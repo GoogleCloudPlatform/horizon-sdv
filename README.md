@@ -20,6 +20,7 @@ The Horizon initiative consists of two streams:
 * Stream 2 will focus on expanding beyond Android towards the rest of SDV, enabling cloud-based virtual development of complex system-of-systems.
 
 ## Platform overview
+![Horizon Platform Overview](https://raw.githubusercontent.com/GoogleCloudPlatform/horizon-sdv/refs/heads/main/docs/horizon_platform_overview.svg)
 
 ## Staying up-to-date
 In case you would like to receive updates, you can [subscribe here](https://forms.gle/TFaKXqfHbF6oUAeg6). In case of questions you can directly reach out to [horizon-sdv@google.com](mailto:horizon-sdv@google.com)
