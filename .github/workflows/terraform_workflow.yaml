@@ -31,7 +31,7 @@ on:
 
 jobs:
   parsing-branch:
-    runs-on: self-hosted
+    runs-on: ubuntu-22.04
     outputs:
       branch_env: ${{ steps.branch.outputs.branch_env }}
       prefix: ${{ steps.branch.outputs.prefix_part }}
