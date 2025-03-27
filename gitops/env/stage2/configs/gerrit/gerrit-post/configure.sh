@@ -41,7 +41,7 @@ function gerrit-test-connection() {
   retVal="RETVAL_NOK"
   echo "Testing the SSH connection to Gerrit."
   n=1
-  until [ "$n" -ge 600 ]; do
+  until [ "$n" -ge 30 ]; do
     ERR_MSG=$(ssh -o LogLevel=ERROR -o ConnectTimeout=1 -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeychecking=no -p 29418 -i /root/.ssh/privatekey gerrit-admin@gerrit-service gerrit version 2>&1)
     if [[ $ERR_MSG == *"gerrit version"* ]]; then
       echo "SSH connection worked, no need to craft All-Users repository. Just retrieve HTTP PASSWORD"
@@ -212,7 +212,7 @@ function gerrit-craft-all-users() {
   echo "Testing SSH connection..."
 
   n=1
-  until [ "$n" -ge 600 ]; do
+  until [ "$n" -ge 400 ]; do
     ERR_MSG=$(ssh -o LogLevel=ERROR -o ConnectTimeout=1 -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeychecking=no -p 29418 -i /root/.ssh/privatekey gerrit-admin@gerrit-service gerrit version 2>&1)
     if [[ $ERR_MSG == *"gerrit version"* ]]; then
       echo "SSH connection worked !!!"
@@ -232,7 +232,7 @@ function gerrit-craft-all-users() {
     echo "Testing SSH connection again (after restart)..."
 
     n=1
-    until [ "$n" -ge 600 ]; do
+    until [ "$n" -ge 400 ]; do
       ERR_MSG=$(ssh -o LogLevel=ERROR -o ConnectTimeout=1 -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeychecking=no -p 29418 -i /root/.ssh/privatekey gerrit-admin@gerrit-service gerrit version 2>&1)
       if [[ $ERR_MSG == *"gerrit version"* ]]; then
         echo "SSH connection worked !!!"

@@ -125,6 +125,8 @@ spec:
               windowMemory = 1g
             [receive]
               timeout = 15m
+            [sendemail]
+              enable = false
             [transfer]
               timeout = 3600
         secretRef: gerrit-secure-config
