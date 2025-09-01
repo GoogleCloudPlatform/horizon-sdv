@@ -10,6 +10,7 @@
     - [Jenkins](#jenkins)
     - [Gerrit](#gerrit)
     - [MTK Connect](#mtk-connect)
+    - [Headlamp](#headlamp)
     - [Landing Page](#landing-page)
 - [Dependencies](#dependencies)
     - [Dynamic PVC Provisioner and Releaser](#dynamic-pvc-provisioner-and-releaser)
@@ -62,6 +63,7 @@ To start GitOps deployment process it is required to provide list of configure p
 - GCP_PROJECT_ID (GCP Project ID)
 - GCP_CLOUD_REGION (GCP Cloud Region)
 - GCP_CLOUD_ZONE (GCP Cloud Zone)
+- GCP_BACKEND_BUCKET_NAME (GCP Bucket used to store tfstate)
 - GITHUB_ENV_NAME (Environment name, also used as a subdomain)
 - GITHUB_DOMAIN_NAME (top level domain name)
 
@@ -86,7 +88,7 @@ Additionally, ArgoCD utilizes sync waves, a feature that allows defining the ord
 |           |            | Init Secrets     | Persistent Volume Claims | Service Accounts         | Gerrit Application      | Post Jobs             |                     |           |                      |
 |           |            |                  |                          | Cluster Roles            | Post Jobs               |                       |                     |           |                      |
 |           |            |                  |                          | Cluster Role Bindings    | MTK Connect Application |                       |                     |           |                      |
-|           |            |                  |                          | Keycloak Aplication      |                         |                       |                     |           |                      |
+|           |            |                  |                          | Keycloak Aplication      | Headlamp Application    |                       |                     |           |                      |
 
 
 ## Aplications
@@ -149,7 +151,7 @@ https://<ENV_NAME>.<HORIZON_DOMAIN>/jenkins
 Ex: https://demo.horizon-sdv.com/jenkins
 
 ####  Purpose
-Jenkins provides a CI/CD pipeline execution environment for workloads, currently supporting Android workloads.
+Jenkins provides a CI/CD pipeline execution environment for workloads, currently supporting Android and Cloud Workstations workloads.
 
 ####  Installation
 Jenkins is installed using the official OpenSource Helm chart, with custom configurations specific to the Horizon SDV project.
@@ -209,6 +211,26 @@ Additionally, MongoDB is installed as a dependency.
 #### Configuration
 To enable authentication via Keycloak, the `keycloak-post-mtk-connect` post-job is executed, integrating Keycloak with MTK Connect using SAML authentication.
 
+
+### Headlamp
+
+#### URL
+https://<ENV_NAME>.<HORIZON_DOMAIN>/headlamp/
+Ex: https://demo.horizon-sdv.com/headlamp/
+
+#### Purpose
+Headlamp is a user-friendly Kubernetes dashboard that provides a interface for interacting with Kubernetes clusters. The Headlamp is a web-based user interface (GUI) for simplify the management and visualization of Kubernetes clusters.
+It is particularly useful for developers, DevOps engineers to manage Kubernetes resources without relying solely on the command line in more intuitive way. Link : https://headlamp.dev/
+
+#### Installation
+Headlamp is deployed by helm chart. During installation, an initial configuration is applied. Additionally kubescape is installed as a dependency.
+
+#### Configuration
+To authenticate to headlamp is needed token. Token should be generated via bastion host :
+`kubectl create token headlamp-admin -n headlamp` 
+
+Then just copy generated token and paste it on headlamp login sceen. Access should be possible. Token is valid 1h for first time login.
+SSO autentication is planned in future releases.
 
 ## Dependencies
 

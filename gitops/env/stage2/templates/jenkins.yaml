@@ -26,7 +26,7 @@ spec:
   source:
     chart: jenkins
     repoURL: https://charts.jenkins.io
-    targetRevision: 5.8.2
+    targetRevision: 5.8.31
     helm:
       values: |
         persistence:
@@ -40,8 +40,11 @@ spec:
         controller:
           sidecars:
             configAutoReload:
-              enabled: true
+              enabled: false
           jenkinsUriPrefix: /jenkins
+          numExecutors: 1
+          executorMode: "EXCLUSIVE"
+          customJenkinsLabels: [ "seed-node" ]
           admin:
             createSecret: true
             existingSecret: jenkins-initial-creds
@@ -51,105 +54,112 @@ spec:
           installPlugins:
             - antisamy-markup-formatter:173.v680e3a_b_69ff3
             - apache-httpcomponents-client-4-api:4.5.14-269.vfa_2321039a_83
-            - asm-api:9.7.1-97.v4cc844130d97
-            - authentication-tokens:1.131.v7199556c3004
+            - asm-api:9.8-163.vb_2a_96d3f9c3c
+            - authentication-tokens:1.144.v5ff4a_5ec5c33
             - bootstrap5-api:5.3.3-2
-            - bouncycastle-api:2.30.1.80-256.vf98926042a_9b_
-            - branch-api:2.1214.v3f652804588d
-            - caffeine-api:3.2.0-161.v691ef352cee1
-            - checks-api:367.v18b_7f530e54a_
-            - cloudbees-folder:6.982.vf165a_16c9507
-            - commons-lang3-api:3.17.0-84.vb_b_938040b_078
-            - commons-text-api:1.13.0-153.v91dcd89e2a_22
-            - command-launcher:115.vd8b_301cc15d0
-            - configuration-as-code:1932.v75cb_b_f1b_698d
-            - credentials-binding:687.v619cb_15e923f
-            - credentials:1408.va_622a_b_f5b_1b_1
-            - display-url-api:2.209.v582ed814ff2f
-            - durable-task:587.v84b_877235b_45
-            - echarts-api:5.6.0-2
-            - eddsa-api:0.3.0-13.v7cb_69ed68f00
-            - font-awesome-api:6.7.2-1
-            - git-client:6.1.2
+            - bouncycastle-api:2.30.1.81-264.v95c79c0e772c
+            - branch-api:2.1229.ve86b_d02b_5e56
+            - caffeine-api:3.2.2-178.v353b_8428ed56
+            - checks-api:373.vfe7645102093
+            - cloudbees-folder:6.1026.ve06dfa_cf31c3
+            - commons-lang3-api:3.18.0-98.v3a_674c06072d
+            - commons-text-api:1.14.0-194.v804a_dc3a_1b_d8
+            - command-launcher:123.v37cfdc92ef67
+            - configuration-as-code:1963.v24e046127a_3f
+            - credentials-binding:702.vfe613e537e88
+            - credentials:1419.v2337d1ceceef
+            - display-url-api:2.217.va_6b_de84cc74b_
+            - durable-task:595.ve87b_f1318d67
+            - echarts-api:6.0.0-1
+            - eddsa-api:0.3.0.1-19.vc432d923e5ee
+            - font-awesome-api:7.0.0-840.vd6c7a_a_a_a_88e1
+            - git-client:6.2.0
             - git:5.7.0
-            - github-api:1.321-478.vc9ce627ce001
-            - github:1.42.0
-            - google-oauth-plugin:1.330.vf5e86021cb_ec
-            - gson-api:2.12.1-113.v347686d6729f
-            - instance-identity:201.vd2a_b_5a_468a_a_6
-            - ionicons-api:82.v0597178874e1
-            - jackson2-api:2.17.0-389.va_5c7e45cd806
+            - github-api:1.321-488.v9b_c0da_9533f8
+            - github:1.43.0
+            - google-oauth-plugin:1.335.ve6de40e2db_18
+            - gson-api:2.13.1-153.vb_3d0c48a_a_b_4a_
+            - instance-identity:203.v15e81a_1b_7a_38
+            - ionicons-api:88.va_4187cb_eddf1
+            - jackson2-api:2.19.2-408.v18248a_324cfe
             - jakarta-activation-api:2.1.3-2
-            - jakarta-mail-api:2.1.3-2
+            - jakarta-mail-api:2.1.3-3
             - javax-activation-api:1.2.0-8
-            - javax-mail-api:1.6.2-10
+            - javax-mail-api:1.6.2-11
             - jaxb:2.3.9-133.vb_ec76a_73f706
-            - jdk-tool:80.v8a_dee33ed6f0
+            - jdk-tool:83.v417146707a_3d
             - jjwt-api:0.11.5-120.v0268cf544b_89
-            - joda-time-api:2.13.1-115.va_6b_5f8efb_1d8
-            - jquery3-api:3.7.1-3
+            - joda-time-api:2.14.0-149.v1c3ce991d1b_9
+            - jquery3-api:3.7.1-594.vb_3864f326cf0
             - jsch:0.2.16-95.v3eecb_55fa_b_78
-            - json-api:20250107-125.v28b_a_ffa_eb_f01
-            - json-path-api:2.9.0-148.v22a_7ffe323ce
-            - junit:1317.v5b_35d792b_06a_
-            - kubernetes-client-api:6.10.0-240.v57880ce8b_0b_2
-            - kubernetes-credentials-provider:1.273.v15e69b_55ea_8e
+            - json-api:20250517-163.v1c5da_e99c775
+            - json-path-api:2.9.0-178.vca_b_c71881321
+            - junit:1335.v6b_a_a_e18534e1
+            - kubernetes-client-api:7.3.1-256.v788a_0b_787114
+            - kubernetes-credentials:203.v85b_9836a_f44b_
             - mailer:489.vd4b_25144138f
-            - matrix-project:845.vffd7fa_f27555
-            - metrics:4.2.21-464.vc9fa_a_0d6265d
-            - mina-sshd-api-common:2.14.0-143.v2b_362fc39576
-            - mina-sshd-api-core:2.14.0-143.v2b_362fc39576
-            - oauth-credentials:0.653.v14cf2088e950
-            - okhttp-api:4.11.0-183.va_87fc7a_89810
-            - pipeline-build-step:557.v95d96f77b_2b_8
-            - pipeline-graph-analysis:231.v56354571a_da_0
+            - matrix-project:856.v4c352b_3a_b_23e
+            - metrics:4.2.32-476.v5042e1c1edd7
+            - mina-sshd-api-common:2.15.0-161.vb_200831a_c15b_
+            - mina-sshd-api-core:2.15.0-161.vb_200831a_c15b_
+            - oauth-credentials:0.657.v7d8dd90b_0382
+            - okhttp-api:4.11.0-189.v976fa_d3379d6
+            - pipeline-build-step:571.v08a_fffd4b_0ce
+            - pipeline-graph-analysis:241.vc3d48fb_b_2582
             - pipeline-groovy-lib:752.vdddedf804e72
-            - pipeline-input-step:515.v8857b_eb_b_910c
-            - pipeline-milestone-step:127.vb_52887ca_3b_6d
-            - pipeline-model-api:2.2234.v4a_b_13b_8cd590
-            - pipeline-model-definition:2.2234.v4a_b_13b_8cd590
-            - pipeline-model-extensions:2.2234.v4a_b_13b_8cd590
-            - pipeline-rest-api:2.37
+            - pipeline-input-step:534.v352f0a_e98918
+            - pipeline-milestone-step:138.v78ca_76831a_43
+            - pipeline-model-api:2.2265.v140e610fe9d5
+            - pipeline-model-definition:2.2265.v140e610fe9d5
+            - pipeline-model-extensions:2.2265.v140e610fe9d5
+            - pipeline-rest-api:2.38
             - pipeline-stage-step:322.vecffa_99f371c
-            - pipeline-stage-tags-metadata:2.2234.v4a_b_13b_8cd590
-            - plain-credentials:183.va_de8f1dd5a_2b_
-            - plugin-util-api:6.0.0
-            - prism-api:1.29.0-19
-            - scm-api:704.v3ce5c542825a_
-            - script-security:1373.vb_b_4a_a_c26fa_00
-            - snakeyaml-api:2.3-123.v13484c65210a_
-            - ssh-credentials:349.vb_8b_6b_9709f5b_
-            - sshd:3.330.vc866a_8389b_58
-            - structs:343.vdcf37b_a_c81d5
-            - token-macro:444.v52de7e9c573d
-            - trilead-api:2.192.vc50a_d147e369
+            - pipeline-stage-tags-metadata:2.2265.v140e610fe9d5
+            - plain-credentials:199.v9f8e1f741799
+            - plugin-util-api:6.1157.vc75ef7129d86
+            - prism-api:1.30.0-600.v0b_eeeb_e43a_f9
+            - scm-api:707.v749f968369d4
+            - script-security:1378.vf25626395f49
+            - snakeyaml-api:2.3-125.v4d77857a_b_402
+            - ssh-credentials:361.vb_f6760818e8c
+            - sshd:3.374.v19b_d59ce6610
+            - structs:353.v261ea_40a_80fb_
+            - token-macro:477.vd4f0dc3cb_cf1
+            - trilead-api:2.209.v0e69b_c43c245
             - variant:70.va_d9f17f859e0
-            - workflow-aggregator:600.vb_57cdd26fdd7
-            - workflow-api:1363.v03f731255494
+            - workflow-aggregator:608.v67378e9d3db_1
+            - workflow-api:1373.v7b_813f10efa_b_
             - workflow-basic-steps:1079.vce64b_a_929c5a_
-            - workflow-cps:4032.vf3248d9c3fee
-            - workflow-durable-task-step:1405.v1fcd4a_d00096
-            - workflow-job:1505.vea_4b_20a_4a_495
-            - workflow-multibranch:803.v08103b_87c280
+            - workflow-cps:4183.v94b_6fd39da_c1
+            - workflow-durable-task-step:1452.v0ee719c104a_7
+            - workflow-job:1540.v295eccc9778f
+            - workflow-multibranch:811.vcd33d074c2a_0
             - workflow-scm-step:437.v05a_f66b_e5ef8
-            - workflow-step-api:700.v6e45cb_a_5a_a_21
-            - workflow-support:961.v51869f7b_d409
+            - workflow-step-api:706.v518c5dcb_24c0
+            - workflow-support:976.vb_d9493c2eb_09
           additionalPlugins:
+            - authorize-project:2.0.0
             - build-blocker-plugin:166.vc82fc20b_a_ed6
             - build-user-vars-plugin:195.v8c35f9d5c3dc
             - configuration-as-code-groovy:1.1
-            - gerrit-code-review:0.4.9
+            - envinject:2.926.v69c9b_3896a_96
+            - envinject-api:1.235.va_14c74f8f487
+            - gerrit-code-review:0.5.0
             - gerrit-trigger:2.42.0
-            - github-branch-source:1810.v913311241fa_9
+            - github-branch-source:1824.v046257273408
             - google-compute-engine:4.683.v0ce26579a_ee7
-            - google-kubernetes-engine:0.430.v4cc1fa_1847a_9
-            - job-dsl:1.91
+            - google-kubernetes-engine:0.443.vcf71f5903ef3
+            - htmlpublisher:427
+            - job-dsl:1.93
             - keycloak:2.3.2
-            - kubernetes:4314.v5b_846cf499eb_
-            - kubernetes-credentials:190.v03c305394deb_
-            - pipeline-stage-view:2.37
-            - ssh-slaves:3.1031.v72c6b_883b_869
-            - timestamper:1.28
+            - kubernetes:4358.vcfd9c5a_0a_f51
+            - kubernetes-credentials-provider:1.276.v99a_de03cb_076
+            - parameter-separator:296.v9b_a_90c81160d
+            - pipeline-stage-view:2.38
+            - role-strategy:799.v5b_e7b_ecc231e
+            - ssh-slaves:3.1071.v0d059c7b_c555
+            - startup-trigger-plugin:2.9.4
+            - timestamper:1.30
           additionalExistingSecrets:
             - name: jenkins-keycloak
               keyName: keycloakJson
@@ -164,14 +174,21 @@ spec:
           markupFormatter: rawHtml
           JCasC:
             enabled: true
+            security:
+              queueItemAuthenticator:
+                authenticators:
+                - project:
+                    disabledStrategies:
+                    - "org.jenkinsci.plugins.authorizeproject.strategy.SystemAuthorizationStrategy"
+                    - "org.jenkinsci.plugins.authorizeproject.strategy.SpecificUsersAuthorizationStrategy"
+                    - "org.jenkinsci.plugins.authorizeproject.strategy.AnonymousAuthorizationStrategy"
+                    enabledStrategies:
+                    - "org.jenkinsci.plugins.authorizeproject.strategy.TriggeringUsersAuthorizationStrategy"
             securityRealm: |-
               keycloak:
                 keycloakJson: ${jenkins-keycloak-keycloakJson}
                 keycloakRespectAccessTokenTimeout: false
                 keycloakValidate: false
-            authorizationStrategy: |-
-              loggedInUsersCanDoAnything:
-                allowAnonymousRead: false
             defaultConfig: true
             configScripts:
               welcome-message: |
@@ -190,6 +207,73 @@ spec:
                                 secretJsonKey: ${base64:${jenkins-gce-creds-gce-creds-json}}
                 jenkins:
                   systemMessage: Welcome to Horizon SDV server.
+                  authorizationStrategy:
+                    roleBased:
+                      permissionTemplates:
+                        - name: "horizon-jenkins-workload-developers"
+                          permissions:
+                            - "Job/Read"
+                            - "Job/Discover"
+                            - "Job/Build"
+                            - "View/Read"
+                            - "Job/Configure"
+                            - "Job/Delete"
+                            - "Job/Create"
+                            - "Job/Move"
+                            - "Job/Workspace"
+                            - "Job/Cancel"
+                        - name: "horizon-jenkins-workload-users"
+                          permissions:
+                            - "Job/Read"
+                            - "Job/Discover"
+                            - "Job/Build"
+                            - "View/Read"
+                            - "Job/Cancel"
+                      roles:
+                        global:
+                          - name: "horizon-jenkins-administrators"
+                            description: "Jenkins administration role for unrestricted access."
+                            permissions:
+                              - "Overall/Administer"
+                            entries:
+                              - group: "horizon-jenkins-administrators"
+                              # Example user
+                              # - user: "john.example.doe@accenture.com"
+                          - name: "horizon-jenkins-workloads-developers"
+                            description: "Jenkins workloads developers role for workload usage and configuration."
+                            permissions:
+                              - "Overall/Read"
+                              - "Agent/Build"
+                              - "Job/Create"
+                            entries:
+                              - group: "horizon-jenkins-workloads-developers"
+                              # Example user
+                              # - user: "jane.example.doe@accenture.com"
+                          - name: "horizon-jenkins-workloads-users"
+                            description: "Jenkins workloads users role with restricted access to workloads."
+                            permissions:
+                              - "Overall/Read"
+                            entries:
+                              - group: "horizon-jenkins-workloads-users"
+                              # Example user
+                              # - user: "john.example.doe@accenture.com"
+                        items:
+                          - name: "workloads-developers" 
+                            description: "Workloads developers item role with unrestricted access." 
+                            pattern: ".*"
+                            templateName: "horizon-jenkins-workload-developers"
+                            entries:
+                              - group: "horizon-jenkins-workloads-developers"
+                              # Example user
+                              # - user: "jane.example.doe@accenture.com"
+                          - name: "workloads-users" 
+                            description: "Workloads user item role with restricted access." 
+                            pattern: ".*"
+                            templateName: "horizon-jenkins-workload-users"
+                            entries:
+                              - group: "horizon-jenkins-workloads-users"
+                              # Example user
+                              # - user: "john.example.doe@accenture.com"
                   clouds:
                     - computeEngine:
                         cloudName: cuttlefish-vm-main
@@ -223,25 +307,25 @@ spec:
                             zone: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/{{ .Values.config.zone }}"
                         credentialsId: "gce-creds"
                         instanceCapStr: "20"
-                        noDelayProvisioning: true
+                        noDelayProvisioning: false
                         projectId: {{ .Values.config.projectID }}
                     - computeEngine:
-                        cloudName: "cuttlefish-vm-v110"
+                        cloudName: "cuttlefish-vm-v1180"
                         configurations:
                         - bootDiskAutoDelete: true
                           bootDiskSizeGb: 10
                           bootDiskSizeGbStr: "10"
                           bootDiskType: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/{{ .Values.config.zone }}/diskTypes/hyperdisk-balanced"
-                          description: "cuttlefish-vm-v110"
+                          description: "cuttlefish-vm-v1180"
                           javaExecPath: "/usr/bin/java"
                           labelSet:
-                          - name: "cuttlefish-vm-v110"
-                          labelString: "cuttlefish-vm-v110"
-                          labels: "cuttlefish-vm-v110"
+                          - name: "cuttlefish-vm-v1180"
+                          labelString: "cuttlefish-vm-v1180"
+                          labels: "cuttlefish-vm-v1180"
                           launchTimeoutSeconds: 300
                           launchTimeoutSecondsStr: "300"
                           mode: NORMAL
-                          namePrefix: "cuttlefish-vm-v110"
+                          namePrefix: "cuttlefish-vm-v1180"
                           numExecutors: 1
                           numExecutorsStr: "1"
                           oneShot: true
@@ -252,12 +336,12 @@ spec:
                           runAsUser: "jenkins"
                           sshConfiguration:
                             customPrivateKeyCredentialsId: "jenkins-cuttlefish-vm-ssh-private-key"
-                          template: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/global/instanceTemplates/instance-template-cuttlefish-vm-v110"
+                          template: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/global/instanceTemplates/instance-template-cuttlefish-vm-v1180"
                           useInternalAddress: true
                           zone: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/{{ .Values.config.zone }}"
                         credentialsId: "gce-creds"
                         instanceCapStr: "20"
-                        noDelayProvisioning: true
+                        noDelayProvisioning: false
                         projectId: {{ .Values.config.projectID }}
                   globalNodeProperties:
                     - envVars:
@@ -265,709 +349,81 @@ spec:
                         - key: "ANDROID_BUILD_BUCKET_ROOT_NAME"
                           value: {{ .Values.config.projectID }}-aaos
                         - key: "ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME"
-                          value: "horizon-sdv/aaos_builder"
+                          value: "horizon-sdv/aaos-builder"
                         - key: "CLOUD_REGION"
                           value: {{ .Values.config.region }}
                         - key: "CLOUD_ZONE"
                           value: {{ .Values.config.zone }}
                         - key: "CLOUD_PROJECT"
                           value: {{ .Values.config.projectID }}
+                        - key: "CLOUD_BACKEND_BUCKET"
+                          value: {{ .Values.config.backendBucket }}
                         - key: "GERRIT_CREDENTIALS_ID"
                           value: "jenkins-gerrit-http-password"
-                        - key: "GERRIT_CUTTLEFISH_INSTANCE_TEMPLATE_LABEL"
-                          value: "cuttlefish-vm-main"
                         - key: "HORIZON_DOMAIN"
                           value: {{ .Values.config.domain }}
+                        - key: "HORIZON_GITHUB_URL"
+                          value: {{ .Values.config.workloads.android.url }}
+                        - key: "HORIZON_GITHUB_BRANCH"
+                          value: {{ .Values.config.workloads.android.branch }}
                         - key: "JENKINS_SERVICE_ACCOUNT"
                           value: "jenkins-sa"
-                        - key: "JENKINS_CACHE_STORAGE_CLASS_NAME"
+                        - key: "JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX"
                           value: "reclaimable-storage-class"
-                        - key: "REPO_SYNC_JOBS"
-                          value: {{ .Values.config.workloads.android.repoSyncJobs }}
+                        - key: "OPENBSW_BUILD_BUCKET_ROOT_NAME"
+                          value: {{ .Values.config.projectID }}-openbsw
+                        - key: "OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME"
+                          value: "horizon-sdv/openbsw-builder"
+                        - key: "INFRA_DOCKER_ARTIFACT_PATH_NAME"
+                          value: "horizon-sdv/abfs-infra"
+                        - key: "ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME"
+                          value: "horizon-sdv/aaos-abfs-builder"
+
+                        - key: "CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME"
+                          value: {{ .Values.config.workloads.cloudWorkstations.workloadEnv.image }}
+                        - key: "CLOUD_WS_CLUSTER_PRESET_NAME"
+                          value: {{ .Values.config.workloads.cloudWorkstations.clusterPresets.name }}
+                        - key: "CLOUD_WS_CLUSTER_PRESET_NETWORK_NAME"
+                          value: {{ .Values.config.workloads.cloudWorkstations.clusterPresets.network }}
+                        - key: "CLOUD_WS_CLUSTER_PRESET_SUBNETWORK_NAME"
+                          value: {{ .Values.config.workloads.cloudWorkstations.clusterPresets.subnetwork }}
+                        - key: "CLOUD_WS_CLUSTER_PRESET_PRIVATE_CLUSTER"
+                          value: {{ .Values.config.workloads.cloudWorkstations.clusterPresets.privateCluster }}
+                        - key: "CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME"
+                          value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonCodeOSS.image }}
+                        - key: "CLOUD_WS_HORIZON_ASFP_IMAGE_NAME"
+                          value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonASFP.image }}
+                        - key: "CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME"
+                          value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonAndroidStudio.image }}
+
                 groovy:
                   - script: >
                       println("This is groovy !");
                 jobs:
                   - script: >
-                      folder('Android') {
-                        displayName('Android Workflows')
-                        description('<p>This folder contains pipelines and jobs related to environment administration, building, testing, and deploying Android applications.<br/>It includes workflows for administration, building and test tasks.</p>')
-                      }
-                  - script: >
-                      folder('Android/Environment') {
-                        displayName('Environment')
-                        description('<p>This folder contains environment administrative jobs related to supporting Android workflows.</p>')
-                      }
-                  - script: >
-                      folder('Android/Builds') {
-                        displayName('Builds')
-                        description('<p>This folder contains jobs to build Android targets.</p>')
-                      }
-                  - script: >
-                      folder('Android/Tests') {
-                        displayName('Tests')
-                        description('<p>This folder contains jobs used to help test and validate Android builds.</p>')
-                      }
-                  - script: >
-                      pipelineJob('Android/Environment/Docker Image Template') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">Container Image Builder</h3>
-                          <p>This job builds the container image that serves as a dependency for other pipeline jobs.</p>
-                          <h4 style="margin-bottom: 10px;">Image Configuration</h4>
-                          <p>The Dockerfile specifies the installed packages and tools required by these jobs.</p>
-                          <h4 style="margin-bottom: 10px;">Pushing Changes to the Registry</h4>
-                          <p>To push changes to the registry, set the parameter <code>NO_PUSH=false</code>.</p>
-                          <p>The image will be pushed to {{ .Values.config.region }}-docker.pkg.dev/{{ .Values.config.projectID }}/<code>ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME</code></p>
-                          <p>Note: <cpde>ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME</code> is defined in the system environment variables.</li></ul></p>
-                          <h4 style="margin-bottom: 10px;">Verifying Changes</h4>
-                          <p>When working with new Dockerfile updates, it's recommended to set <code>NO_PUSH=true</code> to verify the changes before pushing the image to the registry.</p>
-                          <h4 style="margin-bottom: 10px;">Important Notes</h4>
-                          <p>This job need only be run once, or when there are updates to be applied based on Dockerfile changes..</p>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          stringParam {
-                            name('IMAGE_TAG')
-                            defaultValue('latest')
-                            description('''<p>Image tag for the builder image.</p>''')
-                            trim(true)
-                          }
-                          booleanParam {
-                            name('NO_PUSH')
-                            defaultValue(true)
-                            description('''<p>Build only, do not push to registry.</p>''')
-                          }
-                        }
-
-                        logRotator {
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/environment/docker_image_template/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Environment/CF Instance Template') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">GCE Instance Template Creation Job</h3>
-                          <p>This job creates the GCE instance templates used by test pipelines to spin up cuttlefish-ready and CTS-ready cloud instances, which are then used to launch <a href="https://source.android.com/docs/devices/cuttlefish" target="_blank" title="Cuttlefish Virtual Device">CVD</a> and run <a href="https://source.android.com/docs/compatibility/cts" target="_blank" title="Compatibility Test Suite">CTS</a> tests. Refer to the README.md in the respective repository for further details.</p>
-                          <h4 style="margin-bottom: 10px;">Instance Template Naming</h4>
-                          <p>The name for the created instance template can either be auto-generated or user-provided (<code>CUTTLEFISH_INSTANCE_UNIQUE_NAME</code>). The resulting artifact will be <code>instance-template-&lt;name&gt;</code>. If a user-defined name is used, the Jenkins CasC (<code>jenkins.yaml</code>) must be updated with a new <code>computeEngine</code> entry for the template.</p>
-                          <h4 style="margin-bottom: 10px;">Updating and Deleting Outdated Instances</h4>
-                          <p>This job can also be used to update and replace existing instances or delete outdated instances and associated artifacts.</p>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          stringParam {
-                            name('ANDROID_CUTTLEFISH_REVISION')
-                            defaultValue('')
-                            description('''<p>The branch/tag version of Android Cuttlefish to use, e.g..</p>
-                              <ul>
-                                <li>main</li>
-                                <li>v1.1.0</li>
-                              </ul>
-                              <p>Reference: <a href="https://github.com/google/android-cuttlefish.git" target="_blank">android-cuttlefish.git</a></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('CUTTLEFISH_INSTANCE_UNIQUE_NAME')
-                            defaultValue('')
-                            description('''<p>Optional parameter to define the unique name used for the instance template, e.g. <i>cuttlefish-vm-instance-test-v110</i><br/>
-                              Name must start with <i>cuttlefish-vm</i>, refer to docs for details on regex requirements for name.<br/>
-                              Default: The name will be automatically derived from ANDROID_CUTTLEFISH_REVISION., e.g. <i>cuttlefish-vm-v110</i><br/><br/></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('MACHINE_TYPE')
-                            defaultValue('n1-standard-64')
-                            description('''<p>The machine type to use when creating the instance, e.g..</p>
-                              <ul>
-                                <li>n1-standard-64</li>
-                                <li>n1-standard-32</li>
-                                <li>n1-standard-16</li>
-                                <li>n1-standard-8</li>
-                              </ul>
-                              <p>Reference: <a href="https://cloud.google.com/compute/docs/general-purpose-machines" target="_blank">General-purpose machine family for Compute Engine</a> i.e. <i>--machine-type=MACHINE_TYPE</i></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('BOOT_DISK_SIZE')
-                            defaultValue('200GB')
-                            description('''<p>The boot disk size for the instance template image, e.g..</p>
-                              <ul>
-                                <li>200GB</li>
-                                <li>150GB</li>
-                              </ul>
-                              <p>Reference: <a href="https://cloud.google.com/sdk/gcloud/reference/compute/instance-templates/create" target="_blank">gcloud compute instance-templates create</a>, i.e. <i>--create-disk=[PROPERTY=VALUE,…]</i></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('MAX_RUN_DURATION')
-                            defaultValue('4h')
-                            description('''<p>Limits how long this VM instance can run.<br/>
-                              Useful to avoid excessive costs. Set to 0 to disable limit.<br/>
-                              Reference: <a href="https://cloud.google.com/sdk/gcloud/reference/compute/instances/create" target="_blank">gcloud compute instances create</a>, i.e. <i>--max-run-duration=MAX_RUN_DURATION</i></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('DEBIAN_OS_VERSION')
-                            defaultValue('debian-12-bookworm-v20250212')
-                            description('''<p>Disk image OS version.<br/>
-                              Reference: <a href="https://cloud.google.com/sdk/gcloud/reference/compute/instance-templates/create" target="_blank">gcloud compute instance-templates create</a>, i.e. <i>--create-disk</i></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('NODEJS_VERSION')
-                            defaultValue('20.9.0')
-                            description('''<p>NodeJS version.<br/>
-                              This is installed using <i>nvm</i> on the instance template to be compatible with other tooling.</p>''')
-                            trim(true)
-                          }
-
-                          booleanParam {
-                            name('DELETE')
-                            defaultValue(false)
-                            description('''<p>Delete existing templates, skip creation steps.<br/>
-                              Useful for removing old instances to reduce costs.<br/>
-                              <b>Note:</b> Define the CUTTLEFISH_INSTANCE_UNIQUE_NAME if non-standard instance is to be deleted, else simply define the version in ANDROID_CUTTLEFISH_REVISION field.</p>''')
-                          }
-
-                          booleanParam {
-                            name('VM_INSTANCE_CREATE')
-                            defaultValue(false)
-                            description('''<p>If enabled, job will create a Cuttlefish VM instance in a stopped state, using the final instance template.</p>''')
-                          }
-                        }
-
-                        logRotator {
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/environment/cf_instance_template/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Environment/Development Instance') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">Development Build Instance Creation Job</h3>
-                          <p>This job allows creation of a temporary build instance that can be used to aid development and testing of builds.<br/>
-                          <h4 style="margin-bottom: 10px;">Instance Details</h4>
-                          <p>Instances can be expensive and therefore there is a maximum up-time before the instance will automatically be terminated.</p>
-                          <h4 style="margin-bottom: 10px;">Accessing the Instance</h4>
-                          <p>Access the instance via <code>bastion</code> host and <code>kubectl</code> command line tool. Example command:</p>
-                          <p><code>kubectl exec -it -n jenkins &lt;pod name&gt; -- bash</code></p>
-                          <h4 style="margin-bottom: 10px;">Important Notes</h4>
-                          <p>Users are responsible for saving their own work to persistent storage before expiry.</p>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          choiceParam {
-                            name('INSTANCE_MAX_UPTIME')
-                            choices(['0', '1', '2', '4', '8'])
-                            description('''<p>Time in hours to keep instance alive.</p>''')
-                          }
-                        }
-
-                        logRotator {
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/environment/dev_instance/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Environment/Delete Cuttlefish VM Instance') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">Cuttlefish VM Cleanup Job</h3>
-                          <p>This job allows developers to delete Cuttlefish VM instances that may have been left running after testing.</p>
-                          <h4 style="margin-bottom: 10px;">Important Notes</h4>
-                          <p>Only VM instances with the prefix <code>cuttlefish-vm</code> can be deleted, preventing accidental deletion of non-Cuttlefish instances.</p>
-                          <h4 style="margin-bottom: 10px;">Viewing running instances:</h4>
-                          <ul>
-                            <li><a href="http://{{ .Values.config.domain }}/jenkins/manage/computer/" target="_blank">Jenkins Computer Management</a></li>
-                            <li><a href="https://console.cloud.google.com/compute/instances?project={{ .Values.config.projectID }}" target="_blank">Google Cloud Compute Instances</a></li></ul>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          stringParam {
-                            name('VM_INSTANCE_NAME')
-                            defaultValue('')
-                            description('''<p>The name of the instance to delete, e.g.</p>
-                              <i>cuttlefish-vm-main-hgie4b</i></p>''')
-                            trim(true)
-                          }
-                        }
-
-                        logRotator {
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/environment/delete_cf_vm_instance/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Environment/Delete MTK Connect Testbench') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">MTK Connect Testbench Cleanup Job</h3>
-                          <p>This job allows developers to delete offline MTK Connect testbenches that may have been left running after testing.</p>
-                          <h4 style="margin-bottom: 10px;">Important Notes</h4>
-                          <p>The test pipelines show the name of the Testbench in console logs, e.g. <code>MTK_CONNECT_TESTBENCH=Android/Tests/CVD_Launcher-4</code></p>
-                          <h4 style="margin-bottom: 10px;">Viewing Testbenches</h4> <p><a href="http://{{ .Values.config.domain }}/mtk-connect/portal/testbenches" target="_blank">MTK Connect Testbenches</a> provides details of online and offline testbenches.</p>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          stringParam {
-                            name('MTK_CONNECT_TESTBENCH')
-                            defaultValue('')
-                            description('''<p>Provide the name of the testbench to remove from MTK Connect, e.g. <br/>
-                              <ul>
-                                <li>Android/Tests/CTS_Execution-1</li>
-                                <li>Android/Tests/CVD_Launcher-1</il>
-                              </ul><b>WARNING:</b> Take care when using this option!</p>''')
-                            trim(true)
-                          }
-                        }
-
-                        logRotator {
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/environment/delete_mtkc_testbench/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Environment/Warm Build Caches') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">Warm Build Caches Job</h3>
-                          <p>This job is designed to accelerate build times by pre-populating the build caches, specifically the persistent volumes, in advance. It achieves this by executing a series of standard builds based on the selected manifest and revision.</p>
-                          <h4 style="margin-bottom: 10px;">Important Notes</h4>
-                          <ul><li>Ensure all Build PVs are deleted before running this job.</li>
-                          <li>Gerrit manifest and revision can be changed, together with targets, but refer to <code>Jenkinsfile</code> for details as to how these are managed.</li>
-                          <li>Plan to run the jobs in parallel to create sufficient PVs (note: k8s cap of 20)</li></ul>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          stringParam {
-                            name('AAOS_GERRIT_MANIFEST_URL')
-                            defaultValue('https://{{ .Values.config.domain }}/gerrit/android/platform/manifest')
-                            description('''<p>Android Manifest URL.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('AAOS_REVISION')
-                            defaultValue('horizon/android-14.0.0_r30')
-                            description('''<p>Android revision tag/branch name.</p>''')
-                            trim(true)
-                          }
-
-                          booleanParam {
-                            name('ARCHIVE_ARTIFACTS')
-                            defaultValue(false)
-                            description('''<p>Enable if wishing to store build artifacts to bucket</p>''')
-                          }
-                        }
-
-                        logRotator {
-                          artifactDaysToKeep({{ .Values.config.workloads.android.logRotation.artifactDaysToKeep }})
-                          artifactNumToKeep({{ .Values.config.workloads.android.logRotation.artifactNumToKeep }})
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/environment/warm_build_caches/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Builds/AAOS Builder') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">Android Automotive Virtual Devices and Platform Targets Builder</h3>
-                          <p>This job is used to build Android Automotive virtual devices and platform targets from the provided source manifest.</p>
-                          <h4 style="margin-bottom: 10px;">Supported Builds</h4>
-                          <ul>
-                            <li><a href="https://source.android.com/docs/automotive/start/avd/android_virtual_device" target="_blank">Android Virtual Devices</a> for use with <a href="https://source.android.com/docs/automotive/start/avd/android_virtual_device#share-an-avd-image-with-android-studio-users" target="_blank">Android Studio</a></li> 
-                            <li><a href="https://source.android.com/docs/devices/cuttlefish" target="_blank">Cuttlefish Virtual Devices</a> for use with <a href="https://source.android.com/docs/compatibility/cts" target="_blank">CTS</a></li>
-                            <li>Reference hardware platforms such as <a href="https://github.com/raspberry-vanilla/android_local_manifest" target="_blank">RPi</a> and <a href="https://source.android.com/docs/automotive/start/pixelxl" target="_blank">Pixel Tablets</a></li>
-                          </ul>
-                          <h4 style="margin-bottom: 10px;">Build Outputs</h4>
-                          <p>Build outputs are stored in a Google Cloud Storage bucket (refer to build artifact for location).</p>
-                          <h4 style="margin-bottom: 10px;">Viewing Artifacts on Google Cloud</h4>
-                          <p><a href="https://cloud.google.com/docs/authentication/gcloud" target="_blank">Sign in to Google Cloud</a> and run the following command: <br/><code>gcloud storage ls gs://{{ .Values.config.projectID }}-aaos/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;</code></p>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          stringParam {
-                            name('AAOS_GERRIT_MANIFEST_URL')
-                            defaultValue('https://{{ .Values.config.domain }}/gerrit/android/platform/manifest')
-                            description('''<p>Android Manifest URL.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('AAOS_REVISION')
-                            defaultValue('horizon/android-14.0.0_r30')
-                            description('''<p>Android revision tag/branch name.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('AAOS_LUNCH_TARGET')
-                            defaultValue('')
-                            description('''<p>Build Android cuttlefish, virtual devices, Pixel and RPi target to build.</p>''')
-                            trim(true)
-                          }
-
-                          choiceParam {
-                            name('ANDROID_VERSION')
-                            description('''<p>Android Version for AVD image builds.<br/>
-                              Essential for <b>Android Studio</b> devices <i>sdk_car</i> targets to create the SDK addons and device files</p>''')
-                            choices(['14', '15'])
-                          }
-
-                          stringParam {
-                            name('POST_REPO_INITIALISE_COMMAND')
-                            defaultValue('')
-                            description('''<p>Optional additional commands post repo init and prior to repo sync, build/make.<br/>
-                              <b>Note: </b>Single command line only, use logical operators to execute subsequent commands.<br/><br/></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('POST_REPO_SYNC_COMMAND')
-                            defaultValue('')
-                            description('''<p>Optional additional commands post repo sync/fetch and prior to build/make.<br/>
-                              <b>Note: </b>Single command line only, use logical operators to execute subsequent commands.<br/><br/></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('OVERRIDE_MAKE_COMMAND')
-                            defaultValue('')
-                            description('''<p>Optional override default make command.<br/>
-                              <b>Note: </b>Single command line only, use logical operators to execute subsequent commands.</p>''')
-                            trim(true)
-                          }
-
-                          choiceParam {
-                            name('AAOS_CLEAN')
-                            description('''<p>Clean build or cache directories, e.g.
-                              <ul>
-                                <li>NO_CLEAN : do not clean</li>
-                                <li>CLEAN_BUILD : this will clean the build target output directory</li>
-                                <li>CLEAN_ALL : this will clear the whole cache including source</li>
-                              </ul>
-                              <b>Warning:</b> Only use when necessary.</p>''')
-                            choices(['NO_CLEAN', 'CLEAN_BUILD', 'CLEAN_ALL'])
-                          }
-
-                          stringParam {
-                            name('GERRIT_REPO_SYNC_JOBS')
-                            defaultValue('{{ .Values.config.workloads.android.repoSyncJobs }}')
-                            description('''<p>Number of parallel sync jobs for <i>repo sync</i>.<br/>
-                              Default set to <code>REPO_SYNC_JOBS</code> environment variable value.<br/>
-                              If undefined (or null), defaults to 1.</p>''')
-                            trim(true)
-                          }
-
-                          choiceParam {
-                            name('INSTANCE_RETENTION_TIME')
-                            description('''<p>Time in minutes to retain the instance after build completion.<br/>
-                              Useful for debugging build issues, reviewing target outputs etc.</p>''')
-                            choices(['0', '15', '30', '45', '60', '120', '180'])
-                          }
-
-                          stringParam {
-                            name('AAOS_ARTIFACT_STORAGE_SOLUTION')
-                            defaultValue('GCS_BUCKET')
-                            description('''<p>Android Artifact Storage:<br/>
-                              <ul><li>GCS_BUCKET will store to cloud bucket storage</li>
-                              <li>Empty will result in nothing stored</li></ul></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('GERRIT_PROJECT')
-                            defaultValue('')
-                            description('''<p>Optional, define Gerrit Project with open review.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('GERRIT_CHANGE_NUMBER')
-                            defaultValue('')
-                            description('''<p>Optional, define Gerrit review item change number.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('GERRIT_PATCHSET_NUMBER')
-                            defaultValue('')
-                            description('''<p>Optional, define Gerrit review item patchset number.</p>''')
-                            trim(true)
-                          }
-                        }
-
-                        logRotator {
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/builds/aaos_builder/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Builds/CTS Builder') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">Android Compatibility Test Suite Builder</h3>
-                          <p>This job is used to build the Android <a href="https://source.android.com/docs/compatibility/cts" target="_blank">Compatibility Test Suite</a> (CTS) from the provided source manifest.</p>
-                          <h4 style="margin-bottom: 10px;">Supported Builds</h4>
-                          <p>The lunch target provided must be of the cuttlefish variety (i.e. must start with <code>aosp_cf</code>) and only the CTS package is built.</p>
-                          <p>The build target can then be used in the <i>CTS Execution</i> pipeline instead of the <a href="https://source.android.com/docs/compatibility/cts/downloads" target="_blank">google-released</a> version pre-installed on the Cuttlefish instance template.</p>
-                          <h4 style="margin-bottom: 10px;">Build Outputs</h4>
-                          <p>Build outputs are stored in a Google Cloud Storage bucket (refer to build artifact for location).</p>
-                          <p>The main output of this job is the CTS package <code>android-cts.zip</code> which contains :</p>
-                          <ul>
-                            <li><a href="https://source.android.com/docs/core/tests/tradefed" target="_blank">CTS Trade Federataion</a> (<code>cts-tradefed</code>), the test harness for CTS</li>
-                            <li>The full suite of CTS tests (not including <a href="https://source.android.com/docs/compatibility/cts/verifier" target="_blank" title="CTS-V">CTS-V</a> tests)</li>
-                          </ul>
-                          <h4 style="margin-bottom: 10px;">Viewing Artifacts on Google Cloud</h4>
-                          <p><a href="https://cloud.google.com/docs/authentication/gcloud" target="_blank">Sign in to Google Cloud</a> and run the following command: <br/><code>gcloud storage ls gs://{{ .Values.config.projectID }}-aaos/Android/Builds/CTS_Builder/&lt;BUILD_NUMBER&gt;</code></p>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          stringParam {
-                            name('AAOS_GERRIT_MANIFEST_URL')
-                            defaultValue('https://{{ .Values.config.domain }}/gerrit/android/platform/manifest')
-                            description('''<p>Android Manifest URL.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('AAOS_REVISION')
-                            defaultValue('horizon/android-14.0.0_r30')
-                            description('''<p>Android revision tag/branch name.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('AAOS_LUNCH_TARGET')
-                            defaultValue('')
-                            description('''<p>Build Android CTS from cuttlefish target.</p>''')
-                            trim(true)
-                          }
-
-                          choiceParam {
-                            name('AAOS_CLEAN')
-                            description('''<p>Clean build or cache directories, e.g.
-                              <ul>
-                                <li>NO_CLEAN : do not clean</li>
-                                <li>CLEAN_BUILD : this will clean the build target output directory</li>
-                                <li>CLEAN_ALL : this will clear the whole cache including source</li>
-                              </ul>
-                              <b>Warning:</b> Only use when necessary.</p>''')
-                            choices(['NO_CLEAN', 'CLEAN_BUILD', 'CLEAN_ALL'])
-                          }
-
-                          stringParam {
-                            name('GERRIT_REPO_SYNC_JOBS')
-                            defaultValue('{{ .Values.config.workloads.android.repoSyncJobs }}')
-                            description('''<p>Number of parallel sync jobs for <i>repo sync</i>.<br/>
-                              Default set to <code>REPO_SYNC_JOBS</code> environment variable value.<br/>
-                              If undefined (or null), defaults to 1.</p>''')
-                            trim(true)
-                          }
-
-                          choiceParam {
-                            name('INSTANCE_RETENTION_TIME')
-                            description('''<p>Time in minutes to retain the instance after build completion.<br/>
-                              Useful for debugging build issues, reviewing target outputs etc.</p>''')
-                            choices(['0', '15', '30', '45', '60', '120', '180'])
-                          }
-
-                          stringParam {
-                            name('AAOS_ARTIFACT_STORAGE_SOLUTION')
-                            defaultValue('GCS_BUCKET')
-                            description('''<p>Android Artifact Storage:<br/>
-                              <ul><li>GCS_BUCKET will store to cloud bucket storage</li>
-                              <li>Empty will result in nothing stored</li></ul></p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('GERRIT_PROJECT')
-                            defaultValue('')
-                            description('''<p>Optional, define Gerrit Project with open review.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('GERRIT_CHANGE_NUMBER')
-                            defaultValue('')
-                            description('''<p>Optional, define Gerrit review item change number.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('GERRIT_PATCHSET_NUMBER')
-                            defaultValue('')
-                            description('''<p>Optional, define Gerrit review item patchset number.</p>''')
-                            trim(true)
-                          }
-                        }
-
-                        logRotator {
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/builds/cts_builder/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Builds/Gerrit') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">Android Gerrit Pipeline Builder</h3>
-                          <p>This job is triggered by a Gerrit patchset change. Its purpose is to verify the integrity of the patchset change by performing builds on that patchset and providing the user with a vote to their patchset in <a href="https://{{ .Values.config.domain }}/gerrit/" target="_blank">Gerrit.</p>
-                          <h4 style="margin-bottom: 10px;">Supported Builds</h4>
-                          <p>Currently, this job supports the standard set of Android Automotive virtual devices and a platform target.</p>
-                          <h4 style="margin-bottom: 10px;">Build Outputs</h4>
-                          <p>Build outputs are stored in a Google Cloud Storage bucket (refer to build artifacts for location).</p>
-                          <h4 style="margin-bottom: 10px;">Important Notes</h4>
-                          <ul><li>This build job serves only to demonstrate the pipeline with Gerrit</li>
-                          <li>It includes a single CTS test job also for demonstration purposes, but this has no impact on the vote.</li></ul>
-                          <h4 style="margin-bottom: 10px;">Viewing Artifacts on Google Cloud</h4>
-                          <p><a href="https://cloud.google.com/docs/authentication/gcloud" target="_blank">Sign in to Google Cloud</a> and run the following command: <br/><code>gcloud storage ls gs://{{ .Values.config.projectID }}-aaos/Android/Builds/Gerrit/&lt;BUILD_NUMBER&gt;</code></p>
-                          <br/><br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
+                      pipelineJob('Seed Workloads') {
+                        description('''<br/><h3 style="margin-bottom: 10px;">Seed Workloads Job</h3>
+                          <p>This seed job is used to to create and update the workload pipeline folders and jobs in Jenkins.</p>
+                          <h4 style="margin-bottom: 10px;">Mandatory Parameters</h4>
+                          <ul><li><code>SEED_WORKLOAD</code>: The name of the workload to populate.</li></ul>
+                          <p>Refer to the README.md in the repository for further information.</p>
+                        ''')
 
                         triggers {
-                          gerrit {
-                            events {
-                              patchsetCreated()
-                            }
-                            project('reg_exp:^android\\/(?!.*\\/manifest$).*', ['ant:**/horizon/*'])
+                          hudsonStartupTrigger {
+                            nodeParameterName("")
+                            label("")
+                            quietPeriod("0")
+                            runOnChoice("ON_CONNECT")
                           }
                         }
 
-                        logRotator {
-                          artifactDaysToKeep({{ .Values.config.workloads.android.logRotation.artifactDaysToKeep }})
-                          artifactNumToKeep({{ .Values.config.workloads.android.logRotation.artifactNumToKeep }})
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
+                        properties {
+                          authorizeProjectProperty {
+                            strategy {
+                              triggeringUsersAuthorizationStrategy()
+                            }
+                          }
                         }
 
                         definition {
@@ -982,269 +438,7 @@ spec:
                                 branch('*/{{ .Values.config.workloads.android.branch }}')
                               }
                             }
-                            scriptPath('workloads/android/pipelines/builds/gerrit/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Tests/CTS Execution') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">CTS on Cuttlefish Job</h3>
-                          <p>This job allows users execute the <a href="https://source.android.com/docs/compatibility/cts" target="_blank">Compatibility Test Suite</a> (CTS) on their <a href="https://source.android.com/docs/devices/cuttlefish" target="_blank">Cuttlefish Virtual Device</a> (CVD) image builds. Refer to the README.md in the respective repository for further details.</p>
-                          <h4 style="margin-bottom: 10px;">Job Overview</h4>
-                          <p>The job runs on a cuttlefish-ready virtual machine instance (refer to the <i>CF Instance Template</i> job) together with running virtual devices (refer to <i>CVD Launcher</i> job). The Compatibility Test Suite is then executed across the virtual devices:
-                          <ul>
-                            <li><a href="https://source.android.com/docs/core/tests/tradefed" target="_blank">CTS Trade Federation</a></i> (<tt>cts-tradefed</tt>) - the test harness for CTS - can distribute / shard the tests across the multiple virtual devices </li>
-                            <li>The CTS version can either use the default <a href="https://source.android.com/docs/compatibility/cts/downloads" target="_blank">google-released</a> version or a test suite built by the <i>CTS Builder</i> job</i></li>
-                          </ul></p>
-                          <h4 style="margin-bottom: 10px;">Mandatory Parameters</h4>
-                          <ul>
-                            <li><code>JENKINS_GCE_CLOUD_LABEL</code>: The label name of the cuttlefish instance to provision the virtual devices on.</li>
-                            <li><code>CUTTLEFISH_DOWNLOAD_URL</code>: The URL of the user's virtual device images to install and launch.</li>
-                          </ul>
-                          <p>Refer to the README.md in the respective repository for further details.</p>
-                          <h4 style="margin-bottom: 10px;">MTK Connect Integration</h4>
-                          <p>User may choose to enable <a href="http://{{ .Values.config.domain }}/mtk-connect/portal/testbenches" target="_blank">MTK Connect</a> to allow users monitor virtual devices during testing.</p>
-                          <h4 style="margin-bottom: 10px;">Test Results and Debugging</h4>
-                          <p>Test results are stored with the job as artifacts.<br/>
-                          <p>Users can optionally keep the cuttlefish virtual devices alive for a finite amount of time after the CTS run has completed to facilitate debugging via MTK Connect. This option is only available when MTK Connect is enabled.</p>
-                          <h4 style="margin-bottom: 10px;">Important Notes</h4>
-                          <p>Users are responsible for specifying a valid cuttlefish instance - the job will block if the specified instance does not exist.</p>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          stringParam {
-                            name('JENKINS_GCE_CLOUD_LABEL')
-                            defaultValue('cuttlefish-vm-main')
-                            description('''<p>The Jenkins GCE Clouds label for the Cuttlefish instance template, e.g.<br/></p>
-                              <ul>
-                                <li>cuttlefish-vm-main</li>
-                                <li>cuttlefish-vm-v110</li>
-                              </ul>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('CUTTLEFISH_DOWNLOAD_URL')
-                            defaultValue('')
-                            description('''<p>Storage URL pointing to the location of the Cuttlefish Virtual Device images and host packages, e.g.<br/>gs://{{ .Values.config.projectID }}-aaos/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;</p>''')
-                            trim(true)
-                          }
-
-                          booleanParam {
-                            name('CUTTLEFISH_INSTALL_WIFI')
-                            defaultValue(false)
-                            description('''<p>Enable if wishing to install Wifi on the Cuttlefish Virtual Devices.<br/><br/>
-                              <b>Note:</b>
-                              <ul><li>Feature is experimental, impacts on performance and results differ per revision of Android.</li>
-                              <li>Refer to <code>wifi_connection_status.log</code> artifact to check device connectivity.</li></ul></p>''')
-                          }
-
-                          choiceParam {
-                            name('ANDROID_VERSION')
-                            choices(['14', '15'])
-                            description('''<p>Select Android version: Android 14 or 15<br/>
-                              Essential for picking the correct test hardness</p>''')
-                          }
-
-                          stringParam {
-                            name('CTS_DOWNLOAD_URL')
-                            defaultValue('')
-                            description('''<p>Optional CTS test harness download URL.<br/>Use official CTS test harness (empty field) or one built from CTS Builder job and stored in GS Bucket, e.g.<br/>gs://{{ .Values.config.projectID }}-aaos/Android/Builds/CTS_Builder/&lt;BUILD_NUMBER&gt;/android-cts.zip</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('CTS_TESTPLAN')
-                            defaultValue('cts-virtual-device-stable')
-                            description('''<p>Test plan.<br/>
-                              The cts-virtual-device-stable test plan tracks the latest of what is stable on the virtual platform.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('CTS_MODULE')
-                            defaultValue('CtsHostsideNumberBlockingTestCases')
-                            description('''<p>CTS module to test, or leave empty if all modules are to be tested.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('CUTTLEFISH_MAX_BOOT_TIME')
-                            defaultValue('180')
-                            description('''<p>Android Cuttlefish max boot time in seconds.<br/>
-                               Wait on VIRTUAL_DEVICE_BOOT_COMPLETED across devices.</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('NUM_INSTANCES')
-                            defaultValue('8')
-                            description('''<p>Number of guest instances to launch (num-instances option)</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('VM_CPUS')
-                            defaultValue('6')
-                            description('''<p>Virtual CPU count (cpus option).</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('VM_MEMORY_MB')
-                            defaultValue('16384')
-                            description('''<p>total memory available to guest (memory_mb option)</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('CTS_TIMEOUT')
-                            defaultValue('240')
-                            description('''<p>CTS Timeout in minutes for each test run.</p>''')
-                            trim(true)
-                          }
-
-                          booleanParam {
-                            name('MTK_CONNECT_ENABLE')
-                            defaultValue(false)
-                            description('''<p>Enable if wishing to use MTK Connect to view UI of CTS tests on virtual devices</p>''')
-                          }
-
-                          choiceParam {
-                            name('CUTTLEFISH_KEEP_ALIVE_TIME')
-                            choices(['0', '5', '15', '30', '60', '90', '120', '180'])
-                            description('''<p>Time in minutes, to keep CVD alive before stopping the devices and instance.</br>.
-                              Only applicable when <i>MTK_CONNECT_ENABLE</i> enabled so as to connect via HOST.</p>''')
-                          }
-                        }
-
-                        logRotator {
-                          artifactDaysToKeep({{ .Values.config.workloads.android.logRotation.artifactDaysToKeep }})
-                          artifactNumToKeep({{ .Values.config.workloads.android.logRotation.artifactNumToKeep }})
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/tests/cts_execution/Jenkinsfile')
-                          }
-                        }
-                      }
-                  - script: >
-                      pipelineJob('Android/Tests/CVD Launcher') {
-                        description('''
-                          <br/><h3 style="margin-bottom: 10px;">Cuttlefish Virtual Device Test Job</h3>
-                          <p>This job allows the user to test <a href="https://source.android.com/docs/devices/cuttlefish" target="_blank" title="Cuttlefish Virtual Device">CVD</a> images by configuring, the following mandatory parameters:</p>
-                          <h4 style="margin-bottom: 10px;">Job Overview</h4>
-                          <p>Virtual devices are initialized and remain active for a specified period, allowing users to interact with them via <a href="http://{{ .Values.config.domain }}/mtk-connect/portal/testbenches" target="_blank">MTK Connect</a>.<br/>
-                          The number of devices initialized is determined by the <code>NUM_INSTANCES</code> setting.<br/>
-                          After the <code>CUTTLEFISH_KEEP_ALIVE_TIME</code> period expires, the devices, testbenches, and VM instance are terminated in a controlled manner.</p>
-                          <h4 style="margin-bottom: 10px;">Mandatory Parameters</h4>
-                          <ul>
-                            <li><code>JENKINS_GCE_CLOUD_LABEL</code>: The label name of the cuttlefish instance to provision the virtual devices on.</li>
-                            <li><code>CUTTLEFISH_DOWNLOAD_URL</code>: The URL of the user's virtual device images to install and launch.</li>
-                          </ul>
-                          <p>Refer to the README.md in the respective repository for further details.</p>
-                          <h4 style="margin-bottom: 10px;">Important Notes</h4>
-                          <p>Users are responsible for specifying a valid cuttlefish instance - the job will block if the specified instance does not exist.</p>
-                          <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>''')
-
-                        parameters {
-                          stringParam {
-                            name('JENKINS_GCE_CLOUD_LABEL')
-                            defaultValue('cuttlefish-vm-main')
-                            description('''<p>The Jenkins GCE Clouds label for the Cuttlefish instance template, e.g.<br/></p>
-                              <ul>
-                                <li>cuttlefish-vm-main</li>
-                                <li>cuttlefish-vm-v110</li>
-                              </ul>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('CUTTLEFISH_DOWNLOAD_URL')
-                            defaultValue('')
-                            description('''<p>Storage URL pointing to the location of the Cuttlefish Virtual Device images and host packages, e.g.<br/>gs://{{ .Values.config.projectID }}-aaos/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;</p>''')
-                            trim(true)
-                          }
-
-                          booleanParam {
-                            name('CUTTLEFISH_INSTALL_WIFI')
-                            defaultValue(false)
-                            description('''<p>Enable if wishing to install Wifi on the Cuttlefish Virtual Devices.<br/><br/>
-                              <b>Note:</b>
-                              <ul><li>Feature is experimental, impacts on performance and results differ per revision of Android.</li>
-                              <li>Refer to <code>wifi_connection_status.log</code> artifact to check device connectivity.</li></ul></p>''')
-                          }
-
-                          stringParam {
-                            name('CUTTLEFISH_MAX_BOOT_TIME')
-                            defaultValue('180')
-                            description('''<p>Android Cuttlefish max boot time in seconds.<br/>
-                               Wait on VIRTUAL_DEVICE_BOOT_COMPLETED across devices.</p>''')
-                            trim(true)
-                          }
-
-                          choiceParam {
-                            name('CUTTLEFISH_KEEP_ALIVE_TIME')
-                            choices(['5', '15', '30', '60', '90', '120', '180'])
-                            description('''<p>Time in minutes, to keep CVD alive before stopping.</p>''')
-                          }
-
-                          stringParam {
-                            name('NUM_INSTANCES')
-                            defaultValue('1')
-                            description('''<p>Number of guest instances to launch (num-instances option)</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('VM_CPUS')
-                            defaultValue('16')
-                            description('''<p>Virtual CPU count (cpus option).</p>''')
-                            trim(true)
-                          }
-
-                          stringParam {
-                            name('VM_MEMORY_MB')
-                            defaultValue('16384')
-                            description('''<p>total memory available to guest (memory_mb option)</p>''')
-                            trim(true)
-                          }
-                        }
-
-                        logRotator {
-                          artifactDaysToKeep({{ .Values.config.workloads.android.logRotation.artifactDaysToKeep }})
-                          artifactNumToKeep({{ .Values.config.workloads.android.logRotation.artifactNumToKeep }})
-                          daysToKeep({{ .Values.config.workloads.android.logRotation.daysToKeep }})
-                          numToKeep({{ .Values.config.workloads.android.logRotation.numToKeep }})
-                        }
-
-                        definition {
-                          cpsScm {
-                            lightweight()
-                            scm {
-                              git {
-                                remote {
-                                  url('{{ .Values.config.workloads.android.url }}')
-                                  credentials('jenkins-github-creds')
-                                }
-                                branch('*/{{ .Values.config.workloads.android.branch }}')
-                              }
-                            }
-                            scriptPath('workloads/android/pipelines/tests/cvd_launcher/Jenkinsfile')
+                            scriptPath('workloads/seed/Jenkinsfile')
                           }
                         }
                       }

@@ -23,7 +23,7 @@ One-time setup requirements.
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
-**Jenkins Parameters:** Defined in the respective pipeline jobs within `gitops/env/stage2/templates/jenkins.yaml` (CasC).
+**Jenkins Parameters:** Defined in the groovy job definition `groovy/job.groovy`.
 
 ### `AAOS_GERRIT_MANIFEST_URL`
 
@@ -36,14 +36,22 @@ This provides the URL for the Android repo manifest. Such as:
 
 The Android revision, i.e. branch or tag to build. Tested versions are below:
 
-- `horizon/android-14.0.0_r30` (ap1a - default)
+- `horizon/android-14.0.0_r30` (ap1a)
 - `horizon/android-14.0.0_r74` (ap2a - refer to Known Issues)
 - `horizon/android-15.0.0_r4` (ap3a)
 - `horizon/android-15.0.0_r20` (bp1a)
+- `horizon/android-15.0.0_r32` (bp1a)
+- `horizon/android-15.0.0_r36` (bp1a  - default)
 - `android-14.0.0_r30` (ap1a)
 - `android-14.0.0_r74` (ap2a, refer to Known Issues)
 - `android-15.0.0_r4` (ap3a)
 - `android-15.0.0_r20` (bp1a)
+- `android-15.0.0_r32` (bp1a)
+- `android-15.0.0_r36` (bp1a)
+
+### `ANDROID_VERSION`
+
+This specifies which build disk pool to use for the build cache. If `default` then the job will determine the pool based on `AAOS_REVISION`.
 
 ### `ARCHIVE_ARTIFACTS`
 
@@ -79,12 +87,14 @@ These are as follows:
 -   `HORIZON_DOMAIN`
     - The URL domain which is required by pipeline jobs to derive URL for tools and GCP.
 
--   `JENKINS_CACHE_STORAGE_CLASS_NAME`
-    - This identifies the Persistent Volume Claim (PVC) that provisions persistent storage for build cache, ensuring efficient reuse of cached resources across builds.  The default is [`pd-balanced`](https://cloud.google.com/compute/docs/disks/performance), which strikes a balance between optimal performance and cost-effectiveness.
+-   `HORIZON_GITHUB_URL`
+    - The URL to the Horizon SDV GitHub repository.
+
+-   `HORIZON_GITHUB_BRANCH`
+    - The branch name the job will be configured for from `HORIZON_GITHUB_URL`.
+
+-   `JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX`
+    - This identifies the Persistent Volume Claim (PVC) prefix that is used to provision persistent storage for build cache, ensuring efficient reuse of cached resources across builds.  The default is [`pd-balanced`](https://cloud.google.com/compute/docs/disks/performance), which strikes a balance between optimal performance and cost-effectiveness.
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
-
--   `REPO_SYNC_JOBS`
-    - Defines the number of parallel sync jobs when running `repo sync`. By default this is used by Gerrit build
-      pipeline but also forms the default for `GERRIT_REPO_SYNC_JOBS` parameter in build jobs.

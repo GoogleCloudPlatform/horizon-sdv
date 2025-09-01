@@ -15,13 +15,13 @@
 config:
   gitops:
     mtkconnect:
-      router: harbor.scpmtk.com/mtk-connect/mtk-connect-router:v2.2.8
-      authenticator: harbor.scpmtk.com/mtk-connect/mtk-connect-authenticator:v3.5.2
-      wamprouter: harbor.scpmtk.com/mtk-connect/mtk-connect-wamprouter:v3.0.27
-      devices: harbor.scpmtk.com/mtk-connect/mtk-connect-devices:v7.8.0
-      portal: harbor.scpmtk.com/mtk-connect/mtk-connect-portal:v5.8.1
-      installers: harbor.scpmtk.com/mtk-connect/mtk-connect-installers:v1.8.1
-      docs: harbor.scpmtk.com/mtk-connect/mtk-connect-docs:v2.0.12
+      router: harbor.scpmtk.com/mtk-connect/mtk-connect-router:v2.2.10
+      authenticator: harbor.scpmtk.com/mtk-connect/mtk-connect-authenticator:v3.6.0
+      wamprouter: harbor.scpmtk.com/mtk-connect/mtk-connect-wamprouter:v3.0.28
+      devices: harbor.scpmtk.com/mtk-connect/mtk-connect-devices:v7.9.1
+      portal: harbor.scpmtk.com/mtk-connect/mtk-connect-portal:v5.9.1
+      installers: harbor.scpmtk.com/mtk-connect/mtk-connect-installers:v1.9.1
+      docs: harbor.scpmtk.com/mtk-connect/mtk-connect-docs:v2.0.15
 spec:
   destination:
     server: https://kubernetes.default.svc

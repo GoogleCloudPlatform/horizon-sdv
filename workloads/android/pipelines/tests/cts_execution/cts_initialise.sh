@@ -22,13 +22,13 @@
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")"/cts_environment.sh "$0"
 
-# Install the CTS packages. FIXME: need to optimize
+# Install the CTS packages.
 function cts_initialise() {
     if [ -n "${CTS_DOWNLOAD_URL}" ]; then
         echo "Installing Android CTS from ${CTS_DOWNLOAD_URL}."
         case "${CTS_DOWNLOAD_URL}" in
             gs://*)
-                gsutil cp "${CTS_DOWNLOAD_URL}" android-cts.zip
+                gcloud storage cp "${CTS_DOWNLOAD_URL}" android-cts.zip
                 ;;
             *)
                 wget -nv "${CTS_DOWNLOAD_URL}" -O android-cts.zip > /dev/null 2>&1

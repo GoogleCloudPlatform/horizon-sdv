@@ -1,0 +1,218 @@
+# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+#######################################################
+# NoVNC Builder Container
+#######################################################
+FROM us-central1-docker.pkg.dev/cloud-workstations-images/predefined/base as novnc-builder
+
+ARG NOVNC_BRANCH=v1.5.0
+ARG WEBSOCKIFY_BRANCH=v0.12.0
+
+WORKDIR /out
+
+RUN git clone --quiet --depth 1 --branch $NOVNC_BRANCH https://github.com/novnc/noVNC.git && \
+  cd noVNC/utils && \
+  git clone  --quiet --depth 1 --branch $WEBSOCKIFY_BRANCH https://github.com/novnc/websockify.git
+
+#######################################################
+# End NoVNC Builder Container
+#######################################################
+
+#######################################################
+# Cuttlefish Builder Container
+#######################################################
+FROM us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss AS cuttlefish-builder
+
+RUN apt-get update && apt-get install -y \
+    git \
+    devscripts \
+    equivs \
+    config-package-dev \
+    debhelper-compat \
+    golang \
+    curl && \
+  # install libtinfo5
+  wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
+  apt install ./libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
+  git clone https://github.com/google/android-cuttlefish && \
+  /bin/bash -c /android-cuttlefish/tools/buildutils/build_packages.sh && \
+  mkdir out && \
+  cp /android-cuttlefish/cuttlefish-base_*_*64.deb /out && \
+  cp /android-cuttlefish/cuttlefish-user_*_*64.deb /out && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
+
+#######################################################
+# End Cuttlefish Builder Container
+#######################################################
+
+# Main container
+FROM us-west1-docker.pkg.dev/cloud-workstations-images/predefined/base
+
+# Install systemd, GNOME, and VNC.
+
+# Install and configure systemd
+RUN apt-get update && apt-get install -y \
+  systemd && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/* &&\
+  ln -s /dev/null /etc/systemd/system/apache2.service && \
+  ln -s /dev/null /etc/systemd/system/getty@tty1.service && \
+  ln -s /dev/null /etc/systemd/system/ldconfig.service && \
+  /sbin/ldconfig -Xv && \
+  ln -s /dev/null /etc/systemd/system/systemd-modules-load.service && \
+  ln -s /dev/null /etc/systemd/system/ssh.socket && \
+  ln -s /dev/null /etc/systemd/system/ssh.service && \
+  echo "d /run/sshd 0755 root root" > /usr/lib/tmpfiles.d/sshd.conf && \
+  echo -e "x /run/docker.socket - - - - -\nx /var/run/docker.socket - - - - -" > /usr/lib/tmpfiles.d/docker.conf
+
+# Install and configure GNOME
+RUN apt-get update && apt-get install -y \
+    gnome-software \
+    gnome-software-common \
+    gnome-software-plugin-snap \
+    libappstream-glib8 && \
+  apt-get install -y \
+    libgd3 && \
+  apt-get install -y \
+    colord \
+    gnome-control-center \
+    gvfs-backends \
+    hplip \
+    libgphoto2-6 \
+    libsane1 \
+    sane-utils \
+    ubuntu-desktop-minimal && \
+  apt-get remove -y gnome-initial-setup && \
+  apt-get remove -y --purge cloud-init && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/* && \
+  chmod -x /usr/lib/ubuntu-release-upgrader/check-new-release-gtk
+
+# Install TigerVNC and noVNC
+COPY --from=novnc-builder /out/noVNC /opt/noVNC
+RUN apt-get update && apt-get install -y \
+    dbus-x11 \
+    tigervnc-common \
+    tigervnc-scraping-server \
+    tigervnc-standalone-server \
+    tigervnc-xorg-extension \
+    python3-numpy  && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
+
+# Install repo and rsync
+RUN apt-get update && apt-get install -y \
+    repo \
+    rsync && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/* && \
+  repo version && \
+  rsync --version
+
+# Install Cuttlefish from builder
+COPY --from=cuttlefish-builder /out /cuttlefish
+RUN cd /cuttlefish && \
+  apt-get update && \
+  apt install -y ./cuttlefish-base_*.deb ./cuttlefish-user_*.deb && \
+  cd / && \
+  rm -rf /cuttlefish && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
+
+# Install recommended tooling for AOSP development. List obtained from:
+# https://source.android.com/docs/setup/start
+# libncurses6: to workaround CTS/llvm-rs-cc & older versions depending on libncurses5
+RUN apt-get update && apt-get install -y \
+    git-core \
+    gnupg \
+    flex \
+    bison \
+    build-essential \
+    zip \
+    curl \
+    zlib1g-dev \
+    libc6-dev-i386 \
+    x11proto-core-dev \
+    libx11-dev \
+    lib32z1-dev \
+    libgl1-mesa-dev \
+    libxml2-utils \
+    xsltproc \
+    unzip \
+    fontconfig \
+    libncurses6 && \
+  ln -s /usr/lib/x86_64-linux-gnu/libncurses.so.6 /usr/lib/x86_64-linux-gnu/libncurses.so.5 && \
+  ln -s /usr/lib/x86_64-linux-gnu/libtinfo.so.6 /usr/lib/x86_64-linux-gnu/libtinfo.so.5 && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
+
+# Install Android Studio for Platform. Here we are using the canary channel
+# which comes presintalled with Gemini Code Assist.
+ARG ASFP_VERSION=stable
+
+# Install Android Studio for Platform
+RUN \
+  if [ $ASFP_VERSION = "canary" ]; then \
+    PACKAGE="asfp-canary-current-linux.deb"; \
+  else \
+    PACKAGE="asfp-current-linux.deb"; \
+  fi && \
+  wget https://dl.google.com/android/asfp/${PACKAGE} && \
+  dpkg -i ${PACKAGE} && \
+  rm ${PACKAGE}
+
+# Additional Tooling
+
+# Gnome Terminal.
+RUN apt-get update --yes && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y gnome-terminal && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
+
+# Install google-chrome
+RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+  dpkg -i google-chrome-stable_current_amd64.deb && \
+  # apt install -y ./google-chrome*.deb && \
+  rm google-chrome*.deb && \
+  # Ensure chrome will work in our headless environment without gpu support by
+  # specifying environment variables and flags.
+  echo "QT_X11_NO_MITSHM=1 _X11_NO_MITSHM=1 _MITSHM=0 $(tail -n -1 /opt/google/chrome/google-chrome) --disable-gpu --disable-dev-shm-usage --use-gl=swiftshader" >> /opt/google/chrome/google-chrome && \
+  sed -i 'N;$!P;D' /opt/google/chrome/google-chrome && \
+  # Set google-chrome as the default browser.
+  xdg-settings set default-web-browser google-chrome.desktop && \
+  if [ ! -f  /usr/bin/x-www-browser ]; then update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/google-chrome-stable 200; fi && \
+  update-alternatives --set x-www-browser /usr/bin/google-chrome-stable && \
+  if [ ! -f  /usr/bin/gnome-www-browser ]; then update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser /usr/bin/google-chrome-stable 200; fi  && \
+  update-alternatives --set gnome-www-browser /usr/bin/google-chrome-stable
+
+# Merge assets into the container.
+COPY assets/. /
+
+# Run VNC Server and NoVNC as services.
+RUN ln -s /etc/systemd/system/tigervnc.service /etc/systemd/system/multi-user.target.wants/ && \
+  ln -s /etc/systemd/system/novnc.service /etc/systemd/system/multi-user.target.wants/ && \
+  systemctl enable tigervnc && \
+  systemctl enable novnc && \
+  # Apply dconf settings copied from /assets/etc/dconf. This particular config
+  # doesn't change anything but is left in place as a demonstration of how you
+  # can potentially customize gnome in future updates.
+  dconf update && \
+  # Update desktop entry to canary if applicable
+  if [ $ASFP_VERSION = "canary" ]; then sed -i 's/android-studio-for-platform/android-studio-for-platform-canary/g' /usr/share/applications/jetbrains-studio.desktop; fi && \
+  # Provide execute permission to entrypoint script
+  chmod +x /google/scripts/entrypoint.sh
+
+ENTRYPOINT ["/google/scripts/entrypoint.sh"]

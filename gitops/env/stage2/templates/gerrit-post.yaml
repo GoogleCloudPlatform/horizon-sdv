@@ -89,6 +89,9 @@ spec:
       serviceAccountName: gerrit-writer-sa
       containers:
         - name: gerrit-post-container
+          env:
+            - name: DEBUG
+              value: "0"
           image: {{ .Values.config.postjobs.gerrit }}
           imagePullPolicy: Always
           volumeMounts:

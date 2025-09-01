@@ -35,8 +35,11 @@
 #        supported. (Default: 24).
 #  - OVERRIDE_MAKE_COMMAND: the make command line to use
 #  - POST_REPO_INITIALISE_COMMAND: additional vendor commands for repo initialisation.
-#  - POST_REPO_SYNC_COMMAND: additional vendor commands initialisation post
-#        repo sync.
+#  - POST_REPO_COMMAND: additional vendor commands initialisation post repo sync.
+#  - DISK_SPACE_WATERMARK: percentage watermark to clean out old buids
+#        to retain space for current build.
+#  - AAOS_PARALLEL_BUILD_JOBS: define the number of parallel build jobs. Default
+#        let the build run as many jobs in parallel,  otherwise define max number.
 #
 # For Gerrit review change sets:
 #  - GERRIT_SERVER_URL: URL of Gerrit server.
@@ -70,14 +73,11 @@ unset BUILD_NUMBER
 # hostname: jenkins-aaos-build-pod
 
 AAOS_DEFAULT_REVISION=$(echo "${AAOS_DEFAULT_REVISION}" | xargs)
-AAOS_DEFAULT_REVISION=${AAOS_DEFAULT_REVISION:-android-14.0.0_r30}
+AAOS_DEFAULT_REVISION=${AAOS_DEFAULT_REVISION:-android-15.0.0_r36}
 
 # Android branch/tag:
 AAOS_REVISION=${AAOS_REVISION:-${AAOS_DEFAULT_REVISION}}
 AAOS_REVISION=$(echo "${AAOS_REVISION}" | xargs)
-
-# RPi Revision (Vanilla RPi)
-AAOS_RPI_REVISION="android-15.0"
 
 # Gerrit AAOS and RPi manifest URLs.
 AAOS_GERRIT_MANIFEST_URL=$(echo "${AAOS_GERRIT_MANIFEST_URL}" | xargs)
@@ -85,12 +85,21 @@ AAOS_GERRIT_MANIFEST_URL=${AAOS_GERRIT_MANIFEST_URL:-https://android.googlesourc
 AAOS_GERRIT_RPI_MANIFEST_URL=$(echo "${AAOS_GERRIT_RPI_MANIFEST_URL}" | xargs)
 AAOS_GERRIT_RPI_MANIFEST_URL=${AAOS_GERRIT_RPI_MANIFEST_URL:-https://raw.githubusercontent.com/raspberry-vanilla/android_local_manifest}
 
+# ABFS Flag
+ABFS_BUILDER=${ABFS_BUILDER:-false}
+ABFS_CACHED_BUILD=${ABFS_CACHED_BUILD:-false}
+ABFS_CACHEMAN_DIRECTORY=${ABFS_CACHEMAN_DIRECTORY:-}
+ABFS_MOUNT_POINT="abfs"
+UPLOADER_MANIFEST_SERVER=${UPLOADER_MANIFEST_SERVER:-android.googlesource.com}
+
 # Google Repo Sync parallel jobs value
 REPO_SYNC_JOBS=${REPO_SYNC_JOBS:-2}
 MAX_REPO_SYNC_JOBS=${MAX_REPO_SYNC_JOBS:-24}
 # Set up the parallel sync job argument based on value.
 # Min 1, Max 24.
 REPO_SYNC_JOBS_ARG="-j$(( REPO_SYNC_JOBS < 1 ? 1 : REPO_SYNC_JOBS > MAX_REPO_SYNC_JOBS ? MAX_REPO_SYNC_JOBS : REPO_SYNC_JOBS ))"
+# If empty let the build system decide otherwise override with -j<NUMBER>, e.g. -j64
+AAOS_PARALLEL_BUILD_JOBS=${AAOS_PARALLEL_BUILD_JOBS:-}
 
 # Check we have a target defined.
 AAOS_LUNCH_TARGET=$(echo "${AAOS_LUNCH_TARGET}" | xargs)
@@ -126,9 +135,7 @@ AAOS_SDK_SYSTEM_IMAGE_PREFIX=${AAOS_SDK_SYSTEM_IMAGE_PREFIX:-sdk-repo-linux-syst
 
 # Cache directory
 AAOS_CACHE_DIRECTORY=${AAOS_CACHE_DIRECTORY:-/aaos-cache}
-
 AAOS_BUILDS_DIRECTORY="aaos_builds"
-AAOS_BUILDS_RPI_DIRECTORY="aaos_builds_rpi"
 
 # AAOS workspace and artifact storage paths
 # Store original workspace for use later.
@@ -138,65 +145,110 @@ else
     ORIG_WORKSPACE="${WORKSPACE}"
 fi
 
+# Disk space ceiling, remove older build targets if insufficient space.
+DISK_SPACE_WATERMARK=${DISK_SPACE_WATERMARK:-84}
+if [[ "${AAOS_LUNCH_TARGET}" =~ "rpi" ]]; then
+    DISK_SPACE_WATERMARK=78
+fi
+
 if [ -d "${AAOS_CACHE_DIRECTORY}" ]; then
     # Ensure PVC has correct privileges.
     # Note: builder Dockerfile defines USER name
     sudo chown builder:builder /"${AAOS_CACHE_DIRECTORY}"
     sudo chmod g+s /"${AAOS_CACHE_DIRECTORY}"
 
-    # Remove unwanted directories that may have been created for dev.
-    # Retain the official cache directories.
-    find "${AAOS_CACHE_DIRECTORY}" -mindepth 1 -maxdepth 1 -type d ! -name "${AAOS_BUILDS_DIRECTORY}" ! -name \
-        "${AAOS_BUILDS_RPI_DIRECTORY}" ! -name 'lost+found' -exec rm -rf {} + || true
-
-    # Remove oldest target directory if disk usage is greater than 92%
-    # Builds consume ~6% of disk space.
-    while true; do
-        USED_PERCENTAGE=$(df "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print ($3/$2)*100}' | cut -d '.' -f 1)
-        if [ "${USED_PERCENTAGE}" -lt 92 ]; then
-            break
+    if [[ "${ABFS_BUILDER}" == "true" ]]; then
+        if [[ "${ABFS_CACHED_BUILD}" = "true" ]]; then
+            ABFS_CMD_FLAGS="--cache-dir ${AAOS_CACHE_DIRECTORY}/cache"
+            mkdir -p "${AAOS_CACHE_DIRECTORY}/cache"
+            mkdir -p "${AAOS_CACHE_DIRECTORY}/${ABFS_MOUNT_POINT}"
         fi
-        USAGE=$(df -h "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print "Used " $3 " of " $2}')
-        echo "WARNING: Insufficient disk space - ${USED_PERCENTAGE}% (${USAGE})"
+    fi
+    case "$0" in
+        *initialise.sh | *build.sh)
+            if [[ "${ABFS_BUILDER}" == "true" ]]; then
+                if [[ "${ABFS_CACHED_BUILD}" = "true" ]]; then
+                    USAGE=$(df -h "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print "Used " $3 " of " $2}')
+                    USED_PERCENTAGE=$(df "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print ($3/$2)*100}' | cut -d '.' -f 1)
+                    if [ "${USED_PERCENTAGE}" -lt "${DISK_SPACE_WATERMARK}" ]; then
+                        echo "Disk space - ${USED_PERCENTAGE}% (${USAGE})"
+                    else
+                        echo "WARNING: Insufficient disk space - ${USED_PERCENTAGE}% (${USAGE})"
+                        echo "WARNING: Removing ${AAOS_CACHE_DIRECTORY}/cache} ..."
+                        find "${AAOS_CACHE_DIRECTORY}/cache" -delete
+                    fi
+                fi
+            else
+                # Remove unwanted directories that may have been created for dev.
+                # Retain the official cache directories.
+                find "${AAOS_CACHE_DIRECTORY}" -mindepth 1 -maxdepth 1 -type d ! -name "${AAOS_BUILDS_DIRECTORY}" ! \
+                    -name 'lost+found' -exec rm -rf {} + || true
 
-        # List the oldest target directory
-        OLDEST_DIR=$(find "${AAOS_CACHE_DIRECTORY}"/aaos_builds* -mindepth 1 -maxdepth 1 -type d -name 'out_sdv*' -exec ls -drt {} + | head -1)
-        if [ -z "${OLDEST_DIR}" ]; then
-            echo "No further target directories to clean up."
-            break
-        fi
-        echo "WARNING: Removing ${OLDEST_DIR} ..."
-        find "${OLDEST_DIR}" -delete
-    done
+                # Remove oldest target directory if disk space is limited.
+                while true; do
+                    USED_PERCENTAGE=$(df "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print ($3/$2)*100}' | cut -d '.' -f 1)
+                    if [ "${USED_PERCENTAGE}" -lt "${DISK_SPACE_WATERMARK}" ]; then
+                        break
+                    fi
+                    USAGE=$(df -h "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print "Used " $3 " of " $2}')
+                    echo "WARNING: Insufficient disk space - ${USED_PERCENTAGE}% (${USAGE})"
+
+                    # List the oldest target directory
+                    OLDEST_DIR=$(find "${AAOS_CACHE_DIRECTORY}"/aaos_builds* -mindepth 1 -maxdepth 1 -type d -name 'out_sdv*' -exec ls -drt {} + | head -1)
+                    if [ -z "${OLDEST_DIR}" ]; then
+                        echo "No further target directories to clean up."
+                        break
+                    fi
+                    echo "WARNING: Removing ${OLDEST_DIR} ..."
+                    find "${OLDEST_DIR}" -delete
+                done
+            fi
+            ;;
+        *)
+            ;;
+    esac
 else
-    # Local build or no PVC mounted, build in user home.
     AAOS_CACHE_DIRECTORY="${HOME}"
 fi
 
-CACHE_DIRECTORY="${AAOS_CACHE_DIRECTORY}"
-EMPTY_DIR="${CACHE_DIRECTORY}"/empty_dir
+EMPTY_DIR="${AAOS_CACHE_DIRECTORY}"/empty_dir
 
-declare -a DIRECTORY_LIST=(
-    "${CACHE_DIRECTORY}"/"${AAOS_BUILDS_DIRECTORY}"
-    "${CACHE_DIRECTORY}"/"${AAOS_BUILDS_RPI_DIRECTORY}"
-)
-
-if [[ "${AAOS_LUNCH_TARGET}" =~ "rpi" ]]; then
-    # Avoid RPI builds affecting standard android repos.
-    WORKSPACE="${CACHE_DIRECTORY}"/"${AAOS_BUILDS_RPI_DIRECTORY}"
+declare -a DIRECTORY_LIST
+WORKSPACE="${AAOS_CACHE_DIRECTORY}"/"${AAOS_BUILDS_DIRECTORY}"
+if [[ "${ABFS_BUILDER}" == "false" ]]; then
+    DIRECTORY_LIST+=(
+        "${AAOS_CACHE_DIRECTORY}"/"${AAOS_BUILDS_DIRECTORY}"
+    )
 else
-    WORKSPACE="${CACHE_DIRECTORY}"/"${AAOS_BUILDS_DIRECTORY}"
+    if [[ "${ABFS_CACHED_BUILD}" = "true" ]]; then
+        DIRECTORY_LIST+=(
+            "${AAOS_CACHE_DIRECTORY}/cache"
+        )
+        WORKSPACE="${AAOS_CACHE_DIRECTORY}/${ABFS_MOUNT_POINT}"
+    else
+        WORKSPACE="/${ABFS_MOUNT_POINT}"
+    fi
 fi
 
 # Clean commands
 AAOS_CLEAN=${AAOS_CLEAN:-NO_CLEAN}
+
+# ABFS Cache clean
+ABFS_CLEAN_CACHE=${ABFS_CLEAN_CACHE:-false}
+if [[ "${ABFS_CLEAN_CACHE}" == "true" ]]; then
+    AAOS_CLEAN=CLEAN_ALL
+fi
 
 # Build info file name
 BUILD_INFO_FILE="${WORKSPACE}/build_info.txt"
 
 # Override build output directory to keep builds
 # separate from each other.
-export OUT_DIR="out_sdv-${AAOS_LUNCH_TARGET}"
+if [[ "${ABFS_BUILDER}" == "false" ]]; then
+    export OUT_DIR="out_sdv-${AAOS_LUNCH_TARGET}"
+else
+    export OUT_DIR="out"
+fi
 
 # Architecture:
 AAOS_ARCH=""
@@ -206,7 +258,9 @@ if [[ "${AAOS_LUNCH_TARGET}" =~ "arm64" ]]; then
     AAOS_ARCH_ABI="-v8a"
 elif [[ "${AAOS_LUNCH_TARGET}" =~ "x86_64" ]]; then
     AAOS_ARCH="x86_64"
-elif [[ "${AAOS_LUNCH_TARGET}" =~ "rpi" ]]; then
+elif [[ "${AAOS_LUNCH_TARGET}" =~ "rpi4" ]]; then
+    AAOS_ARCH="rpi4"
+elif [[ "${AAOS_LUNCH_TARGET}" =~ "rpi5" ]]; then
     AAOS_ARCH="rpi5"
 elif [[ "${AAOS_LUNCH_TARGET}" =~ "tangor" ]]; then
     AAOS_ARCH="arm64"
@@ -216,12 +270,10 @@ fi
 USER=$(whoami)
 
 # Post repo init commands
-declare -a POST_REPO_INITIALISE_COMMANDS_LIST=(
-    "rm .repo/local_manifests/manifest_brcm_rpi.xml > /dev/null 2>&1"
-    "rm .repo/local_manifests/remove_projects.xml > /dev/null 2>&1"
-)
+declare -a POST_REPO_INITIALISE_COMMANDS_LIST
+
 # Post repo sync commands
-declare -a POST_REPO_SYNC_COMMANDS_LIST
+declare -a POST_REPO_COMMAND_LIST
 
 # Define the make command line for given target
 AAOS_MAKE_CMDLINE=""
@@ -235,13 +287,14 @@ declare -a AAOS_ARTIFACT_LIST=(
 # Post storage commands
 declare -a POST_STORAGE_COMMANDS=(
     "rm -f ${BUILD_INFO_FILE}"
+    "rm -rf vendor"
 )
 
 # This is a dictionary mapping the target names to the command line
 # to build the image.
 case "${AAOS_LUNCH_TARGET}" in
     aosp_rpi*)
-        AAOS_MAKE_CMDLINE="m bootimage systemimage vendorimage"
+        AAOS_MAKE_CMDLINE="m bootimage systemimage vendorimage -j${AAOS_PARALLEL_BUILD_JOBS}"
         # FIXME: we can build full flashable image but may require special
         # permissions, for now host the individual parts.
         # ${VERSION}-${DATE}-rpi5.img # rpi5-mkimg.sh
@@ -250,14 +303,39 @@ case "${AAOS_LUNCH_TARGET}" in
             "${OUT_DIR}/target/product/${AAOS_ARCH}/system.img"
             "${OUT_DIR}/target/product/${AAOS_ARCH}/vendor.img"
         )
-        # Download the RPi manifest if we are building for an RPi device.
-        POST_REPO_INITIALISE_COMMANDS_LIST=(
-            "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/${AAOS_RPI_REVISION}/manifest_brcm_rpi.xml --create-dirs"
-            "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/${AAOS_RPI_REVISION}/remove_projects.xml"
+
+        case "${AAOS_LUNCH_TARGET}" in
+            # Download the RPi manifest if we are building for an RPi device.
+            # Note: if versions change then the previous manifests must be removed, eg. see POST_REPO_INITIALISE_COMMANDS_LIST above
+            *ap1a*)
+                POST_REPO_INITIALISE_COMMANDS_LIST=(
+                    "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-14.0.0_r34/manifest_brcm_rpi.xml --create-dirs"
+                    "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-14.0.0_r34/remove_projects.xml"
+                )
+                ;;
+            *ap3a*)
+                POST_REPO_INITIALISE_COMMANDS_LIST=(
+                    "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-15.0.0_r4/manifest_brcm_rpi.xml --create-dirs"
+                    "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-15.0.0_r4/remove_projects.xml"
+                )
+                ;;
+            *)
+                # bp1a fallthrough: android-15.0.0_r36 / android-15.0.0_r32 / android-15.0.0_r20
+                POST_REPO_INITIALISE_COMMANDS_LIST=(
+                    "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-15.0/manifest_brcm_rpi.xml --create-dirs"
+                    "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-15.0/remove_projects.xml"
+                )
+                ;;
+        esac
+
+        # Clean up the manifests to avoid issues when versions change.
+        POST_REPO_COMMAND_LIST=(
+            "rm .repo/local_manifests/manifest_brcm_rpi.xml > /dev/null 2>&1"
+            "rm .repo/local_manifests/remove_projects.xml > /dev/null 2>&1"
         )
         ;;
     sdk_car*)
-        AAOS_MAKE_CMDLINE="m && m emu_img_zip && m sbom"
+        AAOS_MAKE_CMDLINE="m -j${AAOS_PARALLEL_BUILD_JOBS}&& m emu_img_zip -j${AAOS_PARALLEL_BUILD_JOBS}&& m sbom -j${AAOS_PARALLEL_BUILD_JOBS}"
         AAOS_ARTIFACT_LIST+=(
             "${OUT_DIR}/target/product/emulator_car64_${AAOS_ARCH}/sbom.spdx.json"
             "${OUT_DIR}/target/product/emulator_car64_${AAOS_ARCH}/${AAOS_SDK_SYSTEM_IMAGE_PREFIX}*.zip"
@@ -269,12 +347,12 @@ case "${AAOS_LUNCH_TARGET}" in
         )
         ;;
     aosp_cf*)
-        AAOS_MAKE_CMDLINE="m dist"
+        AAOS_MAKE_CMDLINE="m dist -j${AAOS_PARALLEL_BUILD_JOBS}"
 
         WIFI_APK_NAME="WifiUtil.apk"
 
         # Fallback Wifi APK
-        WIFI_APK_FALLBACK_CMD="git clone https://android.googlesource.com/platform/tools/tradefederation --depth=1 -b android-14.0.0_r30 horizon_wifi && cp -f horizon_wifi/res/apks/wifiutil/${WIFI_APK_NAME} . ; rm -rf horizon_wifi"
+        WIFI_APK_FALLBACK_CMD="git clone https://android.googlesource.com/platform/tools/tradefederation -b android-14.0.0_r30 ${HOME}/horizon_wifi && cp -f ${HOME}/horizon_wifi/res/apks/wifiutil/${WIFI_APK_NAME} . ; rm -rf ${HOME}/horizon_wifi"
         # Trade Federation Wifi APK from repo.
         WIFI_APK_PATH_NAME="tools/tradefederation/core/res/apks/wifiutil/${WIFI_APK_NAME}"
 
@@ -290,7 +368,7 @@ case "${AAOS_LUNCH_TARGET}" in
 
         # If the AAOS_BUILD_CTS variable is set, build only the cts image.
         if [[ "$AAOS_BUILD_CTS" -eq 1 ]]; then
-            AAOS_MAKE_CMDLINE="m cts -j16"
+            AAOS_MAKE_CMDLINE="m cts -j32"
             AAOS_ARTIFACT_LIST+=("${OUT_DIR}/host/linux-x86/cts/android-cts.zip")
         fi
         POST_STORAGE_COMMANDS+=(
@@ -301,37 +379,43 @@ case "${AAOS_LUNCH_TARGET}" in
         AAOS_ARTIFACT_LIST+=(
             "${OUT_DIR}.tgz"
         )
-        AAOS_MAKE_CMDLINE="m && m android.hardware.automotive.vehicle@2.0-default-service android.hardware.automotive.audiocontrol-service.example"
+        AAOS_MAKE_CMDLINE="m -j${AAOS_PARALLEL_BUILD_JOBS} && m android.hardware.automotive.vehicle@2.0-default-service android.hardware.automotive.audiocontrol-service.example -j${AAOS_PARALLEL_BUILD_JOBS}"
         # Pixel Tablet binaries for Android ap1a/ap2a/ap3a/ap4a/bp1a
         case "${AAOS_LUNCH_TARGET}" in
+            *ap1a*)
+                POST_REPO_COMMAND_LIST=(
+                    "curl --output - https://dl.google.com/dl/android/aosp/google_devices-tangorpro-ap1a.240405.002-8d141153.tgz | tar -xzvf - "
+                    "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
+                )
+                ;;
             *ap2a*)
-                POST_REPO_SYNC_COMMANDS_LIST=(
+                POST_REPO_COMMAND_LIST=(
                     "curl --output - https://dl.google.com/dl/android/aosp/google_devices-tangorpro-ap2a.240805.005-7e95f619.tgz | tar -xzvf - "
                     "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
                 )
                 ;;
             *ap3a*)
-                POST_REPO_SYNC_COMMANDS_LIST=(
+                POST_REPO_COMMAND_LIST=(
                     "curl --output - https://dl.google.com/dl/android/aosp/google_devices-tangorpro-ap3a.241105.007-2bf56572.tgz | tar -xzvf - "
                     "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
                 )
                 ;;
             *ap4a*)
-                POST_REPO_SYNC_COMMANDS_LIST=(
+                POST_REPO_COMMAND_LIST=(
                     "curl --output - https://dl.google.com/dl/android/aosp/google_devices-tangorpro-ap4a.250205.002-6474e704.tgz | tar -xzvf - "
                     "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
                 )
                 ;;
             *bp1a*)
-                POST_REPO_SYNC_COMMANDS_LIST=(
-                    "curl --output - https://dl.google.com/dl/android/aosp/google_devices-tangorpro-bp1a.250305.020.t2-636db283.tgz | tar -xzvf - "
+                POST_REPO_COMMAND_LIST=(
+                    "curl --output - https://dl.google.com/dl/android/aosp/google_devices-tangorpro-bp1a.250505.005-fb23c626.tgz | tar -xzvf - "
                     "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
                 )
                 ;;
             *)
-                # android-14.0.0_r30: https://developers.google.com/android/drivers#tangorproap1a.240405.002
-                POST_REPO_SYNC_COMMANDS_LIST=(
-                    "curl --output - https://dl.google.com/dl/android/aosp/google_devices-tangorpro-ap1a.240405.002-8d141153.tgz | tar -xzvf - "
+                # android-15.0.0_r32/r36: https://developers.google.com/android/drivers (same as bp1a above)
+                POST_REPO_COMMAND_LIST=(
+                    "curl --output - https://dl.google.com/dl/android/aosp/google_devices-tangorpro-bp1a.250505.005-fb23c626.tgz | tar -xzvf - "
                     "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
                 )
                 ;;
@@ -362,7 +446,6 @@ case "${AAOS_LUNCH_TARGET}" in
         )
         POST_STORAGE_COMMANDS+=(
             "rm -f ${OUT_DIR}.tgz"
-            "rm -rf vendor"
             "rm -f extract-google_devices-tangorpro.sh"
         )
         ;;
@@ -370,18 +453,18 @@ case "${AAOS_LUNCH_TARGET}" in
         # If the target is not one of the above, print an error message
         # but continue as best so people can play with builds.
         echo "WARNING: unknown target ${LUNCH_TARGET}"
-        AAOS_MAKE_CMDLINE="m"
+        AAOS_MAKE_CMDLINE="m -j${AAOS_PARALLEL_BUILD_JOBS}"
         echo "Artifacts will not be stored!"
         ;;
 esac
 
 # Additional repo init/sync commands.
 if [ -n "${POST_REPO_INITIALISE_COMMAND}" ]; then
-    POST_REPO_INITIALISE_COMMANDS_LIST=("${POST_REPO_INITIALISE_COMMAND}")
+    POST_REPO_INITIALISE_COMMANDS_LIST+=("${POST_REPO_INITIALISE_COMMAND}")
 fi
 
-if [ -n "${POST_REPO_SYNC_COMMAND}" ]; then
-    POST_REPO_SYNC_COMMANDS_LIST=("${POST_REPO_SYNC_COMMAND}")
+if [ -n "${POST_REPO_COMMAND}" ]; then
+    POST_REPO_COMMAND_LIST+=("${POST_REPO_COMMAND}")
 fi
 
 # Additional build commands
@@ -391,7 +474,7 @@ fi
 
 # Gerrit Review environment variables: remove leading and trailing slashes.
 GERRIT_SERVER_URL=$(echo "${GERRIT_SERVER_URL}" | xargs)
-GERRIT_SERVER_URL=${GERRIT_SERVER_URL:-https://dev.horizon-sdv.com/gerrit}
+GERRIT_SERVER_URL=${GERRIT_SERVER_URL:-https://android.googlesource.com}
 # Strip any trailing slashes as this can impact on the download URL.
 GERRIT_SERVER_URL=${GERRIT_SERVER_URL%/}
 GERRIT_PROJECT=$(echo "${GERRIT_PROJECT}" | xargs)
@@ -417,32 +500,58 @@ case "$0" in
         "
         ;;
     *initialise.sh)
-        VARIABLES+="
-        AAOS_GERRIT_MANIFEST_URL=${AAOS_GERRIT_MANIFEST_URL}
-        AAOS_GERRIT_RPI_MANIFEST_URL=${AAOS_GERRIT_RPI_MANIFEST_URL}
+        if [[ "${ABFS_BUILDER}" == "false" ]]; then
+            VARIABLES+="
+            AAOS_GERRIT_MANIFEST_URL=${AAOS_GERRIT_MANIFEST_URL}
+            AAOS_GERRIT_RPI_MANIFEST_URL=${AAOS_GERRIT_RPI_MANIFEST_URL}
 
-        AAOS_REVISION=${AAOS_REVISION}
+            AAOS_REVISION=${AAOS_REVISION}
 
-        POST_REPO_INITIALISE_COMMAND=${POST_REPO_INITIALISE_COMMAND}
-        POST_REPO_SYNC_COMMAND=${POST_REPO_SYNC_COMMAND}
+            POST_REPO_INITIALISE_COMMAND=${POST_REPO_INITIALISE_COMMAND}
+            POST_REPO_COMMAND=${POST_REPO_COMMAND}
 
-        REPO_SYNC_JOBS_ARG=${REPO_SYNC_JOBS_ARG}
+            REPO_SYNC_JOBS_ARG=${REPO_SYNC_JOBS_ARG}
 
-        GERRIT_PROJECT=${GERRIT_PROJECT}
-        GERRIT_CHANGE_NUMBER=${GERRIT_CHANGE_NUMBER}
-        GERRIT_PATCHSET_NUMBER=${GERRIT_PATCHSET_NUMBER}
-        "
+            GERRIT_SERVER_URL=${GERRIT_SERVER_URL}
+            GERRIT_PROJECT=${GERRIT_PROJECT}
+            GERRIT_CHANGE_NUMBER=${GERRIT_CHANGE_NUMBER}
+            GERRIT_PATCHSET_NUMBER=${GERRIT_PATCHSET_NUMBER}
+            "
+        else
+            VARIABLES+="
+            AAOS_REVISION=${AAOS_REVISION}
+            AAOS_CLEAN=${AAOS_CLEAN}
+            ABFS_CACHED_BUILD=${ABFS_CACHED_BUILD}
+            ABFS_CMD_FLAGS=${ABFS_CMD_FLAGS}
+
+            UPLOADER_MANIFEST_SERVER=${UPLOADER_MANIFEST_SERVER}
+
+            GERRIT_SERVER_URL=${GERRIT_SERVER_URL}
+            GERRIT_PROJECT=${GERRIT_PROJECT}
+            GERRIT_CHANGE_NUMBER=${GERRIT_CHANGE_NUMBER}
+            GERRIT_PATCHSET_NUMBER=${GERRIT_PATCHSET_NUMBER}
+
+            POST_REPO_COMMAND=${POST_REPO_COMMAND}
+            "
+        fi
         ;;
     *build.sh)
-        # Only allow cleaning the build, ensure override.
-        if [[ "${AAOS_CLEAN}" != "NO_CLEAN" ]]; then
-            AAOS_CLEAN=CLEAN_BUILD
+        # Do not clean cache in build for ABFS cacheman cache.
+        if [[ "${ABFS_BUILDER}" == "true" ]]; then
+            AAOS_CLEAN=NO_CLEAN
+        else
+            # Only allow cleaning the build, ensure override.
+            if [[ "${AAOS_CLEAN}" != "NO_CLEAN" ]]; then
+                AAOS_CLEAN=CLEAN_BUILD
+            fi
         fi
         VARIABLES+="
         AAOS_MAKE_CMDLINE=${AAOS_MAKE_CMDLINE}
         AAOS_CLEAN=${AAOS_CLEAN}
 
         AAOS_BUILD_CTS=${AAOS_BUILD_CTS}
+
+        AAOS_PARALLEL_BUILD_JOBS=${AAOS_PARALLEL_BUILD_JOBS}
         "
         ;;
     *avd_sdk.sh)
@@ -478,6 +587,7 @@ VARIABLES+="
         hostname=$(hostname)
 
         Storage Usage (${AAOS_CACHE_DIRECTORY}): $(df -h "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print "Used " $3 " of " $2}')
+        Kernel Revision: $(uname -r)
 "
 # Add to build info for storage.
 echo "$0 Build Info:" | tee -a "${BUILD_INFO_FILE}"
@@ -520,8 +630,16 @@ case "${AAOS_CLEAN}" in
 esac
 
 function create_workspace() {
-    mkdir -p "${WORKSPACE}" > /dev/null 2>&1
-    cd "${WORKSPACE}" || exit
+    # ABFS will mount, don't create.
+    if [[ "${ABFS_BUILDER}" == "false" ]]; then
+        mkdir -p "${WORKSPACE}" > /dev/null 2>&1
+    else
+        if [[ "${ABFS_CACHED_BUILD}" = "false" ]]; then
+            sudo mkdir -p "/${ABFS_MOUNT_POINT}"
+            sudo chown builder:builder "/${ABFS_MOUNT_POINT}"
+        fi
+    fi
+    cd "${WORKSPACE}" || true
 }
 
 function recreate_workspace() {
@@ -530,4 +648,3 @@ function recreate_workspace() {
 }
 
 create_workspace
-

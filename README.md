@@ -1,5 +1,21 @@
 # Horizon
 
+Welcome! 
+
+This page provides an introduction to Horizon, a turnkey implementation designed for OEMs and suppliers interested in adopting Google Cloud’s Software-Defined Vehicle (SDV) industry solution.
+
+The program addresses prevalent challenges within the SDV market, including the inefficiencies stemming from complex and inconsistent toolchains, the high scaling costs that impede software development, and a hardware-centric focus that constrains rapid development and innovation.
+
+## Getting started
+
+Horizon is intended to be deployed into a project within your Google Cloud tenant. The deployment is done leveraging Terraform and Argo CD.
+
+To deploy Horizon into your project, follow the steps described in the [deployment guide](https://github.com/GoogleCloudPlatform/horizon-sdv/blob/main/docs/deployment_guide.md). 
+
+We would be happy to accept your contributions, for details refer to the [contribution guide](https://github.com/GoogleCloudPlatform/horizon-sdv/blob/main/docs/contributing.md).
+
+For consultation regarding initial setup, specific use case, technology or other themes, please contact horizon-sdv@google.com.
+
 ## Vision
 Platforms enabling efficient software development shouldn’t be differentiating, the product itself should be differentiating.
 
@@ -21,6 +37,12 @@ The Horizon initiative consists of two streams:
 
 ## Platform overview
 ![Horizon Platform Overview](https://raw.githubusercontent.com/GoogleCloudPlatform/horizon-sdv/refs/heads/main/docs/images/horizon_platform_overview.svg)
+
+## Major upcoming roadmap items
+* [Cloud Workstations](https://cloud.google.com/workstations) directly deployable via Horizon (https://github.com/GoogleCloudPlatform/cloud-workstations-custom-image-examples/tree/main/examples/images/android-open-source-project)
+* Android Build File System (ABFS) Server, Pushers and Clients directly deployable from Horizon and integrated with scalable GKE based build farm (https://github.com/terraform-google-modules/terraform-google-abfs)
+* Virtual devices deployed via Cloud Android Orchestration (https://github.com/google/cloud-android-orchestration/) 
+
 
 ## Staying up-to-date
 In case you would like to receive updates, you can [subscribe here](https://forms.gle/TFaKXqfHbF6oUAeg6). In case of questions you can directly reach out to [horizon-sdv@google.com](mailto:horizon-sdv@google.com)

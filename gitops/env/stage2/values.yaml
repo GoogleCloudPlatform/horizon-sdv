@@ -16,12 +16,27 @@ config:
   name: Horizon SDV
   workloads:
     android:
-      logRotation:
-        artifactDaysToKeep: 60
-        artifactNumToKeep: 100
-        daysToKeep: 60
-        numToKeep: 200
       repoSyncJobs: 2
+    cloudWorkstations:
+      workloadEnv:
+        image: "horizon-sdv/cloud-ws-workloads/env"
+      clusterPresets:
+        name: 'sdv-cloud-ws-cluster'
+        # region: defined in argocd-config.yaml
+        # projectID: defined in argocd-config.yaml
+        network: 'sdv-network'
+        subnetwork: 'sdv-subnet'
+        privateCluster: false
+      workstationPresets:
+        wsImages:
+          horizonCodeOSS:
+            image: "horizon-sdv/cloud-ws-images/horizon-code-oss"
+          horizonASFP:
+            image: "horizon-sdv/cloud-ws-images/horizon-asfp"
+          horizonAndroidStudio:
+            image: "horizon-sdv/cloud-ws-images/horizon-android-studio"
+          
+
 spec:
   destination:
     server: https://kubernetes.default.svc

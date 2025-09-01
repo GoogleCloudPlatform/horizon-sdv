@@ -1,0 +1,167 @@
+// Copyright (c) 2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// Connect to an OpenBSW host to execute and test the POSIX target application.
+
+pipeline {
+
+  // Parameters defined in groovy/job.groovy
+
+  agent none
+
+  environment {
+    // Define Pod Template in environment so we may override later if needs be.
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          openbsw_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: openbsw
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: openbsw_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-openbsw-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          command:
+          - sleep
+          args:
+          - 5h
+        nodeSelector:
+          workloadLabel: openbsw
+    """.stripIndent()
+  }
+
+
+  stages {
+    stage ('Start VM Instance') {
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+
+      stages {
+        stage ('Download artifacts') {
+          when { expression { env.OPENBSW_DOWNLOAD_URL } }
+          steps {
+            script {
+              currentBuild.description = "$BUILD_USER" + "<br/>" + "${env.IMAGE_TAG}"
+            }
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  OPENBSW_DOWNLOAD_URL="${OPENBSW_DOWNLOAD_URL}" \
+                  ./workloads/openbsw/pipelines/tests/posix/bsw_download_artifact.sh
+                '''
+              }
+            }
+          }
+        }
+
+        stage ('MTK Connect to POSIX Host Device') {
+          when {
+            allOf {
+              expression { env.OPENBSW_DOWNLOAD_URL }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                withCredentials([usernamePassword(credentialsId: 'jenkins-mtk-connect-apikey', passwordVariable: 'MTK_CONNECT_PASSWORD', usernameVariable: 'MTK_CONNECT_USERNAME')]) {
+                  sh '''
+                    cd ./workloads/common/mtk-connect/ || true
+                    sudo \
+                    MTK_CONNECT_DOMAIN=${HORIZON_DOMAIN} \
+                    MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
+                    MTK_CONNECT_PASSWORD=${MTK_CONNECT_PASSWORD} \
+                    MTK_CONNECTED_DEVICES="1" \
+                    MTK_CONNECT_TEST_ARTIFACT="${OPENBSW_DOWNLOAD_URL}" \
+                    MTK_CONNECT_TESTBENCH="${JOB_NAME}-${BUILD_NUMBER}" \
+                    MTK_CONNECT_TESTBENCH_USER="${BUILD_USER_ID}" \
+                    MTK_CONNECT_LAUNCH_APPLICATION_NAME="${LAUNCH_APPLICATION_NAME}" \
+                    MTK_CONNECT_CONTAINER_ONLY="true" \
+                    MTK_CONNECT_HOST_ONLY="true" \
+                    MTK_CONNECT_DEVICE_PREFIX="BSW" \
+                    timeout 15m ./mtk_connect.sh --start
+                    cd - || true
+                  '''
+                }
+              }
+            }
+          }
+        }
+
+        stage ('Keep Devices Alive') {
+          when {
+            allOf {
+              expression { env.OPENBSW_DOWNLOAD_URL }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                script {
+                  sleep(time: "${POSIX_KEEP_ALIVE_TIME}", unit: 'MINUTES')
+                }
+              }
+            }
+          }
+        }
+
+        stage ('Stop Virtual Devices') {
+          when { expression { env.OPENBSW_DOWNLOAD_URL } }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                withCredentials([usernamePassword(credentialsId: 'jenkins-mtk-connect-apikey', passwordVariable: 'MTK_CONNECT_PASSWORD', usernameVariable: 'MTK_CONNECT_USERNAME')]) {
+                  script {
+                    sh 'echo "Stopping  MTK Connect"'
+                    sh '''
+                      cd ./workloads/common/mtk-connect/ || true
+                      sudo \
+                      MTK_CONNECT_DOMAIN=${HORIZON_DOMAIN} \
+                      MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
+                      MTK_CONNECT_PASSWORD=${MTK_CONNECT_PASSWORD} \
+                      MTK_CONNECTED_DEVICES="1" \
+                      MTK_CONNECT_TESTBENCH="${JOB_NAME}-${BUILD_NUMBER}" \
+                      MTK_CONNECT_CONTAINER_ONLY="true" \
+                      timeout 10m ./mtk_connect.sh --stop || true
+                      cd - || true
+                    '''
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

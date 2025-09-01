@@ -72,6 +72,7 @@ jobs:
       gh-gerrit-admin-initial-password: ${{ secrets.GERRIT_ADMIN_INITIAL_PASSWORD }}
       gh-gerrit-admin-private-key: ${{ secrets.GERRIT_ADMIN_PRIVATE_KEY }}
       gh-keycloak-horizon-admin-password: ${{ secrets.KEYCLOAK_HORIZON_ADMIN_PASSWORD }}
+      gh-abfs-license-b64: ${{ secrets.ABFS_LICENSE_B64 }}
       gh-cuttlefish-vm-ssh-private-key: ${{ secrets.CUTTLEFISH_VM_SSH_PRIVATE_KEY }}
     with:
       terraform-version: 1.9.6

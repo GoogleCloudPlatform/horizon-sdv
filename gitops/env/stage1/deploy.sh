@@ -74,5 +74,6 @@ sed -i "s,##DOMAIN##,${GITHUB_ENV_NAME}.${GITHUB_DOMAIN_NAME},g" ./argocd-config
 sed -i "s,##PROJECT_ID##,${GCP_PROJECT_ID},g" ./argocd-config.yaml
 sed -i "s,##CLOUD_REGION##,${GCP_CLOUD_REGION},g" ./argocd-config.yaml
 sed -i "s,##CLOUD_ZONE##,${GCP_CLOUD_ZONE},g" ./argocd-config.yaml
+sed -i "s,##CLOUD_BACKEND_BUCKET##,${GCP_BACKEND_BUCKET_NAME},g" ./argocd-config.yaml
 
 kubectl apply -f argocd-config.yaml

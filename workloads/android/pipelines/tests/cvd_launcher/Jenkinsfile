@@ -42,7 +42,7 @@ def kubernetesPodTemplate = """
 
 pipeline {
 
-  // Parameters defined in gitops/env/stage2/templates/jenkins.yaml (Jenkins CasC)
+  // Parameters defined in groovy/job.groovy
 
   agent none
 
@@ -55,7 +55,7 @@ pipeline {
           when { expression { env.CUTTLEFISH_DOWNLOAD_URL } }
           steps {
             script {
-              currentBuild.description = "$BUILD_USER"
+              currentBuild.description = "${params.JENKINS_GCE_CLOUD_LABEL}" + "<br/>" + "$BUILD_USER"
             }
             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
               script { env.VM_NODE_NAME = env.NODE_NAME }
@@ -66,6 +66,7 @@ pipeline {
                 NUM_INSTANCES="${NUM_INSTANCES}" \
                 VM_CPUS="${VM_CPUS}" \
                 VM_MEMORY_MB="${VM_MEMORY_MB}" \
+                CVD_ADDITIONAL_ARGUMENTS="${CVD_ADDITIONAL_ARGUMENTS}" \
                 ./workloads/android/pipelines/tests/cvd_launcher/cvd_start_stop.sh --start
               '''
             }
@@ -85,6 +86,7 @@ pipeline {
             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
               withCredentials([usernamePassword(credentialsId: 'jenkins-mtk-connect-apikey', passwordVariable: 'MTK_CONNECT_PASSWORD', usernameVariable: 'MTK_CONNECT_USERNAME')]) {
                 sh '''
+                  cd ./workloads/common/mtk-connect/ || true
                   sudo \
                   MTK_CONNECT_DOMAIN=${HORIZON_DOMAIN} \
                   MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
@@ -92,7 +94,9 @@ pipeline {
                   MTK_CONNECTED_DEVICES="${NUM_INSTANCES}" \
                   MTK_CONNECT_TEST_ARTIFACT="${CUTTLEFISH_DOWNLOAD_URL}" \
                   MTK_CONNECT_TESTBENCH="${JOB_NAME}-${BUILD_NUMBER}" \
-                  timeout 15m ./workloads/android/pipelines/tests/cvd_launcher/cvd_mtk_connect.sh --start
+                  MTK_CONNECT_TESTBENCH_USER="${BUILD_USER_ID}" \
+                  timeout 15m ./mtk_connect.sh --start
+                  cd - || true
                 '''
               }
             }
@@ -123,13 +127,15 @@ pipeline {
                 script {
                   sh 'echo "Stopping  MTK Connect"'
                   sh '''
+                    cd ./workloads/common/mtk-connect/ || true
                     sudo \
                     MTK_CONNECT_DOMAIN=${HORIZON_DOMAIN} \
                     MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
                     MTK_CONNECT_PASSWORD=${MTK_CONNECT_PASSWORD} \
                     MTK_CONNECTED_DEVICES="${NUM_INSTANCES}" \
                     MTK_CONNECT_TESTBENCH="${JOB_NAME}-${BUILD_NUMBER}" \
-                    timeout 10m ./workloads/android/pipelines/tests/cvd_launcher/cvd_mtk_connect.sh --stop || true
+                    timeout 10m ./mtk_connect.sh --stop || true
+                    cd - || true
                   '''
                   sh 'echo "Stopping Cuttlefish"'
                   sh './workloads/android/pipelines/tests/cvd_launcher/cvd_start_stop.sh --stop || true'
@@ -165,13 +171,15 @@ pipeline {
             container(name: 'builder') {
               withCredentials([usernamePassword(credentialsId: 'jenkins-mtk-connect-apikey', passwordVariable: 'MTK_CONNECT_PASSWORD', usernameVariable: 'MTK_CONNECT_USERNAME')]) {
                 sh '''
+                  cd ./workloads/common/mtk-connect/ || true
                   sudo \
                   MTK_CONNECT_DOMAIN=${HORIZON_DOMAIN} \
                   MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
                   MTK_CONNECT_PASSWORD=${MTK_CONNECT_PASSWORD} \
                   MTK_CONNECT_TESTBENCH="${JOB_NAME}-${BUILD_NUMBER}" \
                   MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES=true \
-                  timeout 10m ./workloads/android/pipelines/tests/cvd_launcher/cvd_mtk_connect.sh --delete || true
+                  timeout 10m ./mtk_connect.sh --delete || true
+                  cd - || true
                 '''
               }
             }

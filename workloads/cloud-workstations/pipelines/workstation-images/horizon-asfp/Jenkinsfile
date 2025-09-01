@@ -1,0 +1,110 @@
+// Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline builds a preset `asfp` (android-studio-for-platform) Docker image for use in GCP Cloud Workstations config
+// Pipeline uses Kaniko to avoid docker in docker privilege issues.
+//
+// References:
+//   * https://github.com/GoogleContainerTools/kaniko
+
+pipeline {
+  // Parameters defined in workloads/cloud-workstations/pipelines/workstation-images/horizon-asfp/groovy/job.groovy
+
+  agent none
+
+  // Block concurrent builds to avoid clashing.
+  options {
+    buildBlocker (useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Cloud-Workstations/.*/Workstation-Images/.*Docker.*')
+  }
+
+  environment {
+    // Update latest tag.
+    DESTINATION="--destination=${env.CLOUD_REGION}-docker.pkg.dev/${env.CLOUD_PROJECT}/${env.CLOUD_WS_HORIZON_ASFP_IMAGE_NAME}"
+    KANIKO_OPTIONS="${NO_PUSH == "true" ? "--no-push" : "${DESTINATION}:${IMAGE_TAG}"}"
+
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          cloud_ws_horizon_asfp_build_pod: "true"
+      spec:
+        tolerations:
+          - key: workloadType
+            operator: Equal
+            value: android
+            effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
+                - key: cloud_ws_horizon_asfp_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
+                - key: cloud_ws_horizon_android_studio_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-cloud-ws-image-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:debug
+          imagePullPolicy: IfNotPresent
+          command:
+          - /busybox/cat
+          tty: true
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+        nodeSelector:
+          workloadLabel: android
+    """.stripIndent()
+  }
+
+  stages {
+    stage ('Create Docker Image'){
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+      when { expression { env.IMAGE_TAG } }
+      steps {
+        container(name: 'kaniko') {
+          script {
+            currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+          }
+          sh '''
+            # Build the docker image and push to Artifact registry using service account configured with
+            # correct roles/permissions.
+            /kaniko/executor -f workloads/cloud-workstations/pipelines/workstation-images/horizon-asfp/Dockerfile \
+              -c workloads/cloud-workstations/pipelines/workstation-images/horizon-asfp --skip-tls-verify-pull \
+              --insecure --skip-tls-verify "${KANIKO_OPTIONS}"
+          '''
+        }
+      }
+    }
+  }
+}

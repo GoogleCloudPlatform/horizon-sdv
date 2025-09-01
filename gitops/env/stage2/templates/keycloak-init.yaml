@@ -55,6 +55,19 @@ type: Opaque
 stringData:
   username: "gerrit-admin"
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-jenkins-admin
+  namespace: keycloak
+  labels:
+    jenkins.io/credentials-type: "usernamePassword"
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+type: Opaque
+stringData:
+  username: "jenkins-admin"
+---
 apiVersion: external-secrets.io/v1beta1
 kind: SecretStore
 metadata:
@@ -132,3 +145,23 @@ spec:
     - secretKey: password
       remoteRef:
         key: gerritAdminInitialPassword
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: jenkins-admin-initial-secret
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  refreshInterval: 10s
+  secretStoreRef:
+    kind: SecretStore
+    name: keycloak-secret-store
+  target:
+    name: keycloak-jenkins-admin
+    creationPolicy: Merge
+  data:
+    - secretKey: password
+      remoteRef:
+        key: jenkinsInitialPassword

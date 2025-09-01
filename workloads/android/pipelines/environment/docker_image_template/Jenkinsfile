@@ -20,7 +20,7 @@
 //   * https://github.com/GoogleContainerTools/kaniko
 pipeline {
 
-  // Parameters defined in gitops/env/stage2/templates/jenkins.yaml (Jenkins CasC)
+  // Parameters defined in groovy/job.groovy
 
   agent {
     kubernetes {
@@ -37,13 +37,13 @@ pipeline {
             command:
             - /busybox/cat
             tty: true
+            resources:
+              limits:
+                memory: 8Gi
+              requests:
+                memory: 8Gi
       """.stripIndent()
     }
-  }
-
-  // Block concurrent builds to avoid clashing.
-  options {
-    buildBlocker (useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '.*Docker.*')
   }
 
   environment {
@@ -65,7 +65,10 @@ pipeline {
             # correct roles/permissions.
             /kaniko/executor -f workloads/android/pipelines/environment/docker_image_template/Dockerfile \
               -c workloads/android/pipelines/environment/docker_image_template --skip-tls-verify-pull \
-              --insecure --skip-tls-verify "${KANIKO_OPTIONS}"
+              --insecure --skip-tls-verify "${KANIKO_OPTIONS}" \
+              --build-arg NODEJS_VERSION='''+NODEJS_VERSION+''' \
+              --build-arg LINUX_DISTRIBUTION='''+LINUX_DISTRIBUTION+''' \
+              --build-arg ABFS="false"
           '''
         }
       }

@@ -1,0 +1,108 @@
+// Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline job retrieves and displays a list of existing GCP Cloud Workstation Configurations (all or those matching a config name pattern provided as input).
+//
+// References:
+//
+
+// Function to create a json object for the .tfvars.json file (on the fly)
+def buildTfvarsMap(params) {
+  return [
+    sdv_cloud_ws_input_config_name: params.CLOUD_WS_CONFIG_NAME_REGEX_PATTERN?.trim() ?: ""
+  ]
+}
+
+pipeline {
+  // Parameters defined in workloads/cloud-workstations/pipelines/config-admin-operations/list-configs/groovy/job.groovy
+
+  agent {
+    kubernetes {
+      yaml """\
+        apiVersion: v1
+        kind: Pod
+        spec:
+          hostname: jenkins-cloud-ws-build-pod
+          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+          containers:
+          - name: cloud-ws-builder
+            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME}:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - sleep
+            args:
+            - 5h
+            tty: true
+      """.stripIndent()
+    }
+  }
+
+  environment {
+    // Define the tf backend bucket name from jenkins env var
+    def tfBackendBucket = "${CLOUD_BACKEND_BUCKET}"
+    // Define the .tfvars.json file name where cloud-ws config tf directory is located
+    def tfvarsJsonFilePath = "./workloads/cloud-workstations/terraform/config/config.tfvars.json"
+    // this file is populated in pipeline stage below
+  }
+  
+  options {
+    // Prevent any other "write" operation pipeline within the Cloud Workstations domain
+    // from running concurrently with this job (and vice-versa).
+    buildBlocker(useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Cloud-Workstations/.*/(create|delete|add|remove|start|stop).*')
+
+    // Prevent this specific job from running concurrently with itself.
+    disableConcurrentBuilds()
+  }
+
+  stages {
+    stage('List Configurations Operation') {
+      steps {
+        script {
+          echo 'Fetching list of Cloud WS Configurations that match input regex pattern...'
+
+          // Convert the tfvars map into valid json object and format it
+          def tfvarsJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(buildTfvarsMap(params)))
+          // Write the content to a temporary .tfvars.json file within the tf directory
+          writeFile(file: "${tfvarsJsonFilePath}", text: tfvarsJson)
+
+          def scriptPath = "./workloads/cloud-workstations/pipelines/config-admin-operations/list-configs/list-configs.sh"
+          
+          container(name: 'cloud-ws-builder') {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              sh """
+                chmod +x "${scriptPath}"
+                ${scriptPath} ${tfBackendBucket} ${tfvarsJsonFilePath}
+              """
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Post-build actions for success or failure
+  post {
+    success {
+      echo "Status: SUCCESS - Workstation Configurations listed successfully."
+    }
+    failure {
+      echo "Status: FAILURE - Failed to list Workstation Configurations."
+    }
+    always {
+      // Clean-up
+      echo "Job finished."
+    }
+  }
+}

@@ -21,7 +21,7 @@
 // any such instances left when developing tests.
 pipeline {
 
-  // Parameters defined in gitops/env/stage2/templates/jenkins.yaml (Jenkins CasC)
+  // Parameters defined in groovy/job.groovy
 
   agent {
     kubernetes {
@@ -43,10 +43,6 @@ pipeline {
             - 1h
       """.stripIndent()
     }
-  }
-
-  options {
-    buildBlocker (useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'ALL', blockingJobs: '.*CF.*Cleanup.*')
   }
 
   stages {

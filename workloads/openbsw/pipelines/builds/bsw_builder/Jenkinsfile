@@ -1,0 +1,328 @@
+
+// Copyright (c) 2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// Jenkins Pipeline for OpenBSW Build and Test Automation
+//
+// This pipeline orchestrates the build, test, and artifact storage processes
+// for the OpenBSW project.
+// It is run on Kubernetes agents using a dynamically generated pod template,
+// allowing for flexible configuration of build environments via environment
+// variables.
+//
+// Pipeline Overview:
+// - Utilizes a Kubernetes pod with a custom builder container for all build
+//   and test steps.
+// - Supports conditional execution of stages based on environment variables
+//   and build results.
+// - Handles initialization, unit test listing, building, running, code
+//   coverage, and target-specific builds.
+// - Archives relevant artifacts and publishes code coverage reports.
+// - Provides a mechanism for artifact storage and optional instance retention
+//   for debugging or inspection.
+//
+// Stages:
+// 1. Start VM Instance: Initializes the build environment and sets build description.
+// 2. Initialise: Runs project-specific initialization scripts.
+// 3. List Unit Tests: Optionally lists available unit tests.
+// 4. Build Unit Tests: Optionally builds unit tests.
+// 5. Run Unit Tests: Optionally runs unit tests and archives results.
+// 6. Code Coverage: Optionally generates and publishes code coverage reports.
+// 7. Build POSIX Target: Optionally builds the POSIX target.
+// 8. Build NXP S32K148 Target: Optionally builds the NXP S32K148 target.
+// 9. Storage: Optionally stores build artifacts.
+// 10. Retain instance: Optionally retains the build instance for a specified time.
+//
+// Note:
+// - Parameters for the pipeline are defined externally in 'groovy/job.groovy'.
+// - The pipeline is designed for extensibility and can be adapted for additional
+//   build targets or test types.
+pipeline {
+
+  // Parameters defined in groovy/job.groovy
+
+  agent none
+
+  environment {
+    // Define Pod Template in environment so we may override later if needs be.
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          openbsw_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: openbsw
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: openbsw_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-openbsw-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          command:
+          - sleep
+          args:
+          - 4h
+        nodeSelector:
+          workloadLabel: openbsw
+    """.stripIndent()
+  }
+
+
+  stages {
+    stage ('Start VM Instance') {
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+
+      stages {
+        stage ('Initialise') {
+          steps {
+            script {
+              currentBuild.description = "$BUILD_USER" + "<br/>" + "${env.IMAGE_TAG}"
+            }
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  OPENBSW_GIT_URL="${OPENBSW_GIT_URL}" \
+                  OPENBSW_GIT_BRANCH="${OPENBSW_GIT_BRANCH}" \
+                  POST_GIT_CLONE_COMMAND="${POST_GIT_CLONE_COMMAND}" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_initialise.sh
+                '''
+              }
+            }
+          }
+        }
+
+        stage ('List Unit Tests') {
+          when {
+            allOf {
+              expression { env.LIST_UNIT_TESTS == 'true' }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  CMAKE_SYNC_JOBS="${CMAKE_SYNC_JOBS}" \
+                  BUILD_NXP_S32K148="false" \
+                  BUILD_POSIX="false" \
+                  BUILD_UNIT_TESTS="false" \
+                  CODE_COVERAGE="false" \
+                  LIST_UNIT_TESTS="${LIST_UNIT_TESTS}" \
+                  LIST_UNIT_TESTS_CMDLINE="${LIST_UNIT_TESTS_CMDLINE}" \
+                  RUN_UNIT_TESTS="false" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_build.sh
+                '''
+                archiveArtifacts artifacts: '*unit_test*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              }
+            }
+          }
+        }
+
+        stage ('Build Unit Tests') {
+          when {
+            allOf {
+              expression { env.BUILD_UNIT_TESTS == 'true' }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  CMAKE_SYNC_JOBS="${CMAKE_SYNC_JOBS}" \
+                  BUILD_NXP_S32K148="false" \
+                  BUILD_POSIX="false" \
+                  BUILD_UNIT_TESTS="${BUILD_UNIT_TESTS}" \
+                  CODE_COVERAGE="false" \
+                  LIST_UNIT_TESTS="false" \
+                  RUN_UNIT_TESTS="false" \
+                  UNIT_TESTS_CMDLINE="${UNIT_TESTS_CMDLINE}" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_build.sh
+                '''
+              }
+            }
+          }
+        }
+
+        stage ('Run Unit Tests') {
+          when {
+            allOf {
+              expression { env.BUILD_UNIT_TESTS == 'true' }
+              expression { env.RUN_UNIT_TESTS == 'true' }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  CMAKE_SYNC_JOBS="${CMAKE_SYNC_JOBS}" \
+                  BUILD_NXP_S32K148="false" \
+                  BUILD_POSIX="false" \
+                  BUILD_UNIT_TESTS="false" \
+                  CODE_COVERAGE="false" \
+                  LIST_UNIT_TESTS="false" \
+                  RUN_UNIT_TESTS="${RUN_UNIT_TESTS}" \
+                  RUN_UNIT_TESTS_CMDLINE="${RUN_UNIT_TESTS_CMDLINE}" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_build.sh
+                '''
+                archiveArtifacts artifacts: '*unit_test*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              }
+            }
+          }
+        }
+
+        stage ('Code Coverage') {
+          when {
+            allOf {
+              expression { env.BUILD_UNIT_TESTS == 'true' }
+              expression { env.RUN_UNIT_TESTS == 'true' }
+              expression { env.CODE_COVERAGE == 'true' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  BUILD_NXP_S32K148="false" \
+                  BUILD_POSIX="false" \
+                  BUILD_UNIT_TESTS="false" \
+                  LIST_UNIT_TESTS="false" \
+                  RUN_UNIT_TESTS="false" \
+                  CODE_COVERAGE="${CODE_COVERAGE}" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_build.sh
+                '''
+                archiveArtifacts artifacts: '*coverage.html.tgz', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+
+                publishHTML target: [
+                  allowMissing: true,
+                  alwaysLinkToLastBuild: true,
+                  keepAll: true,
+                  reportDir: "coverage",
+                  reportFiles: 'index.html',
+                  reportName: 'OpenBSW Unit Test Coverage Report'
+                ]
+              }
+            }
+          }
+        }
+
+        stage ('Build POSIX Target') {
+          when {
+            allOf {
+              expression { env.BUILD_POSIX == 'true' }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  CMAKE_SYNC_JOBS="${CMAKE_SYNC_JOBS}" \
+                  BUILD_NXP_S32K148="false" \
+                  BUILD_POSIX="${BUILD_POSIX}" \
+                  BUILD_UNIT_TESTS="false" \
+                  CODE_COVERAGE="false" \
+                  LIST_UNIT_TESTS="false" \
+                  POSIX_BUILD_CMDLINE="${POSIX_BUILD_CMDLINE}" \
+                  RUN_UNIT_TESTS="false" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_build.sh
+                '''
+              }
+            }
+          }
+        }
+
+        stage ('Build NXP S32K148 Target') {
+          when {
+            allOf {
+              expression { env.BUILD_NXP_S32K148 == 'true' }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  CMAKE_SYNC_JOBS="${CMAKE_SYNC_JOBS}" \
+                  BUILD_POSIX="false" \
+                  BUILD_UNIT_TESTS="false" \
+                  BUILD_NXP_S32K148="${BUILD_NXP_S32K148}" \
+                  CODE_COVERAGE="false" \
+                  LIST_UNIT_TESTS="false" \
+                  NXP_S32K148_BUILD_CMDLINE="${NXP_S32K148_BUILD_CMDLINE}" \
+                  RUN_UNIT_TESTS="false" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_build.sh
+                '''
+              }
+            }
+          }
+        }
+
+        stage ('Storage') {
+          when {
+            allOf {
+              expression { env.OPENBSW_ARTIFACT_STORAGE_SOLUTION }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  OPENBSW_ARTIFACT_ROOT_NAME="${OPENBSW_BUILD_BUCKET_ROOT_NAME}" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_storage.sh
+                '''
+                archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              }
+            }
+          }
+        }
+
+        stage ('Retain instance') {
+          when {
+            allOf {
+              expression { env.BUILD_UNIT_TESTS == 'true' }
+              expression { env.BUILD_NXP_S32K148 == 'true' }
+              expression { env.BUILD_POSIX == 'true' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              script {
+                sleep(time: "${INSTANCE_RETENTION_TIME}", unit: 'MINUTES')
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

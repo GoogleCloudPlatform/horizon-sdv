@@ -64,6 +64,9 @@ module "base" {
   sdv_build_node_pool_machine_type   = "c2d-highcpu-112"
   sdv_build_node_pool_max_node_count = 20
 
+  sdv_openbsw_build_node_pool_machine_type   = "n1-standard-8"
+  sdv_openbsw_build_node_pool_max_node_count = 20
+
   sdv_bastion_host_name    = "sdv-bastion-host"
   sdv_bastion_host_sa      = "sdv-bastion-host-sa-iap"
   sdv_bastion_host_members = []
@@ -79,6 +82,7 @@ module "base" {
   sdv_ssl_certificate_name   = "horizon-sdv"
   sdv_ssl_certificate_domain = "${var.sdv_gh_env_name}.${var.sdv_gh_domain_name}"
 
+  sdv_gh_abfs_license_b64 = var.sdv_gh_abfs_license_b64
   #
   # To create a new SA with access from GKE to GC, add a new saN block.
   #
@@ -107,7 +111,14 @@ module "base" {
         "roles/container.admin",
         "roles/iap.tunnelResourceAccessor",
         "roles/iam.serviceAccountUser",
-        "roles/compute.instanceAdmin.v1"
+        "roles/compute.instanceAdmin.v1",
+        "roles/workstations.admin",
+        "roles/storage.bucketViewer",
+        "roles/spanner.admin",
+        "roles/logging.admin",
+        "roles/editor",
+        "roles/iam.serviceAccountAdmin",
+        "roles/resourcemanager.projectIamAdmin"
       ])
     },
     sa2 = {
@@ -159,7 +170,58 @@ module "base" {
         "roles/secretmanager.secretAccessor",
         "roles/iam.serviceAccountTokenCreator",
       ])
-    }
+    },
+    sa5 = {
+      account_id   = "prometheus-ui"
+      display_name = "prometheus-ui"
+      description  = "prometheus-ui/prometheus-ui in GKE cluster makes use of this account through WI"
+
+      gke_sas = [
+        {
+          gke_ns = "monitoring"
+          gke_sa = "prometheus-ui"
+        }
+      ]
+
+      roles = toset([
+        "roles/monitoring.viewer"
+      ])
+    },
+    sa6 = {
+      account_id   = "monitoring"
+      display_name = "monitoring-sa"
+      description  = "monitoring/monitoring-sa in GKE cluster makes use of this account through WI"
+
+      gke_sas = [
+        {
+          gke_ns = "monitoring"
+          gke_sa = "monitoring-sa"
+        }
+      ]
+
+      roles = toset([
+        "roles/iam.workloadIdentityUser"
+      ])
+    },
+    sa7 = {
+      account_id   = "kube-state-metrics"
+      display_name = "kube-state-metrics-sa"
+      description  = "kube-state-metrics/kube-state-metrics-sa in GKE cluster makes use of this account through WI"
+
+      gke_sas = [
+        {
+          gke_ns = "kube-state-metrics"
+          gke_sa = "gmp-public"
+        }
+      ]
+      roles = toset([
+        #"roles/monitoring.metricWriter",
+        "roles/monitoring.viewer",
+        #"roles/iam.serviceAccountTokenCreator",
+        #"roles/iam.serviceAccountUser",
+        "roles/iam.workloadIdentityUser"
+      ])
+    },
   }
 
   #
@@ -317,6 +379,19 @@ module "base" {
         }
       ]
     }
+    # GCP secret name:  gh_abfs_license_b64
+    # WI to GKE at ns/jenkins/sa/jenkins-sa.
+    s13 = {
+      secret_id        = "jenkinsABFSLicenseB64"
+      value            = var.sdv_gh_abfs_license_b64
+      use_github_value = true
+      gke_access = [
+        {
+          ns = "jenkins"
+          sa = "jenkins-sa"
+        }
+      ]
+    }
 
   }
 
@@ -337,6 +412,8 @@ module "base" {
     echo $GCP_CLOUD_REGION
     export GCP_CLOUD_ZONE=${var.sdv_gcp_cloud_zone}
     echo $GCP_CLOUD_ZONE
+    export GCP_BACKEND_BUCKET_NAME=${var.sdv_gcp_backend_bucket_name}
+    echo $GCP_BACKEND_BUCKET_NAME
     cd bash-scripts
     chmod +x stage1.sh
     ./stage1.sh

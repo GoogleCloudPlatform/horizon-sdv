@@ -120,7 +120,49 @@ spec:
                 secretKeyRef:
                   name: keycloak-initial-creds
                   key: password
+            - name: JENKINS_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-jenkins-admin
+                  key: username
+            - name: JENKINS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-jenkins-admin
+                  key: password
           image: {{ .Values.config.postjobs.keycloakjenkins }}
+          imagePullPolicy: Always
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-post-argocd-job
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/hook: Sync
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 120
+  template:
+    spec:
+      serviceAccountName: keycloak-writer-sa
+      containers:
+        - name: keycloak-post-argocd-container
+          env:
+            - name: PLATFORM_URL
+              value: http://keycloak-keycloakx-http:8080
+            - name: DOMAIN
+              value: https://{{ .Values.config.domain }}
+            - name: KEYCLOAK_USERNAME
+              value: "admin"
+            - name: KEYCLOAK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-initial-creds
+                  key: password
+          image: {{ .Values.config.postjobs.keycloakargocd }}
           imagePullPolicy: Always
       restartPolicy: Never
 ---

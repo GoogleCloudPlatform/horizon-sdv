@@ -1,0 +1,16 @@
+[Unit]
+Description=TigerVNC remote desktop service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=user
+PAMName=login
+PIDFile=/home/user/.vnc/%H:1.pid
+ExecStartPre=/bin/bash -c '/usr/bin/vncserver -kill :1 > /dev/null 2>&1 || :'
+ExecStart=/bin/bash -l -c '/usr/bin/vncserver :1 -geometry 1920x1200 -depth 24 -localhost no -fg -SecurityTypes None --I-KNOW-THIS-IS-INSECURE'
+ExecStop=/bin/bash -c '/usr/bin/vncserver -kill :1 > /dev/null 2>&1 || :'
+
+[Install]
+WantedBy=multi-user.target

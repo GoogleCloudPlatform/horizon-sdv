@@ -1,0 +1,1 @@
+../../../../../docs/workloads/openbsw/environment/delete_mtkc_testbench.md

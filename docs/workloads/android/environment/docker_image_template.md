@@ -21,16 +21,24 @@ This depends only on [`kaniko`](https://github.com/GoogleContainerTools/kaniko) 
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
-**Jenkins Parameters:** Defined in the respective pipeline jobs within `gitops/env/stage2/templates/jenkins.yaml` (CasC).
+**Jenkins Parameters:** Defined in the groovy job definition `groovy/job.groovy`.
+
+### `NO_PUSH`
+
+Build the container image but don't push to the registry.
 
 ### `IMAGE_TAG`
 
 This is the tag that will be applied when the container image is pushed to the registry. For the current release we
 simply use `latest` because all pipelines that depend on this container image are using `latest`.
 
-### `NO_PUSH`
+### `LINUX_DISTRIBUTION`
 
-Build the container image but don't push to the registry.
+Define the Linux Distribution to create the Docker image from. Values must be supported by the Dockerfile `FROM` instruction.
+
+### `NODEJS_VERSION`
+
+The version of NodeJS to install which is required by MTK Connect.
 
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
@@ -48,6 +56,12 @@ These are as follows:
 
 -   `CLOUD_REGION`
     - The GCP project region. Important for bucket, registry paths used in pipelines.
+
+-   `HORIZON_GITHUB_URL`
+    - The URL to the Horizon SDV GitHub repository.
+
+-   `HORIZON_GITHUB_BRANCH`
+    - The branch name the job will be configured for from `HORIZON_GITHUB_URL`.
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.

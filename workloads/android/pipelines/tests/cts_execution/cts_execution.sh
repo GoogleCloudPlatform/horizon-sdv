@@ -87,10 +87,13 @@ function cts_store_results() {
 # Main
 cd "${HOME}"/android-cts/tools || exit
 cts_info
-cts_run
-RESULT="${CTS_RESULT}"
-cts_store_results
-cts_cleanup
+RESULT=$?
+if [[ "${CTS_TEST_LISTS_ONLY}" == "false" ]]; then
+    cts_run
+    RESULT="${CTS_RESULT}"
+    cts_store_results
+    cts_cleanup
+fi
 
 # Return result
 echo "Exit ${RESULT}"
