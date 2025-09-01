@@ -1,0 +1,12 @@
+[
+    {"operation": "GET_USER", "user": "*"},
+    {"operation": "GET_USER", "user": "user@accenture.com"},
+    {"operation": "GET_USER", "user": ["user1@accenture.com", "user2@accenture.com"]},
+    {"operation": "GET_ALL_ROLES"},
+    {"operation": "GET_ALL_ROLES_WITH_USERS"},
+    {"operation": "GET_ROLES_WITH_USERS", "roles": ["editor", "viewer"]},
+    {"operation": "GET_ROLE_INFO", "role": "editor"},
+    {"operation": "SET_ROLE_TO_USER", "user": "user@accenture.com", "role": "editor"},
+    {"operation": "DELETE_ROLE_FROM_USER", "user": "user@accenture.com", "role": "editor"},
+    {"operation": "DELETE_ALL_ROLES_FROM_USER", "user": "user@accenture.com"}
+]

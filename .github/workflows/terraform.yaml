@@ -61,6 +61,9 @@ on:
       gh-cuttlefish-vm-ssh-private-key:
         required: false
         description: "Github Secret CUTTLEFISH_VM_SSH_PRIVATE_KEY"
+      gh-abfs-license-b64:
+        required: false
+        description: "Github Secret ABFS_LICENSE_B64"
 
     inputs:
       branch_env:
@@ -197,10 +200,12 @@ jobs:
           echo "TF_VAR_sdv_gh_keycloak_initial_password=${{ secrets.gh-keycloak-initial-password }}" >> $GITHUB_ENV
           echo "TF_VAR_sdv_gh_gerrit_admin_initial_password=${{ secrets.gh-gerrit-admin-initial-password }}" >> $GITHUB_ENV
           echo "TF_VAR_sdv_gh_keycloak_horizon_admin_password=${{ secrets.gh-keycloak-horizon-admin-password }}" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gh_abfs_license_b64=${{ secrets.gh-abfs-license-b64 }}" >> $GITHUB_ENV
           echo "TF_VAR_sdv_gcp_project_id=${{ vars.GCP_PROJECT_ID }}" >> $GITHUB_ENV;
           echo "TF_VAR_sdv_computer_sa=${{ vars.GCP_COMPUTER_SA }}" >> $GITHUB_ENV;
           echo "TF_VAR_sdv_gcp_cloud_region=${{ vars.GCP_CLOUD_REGION }}" >> $GITHUB_ENV;
           echo "TF_VAR_sdv_gcp_cloud_zone=${{ vars.GCP_CLOUD_ZONE }}" >> $GITHUB_ENV;
+          echo "TF_VAR_sdv_gcp_backend_bucket_name=${{ vars.GCP_BACKEND_BUCKET_NAME }}" >> $GITHUB_ENV;
           echo "TF_VAR_sdv_gh_domain_name=${{ vars.HORIZON_DOMAIN }}" >> $GITHUB_ENV;
 
           if [[ "${{ secrets.gcp-sa }}" != '' && "${{ secrets.wif-provider }}" != '' ]]; then

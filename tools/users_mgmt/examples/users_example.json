@@ -1,0 +1,10 @@
+[
+    {
+        "user": "user@accenture.com",
+        "horizon_roles": ["horizon_role"]
+    },
+    {
+        "group_role": "horizon_role",
+        "users":["user@accenture.com"]
+    }
+]

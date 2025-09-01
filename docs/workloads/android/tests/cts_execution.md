@@ -36,16 +36,19 @@ One-time setup requirements.
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
-**Jenkins Parameters:** Defined in the respective pipeline jobs within `gitops/env/stage2/templates/jenkins.yaml` (CasC).
+**Jenkins Parameters:** Defined in the groovy job definition `groovy/job.groovy`.
 
 ### `JENKINS_GCE_CLOUD_LABEL`
 
 This is the label that identifies the GCE Cloud label which will be used to identify the Cuttlefish VM instance, e.g.
 
 - `cuttlefish-vm-main`
-- `cuttlefish-vm-v110`
+- `cuttlefish-vm-v1180`
 
 Note: The value provided must correspond to a cloud instance or the job will hang.
+
+### `CTS_TEST_LISTS_ONLY`
+Skip running tests and simply list the available test plans and test modules.
 
 ### `CUTTLEFISH_DOWNLOAD_URL`
 
@@ -80,14 +83,18 @@ URL is of the form `gs://<ANDROID_BUILD_BUCKET_ROOT_NAME>/Android/Builds/CTS_Bui
 
 ### `CTS_TESTPLAN`
 
-This defines the CTS test plan that will be run. Default is: `cts-virtual-device-stable`.
+This defines the CTS test plan that will be run. Default is: `cts-system-virtual` which is only available in Android 15.
+
+Android 14 users should pick a test plan that is compatible with their version of Cuttlefish.
+
+Note: `cts-virtual-device-stable` was the previous default and takes less time than `cts-system-virtual`.
 
 ### `CTS_MODULE`
 
 Optional.
 
-This defines the CTS test module that will be run. Default is: `CtsHostsideNumberBlockingTestCases` but if field is left
-empty, all CTS test modules will be run.
+This defines the CTS test module that will be run. Default is: `CtsDeqpTestCases` but if field is left empty, all CTS test modules will be run.
+Note: `CtsHostsideNumberBlockingTestCases` is the previous default simply because it was quick.
 
 ### `CUTTLEFISH_MAX_BOOT_TIME`
 
@@ -128,6 +135,10 @@ minutes, gives the tester time to keep the instance alive so they may work with 
 
 It is only applicable when `MTK_CONNECT_ENABLE` is enabled.
 
+### `CVD_ADDITIONAL_FLAGS`
+
+Append additional flags to `cvd` command, e.g. --display0=width=1920,height=1080,dpi=160
+
 ## Example Usage <a name="examples"></a>
 
 Refer to `docs/workloads/android/tests/cvd_launcher.md` for an example of how to create and set up a test instance and boot the Cuttlefish Virtual Devices. Once the devices are booted, CTS tests can be run as follows:
@@ -136,9 +147,9 @@ Refer to `docs/workloads/android/tests/cvd_launcher.md` for an example of how to
 ```
 ANDROID_VERSION=14 \
 ./workloads/android/pipelines/tests/cts_execution/cts_initialise.sh
-CTS_TESTPLAN="cts-virtual-device-stable" \
-CTS_MODULE="CtsHostsideNumberBlockingTestCases" \
-CTS_TIMEOUT=240 \
+CTS_TESTPLAN="cts-system-virtual" \
+CTS_MODULE="CtsDeqpTestCases" \
+CTS_TIMEOUT=600 \
 SHARD_COUNT=1 \
 ./workloads/android/pipelines/tests/cts_execution/cts_execution.sh
 ```
@@ -168,6 +179,12 @@ These are as follows:
 
 -   `HORIZON_DOMAIN`
     - The URL domain which is required by pipeline jobs to derive URL for tools and GCP.
+
+-   `HORIZON_GITHUB_URL`
+    - The URL to the Horizon SDV GitHub repository.
+
+-   `HORIZON_GITHUB_BRANCH`
+    - The branch name the job will be configured for from `HORIZON_GITHUB_URL`.
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.

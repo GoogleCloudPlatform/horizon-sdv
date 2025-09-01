@@ -30,8 +30,8 @@ CUTTLEFISH_UPDATE=${CUTTLEFISH_UPDATE:-false}
 
 # Android CTS test harness URLs, installed on host.
 # https://source.android.com/docs/compatibility/cts/downloads
-CTS_ANDROID_15_URL="https://dl.google.com/dl/android/cts/android-cts-15_r3-linux_x86-x86.zip"
-CTS_ANDROID_14_URL="https://dl.google.com/dl/android/cts/android-cts-14_r7-linux_x86-x86.zip"
+CTS_ANDROID_15_URL="https://dl.google.com/dl/android/cts/android-cts-15_r5-linux_x86-x86.zip"
+CTS_ANDROID_14_URL="https://dl.google.com/dl/android/cts/android-cts-14_r9-linux_x86-x86.zip"
 # NodeJS Version
 NODEJS_VERSION=${NODEJS_VERSION:-20.9.0}
 

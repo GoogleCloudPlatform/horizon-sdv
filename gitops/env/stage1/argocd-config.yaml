@@ -50,12 +50,14 @@ spec:
           projectID: ##PROJECT_ID##
           region: ##CLOUD_REGION##
           zone: ##CLOUD_ZONE##
+          backendBucket: ##CLOUD_BACKEND_BUCKET##
           apps:
             landingpage: ##CLOUD_REGION##-docker.pkg.dev/##PROJECT_ID##/horizon-sdv/landingpage-app:1.0.0
           postjobs:
             keycloak: ##CLOUD_REGION##-docker.pkg.dev/##PROJECT_ID##/horizon-sdv/keycloak-post:1.0.0
             keycloakmtkconnect: ##CLOUD_REGION##-docker.pkg.dev/##PROJECT_ID##/horizon-sdv/keycloak-post-mtk-connect:1.0.0
             keycloakjenkins: ##CLOUD_REGION##-docker.pkg.dev/##PROJECT_ID##/horizon-sdv/keycloak-post-jenkins:1.0.0
+            keycloakargocd: ##CLOUD_REGION##-docker.pkg.dev/##PROJECT_ID##/horizon-sdv/keycloak-post-argocd:1.0.0
             keycloakgerrit: ##CLOUD_REGION##-docker.pkg.dev/##PROJECT_ID##/horizon-sdv/keycloak-post-gerrit:1.0.0
             mtkconnect: ##CLOUD_REGION##-docker.pkg.dev/##PROJECT_ID##/horizon-sdv/mtk-connect-post:1.0.0
             mtkconnectkey: ##CLOUD_REGION##-docker.pkg.dev/##PROJECT_ID##/horizon-sdv/mtk-connect-post-key:1.0.0

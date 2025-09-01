@@ -1,0 +1,129 @@
+// Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline job creates a GCP Cloud Workstation.
+//
+// References:
+//
+import groovy.json.JsonOutput
+
+def generateTfvarsJson() {
+  String wsId        = params.WORKSTATION_NAME.trim()
+  String projectId   = env.CLOUD_PROJECT.trim()
+  String region      = env.CLOUD_REGION.trim()
+  String clusterName = env.CLOUD_WS_CLUSTER_PRESET_NAME.trim()
+  String configName  = params.WORKSTATION_CONFIG_NAME.trim()
+  String displayName = params.WORKSTATION_DISPLAY_NAME.trim()
+  List<String> emails = params.INITIAL_WORKSTATION_USER_EMAILS_TO_ADD
+                            .split(',')
+                            .collect { it.trim() }
+                            .findAll { it }
+// Build the JSON structure
+  def tfvars = [
+    sdv_cloud_ws_project_id   : projectId,
+    sdv_cloud_ws_region       : region,
+    sdv_cloud_ws_cluster_name : clusterName,
+    workstations              : [
+      (wsId): [
+        sdv_cloud_ws_workstation_config_id: configName,
+        sdv_cloud_ws_workstation_id       : wsId,
+        sdv_cloud_ws_display_name         : displayName,
+        sdv_cloud_ws_user_emails          : emails
+      ]
+    ]
+  ]
+
+  return JsonOutput.prettyPrint(JsonOutput.toJson(tfvars))
+}
+
+pipeline {
+  // Parameters defined in workloads/cloud-workstations/pipelines/workstation-admin-operations/delete-workstation/groovy/job.groovy
+
+  agent {
+    kubernetes {
+      yaml """\
+        apiVersion: v1
+        kind: Pod
+        spec:
+          hostname: jenkins-cloud-ws-build-pod
+          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+          containers:
+          - name: cloud-ws-builder
+            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME}:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - sleep
+            args:
+            - 5h
+            tty: true
+      """.stripIndent()
+    }
+  }
+
+  environment {
+    // Define the tf backend bucket name from jenkins env var
+    def tfBackendBucket = "${CLOUD_BACKEND_BUCKET}"
+    // Define the .tfvars.json file name where cloud-ws config tf directory is located
+    def tfvarsJsonFilePath = "./workloads/cloud-workstations/terraform/workstation/config.tfvars.json"
+    // this file is populated in stage `Delete Config Operation`
+  }
+
+  options {
+    // Prevent any other "write" operation pipeline within the Cloud Workstations domain
+    // from running concurrently with this job (and vice-versa).
+    buildBlocker(useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Cloud-Workstations/.*/(create|delete|add|remove|start|stop).*')
+
+    // Prevent this specific job from running concurrently with itself.
+    disableConcurrentBuilds()
+  }
+
+  stages {
+    stage('Create Workstation Operation') {
+      steps {
+        script {
+          def jsonText = generateTfvarsJson()
+          // Write the content to a temporary .tfvars.json file within the tf directory
+          writeFile file: env.tfvarsJsonFilePath, text: jsonText
+          echo "Wrote Terraform variables to ${env.tfvarsJsonFilePath}"
+
+          def scriptPath = "./workloads/cloud-workstations/pipelines/workstation-admin-operations/create-workstation/create-workstation.sh"
+          
+          container(name: 'cloud-ws-builder') {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              sh """
+                chmod +x "${scriptPath}"
+                "${scriptPath}" "${tfBackendBucket}" "${tfvarsJsonFilePath}"
+              """
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Post-build actions for success or failure
+  post {
+    success {
+      echo "Status: SUCCESS - Workstation creation job completed."
+    }
+    failure {
+      echo "Status: FAILURE - Workstation creation job failed."
+    }
+    always {
+      // Clean-up
+      echo "Job finished."
+    }
+  }
+}

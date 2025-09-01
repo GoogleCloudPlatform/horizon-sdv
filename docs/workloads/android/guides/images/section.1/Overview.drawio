@@ -1,0 +1,114 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/26.2.15 Chrome/134.0.6998.205 Electron/35.2.1 Safari/537.36" version="26.2.15">
+  <diagram name="Page-1" id="L01sDxYhYrt_UExRbwzo">
+    <mxGraphModel dx="706" dy="604" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="mtgB90w1OxnJpAlyboU7-24" value="" style="rounded=0;whiteSpace=wrap;html=1;fillStyle=solid;fillColor=#DBFFFF;" parent="1" vertex="1">
+          <mxGeometry x="320" y="380" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-23" value="" style="rounded=0;whiteSpace=wrap;html=1;fillStyle=solid;fillColor=#DBFFFF;" parent="1" vertex="1">
+          <mxGeometry x="40" y="380" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-1" value="Developer Guide" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" parent="1" vertex="1">
+          <mxGeometry x="120" y="80" width="320" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-2" value="(3) Prerequisites" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="160" y="160" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="mtgB90w1OxnJpAlyboU7-3" target="mtgB90w1OxnJpAlyboU7-4" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-3" value="(4) Common Developer Preparation" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="160" y="240" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-4" value="(5) Application Developer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="40" y="320" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-5" value="(6) Platform Developer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="320" y="320" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-6" value="Foundation" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="60" y="400" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-7" value="Proficiency" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="60" y="440" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-8" value="Innovation" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="60" y="480" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-9" value="(7) Appendix (misc examples)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="160" y="560" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-10" value="Foundation" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="340" y="400" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-11" value="Proficiency" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="340" y="440" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-12" value="Innovation" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="340" y="480" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-13" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1;curved=0;startArrow=none;startFill=0;endSize=6;" parent="1" source="mtgB90w1OxnJpAlyboU7-1" target="mtgB90w1OxnJpAlyboU7-2" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="300" y="340" as="sourcePoint" />
+            <mxPoint x="350" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-15" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1;curved=0;startArrow=none;startFill=0;endSize=6;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="279.5" y="200" as="sourcePoint" />
+            <mxPoint x="279.5" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-20" value="" style="endArrow=classic;html=1;rounded=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" target="mtgB90w1OxnJpAlyboU7-5" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="280" y="300" as="sourcePoint" />
+            <mxPoint x="320" y="290" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="420" y="300" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-25" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="mtgB90w1OxnJpAlyboU7-4" target="mtgB90w1OxnJpAlyboU7-23" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="270" y="340" as="sourcePoint" />
+            <mxPoint x="320" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-28" value="" style="endArrow=classic;html=1;rounded=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="1" source="mtgB90w1OxnJpAlyboU7-5" target="mtgB90w1OxnJpAlyboU7-24" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="270" y="340" as="sourcePoint" />
+            <mxPoint x="320" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-29" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="mtgB90w1OxnJpAlyboU7-23" target="mtgB90w1OxnJpAlyboU7-9" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="270" y="340" as="sourcePoint" />
+            <mxPoint x="290" y="530" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="140" y="540" />
+              <mxPoint x="280" y="540" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-30" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="mtgB90w1OxnJpAlyboU7-24" target="mtgB90w1OxnJpAlyboU7-9" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="270" y="340" as="sourcePoint" />
+            <mxPoint x="320" y="290" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="420" y="540" />
+              <mxPoint x="280" y="540" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-35" value="" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.annotation_2;align=left;labelPosition=right;pointerEvents=1;" parent="1" vertex="1">
+          <mxGeometry x="90" y="180" width="50" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="mtgB90w1OxnJpAlyboU7-36" value="Common" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;" parent="1" vertex="1">
+          <mxGeometry y="190" width="120" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

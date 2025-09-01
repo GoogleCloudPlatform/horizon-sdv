@@ -46,10 +46,10 @@ function cuttlefish_extract_artifacts() {
 
     case "${CUTTLEFISH_DOWNLOAD_URL}" in
         gs://*)
-            gsutil cp "${CUTTLEFISH_DOWNLOAD_URL}"/cvd-host_package.tar.gz .
-            gsutil cp "${CUTTLEFISH_DOWNLOAD_URL}"/aosp_cf_"${ARCHITECTURE}"_auto-img*.zip .
+            gcloud storage cp "${CUTTLEFISH_DOWNLOAD_URL}"/cvd-host_package.tar.gz .
+            gcloud storage cp "${CUTTLEFISH_DOWNLOAD_URL}"/aosp_cf_"${ARCHITECTURE}"_auto-img*.zip .
             # Allow this to fail.
-            gsutil cp "${CUTTLEFISH_DOWNLOAD_URL}/${WIFI_APK_NAME}" . >/dev/null 2>&1 || true
+            gcloud storage cp "${CUTTLEFISH_DOWNLOAD_URL}/${WIFI_APK_NAME}" . >/dev/null 2>&1 || true
             ;;
         *)
             wget -nv "${CUTTLEFISH_DOWNLOAD_URL}"/cvd-host_package.tar.gz .
@@ -78,14 +78,34 @@ function cuttlefish_extract_artifacts() {
     rm -f cvd-host_package.tar.gz
 }
 
+# Adjust cuttlefish resources
+function cuttlefish_adjust_resources() {
+    if (( NUM_INSTANCES > 10 )); then
+        # Modify the resource file to support > 10 devices
+        sudo echo num_cvd_accounts="${NUM_INSTANCES}" | sudo tee -a /etc/default/cuttlefish-host-resources
+        # Restart resource
+        sudo systemctl restart cuttlefish-host-resources
+
+        # Check how many are available
+        INTERFACES=$(ip -c a | grep -c cvd-wtap)
+        if (( NUM_INSTANCES == INTERFACES )); then
+            echo "Cuttlefish updated for $NUM_INSTANCES instances"
+        else
+            echo "Warning: resources $INTERFACES != $NUM_INSTANCES"
+        fi
+    fi
+}
+
 # Start Cuttlefish Virtual Device (CVD) host.
 function cuttlefish_start() {
+    echo "cuttlefish_start"
 
     cd "${HOME}"/cf || exit
 
     # Remove log file.
     rm -f "${logfile}"
 
+    # Start the CF devices (must be run as sudo)
     # Options:
     # resume: do not resume using the disk from the last session.
     # config: default to auto
@@ -93,10 +113,17 @@ function cuttlefish_start() {
     # num_instances: number of guest instances to launch.
     # cpus: virtual CPU count.
     # memory_mb: total memory available to guest.
-    HOME="${PWD}" ./bin/launch_cvd --resume=false --config=auto \
-      -report_anonymous_usage_stats=no \
-      --num-instances="${NUM_INSTANCES}" --cpus "${VM_CPUS}" \
-      --memory_mb "${VM_MEMORY_MB}" > "${logfile}" 2>&1 &
+    # console: enable serial console
+    CVD_CMD="sudo HOME=\"${PWD}\" /usr/bin/cvd create --noresume -config=auto \
+        -report_anonymous_usage_stats=no --num_instances=\"${NUM_INSTANCES}\" \
+        --cpus=\"${VM_CPUS}\" --memory_mb=\"${VM_MEMORY_MB}\" --console=true \
+        ${CVD_ADDITIONAL_FLAGS} >> \"${logfile}\" 2>&1 &"
+    echo "Running ${CVD_CMD} in background."
+    if ! eval "${CVD_CMD}"
+    then
+        echo "ERROR: command ${CVD_CMD} failed, exit!"
+        exit 1
+    fi
 }
 
 # Install WiFi
@@ -106,6 +133,12 @@ function cuttlefish_install_wifi() {
     if [ -f "${WIFI_APK_NAME}" ]; then
 
         echo "WiFi Device Summary:" | tee "${wifilogfile}"
+
+        echo "Start adb server in readiness to install Wifi"
+        sudo adb kill-server || true
+        sleep 10
+        sudo adb start-server || true
+        sleep 20
 
         # shellcheck disable=SC2207
         DEVICES=($(adb devices | grep -E '0.+device$' | cut -f1))
@@ -154,32 +187,11 @@ function cuttlefish_wait_for_device_booted() {
     done
 }
 
-# Restart adb server
-function cuttlefish_adb_restart() {
-    if (( BOOTED_INSTANCES > 0 )); then
-        echo "Boot successful:"
-        echo "    Booted ${BOOTED_INSTANCES} instances of ${NUM_INSTANCES}"
-    else
-        echo "Device(s) not booted within ${CUTTLEFISH_MAX_BOOT_TIME} seconds"
-        echo "    Recheck post adb server restart ..."
-    fi
-    # Allow system time to settle.
-    echo "    Sleep 30 seconds"
-    # Ensure adb devices show devices.
-    sudo adb kill-server || true
-    sleep 10
-    sudo adb start-server || true
-    sleep 20
-    BOOTED_INSTANCES=$(adb devices | grep -c -E '0.+device$')
-    echo "    Booted ${BOOTED_INSTANCES} instances of ${NUM_INSTANCES} post adb restart."
-}
-
-# Ensure CVD is terminated.
+# Cleanup cuttlefish directory.
 function cuttlefish_cleanup() {
+    echo "cuttlefish_cleanup"
     cd "${HOME}" || exit
-    # SIGKILL rather than SIGTERM
-    killall -9 run_cvd launch_cvd > /dev/null 2>&1
-    rm -rf "${HOME}"/cf > /dev/null 2>&1
+    sudo rm -rf cf > /dev/null 2>&1
 }
 
 function cuttlefish_nuclear() {
@@ -190,10 +202,12 @@ function cuttlefish_nuclear() {
 
 # Stop CVD.
 function cuttlefish_stop() {
+    echo "cuttlefish_stop"
     adb reboot
     sudo adb kill-server || true
-    cd "${HOME}"/cf || exit
-    HOME="${HOME}/cf" ./bin/stop_cvd
+    sudo /usr/bin/cvd stop > /dev/null 2>&1
+    sudo /usr/bin/cvd remove > /dev/null 2>&1
+    sudo /usr/bin/cvd reset -y --clean-runtime-dir >/dev/null 2>&1
 }
 
 # Archive logs
@@ -211,6 +225,8 @@ case "${1}" in
         cuttlefish_nuclear
         ;;
     --start|*)
+        # Adjust resources based on instances requested
+        cuttlefish_adjust_resources
         # Start
         cuttlefish_cleanup
         cuttlefish_extract_artifacts
@@ -222,9 +238,12 @@ case "${1}" in
             echo "Attempt ${i} of ${NUM_RETRIES} ..."
             cuttlefish_start
             cuttlefish_wait_for_device_booted
-            cuttlefish_adb_restart
+            echo "Booted ${BOOTED_INSTANCES} instances of ${NUM_INSTANCES}"
             if (( BOOTED_INSTANCES == NUM_INSTANCES )); then
+                sudo /usr/bin/cvd status
                 break;
+            else
+                cuttlefish_stop
             fi
         done
 

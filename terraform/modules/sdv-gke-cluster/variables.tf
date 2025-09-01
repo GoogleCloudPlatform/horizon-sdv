@@ -56,6 +56,60 @@ variable "build_node_pool_max_node_count" {
   default     = 3
 }
 
+variable "abfs_build_node_pool_name" {
+  description = "Name of the ABFS build node pool"
+  type        = string
+}
+
+variable "abfs_build_node_pool_node_count" {
+  description = "Number of nodes for the ABFS build node pool"
+  type        = number
+}
+
+variable "abfs_build_node_pool_machine_type" {
+  description = "Type for the machine for the ABFS build node pool"
+  type        = string
+}
+
+variable "abfs_build_node_pool_min_node_count" {
+  description = "Number of minimum nodes for the ABFS build node pool"
+  type        = number
+  default     = 0
+}
+
+variable "abfs_build_node_pool_max_node_count" {
+  description = "Number max of nodes for the ABFS build node pool"
+  type        = number
+  default     = 3
+}
+
+variable "openbsw_build_node_pool_name" {
+  description = "Name of the OpenBSW build node pool"
+  type        = string
+}
+
+variable "openbsw_build_node_pool_node_count" {
+  description = "Number of nodes for the OpenBSW build node pool"
+  type        = number
+}
+
+variable "openbsw_build_node_pool_machine_type" {
+  description = "Type for the machine for the OpenBSW build node pool"
+  type        = string
+}
+
+variable "openbsw_build_node_pool_min_node_count" {
+  description = "Number of minimum nodes for the OpenBSW build node pool"
+  type        = number
+  default     = 0
+}
+
+variable "openbsw_build_node_pool_max_node_count" {
+  description = "Number max of nodes for the OpenBSW build node pool"
+  type        = number
+  default     = 3
+}
+
 variable "network" {
   description = "Name of the network"
   type        = string

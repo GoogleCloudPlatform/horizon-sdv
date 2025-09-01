@@ -1,0 +1,12 @@
+[Unit]
+Description=noVNC server
+Wants=network-online.target tigervnc.service
+After=network-online.target tigervnc.service
+
+[Service]
+Type=simple
+User=user
+ExecStart=/opt/noVNC/utils/novnc_proxy --listen 80 --vnc localhost:5901
+
+[Install]
+WantedBy=multi-user.target

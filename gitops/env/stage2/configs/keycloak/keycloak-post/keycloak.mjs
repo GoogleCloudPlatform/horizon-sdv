@@ -48,11 +48,27 @@ const config = {
             'friendly.name':'email',
             'attribute.name':'urn:oid:1.2.840.113549.1.9.1'
           }
+      },
+      {
+        protocol: 'openid-connect',
+        name: 'groups',
+        protocolMapper: 'oidc-group-membership-mapper',
+        config: {
+          'claim.name': 'groups',
+          'full.group.path': 'false',
+          'id.token.claim': 'true',
+          'access.token.claim': 'true',
+          'userinfo.token.claim': 'true',
+          'introspection.token.claim': 'true',
+        }
       }
     ],
     adminUser: {
       username: process.env.HORIZON_ADMIN_USERNAME,
       password: process.env.HORIZON_ADMIN_PASSWORD
+    },
+    clientScope:{
+      clientScopeName: 'groups'
     }
   }
 };
@@ -156,12 +172,63 @@ async function createRealmAdminRoleIfRequired() {
   }
 }
 
+async function createGroupsClientScopeIfRequired() {
+  const clientScopeName = config.keycloak.clientScope.clientScopeName;
+
+  try {
+    let clientScope = await keycloakAdmin.clientScopes.findOneByName({name: clientScopeName});
+    if (clientScope) {
+      console.info(`client scope ${clientScopeName} exists`);
+    } else {
+      console.info(`creating client scope ${clientScopeName}`);
+      await keycloakAdmin.clientScopes.create({
+        name: clientScopeName,
+        description: 'Provides access to user group information.',
+        protocol: 'openid-connect'
+      });
+    }
+  } catch (err) {
+    throw err;
+  } 
+}
+
+async function createGroupsMapperIfRequired() {
+  try {
+    const clientScopeName  = config.keycloak.clientScope.clientScopeName;
+
+    let clientScope   = await keycloakAdmin.clientScopes.findOneByName({ name: clientScopeName });
+    if (!clientScope) {
+      console.warn(`client scope ${clientScopeName} does not exist.`);
+    }
+
+    const existing = await keycloakAdmin.clientScopes.listProtocolMappers({ id: clientScope.id });
+    if (existing.some(map => map.name === 'groups')) {
+      console.info('"groups" mapper already exists.');
+      return;
+    }
+
+    const groupsMapper = config.keycloak.mappers.find(map => map.name === 'groups');
+    if (!groupsMapper) {
+      console.warn(`"groups" mapper not found in configuration.`);
+      return;
+    }
+
+    await keycloakAdmin.clientScopes.addProtocolMapper({ id: clientScope.id }, groupsMapper);
+    console.info('"groups" mapper added successfully.');
+
+  } catch (err) {
+    throw err;
+  }
+}
+
 async function configureKeycloak()  {
   try {
     await waitForKeycloak();
     await createRealmIfRequired();
     await createRealmAdminRoleIfRequired();
     await createAdminUserIfRequired();
+    await createGroupsClientScopeIfRequired();
+    await createGroupsMapperIfRequired();
   } catch (err) {
     throw err
   }

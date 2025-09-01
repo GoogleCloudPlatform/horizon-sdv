@@ -1,0 +1,18 @@
+[
+    {
+        "name": "horizon_admin",
+        "gcp_roles": ["roles/iam.securityAdmin", "roles/editor", "roles/iap.tunnelResourceAccessor", "roles/compute.osAdminLogin", "roles/container.admin", "roles/storage.objectUser", "roles/compute.instanceAdmin.v1", "roles/iam.serviceAccountUser"]
+    },
+    {
+        "name": "horizon_developer",
+        "gcp_roles": ["roles/iap.tunnelResourceAccessor", "roles/compute.osAdminLogin", "roles/container.admin", "roles/compute.instanceAdmin.v1", "roles/iam.serviceAccountUser"]
+    },
+    {
+        "name": "horizon_viewer",
+        "gcp_roles": ["roles/viewer"]
+    },
+    {
+        "name": "horizon_workload_user",
+        "gcp_roles": ["roles/storage.objectUser"]
+    }
+]

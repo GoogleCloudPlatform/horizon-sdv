@@ -25,7 +25,7 @@ for config in "${configs[@]}"; do
   docker push ${GCP_CLOUD_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/horizon-sdv/${config}:${VERSION}
 done
 
-declare -a configs=("gerrit-post" "mtk-connect-post" "mtk-connect-post-key" "keycloak-post" "keycloak-post-gerrit" "keycloak-post-jenkins" "keycloak-post-mtk-connect")
+declare -a configs=("gerrit-post" "mtk-connect-post" "mtk-connect-post-key" "keycloak-post" "keycloak-post-gerrit" "keycloak-post-jenkins" "keycloak-post-argocd" "keycloak-post-mtk-connect")
 substr="-post"
 for config in "${configs[@]}"; do
   docker build -t ${GCP_CLOUD_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/horizon-sdv/${config}:${VERSION} ${config%$substr*}/${config}

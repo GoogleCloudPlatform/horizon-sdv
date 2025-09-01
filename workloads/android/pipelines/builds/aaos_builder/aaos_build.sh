@@ -38,7 +38,11 @@ if [ -n "${AAOS_MAKE_CMDLINE}" ]; then
     # Set environment variables and build target
     # shellcheck disable=SC1091
     source build/envsetup.sh
-    lunch "${AAOS_LUNCH_TARGET}"
+    if ! lunch "${AAOS_LUNCH_TARGET}"
+    then
+        echo "ERROR: lunch ${AAOS_LUNCH_TARGET}"
+        exit 1
+    fi
 
     echo "Building: $AAOS_MAKE_CMDLINE"
 

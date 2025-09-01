@@ -1,0 +1,111 @@
+// Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline job creates a Cluster for GCP Cloud Workstations with preset properties
+//
+// References:
+//
+
+// Function to create a json object for the .tfvars.json file (on the fly)
+def buildTfvarsMap(env) {
+  return [
+    sdv_cloud_ws_project_id: "${env.CLOUD_PROJECT}",
+    sdv_cloud_ws_region: "${env.CLOUD_REGION}",
+    sdv_cloud_ws_cluster_name: "${env.CLOUD_WS_CLUSTER_PRESET_NAME}",
+    sdv_cloud_ws_network_name: "${env.CLOUD_WS_CLUSTER_PRESET_NETWORK_NAME}",
+    sdv_cloud_ws_subnetwork_name: "${env.CLOUD_WS_CLUSTER_PRESET_SUBNETWORK_NAME}"
+  ]
+}
+
+pipeline {
+  // This job takes no Parameters as it uses preset properties to create cluster.
+  
+  agent {
+    kubernetes {
+      yaml """\
+        apiVersion: v1
+        kind: Pod
+        spec:
+          hostname: jenkins-cloud-ws-build-pod
+          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+          containers:
+          - name: cloud-ws-builder
+            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME}:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - sleep
+            args:
+            - 5h
+            tty: true
+      """.stripIndent()
+    }
+  }
+
+  environment {
+    // Define the tf backend bucket name from jenkins env var
+    def tfBackendBucket = "${CLOUD_BACKEND_BUCKET}"
+
+    // Define the .tfvars.json file name where cloud-ws cluster tf directory is located
+    def tfvarsJsonFilePath = "./workloads/cloud-workstations/terraform/cluster/cluster.tfvars.json"
+    // this file is populated in stage `Create Cluster Operation`
+  }
+
+  options {
+    // Prevent any other "write" operation pipeline within the Cloud Workstations domain
+    // from running concurrently with this job (and vice-versa).
+    buildBlocker(useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Cloud-Workstations/.*/(create|delete|add|remove|start|stop).*')
+
+    // Prevent this specific job from running concurrently with itself.
+    disableConcurrentBuilds()
+  }
+  
+  stages {
+    stage('Create Cluster Operation') {
+      steps {
+        script {
+          echo 'Creating a new Cloud WS Cluster...'
+          // Convert the tfvars map into valid json object and format it
+          def tfvarsJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(buildTfvarsMap(env)))
+          // Write the content to a temporary .tfvars.json file within the tf directory
+          writeFile(file: "${tfvarsJsonFilePath}", text: tfvarsJson)
+
+          def scriptPath = "./workloads/cloud-workstations/pipelines/cluster-admin-operations/create-cluster/create-cluster.sh"
+          
+          container(name: 'cloud-ws-builder') {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              sh """
+                chmod +x "${scriptPath}"
+                ${scriptPath} ${tfBackendBucket} ${tfvarsJsonFilePath}
+              """
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Post-build actions for success or failure
+  post {
+    success {
+      echo "Status: SUCCESS - Workstation Cluster creation job completed."
+    }
+    failure {
+      echo "Status: FAILURE - Workstation Cluster creation job failed."
+    }
+    always {
+      echo "Job finished."
+    }
+  }
+}

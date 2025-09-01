@@ -1,0 +1,302 @@
+// Copyright (c) 2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// Seed job for Jenkins workloads. Support Stages within stages so
+// we can seed multiple workloads.
+
+def HEADER_STYLE = ' color: white; background: blue; padding: 8px; text-align: center; '
+def SEPARATOR_STYLE = ' border: 0; border-bottom: 1px solid #ccc; background: #999; '
+
+// Single quotes simply match string, double quotes expand the value of the variable.
+// This avoids DSL scripts (loosely based on Groovy) needing to approve getProperty method
+// which is a real security risk across Jenkins.
+// This array can be updated to include other mappings as required.
+def replacements = [
+ ['${CLOUD_REGION}', "${CLOUD_REGION}"],
+ ['${CLOUD_PROJECT}', "${CLOUD_PROJECT}"],
+ ['${HEADER_STYLE}', "${HEADER_STYLE}"],
+ ['${HORIZON_DOMAIN}', "${HORIZON_DOMAIN}"],
+ ['${HORIZON_GITHUB_URL}', "${HORIZON_GITHUB_URL}"],
+ ['${HORIZON_GITHUB_BRANCH}', "${HORIZON_GITHUB_BRANCH}"],
+ ['${SEPARATOR_STYLE}', "${SEPARATOR_STYLE}"],
+ ['${CLOUD_BACKEND_BUCKET}', "${CLOUD_BACKEND_BUCKET}"]]
+
+pipeline {
+
+  agent { label 'seed-node' }
+
+  // Block concurrent seeding to avoid clashing.
+  options {
+    buildBlocker (useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'ALL', blockingJobs: '.*Seed.*')
+  }
+
+  parameters {
+    choice(name: 'SEED_WORKLOAD',
+           choices: ['none', 'all', 'android', 'openbsw', 'cloud-workstations'],
+           description: '''<p>Workload to seed:</p>
+             <ul>
+             <li>none: seed nothing, derisk triggering by accident.</li>
+             <li>all: seed all workloads.</li>
+             <li>android: seed the Android workload.</li>
+             <li>openbsw: seed the OpenBSW workload.</li>
+             <li>cloud-workstations: seed the Cloud Workstations workload.</li>
+           </ul>''')
+
+    separator(
+      name: "Android Workload",
+      sectionHeader: "Android Parameters",
+      separatorStyle: "${SEPARATOR_STYLE}",
+      sectionHeaderStyle: "${HEADER_STYLE}"
+    )
+
+    string(name: 'REPO_SYNC_JOBS',
+           defaultValue: '3',
+           description: '''<p>Number of parallel sync jobs for <i>repo sync</i>.</p>''',
+           trim: true)
+
+    string(name: 'CUTTLEFISH_GCE_CLOUD_LABEL',
+           defaultValue: 'cuttlefish-vm-main',
+           description: '''<p>The Jenkins GCE Clouds label for jobs dependent on the Cuttlefish instance template, e.g.<br/></p>
+                        <ul>
+                          <li>cuttlefish-vm-main</li>
+                          <li>cuttlefish-vm-v1180</li>
+                        </ul>''',
+           trim: true)
+
+    separator(
+      name: "Android ABFS Options",
+      sectionHeader: "ABFS Parameters",
+      separatorStyle: "${SEPARATOR_STYLE}",
+      sectionHeaderStyle: "${HEADER_STYLE}"
+    )
+
+    string(name: 'ABFS_VERSION',
+           defaultValue: "0.0.33-2-ge59ffbc",
+           description: '''<p>ABFS version, e.g. 0.0.33-2-ge59ffbc</p>''',
+           trim: true)
+
+    string(name: 'ABFS_CASFS_VERSION',
+           defaultValue: "0.0.33-19-gd8f7000",
+           description: '''<p>ABFS CASFS version may differ from ABFS_VERSION, e.g. 0.0.33-10-g654e659</p>''',
+           trim: true)
+
+    string(name: 'ABFS_REPOSITORY',
+           defaultValue: "abfs-apt-alpha-public",
+           description: '''<p>ABFS aptitude repository, e.g. abfs-apt-alpha-public. </p>''',
+           trim: true)
+
+    string(name: 'UPLOADER_MANIFEST_SERVER',
+           defaultValue: "android.googlesource.com",
+           description: '''<p>Gerrit manifest server f.</p>''',
+           trim: true)
+
+    separator(
+      name: "OpenBSW Workload",
+      sectionHeader: "OpenBSW Parameters",
+      separatorStyle: "${SEPARATOR_STYLE}",
+      sectionHeaderStyle: "${HEADER_STYLE}"
+    )
+
+    string(name: 'OPENBSW_IMAGE_TAG',
+           defaultValue: 'latest-ubuntu.22.04',
+           description: '''<p>Name of the build image tag used for OpenBSW pipelines.</p>
+             <p>Note: tag may only contain 'abcdefghijklmnopqrstuvwxyz0123456789_-./'</p>''',
+           trim: true)
+
+    separator(
+      name: "Common Parameters",
+      sectionHeader: "Common Parameters",
+      separatorStyle: "${SEPARATOR_STYLE}",
+      sectionHeaderStyle: "${HEADER_STYLE}"
+    )
+
+    string(name: 'NODEJS_VERSION',
+           defaultValue: "20.9.0",
+           description: '''<p>NodeJS version.<br/>
+             This is installed using <i>nvm</i> on the instance template to be compatible with other tooling.</p>''',
+           trim: true)
+  }
+
+  stages {
+    stage ('Workload: Seed Android') {
+      when {
+        anyOf {
+          expression { env.SEED_WORKLOAD == 'android' }
+          expression { env.SEED_WORKLOAD == 'all' }
+        }
+      }
+
+      stages {
+        stage ("Prepare Groovy files") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              script {
+                currentBuild.description = "$BUILD_USER" + "<br>" + "${SEED_WORKLOAD}"
+
+                replacements += [
+                  ['${ANDROID_BUILD_BUCKET_ROOT_NAME}', "${ANDROID_BUILD_BUCKET_ROOT_NAME}"],
+                  ['${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}', "${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}"],
+                  ['${INFRA_DOCKER_ARTIFACT_PATH_NAME}', "${INFRA_DOCKER_ARTIFACT_PATH_NAME}"],
+                  ['${REPO_SYNC_JOBS}', "${REPO_SYNC_JOBS}"],
+                  ['${ABFS_VERSION}', "${ABFS_VERSION}" ],
+                  ['${ABFS_CASFS_VERSION}', "${ABFS_CASFS_VERSION}" ],
+                  ['${ABFS_REPOSITORY}', "${ABFS_REPOSITORY}" ],
+                  ['${ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}', "${ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}"],
+                  ['${UPLOADER_MANIFEST_SERVER}', "${UPLOADER_MANIFEST_SERVER}"],
+                  ['${JENKINS_GCE_CLOUD_LABEL}', "${CUTTLEFISH_GCE_CLOUD_LABEL}" ],
+                  ['${NODEJS_VERSION}', "${NODEJS_VERSION}"]
+                 ]
+
+                def files = sh(returnStdout: true, script: "find workloads/android -name '*.groovy'").trim().split('\n')
+
+                files.each { file ->
+                  replacements.each { replacement ->
+                    def escapedValue = replacement[1].replace('/', '\\/')
+                    sh "sed -i 's/${replacement[0]}/${escapedValue}/g' ${file}"
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        stage ("Seed folders") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              jobDsl targets: 'workloads/android/pipelines/groovy/folders.groovy', sandbox: true
+            }
+          }
+        }
+
+        stage ("Seed jobs") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              jobDsl targets: 'workloads/android/pipelines/**/groovy/*.groovy', sandbox: true
+            }
+          }
+        }
+      }
+    }
+
+    stage ('Workload: Seed OpenBSW') {
+      when {
+        anyOf {
+          expression { env.SEED_WORKLOAD == 'openbsw' }
+          expression { env.SEED_WORKLOAD == 'all' }
+        }
+      }
+
+      stages {
+        stage ("Prepare Groovy files") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              script {
+                currentBuild.description = "$BUILD_USER" + "<br>" + "${SEED_WORKLOAD}"
+
+                replacements += [
+                  ['${OPENBSW_BUILD_BUCKET_ROOT_NAME}', "${OPENBSW_BUILD_BUCKET_ROOT_NAME}"],
+                  ['${OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}', "${OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}"],
+                  ['${OPENBSW_IMAGE_TAG}', "${OPENBSW_IMAGE_TAG}"],
+                  ['${NODEJS_VERSION}', "${NODEJS_VERSION}"]
+                ]
+
+                def files = sh(returnStdout: true, script: "find workloads/openbsw -name '*.groovy'").trim().split('\n')
+
+                files.each { file ->
+                  replacements.each { replacement ->
+                    def escapedValue = replacement[1].replace('/', '\\/')
+                    sh "sed -i 's/${replacement[0]}/${escapedValue}/g' ${file}"
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        stage ("Seed folders") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              jobDsl targets: 'workloads/openbsw/pipelines/groovy/folders.groovy', sandbox: true
+            }
+          }
+        }
+
+        stage ("Seed jobs") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              jobDsl targets: 'workloads/openbsw/pipelines/*/*/groovy/*.groovy', sandbox: true
+            }
+          }
+        }
+      }
+    }
+
+    stage ('Workload: Seed Cloud Workstations') {
+      when {
+        anyOf {
+          expression { env.SEED_WORKLOAD == 'cloud-workstations' }
+          expression { env.SEED_WORKLOAD == 'all' }
+        }
+      }
+
+      stages {
+        stage ("Prepare Groovy files") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              script {
+                replacements += [
+                  ['${CLOUD_BACKEND_BUCKET}', "${CLOUD_BACKEND_BUCKET}"],
+                  ['${CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME}', "${CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME}"],
+                  ['${CLOUD_WS_CLUSTER_PRESET_NAME}', "${CLOUD_WS_CLUSTER_PRESET_NAME}"],
+                  ['${CLOUD_WS_CLUSTER_PRESET_NETWORK_NAME}', "${CLOUD_WS_CLUSTER_PRESET_NETWORK_NAME}"],
+                  ['${CLOUD_WS_CLUSTER_PRESET_SUBNETWORK_NAME}', "${CLOUD_WS_CLUSTER_PRESET_SUBNETWORK_NAME}"],
+                  ['${CLOUD_WS_CLUSTER_PRESET_PRIVATE_CLUSTER}', "${CLOUD_WS_CLUSTER_PRESET_PRIVATE_CLUSTER}"],
+                  ['${CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME}', "${CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME}"],
+                  ['${CLOUD_WS_HORIZON_ASFP_IMAGE_NAME}', "${CLOUD_WS_HORIZON_ASFP_IMAGE_NAME}"],
+                  ['${CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME}', "${CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME}"]
+                ]
+
+                def files = sh(returnStdout: true, script: "find workloads/cloud-workstations -name '*.groovy'").trim().split('\n')
+
+                files.each { file ->
+                  replacements.each { replacement ->
+                    def escapedValue = replacement[1].replace('/', '\\/')
+                    sh "sed -i 's/${replacement[0]}/${escapedValue}/g' ${file}"
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        stage ("Seed folders") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              jobDsl targets: 'workloads/cloud-workstations/pipelines/groovy/folders.groovy', sandbox: true
+            }
+          }
+        }
+
+        stage ("Seed jobs") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              jobDsl targets: 'workloads/cloud-workstations/pipelines/*/*/groovy/*.groovy', sandbox: true
+            }
+          }
+        }
+      }
+    }
+  }
+}

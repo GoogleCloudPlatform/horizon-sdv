@@ -14,73 +14,86 @@
 
 // Description:
 // Build Android CTS for Cuttlefish. Only required if testing CTS changes
-// or requiring a new revision without updating the CTS version on CF
-// instances.
-def kubernetesPodTemplate = """
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          annotations:
-            cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
-          labels:
-            aaos_pod: "true"
-        spec:
-          tolerations:
-          - key: workloadType
-            operator: Equal
-            value: android
-            effect: "NoSchedule"
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-              - labelSelector:
-                  matchExpressions:
-                  - key: aaos_pod
-                    operator: Exists
-                topologyKey: kubernetes.io/hostname
-          hostname: jenkins-aaos-build-pod
-          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
-          containers:
-          - name: builder
-            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
-            imagePullPolicy: IfNotPresent
-            command:
-            - sleep
-            args:
-            - 5h
-            resources:
-              limits:
-                cpu: 96000m
-                memory: 160000Mi
-              requests:
-                cpu: 96000m
-                memory: 160000Mi
-            volumeMounts:
-              - mountPath: /aaos-cache
-                name: aaos-cache
-          volumes:
-            - name: aaos-cache
-              ephemeral:
-                volumeClaimTemplate:
-                  spec:
-                    storageClassName: ${JENKINS_CACHE_STORAGE_CLASS_NAME}
-                    resources:
-                      requests:
-                        storage: 2000Gi
-                    accessModes:
-                      - ReadWriteOnce
-          nodeSelector:
-            workloadLabel: android
-""".stripIndent()
+def getAndroidVersion(revision) {
+  if (revision =~ "android-14") {
+    return "14"
+  } else if (revision =~ "android-15") {
+    return "15"
+  } else {
+    currentBuild.result = 'FAILURE'
+    error "Failed to determine Android version from revision: ${revision}"
+  }
+}
 
 pipeline {
 
-  // Parameters defined in gitops/env/stage2/templates/jenkins.yaml (Jenkins CasC)
+  // Parameters defined in groovy/job.groovy
 
   agent none
 
   environment {
     GERRIT_API_URL="https://${env.HORIZON_DOMAIN}/gerrit"
+    def androidVersion="${ANDROID_VERSION != "default" ? ANDROID_VERSION : getAndroidVersion(AAOS_REVISION)}"
+    def rpi="${AAOS_LUNCH_TARGET =~ "rpi" ? "-rpi" : ""}"
+    STORAGE_CLASS_SUFFIX="android-${androidVersion}"+"${rpi}"
+
+    // Define Pod Template in environment so we can override.
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          aaos_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: android
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-aaos-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
+          imagePullPolicy: IfNotPresent
+          command:
+          - sleep
+          args:
+          - 5h
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+          volumeMounts:
+            - mountPath: /aaos-cache
+              name: aaos-cache
+        volumes:
+          - name: aaos-cache
+            ephemeral:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: ${JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX}-${STORAGE_CLASS_SUFFIX}
+                  resources:
+                    requests:
+                      storage: 1000Gi
+                  accessModes:
+                    - ReadWriteOnce
+        nodeSelector:
+          workloadLabel: android
+    """.stripIndent()
   }
 
   stages {

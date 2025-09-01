@@ -17,7 +17,7 @@
 // test benches left in MTK Connect during dev/testing.
 pipeline {
 
-  // Parameters defined in gitops/env/stage2/templates/jenkins.yaml (Jenkins CasC)
+  // Parameters defined in groovy/job.groovy
 
   agent {
     kubernetes {
@@ -41,23 +41,19 @@ pipeline {
     }
   }
 
-  // Block concurrent builds to avoid clashing.
-  options {
-    buildBlocker (useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '.*MTK.*Cleanup.*')
-  }
-
   stages {
     stage ('Delete Offline Testbenches') {
       when {
         allOf {
           expression { env.MTK_CONNECT_TESTBENCH }
-          expression { env.MTK_CONNECT_TESTBENCH =~ /(CVD_Launcher|CTS_Execution)/ }
+          expression { env.MTK_CONNECT_TESTBENCH =~ /(CVD_Launcher|CTS_Execution|Development)/ }
         }
       }
       steps {
         container(name: 'builder') {
           withCredentials([usernamePassword(credentialsId: 'jenkins-mtk-connect-apikey', passwordVariable: 'MTK_CONNECT_PASSWORD', usernameVariable: 'MTK_CONNECT_USERNAME')]) {
             sh '''
+              cd ./workloads/common/mtk-connect/ || true
               sudo \
               MTK_CONNECT_DOMAIN=${HORIZON_DOMAIN} \
               MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
@@ -65,7 +61,9 @@ pipeline {
               MTK_CONNECT_NATIVE_LINUX_INSTALL=false \
               MTK_CONNECT_TESTBENCH=${MTK_CONNECT_TESTBENCH} \
               MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES=true \
-              timeout 15m ./workloads/android/pipelines/tests/cvd_launcher/cvd_mtk_connect.sh --delete
+              MTK_CONNECT_CONTAINER_ONLY="true" \
+              timeout 15m ./mtk_connect.sh --delete
+              cd - || true
             '''
           }
         }

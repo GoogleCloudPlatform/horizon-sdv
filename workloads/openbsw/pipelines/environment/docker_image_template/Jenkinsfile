@@ -1,0 +1,79 @@
+// Copyright (c) 2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline builds the OpenBSW builder Docker image using Kaniko
+// rather than use a Docker to avoid docker in docker privilege issues.
+//
+// References:
+//   * https://github.com/GoogleContainerTools/kaniko
+pipeline {
+
+  // Parameters defined in groovy/job.groovy
+
+  agent {
+    kubernetes {
+      yaml """\
+        apiVersion: v1
+        kind: Pod
+        spec:
+          hostname: jenkins-openbsw-build-pod
+          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+          containers:
+          - name: kaniko
+            image: gcr.io/kaniko-project/executor:debug
+            imagePullPolicy: IfNotPresent
+            command:
+            - /busybox/cat
+            tty: true
+            resources:
+              limits:
+                memory: 8Gi
+              requests:
+                memory: 8Gi
+      """.stripIndent()
+    }
+  }
+
+  environment {
+    DESTINATION="--destination=${env.CLOUD_REGION}-docker.pkg.dev/${env.CLOUD_PROJECT}/${env.OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}"
+    KANIKO_OPTIONS="${NO_PUSH == "true" ? "--no-push" : "${DESTINATION}:${IMAGE_TAG}"}"
+  }
+
+  stages {
+    stage ('Create Docker Image'){
+      when { expression { env.IMAGE_TAG } }
+      steps {
+        container(name: 'kaniko') {
+          script {
+            currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br/>" + "$BUILD_USER" + "<br/>" + "${env.IMAGE_TAG}"
+          }
+          sh '''
+            # Build the docker image and push to Artifact registry using service account configured with
+            # correct roles/permissions.
+            /kaniko/executor -f workloads/openbsw/pipelines/environment/docker_image_template/Dockerfile \
+              -c workloads/openbsw/pipelines/environment/docker_image_template --skip-tls-verify-pull \
+              --insecure --skip-tls-verify "${KANIKO_OPTIONS}" \
+              --build-arg ARM_TOOLCHAIN_URL='''+ARM_TOOLCHAIN_URL+''' \
+              --build-arg CLANG_TOOLS_URL='''+CLANG_TOOLS_URL+''' \
+              --build-arg CMAKE_URL='''+CMAKE_URL+''' \
+              --build-arg LINUX_DISTRIBUTION='''+LINUX_DISTRIBUTION+''' \
+              --build-arg NODEJS_VERSION='''+NODEJS_VERSION+''' \
+              --build-arg TREEFMT_URL='''+TREEFMT_URL+'''
+          '''
+        }
+      }
+    }
+  }
+}

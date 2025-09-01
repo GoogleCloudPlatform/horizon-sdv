@@ -47,12 +47,11 @@ resource "google_secret_manager_secret_version" "sdv_gsmsv_use_github_value" {
   secret      = google_secret_manager_secret.sdv_gsms[each.key].id
   secret_data = each.value.value
 
-
-  lifecycle {
-    ignore_changes = [
-      secret_data
-    ]
-  }
+  #lifecycle {
+  #  ignore_changes = [
+  #    secret_data
+  #  ]
+  #}
 
   depends_on = [
     google_secret_manager_secret.sdv_gsms

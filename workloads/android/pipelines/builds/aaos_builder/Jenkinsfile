@@ -15,71 +15,89 @@
 // Description:
 // AAOS Build targets pipeline.
 
-def kubernetesPodTemplate = """
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          annotations:
-            cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
-          labels:
-            aaos_pod: "true"
-        spec:
-          tolerations:
-          - key: workloadType
-            operator: Equal
-            value: android
-            effect: "NoSchedule"
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-              - labelSelector:
-                  matchExpressions:
-                  - key: aaos_pod
-                    operator: Exists
-                topologyKey: kubernetes.io/hostname
-          hostname: jenkins-aaos-build-pod
-          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
-          containers:
-          - name: builder
-            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
-            imagePullPolicy: IfNotPresent
-            command:
-            - sleep
-            args:
-            - 5h
-            resources:
-              limits:
-                cpu: 96000m
-                memory: 160000Mi
-              requests:
-                cpu: 96000m
-                memory: 160000Mi
-            volumeMounts:
-              - mountPath: /aaos-cache
-                name: aaos-cache
-          volumes:
-            - name: aaos-cache
-              ephemeral:
-                volumeClaimTemplate:
-                  spec:
-                    storageClassName: ${JENKINS_CACHE_STORAGE_CLASS_NAME}
-                    resources:
-                      requests:
-                        storage: 2000Gi
-                    accessModes:
-                      - ReadWriteOnce
-          nodeSelector:
-            workloadLabel: android
-""".stripIndent()
+def getAndroidVersion(revision) {
+  if (revision =~ "android-14") {
+    return "14"
+  } else if (revision =~ "android-15") {
+    return "15"
+  } else {
+    currentBuild.result = 'FAILURE'
+    error "Failed to determine Android version from revision: ${revision}"
+  }
+}
 
 pipeline {
 
-  // Parameters defined in gitops/env/stage2/templates/jenkins.yaml (Jenkins CasC)
+  // Parameters defined in groovy/job.groovy
 
   agent none
 
   environment {
     GERRIT_API_URL="https://${env.HORIZON_DOMAIN}/gerrit"
+
+    def androidVersion="${ANDROID_VERSION != "default" ? ANDROID_VERSION : getAndroidVersion(AAOS_REVISION)}"
+    def rpi="${AAOS_LUNCH_TARGET =~ "rpi" ? "-rpi" : ""}"
+    SDK_ANDROID_VERSION="${androidVersion}"
+    STORAGE_CLASS_SUFFIX="android-${androidVersion}"+"${rpi}"
+    STORAGE_SIZE="${STORAGE_CLASS_SUFFIX =~ "rpi" ? "500Gi" : "1000Gi"}"
+
+    // Define Pod Template in environment so we can override storageClassName.
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          aaos_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: android
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-aaos-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
+          imagePullPolicy: IfNotPresent
+          command:
+          - sleep
+          args:
+          - 5h
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+          volumeMounts:
+            - mountPath: /aaos-cache
+              name: aaos-cache
+        volumes:
+          - name: aaos-cache
+            ephemeral:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: ${JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX}-${STORAGE_CLASS_SUFFIX}
+                  resources:
+                    requests:
+                      storage: ${STORAGE_SIZE}
+                  accessModes:
+                    - ReadWriteOnce
+        nodeSelector:
+          workloadLabel: android
+    """.stripIndent()
   }
 
   stages {
@@ -95,7 +113,7 @@ pipeline {
           }
           steps {
             script {
-              currentBuild.description = "${env.AAOS_LUNCH_TARGET}" + "<br>" + "${env.AAOS_REVISION}" + "<br>" + "$BUILD_USER"
+              currentBuild.description = "${env.AAOS_LUNCH_TARGET}" + "<br/>" + "${env.AAOS_REVISION}" + "<br/>" + "$BUILD_USER"
             }
             container(name: 'builder') {
               catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
@@ -118,7 +136,7 @@ pipeline {
           }
           steps {
             script {
-              currentBuild.description = "${env.AAOS_LUNCH_TARGET}" + "<br>" + "${env.AAOS_REVISION}" + "<br>" + "$BUILD_USER"
+              currentBuild.description = "${env.AAOS_LUNCH_TARGET}" + "<br/>" + "${env.AAOS_REVISION}" + "<br/>" + "$BUILD_USER"
             }
             container(name: 'builder') {
               catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
@@ -139,7 +157,7 @@ pipeline {
                     AAOS_CLEAN="NO_CLEAN" \
                     GERRIT_SERVER_URL="${GERRIT_API_URL}" \
                     POST_REPO_INITIALISE_COMMAND="${POST_REPO_INITIALISE_COMMAND}" \
-                    POST_REPO_SYNC_COMMAND="${POST_REPO_SYNC_COMMAND}" \
+                    POST_REPO_COMMAND="${POST_REPO_COMMAND}" \
                     REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}" \
                     ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
                   '''
@@ -183,7 +201,7 @@ pipeline {
                 sh '''
                   AAOS_LUNCH_TARGET="${AAOS_LUNCH_TARGET}" \
                   AAOS_REVISION="${AAOS_REVISION}" \
-                  ANDROID_VERSION="${ANDROID_VERSION}" \
+                  ANDROID_VERSION="${SDK_ANDROID_VERSION}" \
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_avd_sdk.sh || true
 
                   AAOS_LUNCH_TARGET="${AAOS_LUNCH_TARGET}" \

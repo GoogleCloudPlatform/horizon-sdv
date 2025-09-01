@@ -1,0 +1,157 @@
+// Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline job updates an existing GCP Cloud Workstation Configuration.
+//
+// References:
+//
+
+// Function to create a json object for the .tfvars.json file (on the fly)
+def buildTfvarsMap(params, env) {
+  return [
+    sdv_cloud_ws_project_id: "${env.CLOUD_PROJECT}",
+    sdv_cloud_ws_region: "${env.CLOUD_REGION}",
+    sdv_cloud_ws_cluster_name: "${env.CLOUD_WS_CLUSTER_PRESET_NAME}",
+    sdv_cloud_ws_horizon_code_oss_image_full_path: "${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME}:latest",
+    sdv_cloud_ws_input_config_name: "${params.CLOUD_WS_CONFIG_NAME}",
+
+    sdv_cloud_ws_configs: [
+      "${params.CLOUD_WS_CONFIG_NAME}": [
+        ws_idle_timeout: params.WS_IDLE_TIMEOUT?.trim() ? params.WS_IDLE_TIMEOUT.trim().toInteger() : null,
+        ws_running_timeout: params.WS_RUNNING_TIMEOUT?.trim() ? params.WS_RUNNING_TIMEOUT.trim().toInteger() : null,
+        ws_replica_zones: params.WS_REPLICA_ZONES?.trim() ? params.WS_REPLICA_ZONES.trim().split(',').collect { it.trim() }.findAll {it} as List : null,
+
+        host_machine_type: params.HOST_MACHINE_TYPE?.trim() ? params.HOST_MACHINE_TYPE.trim() : null,
+        host_quickstart_pool_size: params.HOST_QUICK_START_POOL_SIZE?.trim() ? params.HOST_QUICK_START_POOL_SIZE.trim().toInteger() : null,
+        host_boot_disk_size_gb: params.HOST_BOOT_DISK_SIZE?.trim() ? params.HOST_BOOT_DISK_SIZE.trim().toInteger() : null,
+        host_disable_public_ip_addresses: params.HOST_DISABLE_PUBLIC_IP_ADDRESSES?.toBoolean() ?: null,
+        host_disable_ssh: params.HOST_DISABLE_SSH?.toBoolean() ?: null,
+        host_enable_nested_virtualization: params.HOST_ENABLE_NESTED_VIRTUALIZATION?.toBoolean() ?: null,
+
+        pd_required: params.PD_REQUIRED?.toBoolean() ?: null,
+        pd_mount_path: params.PD_MOUNT_PATH?.trim() ? params.PD_MOUNT_PATH.trim() : null,
+        pd_fs_type: params.PD_FS_TYPE?.trim() ? params.PD_FS_TYPE.trim() : null,
+        pd_disk_type: params.PD_DISK_TYPE?.trim() ? params.PD_DISK_TYPE.trim() : null,
+        pd_size_gb: params.PD_SIZE_GB?.trim() ? params.PD_SIZE_GB.trim().toInteger() : null,
+        pd_reclaim_policy: params.PD_RECLAIM_POLICY?.trim() ? params.PD_RECLAIM_POLICY.trim() : null,
+        pd_source_snapshot: params.PD_SOURCE_SNAPSHOT?.trim() ? params.PD_SOURCE_SNAPSHOT.trim() : null,
+
+        ed_required: params.ED_REQUIRED?.toBoolean() ?: null,
+        ed_mount_path: params.ED_MOUNT_PATH?.trim() ? params.ED_MOUNT_PATH.trim() : null,
+        ed_disk_type: params.ED_DISK_TYPE.trim() ? params.ED_DISK_TYPE.trim() : null,
+        ed_source_snapshot: params.ED_SOURCE_SNAPSHOT?.trim() ? params.ED_SOURCE_SNAPSHOT.trim() : null,
+        ed_source_image: params.ED_SOURCE_IMAGE?.trim() ? params.ED_SOURCE_IMAGE.trim() : null,
+        ed_read_only: params.ED_READ_ONLY?.toBoolean() ?: null,
+
+        container_image: params.CONTAINER_IMAGE?.trim() ? params.CONTAINER_IMAGE.trim() : null,
+        container_entrypoint_commands: params.CONTAINER_ENTRYPOINT_COMMANDS?.trim() ? params.CONTAINER_ENTRYPOINT_COMMANDS.split(',').collect { it.trim() }.findAll {it} as List : [],
+        container_entrypoint_args: params.CONTAINER_ENTRYPOINT_ARGS?.trim() ? params.CONTAINER_ENTRYPOINT_ARGS.split(',').collect { it.trim() }.findAll {it} as List : [],
+        container_working_dir: params.CONTAINER_WORKING_DIR?.trim() ? params.CONTAINER_WORKING_DIR.trim() : null,
+        container_env_vars: params.CONTAINER_ENV_VARS?.trim() ? new groovy.json.JsonSlurper().parseText(params.CONTAINER_ENV_VARS) : null,
+        container_user: params.CONTAINER_USER?.trim() ? params.CONTAINER_USER.trim() : null,
+
+        ws_allowed_ports: params.WS_ALLOWED_PORTS?.trim() ? new groovy.json.JsonSlurper().parseText(params.WS_ALLOWED_PORTS) : null,
+
+        ws_admin_iam_members: params.WS_ADMIN_IAM_MEMBERS?.trim() ? params.WS_ADMIN_IAM_MEMBERS.split(',').collect { it.trim() }.findAll {it} : []
+      ]
+    ]
+  ]
+}
+
+pipeline {
+  // Parameters defined in workloads/cloud-workstations/pipelines/config-admin-operations/update-config/groovy/job.groovy
+
+  agent {
+    kubernetes {
+      yaml """\
+        apiVersion: v1
+        kind: Pod
+        spec:
+          hostname: jenkins-cloud-ws-build-pod
+          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+          containers:
+          - name: cloud-ws-builder
+            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME}:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - sleep
+            args:
+            - 5h
+            tty: true
+      """.stripIndent()
+    }
+  }
+
+  environment {
+    // Define the tf backend bucket name from jenkins env var
+    def tfBackendBucket = "${CLOUD_BACKEND_BUCKET}"
+    // Define the .tfvars.json file name where cloud-ws config tf directory is located
+    def tfvarsJsonFilePath = "./workloads/cloud-workstations/terraform/config/config.tfvars.json"
+    // this file is populated in stage `Delete Config Operation`
+  }
+
+  options {
+    // Prevent any other "write" operation pipeline within the Cloud Workstations domain
+    // from running concurrently with this job (and vice-versa).
+    buildBlocker(useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Cloud-Workstations/.*/(create|delete|add|remove|start|stop).*')
+
+    // Prevent this specific job from running concurrently with itself.
+    disableConcurrentBuilds()
+  }
+
+  stages {
+    stage('Update Configuration Operation') {
+      steps {
+        script {
+          echo 'Updating Cloud WS Configuration...'
+          // Prevent empty required params
+          if(!params.CLOUD_WS_CONFIG_NAME?.trim()) {error("Required Parameter value NOT provided as input: CLOUD_WS_CONFIG_NAME. A Workstation Config name is needed.")}
+          if(!params.WS_ADMIN_IAM_MEMBERS?.trim()) {error("Required Parameter value NOT provided as input: WS_ADMIN_IAM_MEMBERS. Atleast one user email address is needed to be granted Workstation Admin access.")}
+          if(params.ED_REQUIRED && !(params.ED_SOURCE_SNAPSHOT || params.ED_SOURCE_IMAGE)) {error("Required Parameter value NOT provided as input: either of ED_SOURCE_SNAPSHOT or ED_SOURCE_IMAGE must be set when ED_REQUIRED is selected.")}
+
+          // Convert the tfvars map into valid json object and format it
+          def tfvarsJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(buildTfvarsMap(params, env)))
+          // Write the content to a temporary .tfvars.json file within the tf directory
+          writeFile(file: "${tfvarsJsonFilePath}", text: tfvarsJson)
+
+          def scriptPath = "./workloads/cloud-workstations/pipelines/config-admin-operations/update-config/update-config.sh"
+          
+          container(name: 'cloud-ws-builder') {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              sh """
+                chmod +x "${scriptPath}"
+                ${scriptPath} ${tfBackendBucket} ${tfvarsJsonFilePath}
+              """
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Post-build actions for success or failure
+  post {
+    success {
+      echo "Status: SUCCESS - Workstation Configuration update job completed."
+    }
+    failure {
+      echo "Status: FAILURE - Workstation Configuration update job failed."
+    }
+    always {
+      // Clean-up
+      echo "Job finished."
+    }
+  }
+}

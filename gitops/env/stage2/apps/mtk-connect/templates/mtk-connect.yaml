@@ -236,7 +236,7 @@ spec:
               memory: 400Mi
           env:
             - name: devices__version
-              value: "v1.8.1"
+              value: "v1.9.1"
           volumeMounts:
             - mountPath: /usr/src/config/config.json
               name: mtk-connect-config

@@ -1,0 +1,150 @@
+// Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline job revokes access for one or more users from a specific GCP Cloud Workstation.
+//
+// References:
+//
+import groovy.json.JsonOutput
+
+// Validate the workstation name string
+def validateWorkstationName() {
+  def wsName=params.WORKSTATION_NAME
+
+  if (!wsName || !wsName.matches('^[a-z0-9]+(?:-[a-z0-9]+)*$')) {
+    error """
+    [ERROR] Invalid WORKSTATION_NAME: '${wsName}'
+    - Must contain only lowercase letters and hyphens.
+    - Cannot start or end with a hyphen.
+    - Cannot be empty.
+    - Examples: 'jenkins-test', 'codeoss-dev'
+    """
+  }
+}
+
+// Clean and validate the email list
+def validateUserEmails() {
+  def rawEmailCSV=params.WORKSTATION_USER_EMAILS_TO_REMOVE
+  def cleaned = rawEmailCSV.replaceAll(/\s+/, '')
+
+  if (!cleaned || cleaned.length() == 0) {
+    error "[ERROR] WORKSTATION_USER_EMAILS_TO_REMOVE cannot be empty."
+  }
+
+  def emails = cleaned.split(',')
+
+  for (e in emails) {
+    if (!e.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')) {
+      error "[ERROR] Invalid email format: '${e}'"
+    }
+  }
+
+  return emails
+}
+
+def buildTfvarsMap(params, env) {
+  def validatedEmails = validateUserEmails()
+  def csvEmails = validatedEmails.join(',')
+
+  return [
+    input_sdv_cloud_ws_workstation_name:"${params.WORKSTATION_NAME}",
+    input_sdv_cloud_ws_workstation_users:"${csvEmails}",
+    sdv_cloud_ws_project_id: "${env.CLOUD_PROJECT}",
+    sdv_cloud_ws_region: "${env.CLOUD_REGION}",
+    sdv_cloud_ws_cluster_name: "${env.CLOUD_WS_CLUSTER_PRESET_NAME}",
+    workstations: [:]
+  ]
+}
+
+
+pipeline {
+  // Parameters defined in workloads/cloud-workstations/pipelines/workstation-admin-operations/remove-workstation-user/groovy/job.groovy
+
+  agent {
+    kubernetes {
+      yaml """\
+        apiVersion: v1
+        kind: Pod
+        spec:
+          hostname: jenkins-cloud-ws-build-pod
+          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+          containers:
+          - name: cloud-ws-builder
+            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME}:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - sleep
+            args:
+            - 5h
+            tty: true
+      """.stripIndent()
+    }
+  }
+
+  environment {
+    // Define the tf backend bucket name from jenkins env var
+    def tfBackendBucket = "${CLOUD_BACKEND_BUCKET}"
+    // Define the .tfvars.json file name where cloud-ws config tf directory is located
+    def tfvarsJsonFilePath = "./workloads/cloud-workstations/terraform/workstation/config.tfvars.json"
+    // this file is populated in stage `Delete Config Operation`
+  }
+  options {
+    // Prevent any other "write" operation pipeline within the Cloud Workstations domain
+    // from running concurrently with this job (and vice-versa).
+    buildBlocker(useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Cloud-Workstations/.*/(create|delete|add|remove|start|stop).*')
+
+    // Prevent this specific job from running concurrently with itself.
+    disableConcurrentBuilds()
+  }
+
+  stages {
+    stage('Remove Workstation User Operation') {
+      steps {
+        script {
+          echo "Removing specified users' access from Workstation: ${params.WORKSTATION_NAME}..."
+          validateWorkstationName()
+          def tfvarsJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(buildTfvarsMap(params, env)))
+          // Write the content to a temporary .tfvars.json file within the tf directory
+          writeFile(file: "${tfvarsJsonFilePath}", text: tfvarsJson)
+
+          def scriptPath = "./workloads/cloud-workstations/pipelines/workstation-admin-operations/remove-workstation-user/remove-workstation-user.sh"
+          
+          container(name: 'cloud-ws-builder') {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              sh """
+                chmod +x "${scriptPath}"
+                ${scriptPath} ${tfBackendBucket} ${tfvarsJsonFilePath}
+              """
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Post-build actions for success or failure
+  post {
+    success {
+      echo "Status: SUCCESS - Users removed from Workstation job completed."
+    }
+    failure {
+      echo "Status: FAILURE - Failed to remove users from Workstation."
+    }
+    always {
+      // Clean-up
+      echo "Job finished."
+    }
+  }
+}

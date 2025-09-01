@@ -59,6 +59,7 @@ function cuttlefish_install_additional_packages() {
     # Install Node version manager and nodejs.
     npm cache clean -f
     sudo npm install -g n
+    sudo npm install -g wait-on
     sudo n "${NODEJS_VERSION}"
     sudo ln -sf /usr/local/bin/node  /usr/local/bin/nodejs || true
 

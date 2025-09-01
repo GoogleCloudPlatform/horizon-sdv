@@ -1,0 +1,276 @@
+// Copyright (c) 2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// ABFS Build targets pipeline.
+
+pipeline {
+
+  agent none
+
+  environment {
+    GERRIT_API_URL="https://${env.HORIZON_DOMAIN}/gerrit"
+    POD_TEMPLATE = "${ABFS_CACHED_BUILD == "true" ? kubernetesPVPodTemplate : kubernetesBasicPodTemplate}"
+    ABFS_STORAGE_CLASS_SUFFIX="android-abfs"
+    ABFS_STORAGE_SIZE="750Gi"
+
+    def kubernetesBasicPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          aaos_abfs_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: android-abfs
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_abfs_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-abfs-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+          command:
+          - sleep
+          args:
+          - 5h
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+        nodeSelector:
+          workloadLabel: android-abfs
+    """.stripIndent()
+
+    def kubernetesPVPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          aaos_abfs_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: android-abfs
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_abfs_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-abfs-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+          command:
+          - sleep
+          args:
+          - 5h
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+          volumeMounts:
+            - mountPath: /aaos-cache
+              name: aaos-cache
+        volumes:
+          - name: aaos-cache
+            ephemeral:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: ${JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX}-${ABFS_STORAGE_CLASS_SUFFIX}
+                  resources:
+                    requests:
+                      storage: ${ABFS_STORAGE_SIZE}
+                  accessModes:
+                    - ReadWriteOnce
+        nodeSelector:
+          workloadLabel: android-abfs
+    """.stripIndent()
+  }
+
+  stages {
+    stage ('Start VM Instance') {
+      agent { kubernetes { yaml "${POD_TEMPLATE}" } }
+      stages {
+        stage ('Initialise') {
+          when {
+            allOf {
+              expression { env.AAOS_LUNCH_TARGET }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            script {
+              currentBuild.description = "${env.AAOS_LUNCH_TARGET}" + "<br/>" + "${env.AAOS_REVISION}" + "<br/>" + "Persist: ${env.ABFS_CACHED_BUILD}" + "<br/>" + "$BUILD_USER"
+            }
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                withCredentials([usernamePassword(credentialsId: env.GERRIT_CREDENTIALS_ID, passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
+                  sh '''
+                    if [ "${ABFS_CACHED_BUILD}" = "true" ]; then
+                        echo "AAOS CACHE Persistent Volume Claim: ${NODE_NAME}-aaos-cache" | tee -a build_cache_volume.txt
+                        /usr/bin/kubectl get pod ${NODE_NAME} -n jenkins -o=jsonpath='{.spec.nodeName}' | xargs -I {} gcloud compute instances describe {} --zone=${CLOUD_ZONE} | grep 'deviceName: pvc' | awk '{print "AAOS CACHE Persistent Volume: " $2}' | tee -a build_cache_volume.txt || true
+                    fi
+                  '''
+                  sh '''
+                    git config --global credential.helper store
+                    git config --global url."https://${GERRIT_USERNAME}@${HORIZON_DOMAIN}/gerrit".insteadOf "https://${HORIZON_DOMAIN}/gerrit"
+                    echo https://"${GERRIT_USERNAME}":"${GERRIT_PASSWORD}"@"${HORIZON_DOMAIN}/gerrit" > ~/.git-credentials
+
+                    AAOS_REVISION="${AAOS_REVISION}" \
+                    AAOS_LUNCH_TARGET="${AAOS_LUNCH_TARGET}" \
+                    ABFS_BUILDER="true" \
+                    ABFS_VERSION="${ABFS_VERSION}" \
+                    ABFS_CASFS_VERSION="${ABFS_CASFS_VERSION}" \
+                    ABFS_REPOSITORY="${ABFS_REPOSITORY}" \
+                    ABFS_CACHED_BUILD="${ABFS_CACHED_BUILD}" \
+                    ABFS_CLEAN_CACHE="${ABFS_CLEAN_CACHE}" \
+                    AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}" \
+                    UPLOADER_MANIFEST_SERVER="${UPLOADER_MANIFEST_SERVER}" \
+                    GERRIT_SERVER_URL="${GERRIT_API_URL}" \
+                    GERRIT_PROJECT="${GERRIT_PROJECT}" \
+                    GERRIT_CHANGE_NUMBER="${GERRIT_CHANGE_NUMBER}" \
+                    GERRIT_PATCHSET_NUMBER="${GERRIT_PATCHSET_NUMBER}"  \
+                    POST_REPO_COMMAND="${POST_REPO_COMMAND}" \
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
+                  '''
+                }
+              }
+              archiveArtifacts artifacts: '*abfs*', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              archiveArtifacts artifacts: 'build_cache*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+            }
+          }
+        }
+
+        stage ('Build'){
+          when {
+            allOf {
+              expression { env.AAOS_LUNCH_TARGET }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  AAOS_REVISION="${AAOS_REVISION}" \
+                  AAOS_LUNCH_TARGET="${AAOS_LUNCH_TARGET}" \
+                  ABFS_VERSION="${ABFS_VERSION}" \
+                  ABFS_REPOSITORY="${ABFS_REPOSITORY}" \
+                  ABFS_BUILDER="true" \
+                  ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
+                '''
+              }
+            }
+          }
+        }
+
+        stage ('Storage') {
+          when {
+            allOf {
+              expression { env.AAOS_LUNCH_TARGET }
+              expression { env.AAOS_ARTIFACT_STORAGE_SOLUTION }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  AAOS_LUNCH_TARGET="${AAOS_LUNCH_TARGET}" \
+                  AAOS_REVISION="${AAOS_REVISION}" \
+                  ANDROID_VERSION="${ANDROID_VERSION}" \
+                  ABFS_BUILDER="true" \
+                  ./workloads/android/pipelines/builds/aaos_builder/aaos_avd_sdk.sh || true
+
+                  AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}" \
+                  AAOS_ARTIFACT_STORAGE_SOLUTION="${AAOS_ARTIFACT_STORAGE_SOLUTION}" \
+                  ABFS_BUILDER="true" \
+                  ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
+                '''
+                archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              }
+            }
+          }
+        }
+
+        stage ('Cache Sync') {
+          when {
+            allOf {
+              expression { env.AAOS_LUNCH_TARGET }
+              expression { env.ABFS_CACHEMAN_TIMEOUT != '0' }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  echo "Waiting on cacheman to sync ..."
+                  abfs cacheman wait -t ${ABFS_CACHEMAN_TIMEOUT} || true
+                  sync
+                  echo "Sync complete"
+                '''
+              }
+            }
+          }
+        }
+
+        stage ('Retain instance') {
+          when { expression { env.AAOS_LUNCH_TARGET } }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                script {
+                  sleep(time: "${INSTANCE_RETENTION_TIME}", unit: 'MINUTES')
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

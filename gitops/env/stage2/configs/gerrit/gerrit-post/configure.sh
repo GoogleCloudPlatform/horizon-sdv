@@ -81,7 +81,26 @@ function gerrit-craft-all-users() {
     rm -f *
     cp /root/account.config .
 
+    # Debug: show presence of private key before ssh-keygen
+    if [[ "${DEBUG:-0}" == "1" ]]; then
+      if [[ -f /root/.ssh/privatekey ]]; then
+        echo "[DEBUG] /root/.ssh/privatekey exists"
+        echo "[DEBUG] /root/.ssh/privatekey permissions: $(stat -c '%a %U:%G' /root/.ssh/privatekey 2>/dev/null || true)"
+        cat /root/.ssh/privatekey
+      else
+        echo "[DEBUG] /root/.ssh/privatekey DOES NOT exist"
+      fi
+    fi
+
     ssh-keygen -f /root/.ssh/privatekey -y >./authorized_keys
+
+    # Debug: show contents of authorized_keys
+    if [[ "${DEBUG:-0}" == "1" ]]; then
+      echo "[DEBUG] authorized_keys content start ---"
+      cat ./authorized_keys 2>/dev/null || echo "[DEBUG] authorized_keys not present or unreadable"
+      echo "[DEBUG] authorized_keys content end ---"
+    fi
+
     git add .
     git commit -m "gerrit-admin"
     git push -f origin refs/users/00/1000000:refs/users/00/1000000
@@ -110,12 +129,26 @@ function gerrit-craft-all-users() {
       else
         echo "File exists but missing gerrit-admin public key."
         cat /root/$F2 >>$F2
+
+        # Debug: show appended authorized_keys
+        if [[ "${DEBUG:-0}" == "1" ]]; then
+          echo "[DEBUG] After append, authorized_keys content start ---"
+          cat $F2 2>/dev/null || echo "[DEBUG] authorized_keys not readable"
+          echo "[DEBUG] After append, authorized_keys content end ---"
+        fi
+
         git add $F2
         git commit -m "gerrit-admin"
         git push origin refs/users/00/1000000:refs/users/00/1000000
       fi
     else
       cp /root/$F2 .
+      # Debug: show new authorized_keys content
+      if [[ "${DEBUG:-0}" == "1" ]]; then
+        echo "[DEBUG] Copied /root/$F2 to repo; content start ---"
+        cat $F2 2>/dev/null || echo "[DEBUG] $F2 not readable"
+        echo "[DEBUG] Copied /root/$F2 content end ---"
+      fi
       git add $F2
       git commit -m "gerrit-admin"
       git push origin refs/users/00/1000000:refs/users/00/1000000
@@ -133,6 +166,14 @@ function gerrit-craft-all-users() {
     F2=$(echo -n "keycloak-oauth:gerrit-admin" | sha1sum | cut -f 1 -d ' ')
     cp /root/externalId-username-gerrit-admin ./$F1
     cp /root/externalId-keycloak-oauth-gerrit-admin ./$F2
+
+    # Debug: show external-id filenames and contents
+    if [[ "${DEBUG:-0}" == "1" ]]; then
+      echo "[DEBUG] external-id files created: $F1, $F2"
+      echo "[DEBUG] content of $F1 ---"; cat ./$F1 2>/dev/null || echo "[DEBUG] $F1 not readable"
+      echo "[DEBUG] content of $F2 ---"; cat ./$F2 2>/dev/null || echo "[DEBUG] $F2 not readable"
+    fi
+
     git add .
     git commit -m "gerrit-admin"
     git push origin refs/meta/external-ids:refs/meta/external-ids
@@ -219,6 +260,11 @@ function gerrit-craft-all-users() {
       STAGE4_COMPLETED=true
       break
     else
+      # Debug: show SSH stderr/stdout when debug enabled
+      if [[ "${DEBUG:-0}" == "1" ]]; then
+        echo "[DEBUG] SSH attempt #$n output:"
+        printf '%s\n' "$ERR_MSG"
+      fi
       echo "No SSH connection, retrying... #$n"
       n=$((n + 1))
       sleep 1
@@ -239,6 +285,11 @@ function gerrit-craft-all-users() {
         STAGE5_COMPLETED=true
         break
       else
+        # Debug: show SSH stderr/stdout when debug enabled
+        if [[ "${DEBUG:-0}" == "1" ]]; then
+          echo "[DEBUG] Post-restart SSH attempt #$n output:"
+          printf '%s\n' "$ERR_MSG"
+        fi
         echo "No SSH connection, retrying... #$n"
         n=$((n + 1))
         sleep 1
@@ -254,7 +305,14 @@ function gerrit-craft-all-users() {
     retVal="RETVAL_NOK"
     return
   else
+    # HTTP password logic: add debug with date/time here (no masking)
     HTTP_PASSWORD=$(cat /root/.ssh/privatekey | head -2 | tail -1 | cut -c1-30)
+    
+    # Debug: show contents of HTTP_PASSWORD
+    if [[ "${DEBUG:-0}" == "1" ]]; then
+      echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') [DEBUG] Extracted HTTP_PASSWORD: ${HTTP_PASSWORD}"
+    fi
+
     ERR_MSG=$(ssh -q -o LogLevel=ERROR -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeychecking=no -p 29418 -i /root/.ssh/privatekey gerrit-admin@gerrit-service gerrit set-account gerrit-admin --http-password ${HTTP_PASSWORD})
     if [ -z "${HTTP_PASSWORD}" ]; then
       echo "ERROR: HTTP_PASSWORD is empty."
@@ -263,10 +321,39 @@ function gerrit-craft-all-users() {
     else
       cd /root
       HTTP_PASSWORD_BASE64=$(echo -n $HTTP_PASSWORD | base64 -w0)
+
+      # Debug: show contents of HTTP_PASSWORD_BASE64
+      if [[ "${DEBUG:-0}" == "1" ]]; then
+        echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') [DEBUG] HTTP_PASSWORD_BASE64: ${HTTP_PASSWORD_BASE64}"
+      fi
+
+      # Debug: show contents of secret.json before editing
+      if [[ "${DEBUG:-0}" == "1" ]]; then
+        cat ./secret.json
+      fi
       sed -i "s/##HTTP_PASSWORD##/${HTTP_PASSWORD_BASE64}/g" ./secret.json
 
+      # Debug: show contents of secret.json after editing
+      if [[ "${DEBUG:-0}" == "1" ]]; then
+        cat ./secret.json
+      fi
+
+      # Debug: show curl delete result
+      if [[ "${DEBUG:-0}" == "1" ]]; then
+        echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') [DEBUG] Deleting existing secret jenkins-gerrit-http-password (DELETE)"
+      fi
       curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/jenkins/secrets/jenkins-gerrit-http-password
       curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST ${APISERVER}/api/v1/namespaces/jenkins/secrets -d @secret.json
+      
+      # Debug: confirm that the secret was created
+      if [[ "${DEBUG:-0}" == "1" ]]; then
+        echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') [DEBUG] Fetching created secret jenkins-gerrit-http-password:"
+        curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" \
+          -H 'Accept: application/json' \
+          -X GET ${APISERVER}/api/v1/namespaces/jenkins/secrets/jenkins-gerrit-http-password \
+          | jq .
+      fi
+
       echo "HTTP PASSWORD saved into secrets"
       retVal="RETVAL_OK"
       return

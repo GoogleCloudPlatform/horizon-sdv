@@ -17,11 +17,11 @@ This is not intended for everyday usage, simply a tool when developing tests to 
 One-time setup requirements.
 
 - Before running this pipeline job, ensure that the following template has been created by running the corresponding job:
-  - Docker image template: ``Android Workflows/Environment/Docker Image Template`
+  - Docker image template: `Android Workflows/Environment/Docker Image Template`
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
-**Jenkins Parameters:** Defined in the respective pipeline jobs within `gitops/env/stage2/templates/jenkins.yaml` (CasC).
+**Jenkins Parameters:** Defined in the groovy job definition `groovy/job.groovy`.
 
 ### `MTK_CONNECT_TESTBENCH`
 
@@ -46,6 +46,12 @@ These are as follows:
 
 -   `CLOUD_ZONE`
     - The GCP project zone. Important for bucket, registry paths used in pipelines.
+
+-   `HORIZON_GITHUB_URL`
+    - The URL to the Horizon SDV GitHub repository.
+
+-   `HORIZON_GITHUB_BRANCH`
+    - The branch name the job will be configured for from `HORIZON_GITHUB_URL`.
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.

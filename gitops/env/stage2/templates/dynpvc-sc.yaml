@@ -11,11 +11,73 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Description:
+# Storage classes used for Jenkins build caches.
+# Prefix reclaimable-storage-class is referenced in System Variables so
+# jobs may choose the correct storage class based on Android version and
+# target.
 
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: reclaimable-storage-class
+  name: reclaimable-storage-class-android-14
+  annotations:
+    reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
+    argocd.argoproj.io/sync-wave: "3"
+provisioner: pd.csi.storage.gke.io
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  type: pd-balanced
+  csi.storage.k8s.io/fstype: ext4
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: reclaimable-storage-class-android-14-rpi
+  annotations:
+    reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
+    argocd.argoproj.io/sync-wave: "3"
+provisioner: pd.csi.storage.gke.io
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  type: pd-balanced
+  csi.storage.k8s.io/fstype: ext4
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: reclaimable-storage-class-android-15
+  annotations:
+    reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
+    argocd.argoproj.io/sync-wave: "3"
+provisioner: pd.csi.storage.gke.io
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  type: pd-balanced
+  csi.storage.k8s.io/fstype: ext4
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: reclaimable-storage-class-android-15-rpi
+  annotations:
+    reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
+    argocd.argoproj.io/sync-wave: "3"
+provisioner: pd.csi.storage.gke.io
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  type: pd-balanced
+  csi.storage.k8s.io/fstype: ext4
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: reclaimable-storage-class-android-abfs
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"

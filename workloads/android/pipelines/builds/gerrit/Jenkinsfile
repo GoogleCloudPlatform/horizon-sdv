@@ -14,72 +14,87 @@
 
 // Description:
 // AAOS Gerrit Triggered Build.
-def kubernetesPodTemplate = """
-  apiVersion: v1
-  kind: Pod
-  metadata:
-    annotations:
-      cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
-    labels:
-      aaos_pod: "true"
-  spec:
-    tolerations:
-    - key: workloadType
-      operator: Equal
-      value: android
-      effect: "NoSchedule"
-    affinity:
-      podAntiAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
-            matchExpressions:
-            - key: aaos_pod
-              operator: Exists
-          topologyKey: kubernetes.io/hostname
-    hostname: jenkins-aaos-build-pod
-    serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
-    containers:
-    - name: builder
-      image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
-      imagePullPolicy: IfNotPresent
-      command:
-      - sleep
-      args:
-      - 8h
-      resources:
-        limits:
-          cpu: 96000m
-          memory: 160000Mi
-        requests:
-          cpu: 96000m
-          memory: 160000Mi
-      volumeMounts:
-      - mountPath: /aaos-cache
-        name: aaos-cache
-    volumes:
-    - name: aaos-cache
-      ephemeral:
-        volumeClaimTemplate:
-          spec:
-            storageClassName: ${JENKINS_CACHE_STORAGE_CLASS_NAME}
-            resources:
-              requests:
-                storage: 2000Gi
-            accessModes:
-              - ReadWriteOnce
-    nodeSelector:
-      workloadLabel: android
-""".stripIndent()
+
+def getAndroidVersion(revision) {
+  if (revision =~ "android-14") {
+    return "14"
+  } else if (revision =~ "android-15") {
+    return "15"
+  } else {
+    currentBuild.result = 'FAILURE'
+    error "Failed to extract Android version from revision: ${revision}"
+  }
+}
 
 pipeline {
 
-  // Trigger defined in gitops/env/stage2/templates/jenkins.yaml (Jenkins CasC)
+  // Environment defined in groovy/job.groovy
 
   agent none
 
   environment {
     // Ensure Gerrit Code Review knows the new Gerrit path.
     GERRIT_API_URL="https://${env.HORIZON_DOMAIN}/gerrit"
+    SDK_ANDROID_VERSION="${getAndroidVersion(env.GERRIT_BRANCH)}"
+    STORAGE_CLASS_SUFFIX="android-${SDK_ANDROID_VERSION}"
+
+    // Define Pod Template in environment so we can override.
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          aaos_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: android
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-aaos-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
+          imagePullPolicy: IfNotPresent
+          command:
+          - sleep
+          args:
+          - 5h
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+          volumeMounts:
+            - mountPath: /aaos-cache
+              name: aaos-cache
+        volumes:
+          - name: aaos-cache
+            ephemeral:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: ${JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX}-${STORAGE_CLASS_SUFFIX}
+                  resources:
+                    requests:
+                      storage: 1000Gi
+                  accessModes:
+                    - ReadWriteOnce
+        nodeSelector:
+          workloadLabel: android
+    """.stripIndent()
   }
 
   stages {
@@ -96,12 +111,15 @@ pipeline {
               withCredentials([usernamePassword(credentialsId: env.GERRIT_CREDENTIALS_ID, passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
                 script {
                   env.ANDROID_BUILD_ID=''
+                  // Required for CTS
                   env.ANDROID_VERSION=14
                   if ( "${env.GERRIT_BRANCH}" =~ "android-14.0.0_r30" ) env.ANDROID_BUILD_ID="ap1a-"
                   if ( "${env.GERRIT_BRANCH}" =~ "android-14.0.0_r74" ) env.ANDROID_BUILD_ID="ap2a-"
                   if ( "${env.GERRIT_BRANCH}" =~ "android-15.0.0_r4" )  env.ANDROID_BUILD_ID="ap3a-"
                   if ( "${env.GERRIT_BRANCH}" =~ "android-15.0.0_r10" ) env.ANDROID_BUILD_ID="ap4a-"
                   if ( "${env.GERRIT_BRANCH}" =~ "android-15.0.0_r20" ) env.ANDROID_BUILD_ID="bp1a-"
+                  if ( "${env.GERRIT_BRANCH}" =~ "android-15.0.0_r32" ) env.ANDROID_BUILD_ID="bp1a-"
+                  if ( "${env.GERRIT_BRANCH}" =~ "android-15.0.0_r36" ) env.ANDROID_BUILD_ID="bp1a-"
 
                   if ( "$ANDROID_BUILD_ID" =~ "ap3a" ) env.ANDROID_VERSION=15
                   if ( "$ANDROID_BUILD_ID" =~ "ap4a" ) env.ANDROID_VERSION=15
@@ -135,9 +153,10 @@ pipeline {
                   export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
                   export CLOUD_REGION="${CLOUD_REGION}"
                   export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
-                  export ANDROID_VERSION="${ANDROID_VERSION}"
+                  export ANDROID_VERSION="${SDK_ANDROID_VERSION}"
                   export AAOS_CLEAN="NO_CLEAN"
                   export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_avd_sdk.sh || true
@@ -161,9 +180,10 @@ pipeline {
                   export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
                   export CLOUD_REGION="${CLOUD_REGION}"
                   export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
-                  export ANDROID_VERSION="${ANDROID_VERSION}"
+                  export ANDROID_VERSION="${SDK_ANDROID_VERSION}"
                   export AAOS_CLEAN="NO_CLEAN"
                   export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_avd_sdk.sh || true
@@ -189,6 +209,32 @@ pipeline {
                   export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
                   export AAOS_CLEAN="NO_CLEAN"
                   export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                  ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
+                  ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
+                  ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
+                '''
+                archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              }
+            }
+          }
+        }
+
+        stage ('Build: aosp_cf_arm64_auto') {
+          when { expression { env.GERRIT_CHANGE_NUMBER } }
+          steps {
+            container(name: 'builder') {
+              withCredentials([usernamePassword(credentialsId: 'jenkins-gerrit-http-password', passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
+                sh '''
+                  export AAOS_GERRIT_MANIFEST_URL="https://${HORIZON_DOMAIN}/gerrit/android/platform/manifest"
+                  export AAOS_REVISION="${GERRIT_BRANCH}"
+                  export AAOS_LUNCH_TARGET="aosp_cf_arm64_auto-${ANDROID_BUILD_ID}userdebug"
+                  export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
+                  export CLOUD_REGION="${CLOUD_REGION}"
+                  export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
+                  export AAOS_CLEAN="NO_CLEAN"
+                  export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
@@ -213,6 +259,7 @@ pipeline {
                   export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
                   export AAOS_CLEAN="NO_CLEAN"
                   export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
@@ -226,7 +273,7 @@ pipeline {
     }
 
     stage ('Start Test VM Instance') {
-      agent { label "${env.GERRIT_CUTTLEFISH_INSTANCE_TEMPLATE_LABEL}" }
+      agent { label "${env.JENKINS_GCE_CLOUD_LABEL}" }
       stages {
         stage ('Test: aosp_cf_x86_64_auto') {
           when { expression { env.GERRIT_CHANGE_NUMBER } }
@@ -235,9 +282,10 @@ pipeline {
               sh '''
                 BUCKET_FOLDER=$(echo "$JOB_NAME" | tr ' ' '_')
                 export CUTTLEFISH_DOWNLOAD_URL="gs://${CLOUD_PROJECT}-aaos/$BUCKET_FOLDER/$BUILD_NUMBER/aosp_cf_x86_64_auto-${ANDROID_BUILD_ID}userdebug"
-                export NUM_INSTANCES=8
+                export NUM_INSTANCES=10
                 export VM_CPUS=6
                 export CTS_VERSION=${ANDROID_VERSION}
+                export CTS_TESTPLAN="cts-virtual-device-stable"
                 export CTS_MODULE="CtsHostsideNumberBlockingTestCases"
                 export SHARD_COUNT=${NUM_INSTANCES}
                 ./workloads/android/pipelines/tests/cvd_launcher/cvd_start_stop.sh --start

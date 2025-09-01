@@ -1,0 +1,1 @@
+../../../../../docs/workloads/openbsw/environment/docker_image_template.md
