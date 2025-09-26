@@ -21,9 +21,9 @@ The *Access Control Management Horizon* project provides a Python script and cla
 To install the required dependencies for the project:
 
 1. Clone the repository:
-
+    > Note: Replace \<repository-url> with the actual repository URL in your GitHub Organization .
     ```bash
-    git clone https://github.com/AGBG-ASG/acn-horizon-sdv.git
+    git clone <repository-url>
     ```
 
 2. Navigate to the script directory:

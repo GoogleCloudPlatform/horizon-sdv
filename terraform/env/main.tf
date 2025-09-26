@@ -222,6 +222,37 @@ module "base" {
         "roles/iam.workloadIdentityUser"
       ])
     },
+    sa8 = {
+      account_id   = "gke-terraform-workloads-sa"
+      display_name = "terraform-workloads-sa"
+      description  = "jenkins/terraform-workloads-sa in GKE cluster makes use of this account through WI to deploy extra on-demand resources via workload pipelines"
+
+      gke_sas = [
+        {
+          gke_ns = "jenkins"
+          gke_sa = "terraform-workloads-sa"
+        }
+      ]
+
+      roles = toset([
+        "roles/storage.objectUser",
+        "roles/artifactregistry.writer",
+        "roles/secretmanager.secretAccessor",
+        "roles/iam.serviceAccountTokenCreator",
+        "roles/container.admin",
+        "roles/iap.tunnelResourceAccessor",
+        "roles/iam.serviceAccountUser",
+        "roles/compute.instanceAdmin.v1",
+        "roles/workstations.admin",
+        "roles/storage.bucketViewer",
+        "roles/spanner.admin",
+        "roles/logging.admin",
+        "roles/editor",
+        "roles/iam.serviceAccountAdmin",
+        "roles/resourcemanager.projectIamAdmin",
+        "roles/file.editor"
+      ])
+    }
   }
 
   #

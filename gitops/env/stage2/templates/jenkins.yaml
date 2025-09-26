@@ -138,6 +138,7 @@ spec:
             - workflow-step-api:706.v518c5dcb_24c0
             - workflow-support:976.vb_d9493c2eb_09
           additionalPlugins:
+            - ansicolor:1.0.6
             - authorize-project:2.0.0
             - build-blocker-plugin:166.vc82fc20b_a_ed6
             - build-user-vars-plugin:195.v8c35f9d5c3dc
@@ -443,6 +444,8 @@ spec:
                         }
                       }
                 unclassified:
+                  ansiColorBuildWrapper:
+                    globalColorMapName: "xterm"
                   buildUserVars:
                     allBuilds: true
                   gerrit-trigger:

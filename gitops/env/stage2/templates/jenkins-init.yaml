@@ -50,6 +50,15 @@ metadata:
     iam.gke.io/gcp-service-account: gke-jenkins-sa@{{ .Values.config.projectID }}.iam.gserviceaccount.com
     argocd.argoproj.io/sync-wave: "1"
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: terraform-workloads-sa
+  namespace: jenkins
+  annotations:
+    iam.gke.io/gcp-service-account: gke-terraform-workloads-sa@{{ .Values.config.projectID }}.iam.gserviceaccount.com
+    argocd.argoproj.io/sync-wave: "1"
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -76,6 +85,42 @@ rules:
       ]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: terraform-workloads-writer-cluster-role
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "delete", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs:
+      [
+        "create",
+        "delete",
+        "deletecollection",
+        "get",
+        "list",
+        "patch",
+        "update",
+        "watch",
+      ]
+  - apiGroups: [""]
+    resources: ["persistentvolumes", "persistentvolumeclaims"]
+    verbs: 
+      [
+        "create",
+        "get",
+        "list",
+        "watch",
+        "delete",
+        "update",
+        "patch"
+      ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: jenkins-writer-rolebinding
@@ -88,6 +133,22 @@ subjects:
 roleRef:
   kind: Role
   name: jenkins-writer-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: terraform-workloads-writer-cluster-rolebinding
+  namespace: jenkins
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+subjects:
+  - kind: ServiceAccount
+    name: terraform-workloads-sa
+    namespace: jenkins
+roleRef:
+  kind: ClusterRole
+  name: terraform-workloads-writer-cluster-role
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: v1

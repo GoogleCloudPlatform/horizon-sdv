@@ -29,6 +29,8 @@ spec:
     targetRevision: 13.5.1
     helm:
       values: |
+        image:
+          repository: bitnamilegacy/zookeeper
         persistence:
           accessMode: "ReadWriteOnce"
           enabled: true
