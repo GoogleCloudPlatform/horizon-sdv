@@ -20,7 +20,7 @@ These pipelines need only be run once, or when their Dockerfile is updated. Ther
 
 ### References
 - [Kaniko](https://github.com/GoogleContainerTools/kaniko)
-- [Base Image for Horizon Code OSS](https://github.com/AGBG-ASG/acn-horizon-sdv/blob/env/sbx/docs/us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss:latest)
+- [Base Image for Horizon Code OSS](https://us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss:latest)
 - [Base Template for Horizon Android Studio for Platform (ASfP)](https://github.com/GoogleCloudPlatform/cloud-workstations-custom-image-examples/tree/main/examples/images/android-open-source-project/android-studio-for-platform)
 - [Base Template for Horizon Android Studio](https://github.com/GoogleCloudPlatform/cloud-workstations-custom-image-examples/tree/main/examples/images/android/android-studio)
 

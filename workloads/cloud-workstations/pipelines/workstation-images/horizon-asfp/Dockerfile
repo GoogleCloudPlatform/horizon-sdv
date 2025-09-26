@@ -35,7 +35,13 @@ RUN git clone --quiet --depth 1 --branch $NOVNC_BRANCH https://github.com/novnc/
 #######################################################
 FROM us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss AS cuttlefish-builder
 
-RUN apt-get update && apt-get install -y \
+# Add new Helm repo in apt sources (fix broken baltocdn.com entry) and install dependencies
+RUN curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey \
+      | gpg --dearmor > /usr/share/keyrings/helm.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/helm.gpg] \
+      https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" \
+      > /etc/apt/sources.list.d/helm-stable-debian.list && \
+    apt-get update && apt-get install -y \
     git \
     devscripts \
     equivs \
@@ -64,19 +70,25 @@ FROM us-west1-docker.pkg.dev/cloud-workstations-images/predefined/base
 # Install systemd, GNOME, and VNC.
 
 # Install and configure systemd
-RUN apt-get update && apt-get install -y \
-  systemd && \
-  apt-get clean && \
-  rm -rf /var/lib/apt/lists/* &&\
-  ln -s /dev/null /etc/systemd/system/apache2.service && \
-  ln -s /dev/null /etc/systemd/system/getty@tty1.service && \
-  ln -s /dev/null /etc/systemd/system/ldconfig.service && \
-  /sbin/ldconfig -Xv && \
-  ln -s /dev/null /etc/systemd/system/systemd-modules-load.service && \
-  ln -s /dev/null /etc/systemd/system/ssh.socket && \
-  ln -s /dev/null /etc/systemd/system/ssh.service && \
-  echo "d /run/sshd 0755 root root" > /usr/lib/tmpfiles.d/sshd.conf && \
-  echo -e "x /run/docker.socket - - - - -\nx /var/run/docker.socket - - - - -" > /usr/lib/tmpfiles.d/docker.conf
+# Add new Helm repo in apt sources (fix broken baltocdn.com entry) and then install systemd
+RUN curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey \
+      | gpg --dearmor > /usr/share/keyrings/helm.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/helm.gpg] \
+      https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" \
+      > /etc/apt/sources.list.d/helm-stable-debian.list && \
+    apt-get update && apt-get install -y \
+    systemd && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* &&\
+    ln -s /dev/null /etc/systemd/system/apache2.service && \
+    ln -s /dev/null /etc/systemd/system/getty@tty1.service && \
+    ln -s /dev/null /etc/systemd/system/ldconfig.service && \
+    /sbin/ldconfig -Xv && \
+    ln -s /dev/null /etc/systemd/system/systemd-modules-load.service && \
+    ln -s /dev/null /etc/systemd/system/ssh.socket && \
+    ln -s /dev/null /etc/systemd/system/ssh.service && \
+    echo "d /run/sshd 0755 root root" > /usr/lib/tmpfiles.d/sshd.conf && \
+    echo -e "x /run/docker.socket - - - - -\nx /var/run/docker.socket - - - - -" > /usr/lib/tmpfiles.d/docker.conf
 
 # Install and configure GNOME
 RUN apt-get update && apt-get install -y \

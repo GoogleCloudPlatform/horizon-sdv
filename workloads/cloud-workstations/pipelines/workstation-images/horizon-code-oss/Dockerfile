@@ -14,7 +14,13 @@
 
 FROM us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss:latest
 
-RUN apt-get update -y && \
+# Add new Helm repo in apt sources (fix broken baltocdn.com entry)
+RUN curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey \
+      | gpg --dearmor > /usr/share/keyrings/helm.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/helm.gpg] \
+      https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" \
+      > /etc/apt/sources.list.d/helm-stable-debian.list && \
+    apt-get update -y && \
     apt-get install -y --no-install-recommends git curl vim && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
