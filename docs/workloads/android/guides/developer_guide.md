@@ -134,7 +134,7 @@ To build Android targets and utilise other pipeline jobs, it is mandatory to run
 > [!TIP]
 > If there are issues observed when creating the templates, review the console logs for errors to ensure the environment
 > and jobs were setup correctly.
->
+> 
 > The person preparing the platform may wish to test the instance templates using `CVD Launcher` and `CTS Execution` test jobs, using the `aosp_cf` targets created by the `Warm Build Caches` job. Refer to lab exercises for details how to prepare and run those jobs.
 
 <details>
@@ -986,9 +986,9 @@ Upon completing this exercise, you will gain hands-on experience in making code 
 > - `sdk_car_arm64`
 > - `aosp_cf_x86_64_auto`
 > - `aosp_tangorpro_car`
->
+> 
 > and runs a simple single module CTS test module. During each stage of the build, the jobs stores the artifact file for each target showing where to retrieve the build artifacts for test purposes. You may choose to use those targets before the pipeline completes or wait until the full pipeline job completes successfully.
->
+> 
 > Please retain the repo for later exercises.
 
 <details><summary><b>Lab Exercise</b></summary>
@@ -1206,7 +1206,7 @@ ___
 
 > **Note:**
 > This is optional. Included if developer is interested in changing the Android Boot Animation.
->
+> 
 > Refer to Google [README](https://android.googlesource.com/platform/packages/services/Car/+/refs/tags/android-14.0.0_r30/car_product/car_ui_portrait/bootanimation/README) and [FORMAT.md](https://android.googlesource.com/platform/frameworks/base/+/master/cmds/bootanimation/FORMAT.md) for further details.
 
 >**Important:**
@@ -1941,7 +1941,7 @@ ___
 
 > **Note:**
 > This is optional. Included if developer is interested in changing the Android Boot Animation.
->
+> 
 > Refer to Google [README](https://android.googlesource.com/platform/packages/services/Car/+/refs/tags/android-15.0.0_r36/car_product/car_ui_portrait/bootanimation/README) and [FORMAT.md](https://android.googlesource.com/platform/frameworks/base/+/master/cmds/bootanimation/FORMAT.md) for further details.
 
 **_Clone Repo:_**
