@@ -687,7 +687,6 @@ kubectl get pv -n jenkins -o jsonpath='{.items[?(@.spec.storageClassName=="recla
 
 2. Using the list of PVs, selectively delete them by repeating the following command per PV:
 ```
-kubectl delete pv <pv name> -n jenkins
 gcloud compute disks delete <pv name> --zone=<zone>
 ```
     Replace <pv-name> with the actual name of the PV you want to delete, and <zone> being that of your GCP project ZONE, e.g. europe-west1-d.

@@ -153,7 +153,7 @@ Default Compute Service Account
 <li>
 GCP Project details
 <pre>
-<code>gcloud projects describe &lt;GCP_PROJECT_ID&gt;</code>
+<code>gcloud projects describe <GCP_PROJECT_ID></code>
 </pre>
 </li>
 </ol>
@@ -171,7 +171,7 @@ In the current GCP project, it is required to create a GCP Bucket to store data 
 <details>
 <summary><code>gcloud</code> CLI</summary>
 <pre>
-<code>gcloud storage buckets create gs://&lt;GCP_BACKEND_BUCKET_NAME&gt;</code>
+<code>gcloud storage buckets create gs://<GCP_BACKEND_BUCKET_NAME></code>
 </details>
 
 ### Section #2c - Create a GitHub Organization
@@ -243,7 +243,7 @@ Create a Workload Identity Federation Provider
    --description="GitHub OIDC Provider" \
    --issuer-uri="https://token.actions.githubusercontent.com" \
    --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.aud=assertion.aud,attribute.repository_owner=assertion.repository_owner,attribute.repository=assertion.repository" \
-   --attribute-condition="assertion.repository_owner=='&lt;GITHUB_ORGANIZATION_NAME&gt;'"</code>
+   --attribute-condition="assertion.repository_owner=='<GITHUB_ORGANIZATION_NAME>'"</code>
 </pre>
 </li>
 </ol>
@@ -273,16 +273,16 @@ Create service account
 <li>
 Add <code>Owner</code> role to the service account
 <pre>
-<code>gcloud projects add-iam-policy-binding &lt;GCP_PROJECT_ID&gt; \
-   --member="serviceAccount:github-sa@&lt;GCP_PROJECT_ID&gt;.iam.gserviceaccount.com" \
+<code>gcloud projects add-iam-policy-binding <GCP_PROJECT_ID> \
+   --member="serviceAccount:github-sa@<GCP_PROJECT_ID>.iam.gserviceaccount.com" \
    --role="roles/owner"</code>
 </pre>
 </li>
 <li>
 Add <code>Workload Identity User</code> role to the service account
 <pre>
-<code>gcloud projects add-iam-policy-binding &lt;GCP_PROJECT_ID&gt; \
-   --member="serviceAccount:github-sa@&lt;GCP_PROJECT_ID&gt;.iam.gserviceaccount.com" \
+<code>gcloud projects add-iam-policy-binding <GCP_PROJECT_ID> \
+   --member="serviceAccount:github-sa@<GCP_PROJECT_ID>.iam.gserviceaccount.com" \
    --role="roles/iam.workloadIdentityUser"</code>
 </pre>
 </li>
@@ -376,7 +376,7 @@ Follow the below mentioned steps to get the [horizon-sdv](https://github.com/Goo
 <details>
 <summary><code>gh</code> CLI command</summary>
 
-<pre><code>gh repo fork &lt;SOURCE_GITHUB_ORGANIZATION_NAME&gt;/&lt;SOURCE_GITHUB_REPOSITORY_NAME&gt; --org &lt;GITHUB_ORGANIZATION_NAME&gt;</code></pre>
+<pre><code>gh repo fork <SOURCE_GITHUB_ORGANIZATION_NAME>/<SOURCE_GITHUB_REPOSITORY_NAME> --org <GITHUB_ORGANIZATION_NAME></code></pre>
 </details>
 
 ### Section #3c - Create Repository Branches
@@ -419,7 +419,7 @@ Refer [Branching strategy](#branching-strategy) for more information.
 <summary><code>gh api</code> command</summary>
 Create Github Environment
 <pre>
-<code>gh api -X PUT /repos/&lt;GITHUB_ORGANIZATION_NAME&gt;/&lt;GITHUB_REPOSITORY_NAME&gt;/environments/&lt;GITHUB_ENVIRONMENT_NAME&gt;</code>
+<code>gh api -X PUT /repos/<GITHUB_ORGANIZATION_NAME>/<GITHUB_REPOSITORY_NAME>/environments/<GITHUB_ENVIRONMENT_NAME></code>
 </pre>
 </details>
 
@@ -530,7 +530,7 @@ For each environment secret, run the below commands once the repository has been
 Interactive creation <br>
    Follow this method for typical `secret_name` = `secret_value` items.
 <pre>
-<code>gh secret set &lt;YOUR_SECRET_NAME&gt; -e &lt;GITHUB_ENVIRONMENT_NAME&gt;</code>
+<code>gh secret set <YOUR_SECRET_NAME> -e <GITHUB_ENVIRONMENT_NAME></code>
 </pre>
 </li>
 <li>
@@ -538,7 +538,7 @@ Providing File path <br>
 Use this method for creating secrets which hold private keys.<br>
 <code>PRIVATE_SSH_KEY_FILE</code>: Retrieve path and filename while creating private keys in <a href="#add-environment-secrets">Add Environment Secret</a> section.
 <pre>
-<code>cat /path/to/&lt;PRIVATE_SSH_KEY_FILE&gt; | gh secret set &lt;YOUR_SECRET_NAME&gt; -e &lt;GITHUB_ENVIRONMENT_NAME&gt;</code>
+<code>cat /path/to/<PRIVATE_SSH_KEY_FILE> | gh secret set <YOUR_SECRET_NAME> -e <GITHUB_ENVIRONMENT_NAME></code>
 </pre>
 </li>
 </ol>
@@ -568,7 +568,7 @@ Use this method for creating secrets which hold private keys.<br>
 <summary><code>gh</code> CLI</summary>
 For each environment variable, run the below commands once the repository has been <a href="#clone-the-repository">cloned</a> locally.
 <pre>
-<code>gh variable set &lt;YOUR_VARIABLE_NAME&gt; -e &lt;GITHUB_ENVIRONMENT_NAME&gt;</code>
+<code>gh variable set <YOUR_VARIABLE_NAME> -e <GITHUB_ENVIRONMENT_NAME></code>
 </pre>
 </details>
 

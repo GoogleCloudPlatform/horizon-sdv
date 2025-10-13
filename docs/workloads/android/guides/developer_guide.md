@@ -134,7 +134,7 @@ To build Android targets and utilise other pipeline jobs, it is mandatory to run
 > [!TIP]
 > If there are issues observed when creating the templates, review the console logs for errors to ensure the environment
 > and jobs were setup correctly.
->
+> 
 > The person preparing the platform may wish to test the instance templates using `CVD Launcher` and `CTS Execution` test jobs, using the `aosp_cf` targets created by the `Warm Build Caches` job. Refer to lab exercises for details how to prepare and run those jobs.
 
 <details>
@@ -783,7 +783,7 @@ Users must be given access to their respective GCP Project, but also:
 
 > [!IMPORTANT]
 > - **Multiple users** will be using the platform in parallel so it is important each user takes note of which jobs is 'theirs'; to facilitate this, all jobs descriptions show the user that kicked off the job.
->
+> 
 > - Android Studio's ***Android Emulator*** is used in these exercises to verify the target images created using the pipeline build jobs. With the exception of section 5.2.2 (Road Reels Application), Android Studio itself should not be used to perform builds or to clone repos.
 
 ---
@@ -986,9 +986,9 @@ Upon completing this exercise, you will gain hands-on experience in making code 
 > - `sdk_car_arm64`
 > - `aosp_cf_x86_64_auto`
 > - `aosp_tangorpro_car`
->
+> 
 > and runs a simple single module CTS test module. During each stage of the build, the jobs stores the artifact file for each target showing where to retrieve the build artifacts for test purposes. You may choose to use those targets before the pipeline completes or wait until the full pipeline job completes successfully.
->
+> 
 > Please retain the repo for later exercises.
 
 <details><summary><b>Lab Exercise</b></summary>
@@ -1206,7 +1206,7 @@ ___
 
 > **Note:**
 > This is optional. Included if developer is interested in changing the Android Boot Animation.
->
+> 
 > Refer to Google [README](https://android.googlesource.com/platform/packages/services/Car/+/refs/tags/android-14.0.0_r30/car_product/car_ui_portrait/bootanimation/README) and [FORMAT.md](https://android.googlesource.com/platform/frameworks/base/+/master/cmds/bootanimation/FORMAT.md) for further details.
 
 >**Important:**
@@ -1551,15 +1551,15 @@ Upon completing this exercise, you will gain hands-on experience in making code 
 
 > [!NOTE]
 > This example provides a basic change to guarantee that the Gerrit build pipeline is triggered, builds are successful and result is reported back to Gerrit in review comments and the VERIFIED label.
->
+> 
 > Gerrit and the Jenkins build pipeline is for demonstration purposes only, it builds the following targets:
 > - `sdk_car_x86_64`
 > - `sdk_car_arm64`
 > - `aosp_cf_x86_64_auto`
 > - `aosp_tangorpro_car`
->
+> 
 > and runs a simple single module CTS test module. During each stage of the build, the jobs stores the artifact file for each target showing where to retrieve the build artifacts for test purposes. You may choose to use those targets before the pipeline completes or wait until the full pipeline job completes successfully.
->
+> 
 > Please retain the repo for later exercises.
 
 <details><summary><b>Lab Exercise</b></summary>
@@ -1727,9 +1727,9 @@ ___
 
 > **Note:**
 > This lab requires the Pixel Tablet target you built in the Foundation lab exercise.
->
+> 
 > Google will provide Pixel Tablets for use in this exercise. Initially we will test with devices connected to developers laptops but later a demonstration may be provided for remote connection to devices via MTK Connect and tunnels.
->
+> 
 > The flash process is also detailed in [Pixel devices as development platforms](https://source.android.com/docs/automotive/start/pixelxl).
 
 > **Important:**
@@ -1770,13 +1770,13 @@ ___
   - On the device, select `Unlock the Bootloader`. Doing so erases **_all_** data on the device!
 
     > **Note:**
-    >
+    > 
     > The `adb reboot bootloader` command:
     > - _This command initiates a reboot of the Android device, specifying that the device should enter the bootloader mode upon restarting._<br/><br/>
-    >
+    > 
     > **Key Combination:**
     > - Most devices require a specific key combination (e.g., pressing volume down while the device boots) to enter the bootloader mode. This combination needs to be pressed during the reboot process triggered by the `adb reboot bootloader` command.<br/><br/>
-    >
+    > 
     > **Bootloader Activation:**
     > - The physical interaction with the device (pressing the key combination) is what actually forces the device to boot into the bootloader instead of its normal OS.
 
@@ -1941,7 +1941,7 @@ ___
 
 > **Note:**
 > This is optional. Included if developer is interested in changing the Android Boot Animation.
->
+> 
 > Refer to Google [README](https://android.googlesource.com/platform/packages/services/Car/+/refs/tags/android-15.0.0_r36/car_product/car_ui_portrait/bootanimation/README) and [FORMAT.md](https://android.googlesource.com/platform/frameworks/base/+/master/cmds/bootanimation/FORMAT.md) for further details.
 
 **_Clone Repo:_**
