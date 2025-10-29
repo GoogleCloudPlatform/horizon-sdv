@@ -20,3 +20,9 @@ build:
   artifacts:
   - image: code-oss
     context: .
+  - image: code-oss-with-abfs
+    context: .
+    docker:
+      buildArgs:
+        INSTALL_ABFS: "true"
+      network: cloudbuild
