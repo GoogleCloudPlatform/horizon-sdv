@@ -207,13 +207,7 @@ jobs:
             exit 1
           fi
 
-          # This check is no longer needed for GITHUB_APP_PEM_FILE
-          if [[ "${{ secrets.gh-app-key }}" == '' && "${{ secrets.fetcher-key }}" == '' ]]; then
-            echo "Missing Github App Key"
-            exit 1
-          fi
-
-          if [[ ! -z "$JSON_SECRETS" ]]; then
+           if [[ ! -z "$JSON_SECRETS" ]]; then
             echo "SECRETS=true" >> $GITHUB_ENV;
           else
             echo "SECRETS=false" >> $GITHUB_ENV;
