@@ -209,6 +209,8 @@ jobs:
             echo 'sdv_gh_gerrit_admin_initial_password = "${{ secrets.gh-gerrit-admin-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gh_keycloak_horizon_admin_password = "${{ secrets.gh-keycloak-horizon-admin-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gh_abfs_license_b64 = "${{ secrets.gh-abfs-license-b64 }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            
+            # These vars are read directly, so they are correct
             echo 'sdv_gcp_project_id = "${{ vars.GCP_PROJECT_ID }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_computer_sa = "${{ vars.GCP_COMPUTER_SA }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gcp_cloud_region = "${{ vars.GCP_CLOUD_REGION }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
@@ -432,4 +434,5 @@ jobs:
           script: |
 
             core.setFailed('Terraform apply failed.')
+
 
