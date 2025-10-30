@@ -177,12 +177,12 @@ jobs:
           # Clean up the downloaded binary
           rm argocd
 
-      - name: set environment variables
+     - name: set environment variables
         id: set-vars
         shell: bash
         env:
           JSON_SECRETS: ${{ secrets.json-secrets }}
-       run: |
+        run: |    # <--- ADDED 2 SPACES. Now it's part of the step above.
             mkdir -p ${{ inputs.directory }}
             # --- Create terraform.auto.tfvars file ---
             # This file is automatically loaded by Terraform
@@ -201,7 +201,7 @@ jobs:
             
             echo 'sdv_gh_cuttlefish_vm_ssh_private_key = <<EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo '${{ secrets.gh-cuttlefish-vm-ssh-private-key }}' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'ESOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
             
             echo 'sdv_gh_argocd_initial_password_bcrypt = "${{ steps.generate-encoded-argocd-bcrypt-hash.outputs.argocd_encoded_bcrypt_hash }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gh_jenkins_initial_password = "${{ secrets.gh-jenkins-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
@@ -212,7 +212,7 @@ jobs:
             echo 'sdv_gcp_project_id = "${{ vars.GCP_PROJECT_ID }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_computer_sa = "${{ vars.GCP_COMPUTER_SA }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gcp_cloud_region = "${{ vars.GCP_CLOUD_REGION }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gcp_cloud_zone = "${{ vars.GGCP_CLOUD_ZONE }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gcp_cloud_zone = "${{ vars.GCP_CLOUD_ZONE }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gcp_backend_bucket_name = "${{ vars.GCP_BACKEND_BUCKET_NAME }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gh_domain_name = "${{ vars.HORIZON_DOMAIN }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
 
@@ -432,6 +432,7 @@ jobs:
           script: |
 
             core.setFailed('Terraform apply failed.')
+
 
 
 
