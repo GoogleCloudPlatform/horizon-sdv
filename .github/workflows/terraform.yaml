@@ -188,7 +188,7 @@ jobs:
             # This file is automatically loaded by Terraform
             echo "Writing Terraform variables to ${{ inputs.directory }}/terraform.auto.tfvars..."
             
-            echo 'sdv_gh_app_id = "${{ secrets.gh-app-id }}"' > ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_app_id = "123456"' > ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gh_installation_id = "${{ secrets.gh-installation-id }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             
             # This is a PKCS8-formatted key, which Terraform can read
@@ -271,7 +271,14 @@ jobs:
               echo "VARS=false" >> $GITHUB_ENV;
             fi
 
-            
+        - name: DEBUG
+        working-directory: ${{ inputs.directory }}/
+        run: |
+          echo "--- START: terraform.auto.tfvars CONTENT ---"
+          cat terraform.auto.tfvars
+          echo "--- END: terraform.auto.tfvars CONTENT ---"
+
+           
       - name: Get Terraform fetcher GitHub App token
         uses: tibdex/github-app-token@v1
         id: get_github_app_token
