@@ -395,20 +395,19 @@ jobs:
       
       - name: Reformat Plan
         if: ${{ needs.get-env.outputs.environment != '' }}
-        env:
-          TFPLAN_STDOUT: ${{ steps.tfplan.outputs.stdout }}
-          TFPLAN_STDERR: ${{ steps.tfplan.outputs.stderr }}
+        # ⛔️ The entire 'env:' block has been removed
         run: |
           # Add the header and markdown to the file first
           echo "## Terraform plan ${{ needs.get-env.outputs.environment }}" > plan.txt
           echo '```diff' >> plan.txt
-
-          # Append the reformatted plan output
+       
+          # We pipe the output from the 'tfplan' step directly into the sed command.
+          # This avoids ever loading it into an environment variable.
           if [[ "${{ steps.tfplan.outcome }}" == 'success' ]]; then
-            printf '%s' "$TFPLAN_STDOUT" \
+            echo "${{ steps.tfplan.outputs.stdout }}" \
             | sed -E 's/^([[:space:]]+)([-+])/\2\1/g' >> plan.txt
           else
-            printf '%s' "$TFPLAN_STDERR" \
+            echo "${{ steps.tfplan.outputs.stderr }}" \
             | sed -E 's/^([[:space:]]+)([-+])/\2\1/g' >> plan.txt
           fi
 
