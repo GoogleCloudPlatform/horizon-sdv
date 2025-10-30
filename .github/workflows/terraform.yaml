@@ -28,7 +28,7 @@ on:
       gcp-sa:
         required: false
         description: "GCP Service account to impersonate"
-      gh-app-id:
+      GH_APP_ID:
         required: false
         description: "Github App ID"
       gh-installation-id:
@@ -74,7 +74,7 @@ on:
         required: false
         description: "prefix branch name"
         type: string
-      gh-app-id:
+      GH_APP_ID:
         required: false
         description: "Github App ID"
         type: number
@@ -188,7 +188,7 @@ jobs:
             # This file is automatically loaded by Terraform
             echo "Writing Terraform variables to ${{ inputs.directory }}/terraform.auto.tfvars..."
             
-            echo 'sdv_gh_app_id = "${{ secrets.gh-app-id }}"' > ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_app_id = "${{ secrets.GH_APP_ID }}"' > ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gh_installation_id = "${{ secrets.gh-installation-id }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             
             echo 'sdv_gh_app_key = <<EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
@@ -230,11 +230,11 @@ jobs:
 
             echo "GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}" >> $GITHUB_ENV;
 
-            if [[ "${{ secrets.gh-app-id }}" != '' && "${{ secrets.gh-installation-id }}" != '' ]]; then
-              echo "GITHUB_APP_ID=${{ secrets.gh-app-id }}" >> $GITHUB_ENV;
+            if [[ "${{ secrets.GH_APP_ID }}" != '' && "${{ secrets.gh-installation-id }}" != '' ]]; then
+              echo "GITHUB_APP_ID=${{ secrets.GH_APP_ID }}" >> $GITHUB_ENV;
               echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-installation-id }}" >> $GITHUB_ENV;
-            elif [[ "${{ inputs.gh-app-id }}" != '0' && "${{ inputs.gh-installation-id }}" != '0' ]]; then
-              echo "GITHUB_APP_ID=${{ inputs.gh-app-id }}" >> $GITHUB_ENV;
+            elif [[ "${{ inputs.GH_APP_ID }}" != '0' && "${{ inputs.gh-installation-id }}" != '0' ]]; then
+              echo "GITHUB_APP_ID=${{ inputs.GH_APP_ID }}" >> $GITHUB_ENV;
               echo "GITHUB_APP_INSTALLATION_ID=${{ inputs.gh-installation-id }}" >> $GITHUB_ENV;
             else
               echo "Missing Github App id and/or Github Installation ID"
@@ -434,5 +434,6 @@ jobs:
           script: |
 
             core.setFailed('Terraform apply failed.')
+
 
 
