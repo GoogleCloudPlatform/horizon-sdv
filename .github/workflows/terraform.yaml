@@ -113,38 +113,6 @@ jobs:
       environment: ${{ steps.get-env.outputs.environment }}
       action: ${{ steps.get-env.outputs.action }}
     steps:
-      - name: Print environment name to output
-        run: |
-          echo "branch_env name is ${{ inputs.branch_env }}"
-          echo "branch prefix is ${{ inputs.prefix }}"
-
-      - name: get environment
-        id: get-env
-        shell: bash
-        run: |
-          if [[ "${{ inputs.prefix }}" == 'env' && ${{ inputs.branch_env }} != '' ]]; then
-            echo "environment=${{ inputs.branch_env }}" >> $GITHUB_OUTPUT;
-            temp=${{ inputs.branch_env }}
-            action="${temp}-plan-apply"
-            echo "action=$action" >> $GITHUB_OUTPUT;
-          elif [[ "${{ inputs.prefix }}" == 'feature' && ${{ inputs.branch_env }} != '' ]]; then
-            echo "environment=${{ inputs.branch_env }}" >> $GITHUB_OUTPUT;
-            temp=${{ inputs.branch_env }}
-            action="${temp}-plan"
-            echo "action=$action" >> $GITHUB_OUTPUT;
-          else
-            echo "Missing proper prefix in branch name" >> $GITHUB_OUTPUT;
-            action="${temp}-no-action"
-            echo "action=$action" >> $GITHUB_OUTPUT;
-          fi
-
-  terraform:
-    name: Terraform
-    runs-on: ubuntu-24.04
-    needs: get-env
-    environment: ${{ needs.get-env.outputs.environment }}
-
-    steps:
       - name: Convert key to PKCS#8 format
         id: create-pkcs8
         env:
@@ -188,7 +156,7 @@ jobs:
             # This file is automatically loaded by Terraform
             echo "Writing Terraform variables to ${{ inputs.directory }}/terraform.auto.tfvars..."
             
-            echo 'sdv_gh_app_id = "123456"' > ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_app_id = "${{ secrets.gh-app-id }}"' > ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gh_installation_id = "${{ secrets.gh-installation-id }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             
             # This is a PKCS8-formatted key, which Terraform can read
@@ -271,14 +239,13 @@ jobs:
               echo "VARS=false" >> $GITHUB_ENV;
             fi
 
-        - name: DEBUG
+      - name: 🔍 DEBUG - Show .tfvars file content
         working-directory: ${{ inputs.directory }}/
         run: |
           echo "--- START: terraform.auto.tfvars CONTENT ---"
           cat terraform.auto.tfvars
           echo "--- END: terraform.auto.tfvars CONTENT ---"
 
-           
       - name: Get Terraform fetcher GitHub App token
         uses: tibdex/github-app-token@v1
         id: get_github_app_token
@@ -329,7 +296,7 @@ jobs:
         with:
           credentials_json: "${{ secrets.gcp-sa-key }}"
           service_account: ${{ env.GCP_SA }}
-          workload_identity_provider: ${{ env.GCP_WIF }}
+          workload_identity_provider: ${{ env.GGCP_WIF }}
 
       - name: Setup gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
