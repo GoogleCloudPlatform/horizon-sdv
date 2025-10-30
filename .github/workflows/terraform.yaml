@@ -251,7 +251,6 @@ jobs:
         id: get_github_app_token
         with:
           app_id: ${{ env.GITHUB_APP_ID }}
-          installation_id: ${{ env.GITHUB_APP_INSTALLATION_ID}}
           private_key: ${{ env.GITHUB_APP_PEM_FILE }}
 
       - name: Setup node
