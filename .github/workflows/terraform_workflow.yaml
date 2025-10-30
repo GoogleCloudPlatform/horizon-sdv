@@ -60,7 +60,7 @@ jobs:
       contents: "read"
       id-token: "write"
       pull-requests: "write"
-    secrets:
+    secrets: inherit
       gh-app-key: "${{ secrets.GH_APP_KEY }}"
       gcp-sa: "${{ secrets.GCP_SA }}"
       wif-provider: "${{ secrets.WIF_PROVIDER }}"
