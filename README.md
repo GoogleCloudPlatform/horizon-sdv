@@ -3,7 +3,6 @@
 Welcome! 
 
 This page provides an introduction to Horizon, a turnkey implementation designed for OEMs and suppliers interested in adopting Google Cloud’s Software-Defined Vehicle (SDV) industry solution.
-
 The program addresses prevalent challenges within the SDV market, including the inefficiencies stemming from complex and inconsistent toolchains, the high scaling costs that impede software development, and a hardware-centric focus that constrains rapid development and innovation.
 
 ## Getting started
