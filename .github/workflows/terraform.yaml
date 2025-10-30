@@ -247,10 +247,19 @@ jobs:
               exit 1
             fi
 
-            # --- DONT ADD THE PRIVATE KEY TO GITHUB_ENV ---
-            # This was causing the "Argument list too long" error in later steps.
-            # The key is already in the .tfvars file, which is all Terraform needs.
-            # The 'Get Terraform fetcher' step will use the original 'secrets.gh-app-key'
+            # --- THIS BLOCK IS NOW CORRECTLY ADDED BACK ---
+            if [[ "${{ secrets.gh-app-key }}" != '' ]]; then
+              echo "GITHUB_APP_PEM_FILE<<EOF" >> $GITHUB_ENV
+              echo  "${{ secrets.gh-app-key }}" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+            elif [[ "${{ secrets.fetcher-key }}" != '' ]]; then
+              echo "GITHUB_APP_PEM_FILE<<EOF" >> $GITHUB_ENV
+              echo  "${{ secrets.fetcher-key }}" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+            else
+              echo "Missing Github App Key"
+              exit 1
+            fi
             
             if [[ ! -z "$JSON_SECRETS" ]]; then
               echo "SECRETS=true" >> $GITHUB_ENV;
@@ -263,7 +272,6 @@ jobs:
             else
               echo "VARS=false" >> $GITHUB_ENV;
             fi
-
       - name: Get Terraform fetcher GitHub App token
         uses: tibdex/github-app-token@v1
         id: get_github_app_token
