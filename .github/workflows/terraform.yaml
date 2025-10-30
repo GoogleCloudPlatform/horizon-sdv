@@ -182,86 +182,76 @@ jobs:
         shell: bash
         env:
           JSON_SECRETS: ${{ secrets.json-secrets }}
-        run: |    # <--- ADDED 2 SPACES. Now it's part of the step above.
-            # --- Create terraform.auto.tfvars file ---
-            # This file is automatically loaded by Terraform
-            echo "Writing Terraform variables to ${{ inputs.directory }}/terraform.auto.tfvars..."
-            
-            echo 'sdv_gh_app_id = "${{ secrets.gh-app-id }}"' > ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gh_installation_id = "${{ secrets.gh-installation-id }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            
-            echo 'sdv_gh_app_key = <<EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo '${{ secrets.gh-app-key }}' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            
-            echo 'sdv_gh_gerrit_admin_private_key = <<EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo '${{ secrets.gh-gerrit-admin-private-key }}' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            
-            echo 'sdv_gh_cuttlefish_vm_ssh_private_key = <<EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo '${{ secrets.gh-cuttlefish-vm-ssh-private-key }}' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            
-            echo 'sdv_gh_argocd_initial_password_bcrypt = "${{ steps.generate-encoded-argocd-bcrypt-hash.outputs.argocd_encoded_bcrypt_hash }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gh_jenkins_initial_password = "${{ secrets.gh-jenkins-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gh_keycloak_initial_password = "${{ secrets.gh-keycloak-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gh_gerrit_admin_initial_password = "${{ secrets.gh-gerrit-admin-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gh_keycloak_horizon_admin_password = "${{ secrets.gh-keycloak-horizon-admin-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gh_abfs_license_b64 = "${{ secrets.gh-abfs-license-64 }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gcp_project_id = "${{ vars.GCP_PROJECT_ID }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_computer_sa = "${{ vars.GCP_COMPUTER_SA }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gcp_cloud_region = "${{ vars.GCP_CLOUD_REGION }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gcp_cloud_zone = "${{ vars.GCP_CLOUD_ZONE }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gcp_backend_bucket_name = "${{ vars.GCP_BACKEND_BUCKET_NAME }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gh_domain_name = "${{ vars.HORIZON_DOMAIN }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
 
-            echo "Writing Auth variables to GITHUB_ENV..."
-            # --- Keep Auth variables in GITHUB_ENV for other steps ---
-            if [[ "${{ secrets.gcp-sa }}" != '' && "${{ secrets.wif-provider }}" != '' ]]; then
-              echo "GCP_SA=${{ secrets.gcp-sa }}" >> $GITHUB_ENV;
-              echo "GCP_WIF=${{ secrets.wif-provider }}" >> $GITHUB_ENV;
-            else
-              echo "GCP_SA=${{ inputs.gcp-sa }}" >> $GITHUB_ENV;
-              echo "GCP_WIF=${{ inputs.wif-provider }}" >> $GITHUB_ENV;
-            fi
+        run: |
+          echo "TF_VAR_sdv_gh_app_id=${{ secrets.gh-app-id }}" >> $GITHUB_ENV;
+          echo "TF_VAR_sdv_gh_installation_id=${{ secrets.gh-installation-id }}" >> $GITHUB_ENV;
+          echo "TF_VAR_sdv_gh_app_key<<EOF" >> $GITHUB_ENV
+          echo  "${{ secrets.gh-app-key }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gh_gerrit_admin_private_key<<EOF">> $GITHUB_ENV
+          echo  "${{ secrets.gh-gerrit-admin-private-key }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gh_cuttlefish_vm_ssh_private_key<<EOF">> $GITHUB_ENV
+          echo  "${{ secrets.gh-cuttlefish-vm-ssh-private-key }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gh_argocd_initial_password_bcrypt=${{ steps.generate-encoded-argocd-bcrypt-hash.outputs.argocd_encoded_bcrypt_hash }}" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gh_jenkins_initial_password=${{ secrets.gh-jenkins-initial-password }}" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gh_keycloak_initial_password=${{ secrets.gh-keycloak-initial-password }}" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gh_gerrit_admin_initial_password=${{ secrets.gh-gerrit-admin-initial-password }}" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gh_keycloak_horizon_admin_password=${{ secrets.gh-keycloak-horizon-admin-password }}" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gh_abfs_license_b64=${{ secrets.gh-abfs-license-b64 }}" >> $GITHUB_ENV
+          echo "TF_VAR_sdv_gcp_project_id=${{ vars.GCP_PROJECT_ID }}" >> $GITHUB_ENV;
+          echo "TF_VAR_sdv_computer_sa=${{ vars.GCP_COMPUTER_SA }}" >> $GITHUB_ENV;
+          echo "TF_VAR_sdv_gcp_cloud_region=${{ vars.GCP_CLOUD_REGION }}" >> $GITHUB_ENV;
+          echo "TF_VAR_sdv_gcp_cloud_zone=${{ vars.GCP_CLOUD_ZONE }}" >> $GITHUB_ENV;
+          echo "TF_VAR_sdv_gcp_backend_bucket_name=${{ vars.GCP_BACKEND_BUCKET_NAME }}" >> $GITHUB_ENV;
+          echo "TF_VAR_sdv_gh_domain_name=${{ vars.HORIZON_DOMAIN }}" >> $GITHUB_ENV;
 
-            echo "GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}" >> $GITHUB_ENV;
+          if [[ "${{ secrets.gcp-sa }}" != '' && "${{ secrets.wif-provider }}" != '' ]]; then
+            echo "GCP_SA=${{ secrets.gcp-sa }}" >> $GITHUB_ENV;
+            echo "GCP_WIF=${{ secrets.wif-provider }}" >> $GITHUB_ENV;
+          else
+            echo "GCP_SA=${{ inputs.gcp-sa }}" >> $GITHUB_ENV;
+            echo "GCP_WIF=${{ inputs.wif-provider }}" >> $GITHUB_ENV;
+          fi
 
-            if [[ "${{ secrets.gh-app-id }}" != '' && "${{ secrets.gh-installation-id }}" != '' ]]; then
-              echo "GITHUB_APP_ID=${{ secrets.gh-app-id }}" >> $GITHUB_ENV;
-              echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-installation-id }}" >> $GITHUB_ENV;
-            elif [[ "${{ inputs.gh-app-id }}" != '0' && "${{ inputs.gh-installation-id }}" != '0' ]]; then
-              echo "GITHUB_APP_ID=${{ inputs.gh-app-id }}" >> $GITHUB_ENV;
-              echo "GITHUB_APP_INSTALLATION_ID=${{ inputs.gh-installation-id }}" >> $GITHUB_ENV;
-            else
-              echo "Missing Github App id and/or Github Installation ID"
-              exit 1
-            fi
+          echo "GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}" >> $GITHUB_ENV;
 
-            if [[ "${{ secrets.gh-app-key }}" != '' ]]; then
-              echo "GITHUB_APP_PEM_FILE<<EOF" >> $GITHUB_ENV
-              echo  "${{ secrets.gh-app-key }}" >> $GITHUB_ENV
-              echo "EOF" >> $GITHUB_ENV
-            elif [[ "${{ secrets.fetcher-key }}" != '' ]]; then
-              echo "GITHUB_APP_PEM_FILE<<EOF" >> $GITHUB_ENV
-              echo  "${{ secrets.fetcher-key }}" >> $GITHUB_ENV
-              echo "EOF" >> $GITHUB_ENV
-            else
-              echo "Missing Github App Key"
-              exit 1
-            fi
+          if [[ "${{ secrets.gh-app-id }}" != '' && "${{ secrets.gh-installation-id }}" != '' ]]; then
+            echo "GITHUB_APP_ID=${{ secrets.gh-app-id }}" >> $GITHUB_ENV;
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-installation-id }}" >> $GITHUB_ENV;
+          elif [[ "${{ inputs.gh-app-id }}" != '0' && "${{ inputs.gh-installation-id }}" != '0' ]]; then
+            echo "GITHUB_APP_ID=${{ inputs.gh-app-id }}" >> $GITHUB_ENV;
+            echo "GITHUB_APP_INSTALLATION_ID=${{ inputs.gh-installation-id }}" >> $GITHUB_ENV;
+          else
+            echo "Missing Github App id and/or Github Installation ID"
+            exit 1
+          fi
 
-            if [[ ! -z "$JSON_SECRETS" ]]; then
-              echo "SECRETS=true" >> $GITHUB_ENV;
-            else
-              echo "SECRETS=false" >> $GITHUB_ENV;
-            fi
+          if [[ "${{ secrets.gh-app-key }}" != '' ]]; then
+            echo "GITHUB_APP_PEM_FILE<<EOF" >> $GITHUB_ENV
+            echo  "${{ secrets.gh-app-key }}" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          elif [[ "${{ secrets.fetcher-key }}" != '' ]]; then
+            echo "GITHUB_APP_PEM_FILE<<EOF" >> $GITHUB_ENV
+            echo  "${{ secrets.fetcher-key }}" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          else
+            echo "Missing Github App Key"
+            exit 1
+          fi
+          if [[ ! -z "$JSON_SECRETS" ]]; then
+            echo "SECRETS=true" >> $GITHUB_ENV;
+          else
+            echo "SECRETS=false" >> $GITHUB_ENV;
+          fi
 
-            if [[ "${{ vars }}" != '' && "${{ vars }}" != null ]]; then
-              echo "VARS=true" >> $GITHUB_ENV;
-            else
-              echo "VARS=false" >> $GITHUB_ENV;
-            fi
+          if [[ "${{ vars }}" != '' && "${{ vars }}" != null ]]; then
+            echo "VARS=true" >> $GITHUB_ENV;
+          else
+            echo "VARS=false" >> $GITHUB_ENV;
+          fi
 
       - name: Get Terraform fetcher GitHub App token
         uses: tibdex/github-app-token@v1
@@ -429,5 +419,4 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-
             core.setFailed('Terraform apply failed.')
