@@ -166,6 +166,9 @@ jobs:
       - name: Create .auto.tfvars.json files from secrets
         id: create-tfvars
         run: |
+          # 0. Create the target directory, just in case
+          mkdir -p ${{ inputs.directory }}
+          
           # 1. Convert the GitHub App key to PKCS#8
           PKCS8_KEY=$(echo "${{ secrets.gh-app-key }}" | openssl pkcs8 -topk8 -nocrypt -outform PEM)
           
