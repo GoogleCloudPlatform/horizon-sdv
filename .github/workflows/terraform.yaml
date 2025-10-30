@@ -367,34 +367,34 @@ jobs:
           TFPLAN_STDOUT: ${{ steps.tfplan.outputs.stdout }}
           TFPLAN_STDERR: ${{ steps.tfplan.outputs.stderr }}
         run: |
+          # Add the header and markdown to the file first
+          echo "## Terraform plan ${{ needs.get-env.outputs.environment }}" > plan.txt
+          echo '```diff' >> plan.txt
+
+          # Append the reformatted plan output
           if [[ "${{ steps.tfplan.outcome }}" == 'success' ]]; then
             printf '%s' "$TFPLAN_STDOUT" \
-            | sed -E 's/^([[:space:]]+)([-+])/\2\1/g' > plan.txt
+            | sed -E 's/^([[:space:]]+)([-+])/\2\1/g' >> plan.txt
           else
             printf '%s' "$TFPLAN_STDERR" \
-            | sed -E 's/^([[:space:]]+)([-+])/\2\1/g' > plan.txt
+            | sed -E 's/^([[:space:]]+)([-+])/\2\1/g' >> plan.txt
           fi
 
-      - name: Put Plan in Env Var
-        if: ${{ needs.get-env.outputs.environment != '' }}
-        run: |
-          PLAN=$(cat plan.txt)
-          echo "PLAN<<EOF" >> $GITHUB_ENV
-          echo "$PLAN" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      - name: Post Plan to GitHub PR
+          # Add the closing markdown
+          echo '```' >> plan.txt
+          
+- name: Post Plan to GitHub PR
         uses: mshick/add-pr-comment@v2
         if: ${{ needs.get-env.outputs.environment != '' }}
         with:
           allow-repeats: false
           repo-token: ${{steps.get_github_app_token.outputs.token}}
           message-id: plan-${{ needs.get-env.outputs.environment }}
-          message: |
-            ## Terraform plan ${{ needs.get-env.outputs.environment }}
-            ```diff
-            ${{ env.PLAN }}
-            ```
+          
+          # ✅ THIS IS THE FIX ✅
+          # Use message-path to read the comment from the file
+          message-path: plan.txt
+          
         continue-on-error: true
 
       - name: Check if Plan failed
