@@ -272,6 +272,14 @@ jobs:
             else
               echo "VARS=false" >> $GITHUB_ENV;
             fi
+
+        - name: DEBUG - Cat .tfvars file
+        run: |
+          echo "--- START: terraform.auto.tfvars CONTENT ---"
+          cat ${{ inputs.directory }}/terraform.auto.tfvars
+          echo "--- END: terraform.auto.tfvars CONTENT ---"
+
+      
       - name: Get Terraform fetcher GitHub App token
         uses: tibdex/github-app-token@v1
         id: get_github_app_token
