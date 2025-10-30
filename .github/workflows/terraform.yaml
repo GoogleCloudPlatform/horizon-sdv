@@ -145,30 +145,7 @@ jobs:
     environment: ${{ needs.get-env.outputs.environment }}
 
     steps:
-      - name: Convert key and create Terraform .auto.tfvars.json file
-        run: |
-          # 1. Convert the key from the secret and store in a variable
-          PKCS8_KEY=$(echo "${{ secrets.gh-app-key }}" | openssl pkcs8 -topk8 -nocrypt -outform PEM)
-    
-          # 2. Mask every line of the key so it doesn't leak in logs
-          while IFS= read -r each_line; do
-          echo "::add-mask::$each_line"
-          done <<< "$PKCS8_KEY"
-
-          variable "sdv_gh_app_key_pkcs8" {
-          type      = string
-          sensitive = true
-          description = "The PKCS#8 private key for the GitHub App."
-          }      
-
-    # 3. Create the JSON file for Terraform
-    # This pipes the key to 'jq' which correctly formats it as a JSON string
-    # (including newlines) and writes it to a file.
-    echo "$PKCS8_KEY" | jq -R -s '{sdv_gh_app_key_pkcs8: .}' > sdv_gh_app_key.auto.tfvars.json
-    
-    echo "Successfully created sdv_gh_app_key.auto.tfvars.json"
-
-        - name: Generate encoded argocd bcrypt hash
+      - name: Generate encoded argocd bcrypt hash
         id: generate-encoded-argocd-bcrypt-hash
         shell: bash
         run: |
@@ -186,30 +163,54 @@ jobs:
           # Clean up the downloaded binary
           rm argocd
 
+      - name: Create .auto.tfvars.json files from secrets
+        id: create-tfvars
+        run: |
+          # 1. Convert the GitHub App key to PKCS#8
+          PKCS8_KEY=$(echo "${{ secrets.gh-app-key }}" | openssl pkcs8 -topk8 -nocrypt -outform PEM)
+          
+          # 2. Mask the key so it doesn't leak in logs
+          while IFS= read -r each_line; do
+            echo "::add-mask::$each_line"
+          done <<< "$PKCS8_KEY"
+          
+          # 3. Write ALL large secrets to .auto.tfvars.json files using jq
+          # This avoids the "Argument list too long" error by NOT using $GITHUB_ENV
+          
+          # File 1: The converted PKCS#8 key
+          echo "$PKCS8_KEY" | jq -R -s '{sdv_gh_app_key_pkcs8: .}' > key.auto.tfvars.json
+          echo "Successfully created key.auto.tfvars.json"
+          
+          # File 2: All other large secrets
+          jq -n \
+            --arg sdv_gh_app_key "${{ secrets.gh-app-key }}" \
+            --arg sdv_gh_gerrit_admin_private_key "${{ secrets.gh-gerrit-admin-private-key }}" \
+            --arg sdv_gh_cuttlefish_vm_ssh_private_key "${{ secrets.gh-cuttlefish-vm-ssh-private-key }}" \
+            --arg sdv_gh_abfs_license_b64 "${{ secrets.gh-abfs-license-b64 }}" \
+            '{
+              sdv_gh_app_key: $sdv_gh_app_key,
+              sdv_gh_gerrit_admin_private_key: $sdv_gh_gerrit_admin_private_key,
+              sdv_gh_cuttlefish_vm_ssh_private_key: $sdv_gh_cuttlefish_vm_ssh_private_key,
+              sdv_gh_abfs_license_b64: $sdv_gh_abfs_license_b64
+            }' > other_secrets.auto.tfvars.json
+          
+          echo "Successfully created other_secrets.auto.tfvars.json"
+
       - name: set environment variables
         id: set-vars
         shell: bash
         env:
           JSON_SECRETS: ${{ secrets.json-secrets }}
-
         run: |
+          # Set ONLY small/simple variables.
+          # DO NOT echo large keys here.
           echo "TF_VAR_sdv_gh_app_id=${{ secrets.gh-app-id }}" >> $GITHUB_ENV;
           echo "TF_VAR_sdv_gh_installation_id=${{ secrets.gh-installation-id }}" >> $GITHUB_ENV;
-          echo "TF_VAR_sdv_gh_app_key<<EOF" >> $GITHUB_ENV
-          echo  "${{ secrets.gh-app-key }}" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-          echo "TF_VAR_sdv_gh_gerrit_admin_private_key<<EOF">> $GITHUB_ENV
-          echo  "${{ secrets.gh-gerrit-admin-private-key }}" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-          echo "TF_VAR_sdv_gh_cuttlefish_vm_ssh_private_key<<EOF">> $GITHUB_ENV
-          echo  "${{ secrets.gh-cuttlefish-vm-ssh-private-key }}" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
           echo "TF_VAR_sdv_gh_argocd_initial_password_bcrypt=${{ steps.generate-encoded-argocd-bcrypt-hash.outputs.argocd_encoded_bcrypt_hash }}" >> $GITHUB_ENV
           echo "TF_VAR_sdv_gh_jenkins_initial_password=${{ secrets.gh-jenkins-initial-password }}" >> $GITHUB_ENV
           echo "TF_VAR_sdv_gh_keycloak_initial_password=${{ secrets.gh-keycloak-initial-password }}" >> $GITHUB_ENV
           echo "TF_VAR_sdv_gh_gerrit_admin_initial_password=${{ secrets.gh-gerrit-admin-initial-password }}" >> $GITHUB_ENV
           echo "TF_VAR_sdv_gh_keycloak_horizon_admin_password=${{ secrets.gh-keycloak-horizon-admin-password }}" >> $GITHUB_ENV
-          echo "TF_VAR_sdv_gh_abfs_license_b64=${{ secrets.gh-abfs-license-b64 }}" >> $GITHUB_ENV
           echo "TF_VAR_sdv_gcp_project_id=${{ vars.GCP_PROJECT_ID }}" >> $GITHUB_ENV;
           echo "TF_VAR_sdv_computer_sa=${{ vars.GCP_COMPUTER_SA }}" >> $GITHUB_ENV;
           echo "TF_VAR_sdv_gcp_cloud_region=${{ vars.GCP_CLOUD_REGION }}" >> $GITHUB_ENV;
@@ -238,18 +239,12 @@ jobs:
             exit 1
           fi
 
-          if [[ "${{ secrets.gh-app-key }}" != '' ]]; then
-            echo "GITHUB_APP_PEM_FILE<<EOF" >> $GITHUB_ENV
-            echo  "${{ secrets.gh-app-key }}" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
-          elif [[ "${{ secrets.fetcher-key }}" != '' ]]; then
-            echo "GITHUB_APP_PEM_FILE<<EOF" >> $GITHUB_ENV
-            echo  "${{ secrets.fetcher-key }}" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
-          else
+          # This check is no longer needed for GITHUB_APP_PEM_FILE
+          if [[ "${{ secrets.gh-app-key }}" == '' && "${{ secrets.fetcher-key }}" == '' ]]; then
             echo "Missing Github App Key"
             exit 1
           fi
+
           if [[ ! -z "$JSON_SECRETS" ]]; then
             echo "SECRETS=true" >> $GITHUB_ENV;
           else
@@ -268,7 +263,9 @@ jobs:
         with:
           app_id: ${{ env.GITHUB_APP_ID }}
           installation_id: ${{ env.GITHUB_APP_INSTALLATION_ID}}
-          private_key: ${{ env.GITHUB_APP_PEM_FILE }}
+          # *** THIS IS THE FIX ***
+          # Pass the secret directly. Do NOT use an env var.
+          private_key: ${{ secrets.gh-app-key || secrets.fetcher-key }}
 
       - name: Setup node
         uses: actions/setup-node@v4
@@ -336,9 +333,14 @@ jobs:
         run: |
           git config --global url."https://x-access-token:${{steps.get_github_app_token.outputs.token}}@github.com".insteadOf https://github.com
           terraform init -input=false -backend-config bucket="${{ vars.GCP_BACKEND_BUCKET_NAME }}"
+          
+          # Terraform will automatically load key.auto.tfvars.json and other_secrets.auto.tfvars.json
           terraform plan -parallelism=${{ inputs.parallelism }} -input=false -no-color -out=tfplan && terraform show -no-color tfplan
         continue-on-error: true
 
+      # ... (Rest of your file from 'Reformat Plan' onwards) ...
+      # (The rest of your steps were indented correctly relative to each other)
+      
       - name: Reformat Plan
         if: ${{ needs.get-env.outputs.environment != '' }}
         env:
