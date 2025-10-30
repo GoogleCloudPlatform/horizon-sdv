@@ -64,7 +64,7 @@ jobs:
       gh-app-key: "${{ secrets.GH_APP_KEY }}"
       gcp-sa: "${{ secrets.GCP_SA }}"
       wif-provider: "${{ secrets.WIF_PROVIDER }}"
-      GH_APP_ID: ${{ secrets.GH_APP_ID }}
+      gh-app-id: ${{ secrets.GH_APP_ID }}
       gh-installation-id: ${{ secrets.GH_INSTALLATION_ID }}
       gh-argocd-initial-password: ${{ secrets.ARGOCD_INITIAL_PASSWORD }}
       gh-jenkins-initial-password: ${{ secrets.JENKINS_INITIAL_PASSWORD }}
