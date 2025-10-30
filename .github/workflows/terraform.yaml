@@ -163,42 +163,7 @@ jobs:
           # Clean up the downloaded binary
           rm argocd
 
-      - name: Create .auto.tfvars.json files from secrets
-        id: create-tfvars
-        run: |
-          # 0. Create the target directory, just in case
-          mkdir -p ${{ inputs.directory }}
-          
-          # 1. Convert the GitHub App key to PKCS#8
-          PKCS8_KEY=$(echo "${{ secrets.gh-app-key }}" | openssl pkcs8 -topk8 -nocrypt -outform PEM)
-          
-          # 2. Mask the key so it doesn't leak in logs
-          while IFS= read -r each_line; do
-            echo "::add-mask::$each_line"
-          done <<< "$PKCS8_KEY"
-          
-          # 3. Write ALL large secrets to .auto.tfvars.json files using jq
-          # This avoids the "Argument list too long" error by NOT using $GITHUB_ENV
-          
-          # File 1: The converted PKCS#8 key
-          echo "$PKCS8_KEY" | jq -R -s '{sdv_gh_app_key_pkcs8: .}' > key.auto.tfvars.json
-          echo "Successfully created key.auto.tfvars.json"
-          
-          # File 2: All other large secrets
-          jq -n \
-            --arg sdv_gh_app_key "${{ secrets.gh-app-key }}" \
-            --arg sdv_gh_gerrit_admin_private_key "${{ secrets.gh-gerrit-admin-private-key }}" \
-            --arg sdv_gh_cuttlefish_vm_ssh_private_key "${{ secrets.gh-cuttlefish-vm-ssh-private-key }}" \
-            --arg sdv_gh_abfs_license_b64 "${{ secrets.gh-abfs-license-b64 }}" \
-            '{
-              sdv_gh_app_key: $sdv_gh_app_key,
-              sdv_gh_gerrit_admin_private_key: $sdv_gh_gerrit_admin_private_key,
-              sdv_gh_cuttlefish_vm_ssh_private_key: $sdv_gh_cuttlefish_vm_ssh_private_key,
-              sdv_gh_abfs_license_b64: $sdv_gh_abfs_license_b64
-            }' > other_secrets.auto.tfvars.json
-          
-          echo "Successfully created other_secrets.auto.tfvars.json"
-
+      
       - name: set environment variables
         id: set-vars
         shell: bash
@@ -324,6 +289,42 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
+
+      - name: Create .auto.tfvars.json files from secrets
+        id: create-tfvars
+        run: |
+          # 0. Create the target directory, just in case
+          mkdir -p ${{ inputs.directory }}
+          
+          # 1. Convert the GitHub App key to PKCS#8
+          PKCS8_KEY=$(echo "${{ secrets.gh-app-key }}" | openssl pkcs8 -topk8 -nocrypt -outform PEM)
+          
+          # 2. Mask the key so it doesn't leak in logs
+          while IFS= read -r each_line; do
+            echo "::add-mask::$each_line"
+          done <<< "$PKCS8_KEY"
+          
+          # 3. Write ALL large secrets to .auto.tfvars.json files using jq
+          # This avoids the "Argument list too long" error by NOT using $GITHUB_ENV
+          
+          # File 1: The converted PKCS#8 key
+          echo "$PKCS8_KEY" | jq -R -s '{sdv_gh_app_key_pkcs8: .}' > key.auto.tfvars.json
+          echo "Successfully created key.auto.tfvars.json"
+          
+          # File 2: All other large secrets
+          jq -n \
+            --arg sdv_gh_app_key "${{ secrets.gh-app-key }}" \
+            --arg sdv_gh_gerrit_admin_private_key "${{ secrets.gh-gerrit-admin-private-key }}" \
+            --arg sdv_gh_cuttlefish_vm_ssh_private_key "${{ secrets.gh-cuttlefish-vm-ssh-private-key }}" \
+            --arg sdv_gh_abfs_license_b64 "${{ secrets.gh-abfs-license-b64 }}" \
+            '{
+              sdv_gh_app_key: $sdv_gh_app_key,
+              sdv_gh_gerrit_admin_private_key: $sdv_gh_gerrit_admin_private_key,
+              sdv_gh_cuttlefish_vm_ssh_private_key: $sdv_gh_cuttlefish_vm_ssh_private_key,
+              sdv_gh_abfs_license_b64: $sdv_gh_abfs_license_b64
+            }' > other_secrets.auto.tfvars.json
+          
+          echo "Successfully created other_secrets.auto.tfvars.json"
 
       - name: terraform plan
         working-directory: ${{ inputs.directory }}/
