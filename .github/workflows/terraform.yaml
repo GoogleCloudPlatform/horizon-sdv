@@ -383,7 +383,7 @@ jobs:
           # Add the closing markdown
           echo '```' >> plan.txt
           
-- name: Post Plan to GitHub PR
+      - name: Post Plan to GitHub PR
         uses: mshick/add-pr-comment@v2
         if: ${{ needs.get-env.outputs.environment != '' }}
         with:
