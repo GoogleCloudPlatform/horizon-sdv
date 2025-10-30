@@ -182,8 +182,7 @@ jobs:
         shell: bash
         env:
           JSON_SECRETS: ${{ secrets.json-secrets }}
-
-      run: |
+        run: |    # <--- ADDED 2 SPACES. Now it's part of the step above.
             # --- Create terraform.auto.tfvars file ---
             # This file is automatically loaded by Terraform
             echo "Writing Terraform variables to ${{ inputs.directory }}/terraform.auto.tfvars..."
@@ -208,7 +207,7 @@ jobs:
             echo 'sdv_gh_keycloak_initial_password = "${{ secrets.gh-keycloak-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gh_gerrit_admin_initial_password = "${{ secrets.gh-gerrit-admin-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gh_keycloak_horizon_admin_password = "${{ secrets.gh-keycloak-horizon-admin-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
-            echo 'sdv_gh_abfs_license_b64 = "${{ secrets.gh-abfs-license-b64 }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_abfs_license_b64 = "${{ secrets.gh-abfs-license-64 }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gcp_project_id = "${{ vars.GCP_PROJECT_ID }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_computer_sa = "${{ vars.GCP_COMPUTER_SA }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             echo 'sdv_gcp_cloud_region = "${{ vars.GCP_CLOUD_REGION }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
@@ -263,7 +262,7 @@ jobs:
             else
               echo "VARS=false" >> $GITHUB_ENV;
             fi
-            
+
       - name: Get Terraform fetcher GitHub App token
         uses: tibdex/github-app-token@v1
         id: get_github_app_token
@@ -430,4 +429,5 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
+
             core.setFailed('Terraform apply failed.')
