@@ -225,8 +225,7 @@ jobs:
         with:
           app_id: ${{ env.GITHUB_APP_ID }}
           installation_id: ${{ env.GITHUB_APP_INSTALLATION_ID}}
-          # *** THIS IS THE FIX ***
-          # Pass the secret directly. Do NOT use an env var.
+          # Pass the secret directly as an input
           private_key: ${{ secrets.gh-app-key || secrets.fetcher-key }}
 
       - name: Setup node
