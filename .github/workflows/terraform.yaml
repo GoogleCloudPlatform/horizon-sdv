@@ -262,20 +262,37 @@ jobs:
             TF_VAR_SDV_GH_ABFS_LICENSE_B64
             
 
-      - name: convert TFVARS to lowercase
+      - name: convert TFVARS to lowercase (and skip large keys)
+        id: convert-vars
         run: |
+          # Set a size limit. Anything larger is treated as a key and skipped.
+          MAX_VAR_SIZE=1024
+
           for var_name in $(env | grep -o '^TF_VAR_[^=]*'); do
-            suffix="${var_name#TF_VAR_}"
-            suffix_lowercase=$(echo "$suffix" | tr '[:upper:]' '[:lower:]')
-            new_var_name="TF_VAR_${suffix_lowercase}"
-            {
-              echo "$new_var_name<<EOF"
-              echo "${!var_name}"
-              echo "EOF"
-            } >> $GITHUB_ENV
+            # Get the value and its size
+            value="${!var_name}"
+            var_size=$(echo -n "$value" | wc -c)
+
+            # Check if the variable is small enough to process
+            if [[ $var_size -lt $MAX_VAR_SIZE ]]; then
+              # It's a small variable. Convert it to lowercase.
+              suffix="${var_name#TF_VAR_}"
+              suffix_lowercase=$(echo "$suffix" | tr '[:upper:]' '[:lower:]')
+              new_var_name="TF_VAR_${suffix_lowercase}"
+              {
+                echo "$new_var_name<<EOF"
+                echo "$value"
+                echo "EOF"
+              } >> $GITHUB_ENV
+            else
+              # It's a large key. Skip it.
+              echo "Skipping large variable '$var_name' (size: $var_size bytes) to prevent 'Argument list too long' error."
+            fi
+            
+            # Unset the original (uppercase) variable to clean up
             unset $var_name
           done
-
+          
       - name: Checkout source code
         uses: actions/checkout@v4.1.1
 
