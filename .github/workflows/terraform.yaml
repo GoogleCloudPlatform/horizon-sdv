@@ -145,21 +145,30 @@ jobs:
     environment: ${{ needs.get-env.outputs.environment }}
 
     steps:
-      - name: Convert key to PKCS#8 format
-        id: create-pkcs8
-        env:
-          GH_APP_KEY: ${{ secrets.gh-app-key }}
+      - name: Convert key and create Terraform .auto.tfvars.json file
         run: |
-          echo "$GH_APP_KEY" | openssl pkcs8 -topk8 -nocrypt -outform PEM > key.pem
-          PKCS8_KEY=$(<key.pem)
+          # 1. Convert the key from the secret and store in a variable
+          PKCS8_KEY=$(echo "${{ secrets.gh-app-key }}" | openssl pkcs8 -topk8 -nocrypt -outform PEM)
+    
+          # 2. Mask every line of the key so it doesn't leak in logs
           while IFS= read -r each_line; do
-            echo "::add-mask::$each_line"
+          echo "::add-mask::$each_line"
           done <<< "$PKCS8_KEY"
-          echo "TF_VAR_sdv_gh_app_key_pkcs8<<EOF" >> $GITHUB_ENV
-          echo "$PKCS8_KEY" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
 
-      - name: Generate encoded argocd bcrypt hash
+          variable "sdv_gh_app_key_pkcs8" {
+          type      = string
+          sensitive = true
+          description = "The PKCS#8 private key for the GitHub App."
+          }      
+
+    # 3. Create the JSON file for Terraform
+    # This pipes the key to 'jq' which correctly formats it as a JSON string
+    # (including newlines) and writes it to a file.
+    echo "$PKCS8_KEY" | jq -R -s '{sdv_gh_app_key_pkcs8: .}' > sdv_gh_app_key.auto.tfvars.json
+    
+    echo "Successfully created sdv_gh_app_key.auto.tfvars.json"
+
+        - name: Generate encoded argocd bcrypt hash
         id: generate-encoded-argocd-bcrypt-hash
         shell: bash
         run: |
