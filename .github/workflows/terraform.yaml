@@ -186,35 +186,35 @@ jobs:
       run: |
             # --- Create terraform.auto.tfvars file ---
             # This file is automatically loaded by Terraform
-            echo "Writing Terraform variables to terraform.auto.tfvars..."
+            echo "Writing Terraform variables to ${{ inputs.directory }}/terraform.auto.tfvars..."
             
-            echo 'sdv_gh_app_id = "${{ secrets.gh-app-id }}"' > terraform.auto.tfvars
-            echo 'sdv_gh_installation_id = "${{ secrets.gh-installation-id }}"' >> terraform.auto.tfvars
+            echo 'sdv_gh_app_id = "${{ secrets.gh-app-id }}"' > ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_installation_id = "${{ secrets.gh-installation-id }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
             
-            echo 'sdv_gh_app_key = <<EOT' >> terraform.auto.tfvars
-            echo '${{ secrets.gh-app-key }}' >> terraform.auto.tfvars
-            echo 'EOT' >> terraform.auto.tfvars
+            echo 'sdv_gh_app_key = <<EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo '${{ secrets.gh-app-key }}' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
             
-            echo 'sdv_gh_gerrit_admin_private_key = <<EOT' >> terraform.auto.tfvars
-            echo '${{ secrets.gh-gerrit-admin-private-key }}' >> terraform.auto.tfvars
-            echo 'EOT' >> terraform.auto.tfvars
+            echo 'sdv_gh_gerrit_admin_private_key = <<EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo '${{ secrets.gh-gerrit-admin-private-key }}' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
             
-            echo 'sdv_gh_cuttlefish_vm_ssh_private_key = <<EOT' >> terraform.auto.tfvars
-            echo '${{ secrets.gh-cuttlefish-vm-ssh-private-key }}' >> terraform.auto.tfvars
-            echo 'EOT' >> terraform.auto.tfvars
+            echo 'sdv_gh_cuttlefish_vm_ssh_private_key = <<EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo '${{ secrets.gh-cuttlefish-vm-ssh-private-key }}' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'EOT' >> ${{ inputs.directory }}/terraform.auto.tfvars
             
-            echo 'sdv_gh_argocd_initial_password_bcrypt = "${{ steps.generate-encoded-argocd-bcrypt-hash.outputs.argocd_encoded_bcrypt_hash }}"' >> terraform.auto.tfvars
-            echo 'sdv_gh_jenkins_initial_password = "${{ secrets.gh-jenkins-initial-password }}"' >> terraform.auto.tfvars
-            echo 'sdv_gh_keycloak_initial_password = "${{ secrets.gh-keycloak-initial-password }}"' >> terraform.auto.tfvars
-            echo 'sdv_gh_gerrit_admin_initial_password = "${{ secrets.gh-gerrit-admin-initial-password }}"' >> terraform.auto.tfvars
-            echo 'sdv_gh_keycloak_horizon_admin_password = "${{ secrets.gh-keycloak-horizon-admin-password }}"' >> terraform.auto.tfvars
-            echo 'sdv_gh_abfs_license_b64 = "${{ secrets.gh-abfs-license-b64 }}"' >> terraform.auto.tfvars
-            echo 'sdv_gcp_project_id = "${{ vars.GCP_PROJECT_ID }}"' >> terraform.auto.tfvars
-            echo 'sdv_computer_sa = "${{ vars.GCP_COMPUTER_SA }}"' >> terraform.auto.tfvars
-            echo 'sdv_gcp_cloud_region = "${{ vars.GCP_CLOUD_REGION }}"' >> terraform.auto.tfvars
-            echo 'sdv_gcp_cloud_zone = "${{ vars.GCP_CLOUD_ZONE }}"' >> terraform.auto.tfvars
-            echo 'sdv_gcp_backend_bucket_name = "${{ vars.GCP_BACKEND_BUCKET_NAME }}"' >> terraform.auto.tfvars
-            echo 'sdv_gh_domain_name = "${{ vars.HORIZON_DOMAIN }}"' >> terraform.auto.tfvars
+            echo 'sdv_gh_argocd_initial_password_bcrypt = "${{ steps.generate-encoded-argocd-bcrypt-hash.outputs.argocd_encoded_bcrypt_hash }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_jenkins_initial_password = "${{ secrets.gh-jenkins-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_keycloak_initial_password = "${{ secrets.gh-keycloak-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_gerrit_admin_initial_password = "${{ secrets.gh-gerrit-admin-initial-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_keycloak_horizon_admin_password = "${{ secrets.gh-keycloak-horizon-admin-password }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_abfs_license_b64 = "${{ secrets.gh-abfs-license-b64 }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gcp_project_id = "${{ vars.GCP_PROJECT_ID }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_computer_sa = "${{ vars.GCP_COMPUTER_SA }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gcp_cloud_region = "${{ vars.GCP_CLOUD_REGION }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gcp_cloud_zone = "${{ vars.GCP_CLOUD_ZONE }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gcp_backend_bucket_name = "${{ vars.GCP_BACKEND_BUCKET_NAME }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
+            echo 'sdv_gh_domain_name = "${{ vars.HORIZON_DOMAIN }}"' >> ${{ inputs.directory }}/terraform.auto.tfvars
 
             echo "Writing Auth variables to GITHUB_ENV..."
             # --- Keep Auth variables in GITHUB_ENV for other steps ---
@@ -263,7 +263,7 @@ jobs:
             else
               echo "VARS=false" >> $GITHUB_ENV;
             fi
-
+            
       - name: Get Terraform fetcher GitHub App token
         uses: tibdex/github-app-token@v1
         id: get_github_app_token
