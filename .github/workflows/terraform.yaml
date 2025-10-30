@@ -263,7 +263,7 @@ jobs:
             else
               echo "VARS=false" >> $GITHUB_ENV;
             fi
-
+            
       - name: Get Terraform fetcher GitHub App token
         uses: tibdex/github-app-token@v1
         id: get_github_app_token
@@ -432,3 +432,4 @@ jobs:
           script: |
 
             core.setFailed('Terraform apply failed.')
+
