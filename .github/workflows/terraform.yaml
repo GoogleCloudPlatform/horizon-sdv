@@ -301,7 +301,6 @@ jobs:
         if: ${{ steps.gcp-secret-check.outputs.secrets != 'true' }}
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: "${{ secrets.gcp-sa-key }}"
           service_account: ${{ env.GCP_SA }}
           workload_identity_provider: ${{ env.GCP_WIF }}
 
