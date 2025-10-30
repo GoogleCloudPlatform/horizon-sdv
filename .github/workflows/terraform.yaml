@@ -289,42 +289,65 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq openssl
 
       - name: Create .auto.tfvars.json files from secrets
         id: create-tfvars
         run: |
-          # 0. Create the target directory, just in case
+          # Exit on error, print commands, and fail on pipe errors
+          set -exo pipefail
+          
+          # --- DEBUGGING: Check if secrets are empty ---
+          # This will fail the build if the main key is missing
+          if [[ -z "${{ secrets.gh-app-key }}" ]]; then
+            echo "::error:: 'secrets.gh-app-key' is empty or not passed to this workflow."
+            exit 1
+          fi
+          
+          # 1. Create the target directory
+          echo "Creating directory: ${{ inputs.directory }}"
           mkdir -p ${{ inputs.directory }}
           
-          # 1. Convert the GitHub App key to PKCS#8
+          # 2. Convert the GitHub App key to PKCS#8
+          echo "Converting PKCS#8 key..."
           PKCS8_KEY=$(echo "${{ secrets.gh-app-key }}" | openssl pkcs8 -topk8 -nocrypt -outform PEM)
           
-          # 2. Mask the key so it doesn't leak in logs
+          # 3. Mask the key (this part is just for logging)
           while IFS= read -r each_line; do
             echo "::add-mask::$each_line"
           done <<< "$PKCS8_KEY"
           
-          # 3. Write ALL large secrets to .auto.tfvars.json files using jq
-          # This avoids the "Argument list too long" error by NOT using $GITHUB_ENV
+          # 4. Write ALL large secrets to .auto.tfvars.json files
           
           # File 1: The converted PKCS#8 key
-          echo "$PKCS8_KEY" | jq -R -s '{sdv_gh_app_key_pkcs8: .}' > key.auto.tfvars.json
-          echo "Successfully created key.auto.tfvars.json"
+          echo "Writing key.auto.tfvars.json..."
+          echo "$PKCS8_KEY" | jq -R -s '{sdv_gh_app_key_pkcs8: .}' > ${{ inputs.directory }}/key.auto.tfvars.json
           
           # File 2: All other large secrets
+          echo "Writing other_secrets.auto.tfvars.json..."
           jq -n \
             --arg sdv_gh_app_key "${{ secrets.gh-app-key }}" \
             --arg sdv_gh_gerrit_admin_private_key "${{ secrets.gh-gerrit-admin-private-key }}" \
             --arg sdv_gh_cuttlefish_vm_ssh_private_key "${{ secrets.gh-cuttlefish-vm-ssh-private-key }}" \
-            --arg sdv_gh_abfs_license_b64 "${{ secrets.gh-abfs-license-b64 }}" \
+            --arg sdv_gh_abfs_license_b64 "${{ secrets.gh-abfs_license_b64 }}" \
             '{
               sdv_gh_app_key: $sdv_gh_app_key,
               sdv_gh_gerrit_admin_private_key: $sdv_gh_gerrit_admin_private_key,
               sdv_gh_cuttlefish_vm_ssh_private_key: $sdv_gh_cuttlefish_vm_ssh_private_key,
               sdv_gh_abfs_license_b64: $sdv_gh_abfs_license_b64
-            }' > other_secrets.auto.tfvars.json
+            }' > ${{ inputs.directory }}/other_secrets.auto.tfvars.json
           
-          echo "Successfully created other_secrets.auto.tfvars.json"
+          echo "--- File creation complete. Listing files in target directory: ---"
+          ls -la ${{ inputs.directory }}/
+          
+          echo "--- Contents of key.auto.tfvars.json (keys only) ---"
+          jq 'keys' ${{ inputs.directory }}/key.auto.tfvars.json
+          
+          echo "--- Contents of other_secrets.auto.tfvars.json (keys only) ---"
+          jq 'keys' ${{ inputs.directory }}/other_secrets.auto.tfvars.json
 
       - name: terraform plan
         working-directory: ${{ inputs.directory }}/
