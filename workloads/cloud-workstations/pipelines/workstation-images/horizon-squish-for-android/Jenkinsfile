@@ -1,0 +1,120 @@
+// Copyright (C) 2025 The Qt Company Ltd.
+// All rights reserved.
+//
+// This file is part of Squish.
+//
+// Licensees holding a valid Squish License Agreement may use this
+// file in accordance with the Squish License Agreement provided with
+// the Software.
+//
+// This file is provided AS IS with NO WARRANTY OF ANY KIND, INCLUDING THE
+// WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+//
+// See the LICENSE file in this directory.
+//
+// Contact qatools.support@qt.io if any conditions of this licensing are
+// not clear to you.
+
+// Description:
+// This pipeline builds a preset `squish-for-android` Docker image for use in GCP Cloud Workstations config
+// Pipeline uses Kaniko to avoid docker in docker privilege issues.
+//
+// References:
+//   * https://github.com/GoogleContainerTools/kaniko
+
+pipeline {
+  // Parameters defined in workloads/cloud-workstations/pipelines/workstation-images/horizon-squish-for-android/groovy/job.groovy
+
+  agent none
+
+  // Block concurrent builds to avoid clashing.
+  options {
+    buildBlocker (useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Cloud-Workstations/.*/Workstation-Images/.*Docker.*')
+  }
+
+  environment {
+    // Update latest tag.
+    REGISTRY="${env.CLOUD_REGION}-docker.pkg.dev"
+    DESTINATION="${REGISTRY}/${env.CLOUD_PROJECT}/${env.CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME}"
+    PUSH="${NO_PUSH == "true" ? "false" : "true"}"
+    HORIZON_DOMAIN="${env.HORIZON_DOMAIN}"
+
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          cloud_ws_horizon_squish_for_android_build_pod: "true"
+      spec:
+        tolerations:
+          - key: workloadType
+            operator: Equal
+            value: android
+            effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
+                - key: cloud_ws_horizon_asfp_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
+                - key: cloud_ws_horizon_squish_for_android_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-cloud-ws-image-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:debug
+          imagePullPolicy: IfNotPresent
+          command:
+          - /busybox/cat
+          tty: true
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+        nodeSelector:
+          workloadLabel: android
+    """.stripIndent()
+  }
+
+  stages {
+    stage ('Create Docker Image'){
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+      when { expression { env.IMAGE_TAG } }
+      steps {
+        container(name: 'kaniko') {
+          script {
+            currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+          }
+          withCredentials([string(credentialsId: 'squish-license-file', variable: "SQUISH_LICENSE_FILE")]) {
+            sh '''
+              # Pass secret to kaniko
+              echo "$SQUISH_LICENSE_FILE" > /kaniko/squish-license
+              # Build the docker image and push to Artifact registry using service account configured with
+              # correct roles/permissions.
+              /kaniko/executor -f workloads/cloud-workstations/pipelines/workstation-images/horizon-squish-for-android/Dockerfile \
+                -c workloads/cloud-workstations/pipelines/workstation-images/horizon-squish-for-android \
+                --secret id=squish-license,src=/kaniko/squish-license \
+                --skip-tls-verify-pull --insecure --skip-tls-verify "${KANIKO_OPTIONS}"
+            '''
+          }
+        }
+      }
+    }
+  }
+}

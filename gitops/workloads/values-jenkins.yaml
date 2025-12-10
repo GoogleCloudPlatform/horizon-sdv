@@ -47,6 +47,8 @@ config:
             image: "horizon-sdv/cloud-ws-images/horizon-asfp"
           horizonAndroidStudio:
             image: "horizon-sdv/cloud-ws-images/horizon-android-studio"
+          horizonSquishForAndroid:
+            image: "horizon-sdv/cloud-ws-images/horizon-squish-for-android"
     common:
       serviceAccounts:
         terraformWorkloadsSA:
@@ -489,6 +491,8 @@ controller:
                   value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonASFP.image }}
                 - key: "CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME"
                   value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonAndroidStudio.image }}
+                - key: "CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME"
+                  value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonSquishForAndroid.image }}
         groovy:
           - script: >
               println("This is groovy !");
