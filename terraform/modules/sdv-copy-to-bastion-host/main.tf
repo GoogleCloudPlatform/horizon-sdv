@@ -45,7 +45,7 @@ resource "null_resource" "copy_from_storage_to_bastion_host" {
       # Create all the directories defined by the filename
       mkdir -p ${var.destination_directory}
 
-      gsutil cp gs://${var.bucket_name}/${var.bucket_destination_path} ${var.destination_directory}/${var.destination_filename}
+      gcloud storage cp gs://${var.bucket_name}/${var.bucket_destination_path} ${var.destination_directory}/${var.destination_filename}
     "
     EOT
   }
