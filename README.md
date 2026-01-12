@@ -1,7 +1,5 @@
 # Horizon
 
-
-
 Welcome! 
 
 This page provides an introduction to Horizon, a turnkey implementation designed for OEMs and suppliers interested in adopting Google Cloud’s Software-Defined Vehicle (SDV) industry solution.
@@ -39,12 +37,6 @@ The Horizon initiative consists of two streams:
 
 ## Platform overview
 ![Horizon Platform Overview](https://raw.githubusercontent.com/GoogleCloudPlatform/horizon-sdv/refs/heads/main/docs/images/horizon_platform_overview.svg)
-
-## Major upcoming roadmap items
-* [Cloud Workstations](https://cloud.google.com/workstations) directly deployable via Horizon (https://github.com/GoogleCloudPlatform/cloud-workstations-custom-image-examples/tree/main/examples/images/android-open-source-project)
-* Android Build File System (ABFS) Server, Pushers and Clients directly deployable from Horizon and integrated with scalable GKE based build farm (https://github.com/terraform-google-modules/terraform-google-abfs)
-* Virtual devices deployed via Cloud Android Orchestration (https://github.com/google/cloud-android-orchestration/) 
-
 
 ## Staying up-to-date
 In case you would like to receive updates, you can [subscribe here](https://forms.gle/TFaKXqfHbF6oUAeg6). In case of questions you can directly reach out to [horizon-sdv@google.com](mailto:horizon-sdv@google.com)
