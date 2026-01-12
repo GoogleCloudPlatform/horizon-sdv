@@ -45,6 +45,11 @@ const axios = require('axios');
  */
 const { MTK_CONNECT_DOMAIN, MTK_CONNECT_USERNAME, MTK_CONNECT_PASSWORD } = process.env;
 
+/**
+ * Retrieve architecture for MTK Connect installer.
+ */
+const arch = { x64: 'amd64', arm64: 'arm64' }[process.arch] || process.arch;
+
 axios.defaults.baseURL = `https://${MTK_CONNECT_DOMAIN}/mtk-connect`;
 axios.defaults.auth = {
   username: MTK_CONNECT_USERNAME,
@@ -55,13 +60,10 @@ axios.defaults.auth = {
  * Downloads an installer from a specified API endpoint and saves it to a file named
  * mtk-connect-agent.node.zip.
  */
-/* mtk-connect-agent.v1.8.1.linux.amd64.tgz
-    return artifact.path.startsWith('mtk-connect-agent') && artifact.path.endsWith('.linux.amd64.tgz');
- */
 async function downloadInstaller() {
   let artifactResponse = await axios.get('/api/v1/installers');
   const installer = artifactResponse.data.data.find((artifact) => {
-    return artifact.path.startsWith('mtk-connect-agent') && artifact.path.endsWith('.linux.amd64.tgz');
+    return artifact.path.startsWith('mtk-connect-agent') && artifact.path.endsWith(`.linux.${arch}.tgz`);
   });
   if (installer) {
     console.log(`Installer path ${installer.path}`)

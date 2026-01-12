@@ -55,6 +55,8 @@ pipeline {
           imagePullPolicy: Always
           securityContext:
             privileged: true
+            appArmorProfile:
+              type: Unconfined
           command:
           - sleep
           args:
@@ -100,6 +102,8 @@ pipeline {
           imagePullPolicy: Always
           securityContext:
             privileged: true
+            appArmorProfile:
+              type: Unconfined
           command:
           - sleep
           args:
@@ -200,6 +204,7 @@ pipeline {
                   ABFS_VERSION="${ABFS_VERSION}" \
                   ABFS_REPOSITORY="${ABFS_REPOSITORY}" \
                   ABFS_BUILDER="true" \
+                  AAOS_BUILD_CTS=${AAOS_BUILD_CTS} \
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
                 '''
               }
@@ -228,6 +233,8 @@ pipeline {
                   AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}" \
                   AAOS_ARTIFACT_STORAGE_SOLUTION="${AAOS_ARTIFACT_STORAGE_SOLUTION}" \
                   ABFS_BUILDER="true" \
+                  STORAGE_BUCKET_DESTINATION="${STORAGE_BUCKET_DESTINATION}" \
+                  STORAGE_LABELS="${STORAGE_LABELS}" \
                   ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
                 '''
                 archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true

@@ -21,7 +21,6 @@
 pipeline {
 
   // Parameters defined in groovy/job.groovy
-
   agent {
     kubernetes {
       yaml """\
@@ -30,7 +29,23 @@ pipeline {
         metadata:
           annotations:
             cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+          labels:
+            aaos_pod: "true"
         spec:
+          tolerations:
+          - key: workloadType
+            operator: Equal
+            value: android
+            effect: "NoSchedule"
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: aaos_pod
+                    operator: Exists
+                topologyKey: kubernetes.io/hostname
+          hostname: jenkins-aaos-cf-build-pod
           serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
           containers:
           - name: builder
@@ -39,14 +54,22 @@ pipeline {
             command:
             - sleep
             args:
-            - 4h
+            - 5h
+            resources:
+              limits:
+                cpu: 98000m
+                memory: 180000Mi
+              requests:
+                cpu: 98000m
+                memory: 180000Mi
+          nodeSelector:
+            workloadLabel: android
       """.stripIndent()
     }
   }
 
   stages {
     stage ('Stage 1: Create base instance template') {
-
       when {
         allOf {
           expression { env.DELETE == 'false' }
@@ -57,17 +80,30 @@ pipeline {
       steps {
         container(name: 'builder') {
           script {
-            currentBuild.description = "Revision: ${env.ANDROID_CUTTLEFISH_REVISION}" + "<br/>" + "$BUILD_USER"
+            env.MACHINE_TYPE_DESCRIPTION=''
+            if ( "${env.MACHINE_TYPE}" != "" ) {
+              env.MACHINE_TYPE_DESCRIPTION="${env.MACHINE_TYPE}"
+            } else {
+              env.MACHINE_TYPE_DESCRIPTION="${env.CUSTOM_VM_TYPE}-custom-${env.CUSTOM_CPU}"
+            }
+            currentBuild.description = "Revision: ${env.ANDROID_CUTTLEFISH_REVISION}" + "<br/>" + "Prebuilt: ${env.ANDROID_CUTTLEFISH_PREBUILT}" + "<br/>" + "${env.MACHINE_TYPE_DESCRIPTION}" + "<br/>" + "$BUILD_USER"
           }
           sh '''
+            ADDITIONAL_NETWORKING="${ADDITIONAL_NETWORKING}" \
             BOOT_DISK_SIZE="${BOOT_DISK_SIZE}" \
+            BOOT_DISK_TYPE="${BOOT_DISK_TYPE}" \
+            CUTTLEFISH_POST_COMMAND="${ANDROID_CUTTLEFISH_POST_COMMAND}" \
             CUTTLEFISH_REVISION="${ANDROID_CUTTLEFISH_REVISION}" \
             MACHINE_TYPE="${MACHINE_TYPE}" \
+            CUSTOM_VM_TYPE="${CUSTOM_VM_TYPE}" \
+            CUSTOM_CPU="${CUSTOM_CPU}" \
+            CUSTOM_MEMORY="${CUSTOM_MEMORY}" \
             PROJECT=${CLOUD_PROJECT} \
-            REGION=${CLOUD_REGION} \
-            CUTTLEFISH_INSTANCE_UNIQUE_NAME="${CUTTLEFISH_INSTANCE_UNIQUE_NAME}" \
+            REGION=${REGION:-${CLOUD_REGION}} \
+            CUTTLEFISH_INSTANCE_NAME="${CUTTLEFISH_INSTANCE_NAME}" \
             VM_INSTANCE_CREATE="${VM_INSTANCE_CREATE}" \
-            ZONE=${CLOUD_ZONE} \
+            SUBNET=${SUBNET} \
+            ZONE=${ZONE:-${CLOUD_ZONE}} \
             ./workloads/android/pipelines/environment/cf_instance_template/cf_create_instance_template.sh 1
           '''
         }
@@ -87,11 +123,13 @@ pipeline {
         container(name: 'builder') {
           sh '''
             CUTTLEFISH_REVISION="${ANDROID_CUTTLEFISH_REVISION}" \
+            CUTTLEFISH_POST_COMMAND="${ANDROID_CUTTLEFISH_POST_COMMAND}" \
             VM_INSTANCE_CREATE="${VM_INSTANCE_CREATE}" \
             MAX_RUN_DURATION="${MAX_RUN_DURATION}" \
             PROJECT=${CLOUD_PROJECT} \
-            REGION=${CLOUD_REGION} \
-            ZONE=${CLOUD_ZONE} \
+            REGION=${REGION:-${CLOUD_REGION}} \
+            SUBNET=${SUBNET} \
+            ZONE=${ZONE:-${CLOUD_ZONE}} \
             ./workloads/android/pipelines/environment/cf_instance_template/cf_create_instance_template.sh 2
           '''
         }
@@ -109,15 +147,27 @@ pipeline {
 
       steps {
         container(name: 'builder') {
-          sh '''
-            CUTTLEFISH_REVISION="${ANDROID_CUTTLEFISH_REVISION}" \
-            VM_INSTANCE_CREATE="${VM_INSTANCE_CREATE}" \
-            PROJECT=${CLOUD_PROJECT} \
-            REGION=${CLOUD_REGION} \
-            ZONE=${CLOUD_ZONE} \
-            NODEJS_VERSION="${NODEJS_VERSION}" \
-            ./workloads/android/pipelines/environment/cf_instance_template/cf_create_instance_template.sh 3
-          '''
+          maskPasswords(varPasswordPairs: [[var: 'REPO_PASSWORD']], varMaskRegexes: []) {
+            sh '''
+              ADDITIONAL_NETWORKING="${ADDITIONAL_NETWORKING}" \
+              ANDROID_CUTTLEFISH_PREBUILT="${ANDROID_CUTTLEFISH_PREBUILT}" \
+              CUTTLEFISH_POST_COMMAND="${ANDROID_CUTTLEFISH_POST_COMMAND}" \
+              CUTTLEFISH_REVISION="${ANDROID_CUTTLEFISH_REVISION}" \
+              CUTTLEFISH_URL="${ANDROID_CUTTLEFISH_REPO_URL}" \
+              REPO_USERNAME="${REPO_USERNAME}" \
+              REPO_PASSWORD="${REPO_PASSWORD}" \
+              CURL_UPDATE_COMMAND=\""${CURL_UPDATE_COMMAND}"\" \
+              JAVA_VERSION="${JAVA_VERSION}" \
+              NODEJS_VERSION="${NODEJS_VERSION}" \
+              PROJECT=${CLOUD_PROJECT} \
+              REGION=${REGION:-${CLOUD_REGION}} \
+              SUBNET=${SUBNET} \
+              VM_INSTANCE_CREATE="${VM_INSTANCE_CREATE}" \
+              ZONE=${ZONE:-${CLOUD_ZONE}} \
+              ./workloads/android/pipelines/environment/cf_instance_template/cf_create_instance_template.sh 3
+            '''
+          }
+          archiveArtifacts artifacts: 'android*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
         }
       }
     }
@@ -148,11 +198,13 @@ pipeline {
               fi
 
               CUTTLEFISH_REVISION="${ANDROID_CUTTLEFISH_REVISION}" \
+              CUTTLEFISH_POST_COMMAND="${ANDROID_CUTTLEFISH_POST_COMMAND}" \
               VM_INSTANCE_CREATE="${VM_INSTANCE_CREATE}" \
               JENKINS_SSH_PUB_KEY_FILE="${WORKSPACE}"/jenkins_rsa.pub \
               PROJECT=${CLOUD_PROJECT} \
-              REGION=${CLOUD_REGION} \
-              ZONE=${CLOUD_ZONE} \
+              REGION=${REGION:-${CLOUD_REGION}} \
+              SUBNET=${SUBNET} \
+              ZONE=${ZONE:-${CLOUD_ZONE}} \
              ./workloads/android/pipelines/environment/cf_instance_template/cf_create_instance_template.sh 4
             '''
           }
@@ -172,13 +224,20 @@ pipeline {
       steps {
         container(name: 'builder') {
           sh '''
+            BOOT_DISK_TYPE="${BOOT_DISK_TYPE}" \
+            CUTTLEFISH_POST_COMMAND="${ANDROID_CUTTLEFISH_POST_COMMAND}" \
             CUTTLEFISH_REVISION="${ANDROID_CUTTLEFISH_REVISION}" \
             VM_INSTANCE_CREATE="${VM_INSTANCE_CREATE}" \
             MACHINE_TYPE="${MACHINE_TYPE}" \
+            CUSTOM_VM_TYPE="${CUSTOM_VM_TYPE}" \
+            CUSTOM_CPU="${CUSTOM_CPU}" \
+            CUSTOM_MEMORY="${CUSTOM_MEMORY}" \
+            OS_PROJECT="${OS_PROJECT}" \
             PROJECT=${CLOUD_PROJECT} \
-            REGION=${CLOUD_REGION} \
-            CUTTLEFISH_INSTANCE_UNIQUE_NAME="${CUTTLEFISH_INSTANCE_UNIQUE_NAME}" \
-            ZONE=${CLOUD_ZONE} \
+            REGION=${REGION:-${CLOUD_REGION}} \
+            SUBNET=${SUBNET} \
+            CUTTLEFISH_INSTANCE_NAME="${CUTTLEFISH_INSTANCE_NAME}" \
+            ZONE=${ZONE:-${CLOUD_ZONE}} \
             ./workloads/android/pipelines/environment/cf_instance_template/cf_create_instance_template.sh 5
           '''
         }
@@ -190,7 +249,7 @@ pipeline {
       when {
         allOf {
           expression { env.DELETE == 'true' }
-          expression { env.ANDROID_CUTTLEFISH_REVISION || env.CUTTLEFISH_INSTANCE_UNIQUE_NAME }
+          expression { env.ANDROID_CUTTLEFISH_REVISION || env.CUTTLEFISH_INSTANCE_NAME }
         }
       }
 
@@ -199,9 +258,10 @@ pipeline {
           sh '''
             CUTTLEFISH_REVISION="${ANDROID_CUTTLEFISH_REVISION}" \
             PROJECT=${CLOUD_PROJECT} \
-            REGION=${CLOUD_REGION} \
-            CUTTLEFISH_INSTANCE_UNIQUE_NAME="${CUTTLEFISH_INSTANCE_UNIQUE_NAME}" \
-            ZONE=${CLOUD_ZONE} \
+            REGION=${REGION:-${CLOUD_REGION}} \
+            CUTTLEFISH_INSTANCE_NAME="${CUTTLEFISH_INSTANCE_NAME}" \
+            SUBNET=${SUBNET} \
+            ZONE=${ZONE:-${CLOUD_ZONE}} \
             ./workloads/android/pipelines/environment/cf_instance_template/cf_create_instance_template.sh 6
           '''
         }

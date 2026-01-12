@@ -9,11 +9,24 @@
 
 ## Introduction <a name="introduction"></a>
 
-This job enables users to test a prior build of the POSIX application on the OpenBSW POSIX platform.
+This job enables users to test a prior build of the POSIX application on the OpenBSW POSIX platform using MTK Connect.
 
-**Test Configuration**
+Use `NUM_HOST_INSTANCES` to set how many device sessions to create. These sessions appear under the testbench in the MTK Connect application. They all attach to the same host instance but run independently, allowing you to use separate shell sessions. This will allow interaction with a running POSIX application from a separate shell session.
 
-The test will launch MTK Connect, allowing users to connect to the POSIX host and access the application via the MTK Connect HOST API interface. The test behavior is controlled by the `LAUNCH_APPLICATION_NAME` parameter, which determines whether the application is launched automatically or user will launch manually when connected to the host.
+The following options are available for testing the POSIX reference application:
+
+**POSIX Reference Application:**
+
+This will allow users to execute and operate the POSIX reference application.
+
+`./posix/tools/enet/bring-up-ethernet.sh && ./posix/tools/can/bring-up-vcan0.sh && ./posix/build/posix/executables/referenceApp/application/Release/app.referenceApp.elf`
+
+**POSIX pyTest:**
+
+This will allow users to run pyTest on the reference application, and debug failures etc:
+
+`./posix/tools/enet/bring-up-ethernet.sh && ./posix/tools/can/bring-up-vcan0.sh && cd posix/test/pyTest/ && pytest --target=posix --app=freertos`
+
 
 ### References <a name="references"></a>
 
@@ -33,14 +46,7 @@ One-time setup requirements.
 
 ### `OPENBSW_DOWNLOAD_URL`
 
-Storage URL pointing to the location of the POSIX target application image that was build using `BSW Builder`, e.g.`gs://${OPENBSW_BUILD_BUCKET_ROOT_NAME}/OpenBSW/Builds/BSW_Builder/<BUILD_NUMBER>/posix`
-
-### `LAUNCH_APPLICATION_NAME`
-
-Name of the application to launch, or empty to manually launch. Default is the standard POSIX target application.
-
-If defined, then MTK Connect will launch the application automatically. If not defined, then user will find the
-application under the `posix` directory and they many manually start.
+Storage URL pointing to the location of the POSIX target application image that was build using `BSW Builder`, e.g.`gs://${OPENBSW_BUILD_BUCKET_ROOT_NAME}/OpenBSW/Builds/BSW_Builder/<BUILD_NUMBER>/posix`, or `<STORAGE_BUCKET_DESTINATION>/posix` if destination was overridden.
 
 ### `IMAGE_TAG`
 
@@ -48,16 +54,26 @@ Specifies the name of the Docker image to be used when running this job.
 
 The default value is defined by the `Seed Workloads` pipeline job. Users may override to provide a unique tag that describes the Linux distribution and tool chain versions.
 
+### `NUM_HOST_INSTANCES`
+
+Number of host instances to create for testing the POSIX application. This is effectively the number of devices that
+will be created associated with the development instance testbench in MTK Connect.
+
 ### `POSIX_KEEP_ALIVE_TIME`
 
 When using MTK Connect to test the POSIX images, the VM instance must be allowed to continue to run. This timeout, in
 minutes, gives the tester time to keep the instance alive so they may work with the devices via MTK Connect.
 
+### `MTK_CONNECT_PUBLIC`
+
+When checked, the MTK Connect testbench is visible to everyone and can be shared.
+By default, testbenches are private and only visible to their creator and MTK Connect administrators.
+
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 

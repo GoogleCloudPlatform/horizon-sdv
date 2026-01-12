@@ -50,7 +50,7 @@ The URL must point to the bucket where the host packages and virtual devices ima
 - `cvd-host_package.tar.gz`
 - `osp_cf_x86_64_auto-img-builder.zip`
 
-URL is of the form `gs://<ANDROID_BUILD_BUCKET_ROOT_NAME>/Android/Builds/AAOS_Builder/<BUILD_NUMBER>` where `ANDROID_BUILD_BUCKET_ROOT_NAME` is a system environment variable defined in Jenkins CasC `jenkins.yaml` and `BUILD_NUMBER` is the Jenkins build number.
+URL is of the form `gs://<ANDROID_BUILD_BUCKET_ROOT_NAME>/Android/Builds/AAOS_Builder/<BUILD_NUMBER>` where `ANDROID_BUILD_BUCKET_ROOT_NAME` is a system environment variable defined in Jenkins CasC `values-jenkins.yaml` and `BUILD_NUMBER` is the Jenkins build number. Alternatively, `<STORAGE_BUCKET_DESTINATION>` if destination was overridden.
 
 ### `CUTTLEFISH_INSTALL_WIFI`
 
@@ -85,9 +85,17 @@ Defines total memory available to guest.
 
 This applies to CVD `memory_mb` parameter.
 
+### `MTK_CONNECT_PUBLIC`
+
+When checked, the MTK Connect testbench is visible to everyone and can be shared.
+By default, testbenches are private and only visible to their creator and MTK Connect administrators.
+
 ### `CVD_ADDITIONAL_FLAGS`
 
-Append additional flags to `cvd` command, e.g. --display0=width=1920,height=1080,dpi=160
+Append additional flags to `cvd` command, e.g.
+
+- `--setupwizard_mode DISABLED --enable_host_bluetooth false --gpu_mode guest_swiftshader`
+- `--display0=width=1920,height=1080,dpi=160`
 
 ## Example Usage <a name="examples"></a>
 
@@ -96,19 +104,20 @@ The following examples show how the scripts may be used standalone on a test ins
 From `Workloads/Android/Environment/CF Instance Template` create a Cuttlefish test instance:
 
 - `ANDROID_CUTTLEFISH_REVISION`: choose the version you wish to build the template from
-- `CUTTLEFISH_INSTANCE_UNIQUE_NAME` : provide a unique name, starting with cuttlefish-vm, e.g. `cuttlefish-vm-test-instance-v110.`
+- `CUTTLEFISH_INSTANCE_NAME` : provide a unique name, starting with cuttlefish-vm, e.g. `cuttlefish-vm-test-instance-v110.`
 - `MAX_RUN_DURATION` : set to 0 to avoid instance being deleted after this time.
 - `VM_INSTANCE_CREATE` : Enable this option so that the instance template will create a VM instance for user to start, connect to and work with.
 
 Connect to the instance, e.g.
 
 ```
-# SSH to bastion host
-gcloud compute ssh --zone "europe-west1-d" "sdv-bastion-host" --tunnel-through-iap --project "sdva-2108202401"
-# Set up credentials to connect to the VM instance
-gcloud container clusters get-credentials sdv-cluster --region europe-west1 --internal-ip
 
-# If user wishes to use MTK Connect then retrieve the MTK Connect API key via bastion:
+# Set up fleet management:
+gcloud container fleet memberships list
+# sdv-cluster may be default but derive the membership name from list
+gcloud container fleet memberships get-credentials sdv-cluster
+
+# If user wishes to use MTK Connect then retrieve the MTK Connect API key:
 # Retrieve the MTK_CONNECT_USERNAME:
 kubectl get secrets -n mtk-connect mtk-connect-apikey -o json | jq -r '.data.username' | base64 -d
 # Retrieve the MTK_CONNECT_PASSWORD:
@@ -177,14 +186,14 @@ When entirely finished with the instance, delete it. e.g.
 
 From `Workloads/Android/Environment/CF Instance Template` delete the Cuttlefish test instance:
 
-- `CUTTLEFISH_INSTANCE_UNIQUE_NAME` : provide a unique name, starting with cuttlefish-vm, e.g. `cuttlefish-vm-test-instance-v110.`
+- `CUTTLEFISH_INSTANCE_NAME` : provide a unique name, starting with cuttlefish-vm, e.g. `cuttlefish-vm-test-instance-v110.`
 - `DELETE` : This ensures the instance template, disk image and VM instance are deleted.
 
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 
@@ -222,4 +231,3 @@ These are as follows:
 -   The CVD launcher will exit if it cannot boot the desired number of devices. Due to existing issues with CVD's device creation and booting process, it is safer to terminate and report failure rather than attempting to recover with fewer devices, as this may cause connectivity problems with some of the remaining devices.
      - Future plans include implementing mitigation strategies to ensure that devices that boot with fewer than the requested number can be trusted and utilized. Currently, these devices cannot be relied upon to function correctly.
 -    WiFi: Some versions of Android, e.g. `android-14.0.0_r30` are not so reliable when it comes to connecting WiFi to the network. If the device cannot connect to the network, it is not possible to test WiFi connectivity. In future releases we will remove devices that fail to connect from the test.
-     - Known reliable version: `android-14.0.0_r74`

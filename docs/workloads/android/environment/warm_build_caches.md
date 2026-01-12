@@ -37,17 +37,11 @@ This provides the URL for the Android repo manifest. Such as:
 The Android revision, i.e. branch or tag to build. Tested versions are below:
 
 - `horizon/android-14.0.0_r30` (ap1a)
-- `horizon/android-14.0.0_r74` (ap2a - refer to Known Issues)
-- `horizon/android-15.0.0_r4` (ap3a)
-- `horizon/android-15.0.0_r20` (bp1a)
-- `horizon/android-15.0.0_r32` (bp1a)
-- `horizon/android-15.0.0_r36` (bp1a  - default)
+- `horizon/android-15.0.0_r36` (bp1a)
+- `horizon/android-16.0.0_r3` (bp3a  - default)
 - `android-14.0.0_r30` (ap1a)
-- `android-14.0.0_r74` (ap2a, refer to Known Issues)
-- `android-15.0.0_r4` (ap3a)
-- `android-15.0.0_r20` (bp1a)
-- `android-15.0.0_r32` (bp1a)
 - `android-15.0.0_r36` (bp1a)
+- `android-16.0.0_r3` (bp3a)
 
 ### `ANDROID_VERSION`
 
@@ -57,12 +51,25 @@ This specifies which build disk pool to use for the build cache. If `default` th
 
 Option to archive the build artifacts to bucket.
 
+### `USE_LOCAL_AOSP_MIRROR`
+
+If checked, the build will use the AOSP Mirror setup in your GCP project to fetch Android source code during `repo sync`.
+**Note:**
+-  The AOSP Mirror must be setup prior to running this job. If not setup, the job will fail.
+-  The setup jobs are in folder `Android Workflows -> Environment -> Mirror`.
+
+### `AOSP_MIRROR_DIR_NAME`
+
+This defines the directory name on the Filestore volume where the Mirror is located.
+**Note:**
+-  This is required if `USE_LOCAL_AOSP_MIRROR` is checked.
+-  e.g. If you provided `my-mirror` when creating the mirror, provide the same value here.
 
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 
@@ -98,3 +105,9 @@ These are as follows:
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
+
+-    `AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER`
+
+-    `AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME`
+
+-    `AOSP_MIRROR_DIR_NAME`

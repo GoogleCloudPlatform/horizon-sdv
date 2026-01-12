@@ -19,14 +19,14 @@ The following pipelines are currently available:
 These pipelines need only be run once, or when their Dockerfile is updated. There is an option not to push the resulting image to the registry, so that devs can test their changes before committing the image.
 
 ### References
-- [Kaniko](https://github.com/GoogleContainerTools/kaniko)
+- [buildkit](https://hub.docker.com/r/moby/buildkit)
 - [Base Image for Horizon Code OSS](https://us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss:latest)
 - [Base Template for Horizon Android Studio for Platform (ASfP)](https://github.com/GoogleCloudPlatform/cloud-workstations-custom-image-examples/tree/main/examples/images/android-open-source-project/android-studio-for-platform)
 - [Base Template for Horizon Android Studio](https://github.com/GoogleCloudPlatform/cloud-workstations-custom-image-examples/tree/main/examples/images/android/android-studio)
 
 ## Prerequisites<a name="prerequisites"></a>
 
-All of these pipelines depend on [`kaniko`](https://github.com/GoogleContainerTools/kaniko) which should be installed by default.
+All of these pipelines depend on [`buildkit`](https://hub.docker.com/r/moby/buildkit) which should be installed by default.
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
@@ -45,7 +45,7 @@ simply use `latest` because all pipelines that depend on this container image ar
 
 There are a number of system environment variables that are unique to each platform but required by these Jenkins Cloud Workstation `Workstation Images` pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 
@@ -64,7 +64,7 @@ These are as follows:
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
 
-Below variables have their values defined in `gitops/env/stage2/values.yaml` and then referenced in Jenkins CasC `jenkins.yaml`.
+Below variables have their values defined in `gitops/values.yaml` and then referenced in Jenkins CasC `values-jenkins.yaml`.
 
 -   `CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME`
     - Name of the Docker image on GCP Artifact registry for VS Code IDE (`horizon-code-oss`), that is used in Cloud Workstations.

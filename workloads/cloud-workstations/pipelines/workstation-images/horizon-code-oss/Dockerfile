@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture and Google LLC, All Rights Reserved.
+# Copyright (c) 2025-2026 Accenture and Google LLC, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,11 +16,22 @@ FROM us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss:la
 
 ARG ADDITIONAL_PACKAGES=""
 ARG INSTALL_ABFS="false"
+ARG HORIZON_DOMAIN
 
-RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends \
+# Install Node.js v20 for the official Gemini CLI, then install the CLI via npm
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+      ca-certificates \
       curl \
-      gnupg && \
+      gnupg \
+      python3-pip \
+      python3-requests && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    NODE_MAJOR=20 && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update -y && apt-get install -y --no-install-recommends nodejs && \
+    # Install the official Gemini CLI
+    npm install -g @google/gemini-cli && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -66,3 +77,7 @@ RUN if [ "${INSTALL_ABFS}" = "true" ]; then \
     fi
 
 COPY ./assets/. /
+
+# Configure gemini-mcp-setup script
+COPY --chmod=755 ./common-utils/gemini/gemini-mcp-setup.py /usr/local/bin/gemini-mcp-setup
+RUN sed -i 's/^\(HORIZON_DOMAIN = os.environ.get("HORIZON_DOMAIN", "\)##DOMAIN##\(")\)/\1'"${HORIZON_DOMAIN}"'\2/' /usr/local/bin/gemini-mcp-setup

@@ -43,6 +43,17 @@ function build_posix_target() {
     fi
 }
 
+# Function to run pytest for POSIX target
+function run_pytest_posix_target() {
+    echo "Running POSIX pytest"
+    eval "${POSIX_PYTEST_CMDLINE}" | tee -a "${PYTEST_RESULTS_FILE}"
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        echo "ERROR: ${POSIX_PYTEST_CMDLINE} failed"
+        # Don't exit, allow tests and storage to complete.
+        exit 0
+    fi
+}
+
 # Function to build unit tests
 function build_unit_tests() {
     echo "Building unit tests"
@@ -59,6 +70,16 @@ function list_unit_tests() {
     eval "${LIST_UNIT_TESTS_CMDLINE}" | tee -a "${UNIT_TESTS_LIST_FILE}"
     if [ "${PIPESTATUS[0]}" -ne 0 ]; then
         echo "ERROR: ${LIST_UNIT_TESTS_CMDLINE} failed"
+        exit 1
+    fi
+}
+
+# Function to generate documentation
+function build_documentation() {
+    echo "Building unit tests"
+    if ! eval "${BUILD_DOCUMENTATION_CMDLINE}"
+    then
+        echo "ERROR: ${BUILD_DOCUMENTATION_CMDLINE} failed"
         exit 1
     fi
 }
@@ -91,6 +112,11 @@ if ${LIST_UNIT_TESTS}; then
     list_unit_tests
 fi
 
+# Create documentation
+if ${BUILD_DOCUMENTATION}; then
+    build_documentation
+fi
+
 # Build and run unit tests if enabled
 if ${BUILD_UNIT_TESTS}; then
     build_unit_tests
@@ -104,6 +130,11 @@ fi
 # Build the POSIX target if enabled
 if ${BUILD_POSIX}; then
     build_posix_target
+fi
+
+# Run POSIX pytest if enabled
+if ${POSIX_PYTEST}; then
+    run_pytest_posix_target
 fi
 
 # Build the NXP S32K148 target if enabled

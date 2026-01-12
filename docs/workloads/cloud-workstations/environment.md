@@ -13,11 +13,11 @@ The Jenkins pipeline `Environment > Docker Image Template` builds the container 
 This pipeline need only be run once, or when Dockerfile is updated. There is an option not to push the resulting image to the registry, so that devs can test their changes before committing the image.
 
 ### References
-- [Kaniko](https://github.com/GoogleContainerTools/kaniko)
+- [buildkit](https://hub.docker.com/r/moby/buildkit)
 
 ## Prerequisites<a name="prerequisites"></a>
 
-This depends only on [`kaniko`](https://github.com/GoogleContainerTools/kaniko) which should be installed by default.
+This depends only on [`buildkit`](https://hub.docker.com/r/moby/buildkit) which should be installed by default.
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
@@ -36,7 +36,7 @@ simply use `latest` because all pipelines that depend on this container image ar
 
 There are a number of system environment variables that are unique to each platform but required by this Jenkins Cloud Workstation environment pipeline.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 
@@ -55,7 +55,7 @@ These are as follows:
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
 
-Below variables have their values defined in `gitops/env/stage2/values.yaml` and then referenced in Jenkins CasC `jenkins.yaml`.
+Below variables have their values defined in `gitops/values.yaml` and then referenced in Jenkins CasC `jenkins.yaml`.
 
 -   `CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME`
     - Name of the Docker image on GCP Artifact registry, that is used as an environment for Cloud Workstations workload pipelines.

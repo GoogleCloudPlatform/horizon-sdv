@@ -20,8 +20,10 @@ pipelineJob('Android/Builds/AAOS Builder ABFS') {
       <li><a href="https://source.android.com/docs/automotive/start/avd/android_virtual_device" target="_blank">Android Virtual Devices</a> for use with <a href="https://source.android.com/docs/automotive/start/avd/android_virtual_device#share-an-avd-image-with-android-studio-users" target="_blank">Android Studio</a></li>
       <li><a href="https://source.android.com/docs/devices/cuttlefish" target="_blank">Cuttlefish Virtual Devices</a> for use with <a href="https://source.android.com/docs/compatibility/cts" target="_blank">CTS</a></li>
       <li>Reference hardware platforms such as <a href="https://source.android.com/docs/automotive/start/pixelxl" target="_blank">Pixel Tablets</a></li>
+      <li><a href="https://source.android.com/docs/compatibility/cts/development" target="_blank">CTS development</a>, reference <a href="https://source.android.com/docs/compatibility/cts" target="_blank">Compatibility Test Suite</a> and <a href="https://source.android.com/docs/core/tests/tradefed" target="_blank">CTS Trade Federataion</a></a>.</li>
     </ul>
     <p>Users have the ability to retain the ABFS cache and ABFS source mount point in persistent storage, this may improve build times. Simply enable <code>ABFS_CACHED_BUILD</code> and a persistent volume will be created to store the cache and source mount path.</p>
+    <p>For <i>CTS development builds</i>, select a cuttlefish variety of <code>AAOS_LUNCH_TARGET</code> and enable <code>AAOS_BUILD_CTS</code> to build and create <code>android-cts.zip</code> for use in the <i>CTS Execution</i> test job.</p>
     <h4 style="margin-bottom: 10px;">Build Outputs</h4>
     <p>Build outputs are stored in a Google Cloud Storage bucket (refer to build artifact for location).</p>
     <h4 style="margin-bottom: 10px;">Viewing Artifacts on Google Cloud</h4>
@@ -52,10 +54,17 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
       trim(true)
     }
 
+    booleanParam {
+      name('AAOS_BUILD_CTS')
+      defaultValue(false)
+      description('''<p>Build the Android Automotive Compatibility Test Suite.<br/>
+        Only applicable for CF lunch targets, i.e aosp_cf.</p>''')
+    }
+
     choiceParam {
       name('ANDROID_VERSION')
       description('''<p>Version of Android required for SDK generation of addons and devices.</p>''')
-      choices(['15', '14'])
+      choices(['15','16'])
     }
 
     booleanParam {
@@ -99,40 +108,51 @@ git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/
       trim(true)
     }
 
-    stringParam {
-      name('AAOS_GERRIT_MANIFEST_URL')
-      defaultValue("https://${HORIZON_DOMAIN}/gerrit/android/platform/manifest")
-      description('''<p>Gerrit manifest URL for patchset.<br>
-        Manifest is required so project can be matched to path within the source tree in order to fetch the change.</p>''')
-      trim(true)
-    }
-
-    stringParam {
-      name('GERRIT_PROJECT')
-      defaultValue('')
-      description('''<p>Optional, define Gerrit Project with open review.</p>''')
-      trim(true)
-    }
-
-    stringParam {
-      name('GERRIT_CHANGE_NUMBER')
-      defaultValue('')
-      description('''<p>Optional, define Gerrit review item change number.</p>''')
-      trim(true)
-    }
-
-    stringParam {
-      name('GERRIT_PATCHSET_NUMBER')
-      defaultValue('')
-      description('''<p>Optional, define Gerrit review item patchset number.</p>''')
-      trim(true)
-    }
-
     choiceParam {
       name('INSTANCE_RETENTION_TIME')
       description('''<p>Time in minutes to retain the instance after build completion.<br/>
         Useful for debugging build issues, reviewing target outputs etc.</p>''')
       choices(['0', '15', '30', '45', '60', '120', '180'])
+    }
+
+    separator {
+      name('Storage Options')
+      sectionHeader('Storage Options')
+      sectionHeaderStyle("${HEADER_STYLE}")
+      separatorStyle("${SEPARATOR_STYLE}")
+    }
+
+    stringParam {
+      name('AAOS_ARTIFACT_STORAGE_SOLUTION')
+      defaultValue('GCS_BUCKET')
+      description('''<p>Android Artifact Storage:<br/>
+        <ul><li>GCS_BUCKET will store to cloud bucket storage</li>
+        <li>Empty will result in nothing stored</li></ul></p>''')
+      trim(true)
+    }
+
+    stringParam {
+      name('STORAGE_BUCKET_DESTINATION')
+      defaultValue('')
+      description('''<p>Storage bucket destination:<br/>
+        Leave empty for build to create default, e.g. gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder_ABFS/<BUILD_NUMBER><br/>
+        Alternatively, override path, e.g gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Releases/010129</p>''')
+      trim(true)
+    }
+
+    stringParam {
+      name('STORAGE_LABELS')
+      defaultValue('')
+      description('''<p>Optional, list one or more labels to be applied to the artifacts being uploaded to storage.
+      <br>Use spaces or commas to seperate. Neither keys nor values should contain spaces. (e.g. Release=X.Y.Z,Workload=Android)</p>''')
+      trim(true)
+    }
+
+    separator {
+      name('ABFS Version Options')
+      sectionHeader('ABFS Version Options')
+      sectionHeaderStyle("${HEADER_STYLE}")
+      separatorStyle("${SEPARATOR_STYLE}")
     }
 
     stringParam {
@@ -163,12 +183,39 @@ git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/
       trim(true)
     }
 
+    separator {
+      name('Gerrit Changeset Options')
+      sectionHeader('Gerrit Changeset Options')
+      sectionHeaderStyle("${HEADER_STYLE}")
+      separatorStyle("${SEPARATOR_STYLE}")
+    }
+
     stringParam {
-      name('AAOS_ARTIFACT_STORAGE_SOLUTION')
-      defaultValue('GCS_BUCKET')
-      description('''<p>Android Artifact Storage:<br/>
-        <ul><li>GCS_BUCKET will store to cloud bucket storage</li>
-        <li>Empty will result in nothing stored</li></ul></p>''')
+      name('AAOS_GERRIT_MANIFEST_URL')
+      defaultValue("https://${HORIZON_DOMAIN}/gerrit/android/platform/manifest")
+      description('''<p>Gerrit manifest URL for patchset.<br>
+        Manifest is required so project can be matched to path within the source tree in order to fetch the change.</p>''')
+      trim(true)
+    }
+
+    stringParam {
+      name('GERRIT_PROJECT')
+      defaultValue('')
+      description('''<p>Optional, define Gerrit Project with open review.</p>''')
+      trim(true)
+    }
+
+    stringParam {
+      name('GERRIT_CHANGE_NUMBER')
+      defaultValue('')
+      description('''<p>Optional, define Gerrit review item change number.</p>''')
+      trim(true)
+    }
+
+    stringParam {
+      name('GERRIT_PATCHSET_NUMBER')
+      defaultValue('')
+      description('''<p>Optional, define Gerrit review item patchset number.</p>''')
       trim(true)
     }
   }

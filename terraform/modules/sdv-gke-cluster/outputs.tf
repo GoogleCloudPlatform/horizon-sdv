@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+output "name" {
+  description = "The name of the GKE cluster."
+  value       = google_container_cluster.sdv_cluster.name
+}
+
+output "location" {
+  description = "The location (region/zone) of the GKE cluster."
+  value       = google_container_cluster.sdv_cluster.location
+}

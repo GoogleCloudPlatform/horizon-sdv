@@ -1,0 +1,185 @@
+// Copyright (c) 2026 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline job deletes the provisioned Mirror resources in your
+// existing GCP project.
+
+// Function to create a json object for the .tfvars.json file (on the fly)
+def buildTfvarsMap(env, params) {
+  return [
+    sdv_aosp_mirror_project_id: "${env.CLOUD_PROJECT}",
+    sdv_aosp_mirror_region: "${env.CLOUD_REGION}",
+    sdv_aosp_mirror_zone: "${env.CLOUD_ZONE}",
+    sdv_aosp_mirror_network_name: "${env.AOSP_MIRROR_PRESET_NETWORK_NAME}",
+    sdv_aosp_mirror_subnetwork_name: "${env.AOSP_MIRROR_PRESET_SUBNETWORK_NAME}"
+  ]
+}
+
+pipeline {
+  // Parameters defined in workloads/android/pipelines/environment/mirror/delete_mirror/groovy/job.groovy
+
+  agent none
+
+  environment {
+    POD_TEMPLATE = "${DELETE_ENTIRE_MIRROR_SETUP == "true" ? kubernetesPodTemplateWithoutMirror : kubernetesPodTemplateWithMirror}"
+    
+    // Pod template for pre-checks stage
+    def kubernetesPodTemplateWithoutMirror = """\
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: jenkins-aosp-mirror-pre-checks-build-pod
+        labels:
+          aosp_mirror_build_pod: "true"
+      spec:
+        hostname: jenkins-aosp-mirror-pre-checks-build-pod
+        serviceAccountName: ${TERRAFORM_WORKLOADS_SERVICE_ACCOUNT}
+        containers:
+        - name: aosp-mirror-delete-mirror-builder-container
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${AOSP_MIRROR_WORKLOADS_ENV_IMAGE_NAME}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          command:
+          - sleep
+          args:
+          - 5h
+          tty: true
+    """.stripIndent()
+
+    // Pod template for main stage
+    def kubernetesPodTemplateWithMirror = """\
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: jenkins-aosp-mirror-delete-mirror-build-pod
+        labels:
+          aosp_mirror_build_pod: "true"
+      spec:
+        # GID (1000) is set at the Pod level
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+        hostname: jenkins-aosp-mirror-delete-mirror-build-pod
+        serviceAccountName: ${TERRAFORM_WORKLOADS_SERVICE_ACCOUNT}
+        containers:
+        - name: aosp-mirror-delete-mirror-builder-container
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${AOSP_MIRROR_WORKLOADS_ENV_IMAGE_NAME}:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          command:
+          - sleep
+          args:
+          - 5h
+          tty: true
+          volumeMounts:
+          - mountPath: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}
+            readOnly: false
+            name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+
+        volumes:
+        - name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+          persistentVolumeClaim:
+            claimName: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+    """.stripIndent()
+
+    // Define the tf backend bucket name from jenkins env var
+    def tfBackendBucket = "${CLOUD_BACKEND_BUCKET}"
+
+    // Define the .tfvars.json file name where Mirror tf directory is located
+    def tfvarsJsonFilePath = "./workloads/android/pipelines/environment/mirror/terraform/delete_mirror.tfvars.json"
+    // this file is populated in stage `Delete Mirror Operation`
+
+    // Path for ops scripts
+    def utilsScriptPath = "./workloads/android/pipelines/environment/mirror/utils/utils.sh"
+    def deleteMirrorScriptPath = "./workloads/android/pipelines/environment/mirror/delete_mirror/delete_mirror.sh"
+    // Mirror root subdirectory path inside container where all mirrors live
+    def mirrorRootSubdirPath = "${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}"
+  }
+
+  stages {
+    stage('Prerequisite Infra Check') {
+      agent { kubernetes { yaml kubernetesPodTemplateWithoutMirror } }
+      steps {
+        script {
+          if(!params.CONFIRM_DELETE) {error("Required Parameter value NOT set to true: CONFIRM_DELETE must be selected in order to proceed for deletion. Aborting...")}
+          if(!params.IMAGE_TAG?.trim()) {error("Required Parameter value NOT provided as input: IMAGE_TAG. An Image Tag for container is needed to use as environment for this job.")}
+
+          if(params.DELETE_ENTIRE_MIRROR_SETUP) {
+            currentBuild.description = "$BUILD_USER" + "<br/>" + "Destroy Entire Setup"
+          } else {
+            currentBuild.description = "$BUILD_USER" + "<br/>" + "Dir to Delete: '${params.MIRROR_DIR_TO_DELETE}'"
+          }
+
+          echo 'Checking prerequisite infra exists...'
+          container(name: 'aosp-mirror-delete-mirror-builder-container') {
+            try {
+              sh """/bin/bash -c '
+                source "${utilsScriptPath}"
+                if check_aosp_mirror_pvc_exists "${env.AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}" "jenkins"; then
+                  echo "[SUCCESS] Prerequisite check passed. PVC ${env.AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME} found in namespace jenkins."
+                else
+                  exit 1
+                fi
+              ' """
+            }
+            catch (err) {
+              currentBuild.result = 'FAILURE'
+              error("${err}\n[ERROR] Prerequisites check failed. PVC '${env.AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}' not found in namespace 'jenkins'.\nPlease run the 'Mirror > Create Mirror Infra' pipeline first.")
+            }
+          }
+        }
+      }
+    }
+
+    stage('Delete Mirror Operation') {
+      agent { kubernetes { yaml "${POD_TEMPLATE}" } }
+      steps {
+        script {
+          if(!params.DELETE_ENTIRE_MIRROR_SETUP && !params.MIRROR_DIR_TO_DELETE?.trim()) {
+            error("Either set DELETE_ENTIRE_MIRROR_SETUP to true or provide a valid MIRROR_DIR_TO_DELETE value to proceed with deletion. Aborting...")
+          }
+
+          echo 'Deleting existing Mirror...'
+          // Convert the tfvars map into valid json object and format it
+          def tfvarsJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(buildTfvarsMap(env, params)))
+          // Write the content to a temporary .tfvars.json file within the tf directory
+          writeFile(file: "${tfvarsJsonFilePath}", text: tfvarsJson)
+          
+          container(name: 'aosp-mirror-delete-mirror-builder-container') {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              sh """
+                chmod +x "${deleteMirrorScriptPath}"
+                "${deleteMirrorScriptPath}" "${mirrorRootSubdirPath}" "${params.MIRROR_DIR_TO_DELETE}" "${params.DELETE_ENTIRE_MIRROR_SETUP}" "${tfBackendBucket}" "${tfvarsJsonFilePath}"
+              """
+              echo '[SUCCESS] Deletion completed successfully.'
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Post-build actions for success or failure
+  post {
+    success {
+      echo "Status: SUCCESS - Mirror deletion job completed."
+    }
+    failure {
+      echo "Status: FAILURE - Mirror deletion job failed."
+    }
+    always {
+      echo "Job finished."
+    }
+  }
+}

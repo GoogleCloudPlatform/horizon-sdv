@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2025-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -67,6 +67,8 @@ RUN curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey \
 # Main container
 FROM us-west1-docker.pkg.dev/cloud-workstations-images/predefined/base
 
+ARG HORIZON_DOMAIN
+
 # Install systemd, GNOME, and VNC.
 
 # Install and configure systemd
@@ -76,8 +78,20 @@ RUN curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey \
     echo "deb [signed-by=/usr/share/keyrings/helm.gpg] \
       https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" \
       > /etc/apt/sources.list.d/helm-stable-debian.list && \
+    # Install Node.js v20 for the official Gemini CLI
+    apt-get update && apt-get install -y ca-certificates curl gnupg && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    NODE_MAJOR=20 && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
+    # Install systemd, pip, nodejs, and then the official Gemini CLI via npm
     apt-get update && apt-get install -y \
-    systemd && \
+      systemd \
+      python3-pip \
+      python3-requests \
+      nodejs && \
+    # The gemini-mcp-setup.py script requires 'requests'
+    npm install -g @google/gemini-cli && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* &&\
     ln -s /dev/null /etc/systemd/system/apache2.service && \
@@ -173,7 +187,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install Android Studio for Platform. Here we are using the canary channel
 # which comes presintalled with Gemini Code Assist.
-ARG ASFP_VERSION=stable
+ARG ASFP_VERSION=canary
 
 # Install Android Studio for Platform
 RUN \
@@ -226,5 +240,9 @@ RUN ln -s /etc/systemd/system/tigervnc.service /etc/systemd/system/multi-user.ta
   if [ $ASFP_VERSION = "canary" ]; then sed -i 's/android-studio-for-platform/android-studio-for-platform-canary/g' /usr/share/applications/jetbrains-studio.desktop; fi && \
   # Provide execute permission to entrypoint script
   chmod +x /google/scripts/entrypoint.sh
+
+# Configure gemini-mcp-setup script
+COPY --chmod=755 ./common-utils/gemini/gemini-mcp-setup.py /usr/local/bin/gemini-mcp-setup
+RUN sed -i 's/^\(HORIZON_DOMAIN = os.environ.get("HORIZON_DOMAIN", "\)##DOMAIN##\(")\)/\1'"${HORIZON_DOMAIN}"'\2/' /usr/local/bin/gemini-mcp-setup
 
 ENTRYPOINT ["/google/scripts/entrypoint.sh"]

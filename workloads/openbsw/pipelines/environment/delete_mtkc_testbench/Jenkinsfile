@@ -62,6 +62,7 @@ pipeline {
               MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
               MTK_CONNECT_PASSWORD=${MTK_CONNECT_PASSWORD} \
               MTK_CONNECT_TESTBENCH=${MTK_CONNECT_TESTBENCH} \
+              MTK_CONNECT_DEVICE_PREFIX="BSW" \
               MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES=true \
               MTK_CONNECT_CONTAINER_ONLY="true" \
               timeout 15m ./mtk_connect.sh --delete

@@ -43,6 +43,7 @@
 #  - GERRIT_PROJECT: the name of the project to download.
 #  - GERRIT_CHANGE_NUMBER: the change number of the changeset to download.
 #  - GERRIT_PATCHSET_NUMBER: the patchset number of the changeset to download.
+#  - GERRIT_TOPIC: the topic identifying the changes to fetch.
 #
 # Example usage:
 # AAOS_GERRIT_MANIFEST_URL=https://dev.horizon-sdv.scpmtk.com/android/platform/manifest \
@@ -65,13 +66,24 @@ source "$(dirname "${BASH_SOURCE[0]}")"/aaos_environment.sh "$0"
 
 # Initialise the repository
 function initialise_repo() {
+    local LOCAL_MIRROR_REFERENCE=""
+    if [[ "${USE_LOCAL_AOSP_MIRROR}" == "true" ]]; then
+        if [[ -d "${MIRROR_DIR_FULL_PATH}/.repo" ]]; then
+            LOCAL_MIRROR_REFERENCE="--reference ${MIRROR_DIR_FULL_PATH}"
+            echo "Using AOSP mirror: '${MIRROR_DIR_FULL_PATH}'."
+        else
+            echo -e "\033[1;31mERROR: AOSP mirror not found at path: '${MIRROR_DIR_FULL_PATH}', ensure AOSP Mirror has been setup..\033[0m"
+            exit 1
+        fi
+    fi
     # Retry 4 times, on 3rd fail, clean workspace and retry once more.
     MAX_RETRIES=4
     for ((i=1; i<="${MAX_RETRIES}"; i++)); do
         # Initialise repo checkout.
-        if ! repo init -u "${AAOS_GERRIT_MANIFEST_URL}" -b "${AAOS_REVISION}" --depth=1
+        # shellcheck disable=SC2086
+        if ! repo init -u "${AAOS_GERRIT_MANIFEST_URL}" -b "${AAOS_REVISION}" --depth=1 ${LOCAL_MIRROR_REFERENCE}
         then
-            echo "ERROR: repo init failed, exit!"
+            echo -e "\033[1;31mERROR: repo init failed, exit!\033[0m"
             exit 1
         fi
 
@@ -79,29 +91,33 @@ function initialise_repo() {
             echo "${command}"
             if ! eval "${command}"
             then
-                echo "ERROR: command ${command} failed, exit!"
+                echo -e "\033[1;31mERROR: command ${command} failed, exit!\033[0m"
                 exit 1
             fi
         done
 
+        local repo_sync_jobs="${REPO_SYNC_JOBS_ARG}"
         # This will automatically clean any previous staged/fetched/downloaded changes.
-        if ! repo sync --no-tags --optimized-fetch --prune --retry-fetches=3 --auto-gc --no-clone-bundle --fail-fast --force-sync "${REPO_SYNC_JOBS_ARG}"
+        if ! repo sync --no-tags --optimized-fetch --prune --retry-fetches=3 --auto-gc --no-clone-bundle --fail-fast --force-sync "${repo_sync_jobs}"
         then
-            echo "WARNING: repo sync failed, sleep 60s and retrying..."
+            # reduce parallel jobs to a reasonable level because mirror failures with high job
+            # value result in Google remote repo failures (HTTP 429 errors - rate limits).
+            repo_sync_jobs="-j3"
+            echo "WARNING: repo sync failed, sleep 60s and retrying with $repo_sync_jobs..."
             sleep 60
             if [ "$i" -eq 3 ]; then
                 echo "WARNING: clean workspace and retry."
                 recreate_workspace
             fi
             if [ "$i" -eq 4 ]; then
-                echo "ERROR: repo sync retry failed, giving up."
+                echo -e "\033[1;31mERROR: repo sync retry failed, giving up.\033[0m"
                 exit 1
             fi
         else
             # Remove any unstaged changes others may have left in place on PV.
             if ! repo forall -c 'git checkout -- .; git clean -fdx'
             then
-                echo "ERROR: git clean failed, giving up."
+                echo -e "\033[1;31mERROR: git clean failed, giving up.\033[0m"
                 exit 1
             fi
             break
@@ -111,9 +127,57 @@ function initialise_repo() {
     echo "SUCCESS: repo sync complete."
 }
 
+# Fetch and apply all changes based on GERRIT_TOPIC
+function fetch_from_topic() {
+    echo "Fetching ${GERRIT_TOPIC}"
+
+    local createChangesFile=1
+    if [ -f "${GERRIT_CHANGES_FILE}" ]; then
+        echo "${GERRIT_CHANGES_FILE} exists, so do not replace."
+        createChangesFile=0
+    fi
+
+    while IFS=$'\t' read -r project url ref rev; do
+        echo "Fetch Project: ${project}"
+        echo "Fetch HTTP URL    : $url"
+        echo "Fetch HTTP Ref    : $ref"
+        echo "Current Revision  | $rev"
+
+        # Derive project path from manifest
+        PROJECT_PATH=$(grep "name=\"${project}\"" .repo/manifests/default.xml | sed -r 's/.*path="([^"]+)".*/\1/')
+        # Create the command to apply the patchset from topic.
+        REPO_CMD="cd ${PROJECT_PATH} && git fetch ${url} ${ref} && git cherry-pick FETCH_HEAD && cd -"
+        echo "Running: ${REPO_CMD}"
+        if ! eval "${REPO_CMD}"
+        then
+            echo -e "\033[1;31mERROR: git fetch failed, exit!\033[0m"
+            # Clean up so pv is not left in limbo (and thus removed)
+            git cherry-pick --abort || true  && git reset --hard HEAD || true
+            exit 1
+        else
+            if (( createChangesFile == 1 )); then
+                echo "$rev" | tee -a  "${GERRIT_CHANGES_FILE}"
+            fi
+        fi
+    done < <(curl -sS -u "${GERRIT_USERNAME}:${GERRIT_PASSWORD}" \
+        "${GERRIT_SERVER_URL}/a/changes/?q=topic:${GERRIT_TOPIC}+status:open&o=CURRENT_REVISION" \
+        | sed '1d' | jq -r ' .[] |
+            .project as $project |
+            (if .current_revision != null
+             then .revisions[.current_revision].fetch.http?
+             else (.revisions | to_entries | first.value.fetch.http?)
+             end) as $http |
+                 [$project, ($http.url // ""), ($http.ref // ""), .current_revision] | @tsv')
+    echo "Changes ->"
+    cat "${GERRIT_CHANGES_FILE}"
+    echo "<-"
+}
+
 # Pull in change set from Gerrit.
 function fetch_patchset() {
-    if [[ -n "${GERRIT_PROJECT}" && -n "${GERRIT_CHANGE_NUMBER}" && -n "${GERRIT_PATCHSET_NUMBER}" ]]; then
+    if [[ -n "${GERRIT_TOPIC}" ]]; then
+        fetch_from_topic
+    elif [[ -n "${GERRIT_PROJECT}" && -n "${GERRIT_CHANGE_NUMBER}" && -n "${GERRIT_PATCHSET_NUMBER}" ]]; then
         if [[ "${ABFS_BUILDER}" == "false" ]]; then
             # Use standard git fetch to retrieve the change.
             # Find the project name from the manifest.
@@ -133,7 +197,7 @@ function fetch_patchset() {
             # FIXME: will use clone in future but for now this is just convenience for commonality.
             if ! repo init -u "${AAOS_GERRIT_MANIFEST_URL}" -b "${AAOS_REVISION}" --depth=1
             then
-                echo "ERROR: repo init failed, exit!"
+                echo -e "\033[1;31mERROR: repo init failed, exit!\033[0m"
                 exit 1
             fi
 
@@ -168,8 +232,14 @@ function fetch_patchset() {
         echo "Running: ${REPO_CMD}"
         if ! eval "${REPO_CMD}"
         then
-            echo "ERROR: git fetch failed, exit!"
+            echo -e "\033[1;31mERROR: git fetch failed, exit!\033[0m"
             exit 1
+        fi
+
+        if [ -f "${GERRIT_CHANGES_FILE}" ]; then
+            echo "${GERRIT_CHANGES_FILE} exists, so do not replace."
+        else
+            echo "$GERRIT_CHANGE_ID" | tee -a  "${GERRIT_CHANGES_FILE}"
         fi
     fi
 }
@@ -185,8 +255,6 @@ EOL
 
     sudo mv systemctl /usr/bin
     sudo chmod +x /usr/bin/systemctl
-    sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
-    sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 }
 
 # ABFS: install aptitude binaries for abfs
@@ -215,7 +283,7 @@ function abfs_install() {
     grep -e "pool/${ABFS_CLIENT_FILE}" -e "pool/${ABFS_CASFS_FILE}" "${abfs_artifacts}" | awk '{print $1}' | while read -r a; do gcloud artifacts files download --project=abfs-binaries --location=us --repository="${ABFS_REPOSITORY}" --destination=. "${a}"; done
     for f in "${ABFS_FILES[@]}"; do
         if ! ls ./*"${f}"* 1> /dev/null 2>&1; then
-            echo "ERROR: $f does not exist. Review ${abfs_artifacts} for supported versions."
+            echo -e "\033[1;31mERROR: $f does not exist. Review ${abfs_artifacts} for supported versions.\033[0m"
             exit 1
         fi
     done
@@ -236,7 +304,7 @@ function abfs_initialise() {
     # shellcheck disable=SC2086
     if ! abfs ${ABFS_CMD_FLAGS} init -c
     then
-        echo "ERROR: failed on abfs init"
+        echo -e "\033[1;31mERROR: failed on abfs init\033[0m"
         exit 1
     fi
     # shellcheck disable=SC2086
@@ -248,14 +316,14 @@ function abfs_initialise() {
     # shellcheck disable=SC2086
     if ! abfs ${ABFS_CMD_FLAGS} mount -b "${AAOS_REVISION}" "${WORKSPACE}"
     then
-        echo "ERROR: failed on abfs mount"
+        echo -e "\033[1;31mERROR: failed on abfs mount\033[0m"
         exit 1
     fi
     cd "${WORKSPACE}" || exit 1
     # shellcheck disable=SC2086
     if ! abfs ${ABFS_CMD_FLAGS} setup .
     then
-        echo "ERROR: failed on abfs setup"
+        echo -e "\033[1;31mERROR: failed on abfs setup\033[0m"
         exit 1
     fi
 }
@@ -266,20 +334,19 @@ function post_repo_commands() {
         echo "${command}"
         if ! eval "${command}"
         then
-            echo "ERROR: command ${command} failed, exit!"
+            echo -e "\033[1;31mERROR: command ${command} failed, exit!"
             exit 1
         fi
     done
 }
 
+fake_systemd
 if [[ "${ABFS_BUILDER}" == "false" ]]; then
     initialise_repo
-    fetch_patchset
 else
-    fake_systemd
     abfs_install
     abfs_initialise
-    fetch_patchset
 fi
+fetch_patchset
 post_repo_commands
 exit 0

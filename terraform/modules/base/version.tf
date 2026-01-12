@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,16 +17,44 @@
 # necessary providers.
 
 terraform {
-  required_version = ">= 1.9.6"
+  required_version = ">= 1.14.2"
 
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "6.20.0"
+      version = "7.12.0"
     }
     google-beta = {
       source  = "hashicorp/google-beta"
-      version = "6.20.0"
+      version = "7.12.0"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 3.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.0"
+    }
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "3.6.2"
+    }
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = "~> 1.14"
+    }
+    tls = {
+      source  = "hashicorp/tls",
+      version = ">= 4.0.0"
+    }
+    local = {
+      source  = "hashicorp/local",
+      version = ">= 2.4.0"
+    }
+    external = {
+      source  = "hashicorp/external",
+      version = ">= 2.3.0"
     }
   }
 }

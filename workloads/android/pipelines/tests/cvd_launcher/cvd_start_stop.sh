@@ -35,12 +35,13 @@ source "$(dirname "${BASH_SOURCE[0]}")"/cvd_environment.sh "$0"
 declare BOOTED_INSTANCES=0
 
 # CVD log file.
-declare -r logfile="${WORKSPACE}"/cvd-"${BUILD_NUMBER}".log
+declare -r logfile="${HOME}"/cvd-"${BUILD_NUMBER}".log
 # WiFi device status
 declare -r wifilogfile="${WORKSPACE}"/wifi_connection_status.log
 
 # Download CVD host package and Cuttlefish AVD artifacts
 function cuttlefish_extract_artifacts() {
+    sudo rm -rf "${HOME}"/cf
     mkdir -p "${HOME}"/cf
     cd "${HOME}"/cf || exit
 
@@ -212,8 +213,10 @@ function cuttlefish_stop() {
 
 # Archive logs
 function cuttlefish_archive_logs() {
-    cd "${HOME}"/cf/cuttlefish_runtime.1/ || true
-    tar -czf "${WORKSPACE}"/cuttlefish_logs-"${BUILD_NUMBER}".tgz logs || true
+    cp -f "${logfile}" "${WORKSPACE}"
+    cd "${HOME}"/cf/cuttlefish/instances/ || true
+    zip -r "${WORKSPACE}"/cuttlefish_logs-"${BUILD_NUMBER}".zip cvd*/logs/ || true
+    cd - || true
 }
 
 case "${1}" in

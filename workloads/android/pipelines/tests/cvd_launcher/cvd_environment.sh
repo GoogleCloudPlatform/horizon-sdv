@@ -33,8 +33,13 @@ WIFI_APK_NAME="WifiUtil.apk"
 
 JOB_NAME=${JOB_NAME:-AAOS_CVD}
 
-# Architecture x86_64 is only supported at this time.
-ARCHITECTURE=${ARCHITECTURE:-x86_64}
+# Derive architecture from instance.
+ARCHITECTURE=$(uname -m)
+case "${ARCHITECTURE}" in
+  x86_64)  ARCHITECTURE="x86_64" ;;
+  aarch64) ARCHITECTURE="arm64" ;;
+  *)       echo "Error: ${ARCHITECTURE} is not supported!"; exit 1 ;;
+esac
 
 # Download URL for artifacts.
 CUTTLEFISH_DOWNLOAD_URL=$(echo "${CUTTLEFISH_DOWNLOAD_URL}" | xargs)
@@ -44,11 +49,11 @@ CUTTLEFISH_DOWNLOAD_URL=${CUTTLEFISH_DOWNLOAD_URL%/}
 
 # Specific Cuttlefish Virtual Device and CTS variables.
 NUM_INSTANCES=$(echo "${NUM_INSTANCES}" | xargs)
-NUM_INSTANCES=${NUM_INSTANCES:-8}
+NUM_INSTANCES=${NUM_INSTANCES:-10}
 VM_CPUS=$(echo "${VM_CPUS}" | xargs)
-VM_CPUS=${VM_CPUS:-8}
+VM_CPUS=${VM_CPUS:-3}
 VM_MEMORY_MB=$(echo "${VM_MEMORY_MB}" | xargs)
-VM_MEMORY_MB=${VM_MEMORY_MB:-16384}
+VM_MEMORY_MB=${VM_MEMORY_MB:-8192}
 
 # Resolutions
 CVD_ADDITIONAL_FLAGS=${CVD_ADDITIONAL_FLAGS:-}

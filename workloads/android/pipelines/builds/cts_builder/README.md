@@ -1,1 +1,0 @@
-../../../../../docs/workloads/android/builds/cts_builder.md

@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,41 @@
 #
 # Description:
 # Configuration file containing variables for the "base" module.
+
+variable "github_auth_method" {
+  description = "Authentication method for Argo CD: 'app' or 'pat'."
+  type        = string
+}
+
+variable "github_repo_owner" {
+  description = "Define the GitHub repository name"
+  type        = string
+}
+
+variable "github_repo_name" {
+  description = "Define the GitHub repository name"
+  type        = string
+}
+
+variable "github_repo_branch" {
+  description = "Github repo branch"
+  type        = string
+}
+
+variable "github_env_name" {
+  description = "Define the GitHub environment name"
+  type        = string
+}
+
+variable "github_domain_name" {
+  description = "Define the GitHub domain name"
+  type        = string
+}
+
+variable "gcp_backend_bucket_name" {
+  description = "Define the GCP backend bucket name"
+  type        = string
+}
 
 variable "sdv_project" {
   description = "Define the GCP project id"
@@ -45,7 +80,7 @@ variable "sdv_zone" {
   type        = string
 }
 
-variable "sdv_computer_sa" {
+variable "sdv_gcp_compute_sa_email" {
   description = "The Computer SA"
   type        = string
 }
@@ -75,21 +110,6 @@ variable "sdv_cluster_node_pool_count" {
 variable "sdv_cluster_node_locations" {
   description = "Define node locations/zones"
   type        = list(string)
-}
-
-variable "sdv_bastion_host_name" {
-  description = "Name of the bastion host server"
-  type        = string
-}
-
-variable "sdv_bastion_host_members" {
-  description = "List of members allowed to access the bastion server"
-  type        = list(string)
-}
-
-variable "sdv_bastion_host_sa" {
-  description = "SA used by the bastion host and allow IAP to the host"
-  type        = string
 }
 
 variable "sdv_network_egress_router_name" {
@@ -255,28 +275,47 @@ variable "sdv_gcp_secrets_map" {
   }))
 }
 
-variable "sdv_bastion_host_bash_command" {
-  description = "Define the commands to run on the bastion host"
-  type        = string
-}
-
 variable "sdv_list_of_apis" {
   description = "List of APIs for the project"
   type        = set(string)
 }
 
-# variable "sdv_bastion_host_files_to_copy" {
-#   description = "List fo file that should be copied to the bastion host"
-#   type        = list(string)
-# }
-
-# variable "sdv_bastion_host_destination_dir" {
-#   description = "Destination dir on the bastion host"
-#   type        = string
-# }
-
-variable "sdv_gh_abfs_license_b64" {
+variable "sdv_abfs_license_key_b64" {
   description = "ABFS license base64"
   type        = string
 }
 
+# Define Parameters map
+variable "sdv_gcp_parameters_map" {
+  description = "Map of parameters for Parameter Manager"
+  type        = any
+}
+
+variable "enable_arm64" {
+  description = "Enable or disable ARM64 networking resources"
+  type        = bool
+}
+
+variable "arm64_region" {
+  description = "ARM64 region (example: us-central1)"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "arm64_subnetwork" {
+  description = "ARM64 subnet name"
+  type        = string
+  default     = "sdv-subnet-us"
+}
+
+variable "arm64_pods_range" {
+  description = "ARM64 pod CIDR"
+  type        = string
+  default     = "10.20.0.0/16"
+}
+
+variable "arm64_services_range" {
+  description = "ARM64 service CIDR"
+  type        = string
+  default     = "10.22.0.0/16"
+}

@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+// Copyright (c) 2025-2026 Accenture, All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,59 +15,88 @@
 // Description:
 // This pipeline builds a preset `code-oss` Docker image for use in GCP Cloud Workstations config
 // The official predefined image from google is used as base: `us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss:latest`
-// Pipeline uses Kaniko to avoid docker in docker privilege issues.
+// Pipeline uses BuildKit to avoid docker in docker privilege issues.
 //
 // References:
-//   * https://github.com/GoogleContainerTools/kaniko
+//   * https://github.com/moby/buildkit
+//   * Image: https://hub.docker.com/r/moby/buildkit
+//     e.g. image: moby/buildkit:v0.24.0
 
 pipeline {
   // Parameters defined in workloads/cloud-workstations/pipelines/workstation-images/horizon-code-oss/groovy/job.groovy
 
-  agent {
-    kubernetes {
-      yaml """\
-        apiVersion: v1
-        kind: Pod
-        spec:
-          hostname: jenkins-cloud-ws-image-build-pod
-          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
-          containers:
-          - name: kaniko
-            image: gcr.io/kaniko-project/executor:debug
-            imagePullPolicy: IfNotPresent
-            command:
-            - /busybox/cat
-            tty: true
-      """.stripIndent()
-    }
-  }
-
-  // Block concurrent builds to avoid clashing.
-  options {
-    buildBlocker (useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Cloud-Workstations/.*/Workstation-Images/.*Docker.*')
-  }
+  agent none
 
   environment {
     // Update latest tag.
-    DESTINATION="--destination=${env.CLOUD_REGION}-docker.pkg.dev/${env.CLOUD_PROJECT}/${env.CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME}"
-    KANIKO_OPTIONS="${NO_PUSH == "true" ? "--no-push" : "${DESTINATION}:${IMAGE_TAG}"}"
+    REGISTRY="${env.CLOUD_REGION}-docker.pkg.dev"
+    DESTINATION="${REGISTRY}/${env.CLOUD_PROJECT}/${env.CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME}"
+    PUSH="${NO_PUSH == "true" ? "false" : "true"}"
+    HORIZON_DOMAIN="${env.HORIZON_DOMAIN}"
+
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      spec:
+        hostname: jenkins-cloud-ws-image-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: buildkit
+          image: moby/buildkit:${BUILDKIT_RELEASE_TAG}
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              memory: 8Gi
+            requests:
+              memory: 8Gi
+      """.stripIndent()
   }
 
   stages {
-    stage ('Create Docker Image'){
-      when { expression { env.IMAGE_TAG } }
-      steps {
-        container(name: 'kaniko') {
-          script {
-            currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+    stage ('Start instance'){
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+      stages {
+        stage ('Docker Credentials'){
+          steps {
+            script {
+              currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+            }
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  wget -nv -O docker-credential-gcr.tgz ${DOCKER_CREDENTIALS_URL}
+                  tar -zxf docker-credential-gcr.tgz
+                  chmod +x docker-credential-gcr && mv docker-credential-gcr /usr/bin/
+                  rm -f docker-credential-gcr*.tar.gz
+                  docker-credential-gcr configure-docker --registries=${REGISTRY}
+                '''
+              }
+            }
           }
-          sh '''
-            # Build the docker image and push to Artifact registry using service account configured with
-            # correct roles/permissions.
-            /kaniko/executor -f workloads/cloud-workstations/pipelines/workstation-images/horizon-code-oss/Dockerfile \
-              -c workloads/cloud-workstations/pipelines/workstation-images/horizon-code-oss --skip-tls-verify-pull \
-              --insecure --skip-tls-verify "${KANIKO_OPTIONS}"
-          '''
+        }
+
+        stage ('Build Docker Image'){
+          when { expression { env.IMAGE_TAG } }
+          steps {
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  cd "${WORKSPACE}/workloads/cloud-workstations/pipelines/workstation-images/horizon-code-oss/";
+                  cp -r "${WORKSPACE}/workloads/cloud-workstations/pipelines/workstation-images/common-utils/" ./common-utils/;
+                  buildctl build \
+                   --frontend=dockerfile.v0 \
+                   --local=dockerfile=. \
+                   --local context=. \
+                   --opt platform=linux/amd64 \
+                   --opt build-arg:HORIZON_DOMAIN=${HORIZON_DOMAIN} \
+                   --registry-auth-tlscontext host=${REGISTRY},insecure=true \
+                   --output=type=image,name=${DESTINATION}:${IMAGE_TAG},push=${PUSH}
+                '''
+              }
+            }
+          }
         }
       }
     }

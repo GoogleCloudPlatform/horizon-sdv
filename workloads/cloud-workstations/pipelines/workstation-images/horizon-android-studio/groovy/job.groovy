@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Accenture, All Rights Reserved.
+// Copyright (c) 2025-2026 Accenture, All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ pipelineJob('Cloud-Workstations/Workstation-Images/Horizon Android Studio') {
     <br/><h3 style="margin-bottom: 10px;">Workstation Image Builder</h3>
     <p>This job builds the container image for the Android Studio IDE for use in Cloud Workstations.</p>
     <h4 style="margin-bottom: 10px;">Image Configuration</h4>
-    <p>The Dockerfile uses a minimal Google Cloud Workstation base image and installs essential packages and tools including Android Command Line Tools and SDKs, GNOME desktop environment (with terminal), noVNC and TigerVNC for browser-based remote desktop access, the standard Android emulator, Google Chrome browser, and all necessary system services for a complete cloud development experience.</p>
+    <p>The Dockerfile uses a minimal Google Cloud Workstation base image and installs essential packages and tools including Android Command Line Tools and SDKs, GNOME desktop environment (with terminal), noVNC and TigerVNC for browser-based remote desktop access, the standard Android emulator, Google Chrome browser, Gemini-CLI and all necessary system services for a complete cloud development experience.</p>
     <h4 style="margin-bottom: 10px;">Pushing Changes to the Registry</h4>
     <p>To push changes to the registry, set the parameter <code>NO_PUSH=false</code>.</p>
     <p>The image will be pushed to <code>${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME}</code></p>
@@ -32,7 +32,7 @@ pipelineJob('Cloud-Workstations/Workstation-Images/Horizon Android Studio') {
     stringParam {
       name('IMAGE_TAG')
       defaultValue('latest')
-      description('''<p>Image tag for the Workstation image.</p>''')
+      description('''<p><b>Mandatory:</b> Image tag for the Workstation image.</p>''')
       trim(true)
     }
     booleanParam {
@@ -40,6 +40,32 @@ pipelineJob('Cloud-Workstations/Workstation-Images/Horizon Android Studio') {
       defaultValue(true)
       description('''<p>Build only, do not push to registry.</p>''')
     }
+    separator {
+      name('Common Parameters: Buildkit')
+      sectionHeader('Common Parameters: Buildkit')
+      sectionHeaderStyle("${HEADER_STYLE}")
+      separatorStyle("${SEPARATOR_STYLE}")
+    }
+    stringParam {
+      name('BUILDKIT_RELEASE_TAG')
+      defaultValue("${BUILDKIT_RELEASE_TAG}")
+      description('''<p>BuildKit tag, see <a target="_blank"  href=https://hub.docker.com/r/moby/buildkit>buildkit releases</a>.</p>''')
+      trim(true)
+    }
+    stringParam {
+      name('DOCKER_CREDENTIALS_URL')
+      defaultValue("${DOCKER_CREDENTIALS_URL}")
+      description('''<p>Docker credentials helper URL, e.g. <a target="_blank" href=https://cloud.google.com/artifact-registry/docs/docker/authentication#standalone-helper>credentials helper</a>.</p>''')
+      trim(true)
+    }
+  }
+
+  // Block build if certain jobs are running.
+  blockOn('Cloud*.*Workstation*.*Images.*') {
+    // Possible values are 'GLOBAL' and 'NODE' (default).
+    blockLevel('GLOBAL')
+    // Possible values are 'ALL', 'BUILDABLE' and 'DISABLED' (default).
+    scanQueueFor('BUILDABLE')
   }
 
   logRotator {

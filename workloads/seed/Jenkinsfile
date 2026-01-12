@@ -44,15 +44,43 @@ pipeline {
 
   parameters {
     choice(name: 'SEED_WORKLOAD',
-           choices: ['none', 'all', 'android', 'openbsw', 'cloud-workstations'],
+           choices: ['none', 'all', 'android', 'openbsw', 'utilities', 'cloud-workstations'],
            description: '''<p>Workload to seed:</p>
              <ul>
              <li>none: seed nothing, derisk triggering by accident.</li>
              <li>all: seed all workloads.</li>
              <li>android: seed the Android workload.</li>
              <li>openbsw: seed the OpenBSW workload.</li>
+             <li>utilities: seed the Utilities jobs.</li>
              <li>cloud-workstations: seed the Cloud Workstations workload.</li>
            </ul>''')
+
+    separator(
+      name: "Common: Docker templates",
+      sectionHeader: "Common Parameters: Docker Templates",
+      separatorStyle: "${SEPARATOR_STYLE}",
+      sectionHeaderStyle: "${HEADER_STYLE}"
+    )
+
+    string(name: 'BUILDKIT_RELEASE_TAG',
+           defaultValue: 'v0.24.0',
+           description: '''<p>BuildKit tag, see <a target="_blank"  href=https://hub.docker.com/r/moby/buildkit>buildkit releases</a>.</p>''',
+           trim: true)
+
+    string(name: 'DOCKER_CREDENTIALS_URL',
+           defaultValue: 'https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v2.1.29/docker-credential-gcr_linux_amd64-2.1.29.tar.gz',
+           description: '''<p>Docker credentials helper URL, e.g. <a target="_blank" href=https://cloud.google.com/artifact-registry/docs/docker/authentication#standalone-helper>credentials helper</a>.</p>''',
+           trim: true)
+
+    string(name: 'GCLOUD_CLI_VERSION',
+           defaultValue: '545.0.0-0',
+           description: '''<p>Version of <a target="_blank" https://docs.cloud.google.com/sdk/docs/release-notes>Google Cloud CLI</a>.<br/>Note: Define <code>latest</code> if wishing to use the latest available version.</p>''',
+           trim: true)
+
+    string(name: 'KUBECTL_VERSION',
+           defaultValue: '1:545.0.0-0',
+           description: '''<p>Version of <code>kubectl</code>. Typically based on <a target="_blank" https://docs.cloud.google.com/sdk/docs/release-notes>Google Cloud CLI</a><br/>Note: Define <code>latest</code> if wishing to use the latest available version.</p>''',
+           trim: true)
 
     separator(
       name: "Android Workload",
@@ -63,16 +91,39 @@ pipeline {
 
     string(name: 'REPO_SYNC_JOBS',
            defaultValue: '3',
-           description: '''<p>Number of parallel sync jobs for <i>repo sync</i>.</p>''',
+           description: '''<p>Number of parallel sync jobs for <i>repo sync</i>.<br>
+             <b>Note:</b> to avoid sync errors, consider the value carefully, e.g.<br/>
+             <ul><li>3 is recommended for Google open source gerrit, together with syncing AOSP Mirror.</li>
+                 <li>14 is maximum recommended when using an AOSP Mirror for building.</li></ul></p>''',
            trim: true)
 
     string(name: 'CUTTLEFISH_GCE_CLOUD_LABEL',
-           defaultValue: 'cuttlefish-vm-main',
+           defaultValue: 'cuttlefish-vm-v1350',
            description: '''<p>The Jenkins GCE Clouds label for jobs dependent on the Cuttlefish instance template, e.g.<br/></p>
                         <ul>
+                          <li>cuttlefish-vm-v1350</li>
                           <li>cuttlefish-vm-main</li>
-                          <li>cuttlefish-vm-v1180</li>
                         </ul>''',
+           trim: true)
+
+    separator(
+      name: "AOSP Mirror Parameters",
+      sectionHeader: "AOSP Mirror Parameters",
+      separatorStyle: "${SEPARATOR_STYLE}",
+      sectionHeaderStyle: "${HEADER_STYLE}"
+    )
+
+    booleanParam(name: 'USE_LOCAL_AOSP_MIRROR',
+                 defaultValue: false,
+                 description: '''<p>If checked, the build will use the AOSP Mirror setup in your GCP project to fetch Android source code during <i>repo sync</i>.<br/>
+                   <b>Note:</b> The AOSP Mirror must be setup prior to running this job. If not setup, the job will fail.<br>
+                 The setup jobs are in folder <i>Android Workflows > Environment > Mirror</i>.<br/><br/></p>''')
+
+    string(name: 'AOSP_MIRROR_DIR_NAME',
+           defaultValue: '',
+           description: '''<p>The directory name on the Filestore volume where the Mirror is located.<br/>
+             <b>Note:</b> This is required if <code>USE_LOCAL_AOSP_MIRROR</code> is checked.</p>
+             <b>Example:</b> If you provided '<i><code>my-mirror</code></i>' when creating the mirror, provide the same value here.<br/><br/></p>''',
            trim: true)
 
     separator(
@@ -88,8 +139,13 @@ pipeline {
            trim: true)
 
     string(name: 'ABFS_CASFS_VERSION',
-           defaultValue: "0.0.33-19-gd8f7000",
-           description: '''<p>ABFS CASFS version may differ from ABFS_VERSION, e.g. 0.0.33-10-g654e659</p>''',
+           defaultValue: "0.0.33-30-g64ff253",
+           description: '''<p>ABFS CASFS version may differ from ABFS_VERSION, e.g. 0.0.33-30-g64ff253</p>''',
+           trim: true)
+
+    string(name: 'ABFS_COS_IMAGE_REF',
+           defaultValue: "projects/cos-cloud/global/images/family/cos-113-lts",
+           description: '''<p>ABFS Containerized OS images used on server and uploader instances.</p>''',
            trim: true)
 
     string(name: 'ABFS_REPOSITORY',
@@ -115,6 +171,16 @@ pipeline {
              <p>Note: tag may only contain 'abcdefghijklmnopqrstuvwxyz0123456789_-./'</p>''',
            trim: true)
 
+    string(name: 'OPENBSW_GIT_URL',
+           defaultValue: 'https://github.com/eclipse-openbsw/openbsw.git',
+           description: '''<p>OpenBSW Git URL.</p>''',
+           trim: true)
+
+    string(name: 'OPENBSW_GIT_BRANCH',
+           defaultValue: 'main',
+           description: '''<p>OpenBSW revision tag/branch name.</p>''',
+           trim: true)
+
     separator(
       name: "Common Parameters",
       sectionHeader: "Common Parameters",
@@ -123,9 +189,10 @@ pipeline {
     )
 
     string(name: 'NODEJS_VERSION',
-           defaultValue: "20.9.0",
+           defaultValue: "25.2.1",
            description: '''<p>NodeJS version.<br/>
-             This is installed using <i>nvm</i> on the instance template to be compatible with other tooling.</p>''',
+             This is installed using <i>nvm</i> on the instance template to be compatible with other tooling.<br/><br>
+             <b>Reference:</b> <a href="https://nodejs.org/en/about/previous-releases" target="_blank<NodeJS Releases</a></p>''',
            trim: true)
   }
 
@@ -152,11 +219,24 @@ pipeline {
                   ['${REPO_SYNC_JOBS}', "${REPO_SYNC_JOBS}"],
                   ['${ABFS_VERSION}', "${ABFS_VERSION}" ],
                   ['${ABFS_CASFS_VERSION}', "${ABFS_CASFS_VERSION}" ],
+                  ['${ABFS_COS_IMAGE_REF}', "${ABFS_COS_IMAGE_REF}" ],
                   ['${ABFS_REPOSITORY}', "${ABFS_REPOSITORY}" ],
                   ['${ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}', "${ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}"],
+                  ['${GCLOUD_CLI_VERSION}', "${GCLOUD_CLI_VERSION}"],
+                  ['${KUBECTL_VERSION}', "${KUBECTL_VERSION}"],
                   ['${UPLOADER_MANIFEST_SERVER}', "${UPLOADER_MANIFEST_SERVER}"],
                   ['${JENKINS_GCE_CLOUD_LABEL}', "${CUTTLEFISH_GCE_CLOUD_LABEL}" ],
-                  ['${NODEJS_VERSION}', "${NODEJS_VERSION}"]
+                  ['${NODEJS_VERSION}', "${NODEJS_VERSION}"],
+                  ['${BUILDKIT_RELEASE_TAG}', "${BUILDKIT_RELEASE_TAG}"],
+                  ['${DOCKER_CREDENTIALS_URL}', "${DOCKER_CREDENTIALS_URL}"],
+                  ['${USE_LOCAL_AOSP_MIRROR}', "${USE_LOCAL_AOSP_MIRROR}"],
+                  ['${AOSP_MIRROR_DIR_NAME}', "${AOSP_MIRROR_DIR_NAME}"],
+                  ['${AOSP_MIRROR_WORKLOADS_ENV_IMAGE_NAME}', "${AOSP_MIRROR_WORKLOADS_ENV_IMAGE_NAME}"],
+                  ['${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}', "${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}"],
+                  ['${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}', "${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}"],
+                  ['${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}', "${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}"],
+                  ['${AOSP_MIRROR_PRESET_NETWORK_NAME}', "${AOSP_MIRROR_PRESET_NETWORK_NAME}"],
+                  ['${AOSP_MIRROR_PRESET_SUBNETWORK_NAME}', "${AOSP_MIRROR_PRESET_SUBNETWORK_NAME}"]
                  ]
 
                 def files = sh(returnStdout: true, script: "find workloads/android -name '*.groovy'").trim().split('\n')
@@ -206,10 +286,16 @@ pipeline {
                 currentBuild.description = "$BUILD_USER" + "<br>" + "${SEED_WORKLOAD}"
 
                 replacements += [
+                  ['${GCLOUD_CLI_VERSION}', "${GCLOUD_CLI_VERSION}"],
+                  ['${KUBECTL_VERSION}', "${KUBECTL_VERSION}"],
                   ['${OPENBSW_BUILD_BUCKET_ROOT_NAME}', "${OPENBSW_BUILD_BUCKET_ROOT_NAME}"],
                   ['${OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}', "${OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}"],
                   ['${OPENBSW_IMAGE_TAG}', "${OPENBSW_IMAGE_TAG}"],
-                  ['${NODEJS_VERSION}', "${NODEJS_VERSION}"]
+                  ['${OPENBSW_GIT_URL}', "${OPENBSW_GIT_URL}"],
+                  ['${OPENBSW_GIT_BRANCH}', "${OPENBSW_GIT_BRANCH}"],
+                  ['${NODEJS_VERSION}', "${NODEJS_VERSION}"],
+                  ['${BUILDKIT_RELEASE_TAG}', "${BUILDKIT_RELEASE_TAG}"],
+                  ['${DOCKER_CREDENTIALS_URL}', "${DOCKER_CREDENTIALS_URL}"]
                 ]
 
                 def files = sh(returnStdout: true, script: "find workloads/openbsw -name '*.groovy'").trim().split('\n')
@@ -236,7 +322,59 @@ pipeline {
         stage ("Seed jobs") {
           steps {
             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-              jobDsl targets: 'workloads/openbsw/pipelines/*/*/groovy/*.groovy', sandbox: true
+              jobDsl targets: 'workloads/openbsw/pipelines/**/groovy/*.groovy', sandbox: true
+            }
+          }
+        }
+      }
+    }
+
+    stage ('Workload: Seed Utilities') {
+      when {
+        anyOf {
+          expression { env.SEED_WORKLOAD == 'utilities' }
+          expression { env.SEED_WORKLOAD == 'all' }
+        }
+      }
+
+      stages {
+        stage ("Prepare Groovy files") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              script {
+                replacements += [
+                  ['${BUILDKIT_RELEASE_TAG}', "${BUILDKIT_RELEASE_TAG}"],
+                  ['${GCLOUD_CLI_VERSION}', "${GCLOUD_CLI_VERSION}"],
+                  ['${KUBECTL_VERSION}', "${KUBECTL_VERSION}"],
+                  ['${DOCKER_CREDENTIALS_URL}', "${DOCKER_CREDENTIALS_URL}"],
+                  ['${UTILITIES_DOCKER_ARTIFACT_PATH_NAME}', "${UTILITIES_DOCKER_ARTIFACT_PATH_NAME}"]
+                ]
+
+                def files = sh(returnStdout: true, script: "find workloads/utilities -name '*.groovy'").trim().split('\n')
+
+                files.each { file ->
+                  replacements.each { replacement ->
+                    def escapedValue = replacement[1].replace('/', '\\/')
+                    sh "sed -i 's/${replacement[0]}/${escapedValue}/g' ${file}"
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        stage ("Seed folders") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              jobDsl targets: 'workloads/utilities/groovy/folders.groovy', sandbox: true
+            }
+          }
+        }
+
+        stage ("Seed jobs") {
+          steps {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              jobDsl targets: 'workloads/utilities/**/groovy/*.groovy', sandbox: true
             }
           }
         }
@@ -256,6 +394,8 @@ pipeline {
           steps {
             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
               script {
+                currentBuild.description = "$BUILD_USER" + "<br>" + "${SEED_WORKLOAD}"
+
                 replacements += [
                   ['${CLOUD_BACKEND_BUCKET}', "${CLOUD_BACKEND_BUCKET}"],
                   ['${CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME}', "${CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME}"],
@@ -265,7 +405,9 @@ pipeline {
                   ['${CLOUD_WS_CLUSTER_PRESET_PRIVATE_CLUSTER}', "${CLOUD_WS_CLUSTER_PRESET_PRIVATE_CLUSTER}"],
                   ['${CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME}', "${CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME}"],
                   ['${CLOUD_WS_HORIZON_ASFP_IMAGE_NAME}', "${CLOUD_WS_HORIZON_ASFP_IMAGE_NAME}"],
-                  ['${CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME}', "${CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME}"]
+                  ['${CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME}', "${CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME}"],
+                  ['${BUILDKIT_RELEASE_TAG}', "${BUILDKIT_RELEASE_TAG}"],
+                  ['${DOCKER_CREDENTIALS_URL}', "${DOCKER_CREDENTIALS_URL}"]
                 ]
 
                 def files = sh(returnStdout: true, script: "find workloads/cloud-workstations -name '*.groovy'").trim().split('\n')

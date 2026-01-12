@@ -1,0 +1,1 @@
+../../../docs/workloads/utilities/docker_image_template.md

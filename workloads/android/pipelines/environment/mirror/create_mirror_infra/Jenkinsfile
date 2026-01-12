@@ -1,0 +1,119 @@
+// Copyright (c) 2026 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline job provisions the Mirror resources in your existing GCP
+// project.
+
+// Function to create a json object for the .tfvars.json file (on the fly)
+def buildTfvarsMap(env, params) {
+  return [
+    sdv_aosp_mirror_project_id: "${env.CLOUD_PROJECT}",
+    sdv_aosp_mirror_region: "${env.CLOUD_REGION}",
+    sdv_aosp_mirror_zone: "${env.CLOUD_ZONE}",
+    sdv_aosp_mirror_network_name: "${env.AOSP_MIRROR_PRESET_NETWORK_NAME}",
+    sdv_aosp_mirror_subnetwork_name: "${env.AOSP_MIRROR_PRESET_SUBNETWORK_NAME}",
+    sdv_aosp_mirror_filestore_share_capacity_gb: "${params.MIRROR_VOLUME_CAPACITY_GB}"
+  ]
+}
+
+pipeline {
+  // Parameters defined in workloads/android/pipelines/environment/mirror/create_mirror_infra/groovy/job.groovy
+
+  agent {
+    kubernetes {
+      yaml """\
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: jenkins-aosp-mirror-create-mirror-build-pod
+          labels:
+            aosp_mirror_build_pod: "true"
+        spec:
+          hostname: jenkins-aosp-mirror-create-mirror-build-pod
+          serviceAccountName: ${TERRAFORM_WORKLOADS_SERVICE_ACCOUNT}
+          containers:
+          - name: aosp-mirror-create-mirror-builder-container
+            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${AOSP_MIRROR_WORKLOADS_ENV_IMAGE_NAME}:${IMAGE_TAG}
+            imagePullPolicy: IfNotPresent
+            command:
+            - sleep
+            args:
+            - 5h
+            tty: true
+      """.stripIndent()
+    }
+  }
+
+  environment {
+    // Define the tf backend bucket name from jenkins env var
+    def tfBackendBucket = "${CLOUD_BACKEND_BUCKET}"
+
+    // Define the .tfvars.json file name where Mirror tf directory is located
+    def tfvarsJsonFilePath = "./workloads/android/pipelines/environment/mirror/terraform/create_mirror_infra.tfvars.json"
+    // this file is populated in stage `Provision Mirror Infrastructure`
+  }
+
+  options {
+    // Prevent any other "write" operation pipeline within the Mirror domain
+    // from running concurrently with this job (and vice-versa).
+    buildBlocker(useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Android/Environment/Mirror/.*/(create|delete|sync).*')
+
+    // Prevent this specific job from running concurrently with itself.
+    disableConcurrentBuilds()
+  }
+  
+  stages {
+    stage('Provision Mirror Infrastructure') {
+      steps {
+        script {
+          // Validate required parameters are provided
+          if(!params.IMAGE_TAG?.trim()) {error("Required Parameter value NOT provided as input: IMAGE_TAG. An Image Tag for container is needed to use as environment for this job.")}
+          if(!params.MIRROR_VOLUME_CAPACITY_GB?.trim()) {error("Required Parameter value NOT provided as input: MIRROR_VOLUME_CAPACITY_GB. Size of the mirror volume is needed to proceed with mirror infrastructure creation.")}
+          
+          currentBuild.description = "$BUILD_USER" + "<br/>" + "Vol Size: ${params.MIRROR_VOLUME_CAPACITY_GB}GiB"
+
+          echo 'Creating Mirror Infrastructure...'
+          // Convert the tfvars map into valid json object and format it
+          def tfvarsJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(buildTfvarsMap(env, params)))
+          // Write the content to a temporary .tfvars.json file within the tf directory
+          writeFile(file: "${tfvarsJsonFilePath}", text: tfvarsJson)
+
+          def scriptPath = "./workloads/android/pipelines/environment/mirror/create_mirror_infra/create_mirror_infra.sh"
+          
+          container(name: 'aosp-mirror-create-mirror-builder-container') {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              sh """
+                "${scriptPath}" "${tfBackendBucket}" "${tfvarsJsonFilePath}"
+              """
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Post-build actions for success or failure
+  post {
+    success {
+      echo "Status: SUCCESS - Mirror creation job completed."
+    }
+    failure {
+      echo "Status: FAILURE - Mirror creation job failed."
+    }
+    always {
+      echo "Job finished."
+    }
+  }
+}

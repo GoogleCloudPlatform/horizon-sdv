@@ -51,12 +51,23 @@ pipeline {
         - name: builder
           image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}:${IMAGE_TAG}
           imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
           command:
           - sleep
           args:
           - 5h
+          volumeMounts:
+            - name: host-lib-modules
+              mountPath: /lib/modules
+              readOnly: true
         nodeSelector:
           workloadLabel: openbsw
+        volumes:
+          - name: host-lib-modules
+            hostPath:
+              path: /lib/modules
+              type: Directory
     """.stripIndent()
   }
 
@@ -102,9 +113,9 @@ pipeline {
                     MTK_CONNECT_PASSWORD=${MTK_CONNECT_PASSWORD} \
                     MTK_CONNECTED_DEVICES="1" \
                     MTK_CONNECT_TEST_ARTIFACT="${OPENBSW_DOWNLOAD_URL}" \
+                    MTK_CONNECTED_DEVICES=${NUM_HOST_INSTANCES} \
                     MTK_CONNECT_TESTBENCH="${JOB_NAME}-${BUILD_NUMBER}" \
-                    MTK_CONNECT_TESTBENCH_USER="${BUILD_USER_ID}" \
-                    MTK_CONNECT_LAUNCH_APPLICATION_NAME="${LAUNCH_APPLICATION_NAME}" \
+                    MTK_CONNECT_TESTBENCH_USER=$([ "$MTK_CONNECT_PUBLIC" = "true" ] && echo "everyone" || echo "$BUILD_USER_ID") \
                     MTK_CONNECT_CONTAINER_ONLY="true" \
                     MTK_CONNECT_HOST_ONLY="true" \
                     MTK_CONNECT_DEVICE_PREFIX="BSW" \

@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,6 +27,9 @@ resource "google_container_cluster" "sdv_cluster" {
   subnetwork               = var.subnetwork
   remove_default_node_pool = true
   initial_node_count       = 1
+  fleet {
+    project = var.project_id
+  }
 
   # Set `deletion_protection` to `true` will ensure that one cannot
   # accidentally delete this instance by use of Terraform.
@@ -95,7 +98,7 @@ resource "google_container_cluster" "sdv_cluster" {
     enable_components = ["SYSTEM_COMPONENTS", "APISERVER", "SCHEDULER", "CONTROLLER_MANAGER", "CADVISOR", "KUBELET"]
     # DISABLED monitoring for Kube state metrics : STORAGE, POD, DEPLOYMENT, STATEFULSET, DAEMONSET, JOBSET
 
-  # Control Plane Metrics enabled
+    # Control Plane Metrics enabled
     managed_prometheus {
       enabled = true
     }
@@ -141,6 +144,8 @@ resource "google_container_node_pool" "sdv_build_node_pool" {
   node_config {
     preemptible  = false
     machine_type = var.build_node_pool_machine_type
+    disk_size_gb = 500
+    image_type   = "UBUNTU_CONTAINERD"
 
     # Google recommends custom service accounts that have cloud-platform
     # scope and permissions granted via IAM Roles.
@@ -229,6 +234,8 @@ resource "google_container_node_pool" "sdv_openbsw_build_node_pool" {
   node_config {
     preemptible  = false
     machine_type = var.openbsw_build_node_pool_machine_type
+    disk_size_gb = 500
+    image_type   = "UBUNTU_CONTAINERD"
 
     # Google recommends custom service accounts that have cloud-platform
     # scope and permissions granted via IAM Roles.

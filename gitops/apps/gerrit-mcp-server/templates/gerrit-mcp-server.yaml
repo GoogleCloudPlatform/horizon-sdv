@@ -1,0 +1,88 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- $gerrit_external_url := .Values.server.config.external_url | replace "##DOMAIN##" .Values.config.gitops.domain -}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gerrit-mcp-server-config
+data:
+  gerrit_config.json: |-
+    {
+      "default_gerrit_base_url": "{{ .Values.server.config.default_gerrit_base_url }}",
+      "gerrit_hosts": [
+        {
+          "name": "{{  .Values.server.config.name }}",
+          "internal_url": "{{ .Values.server.config.internal_url }}",
+          "external_url": "{{ $gerrit_external_url }}",
+          "authentication": {
+            "type": "http_basic",
+            "username": "##USERNAME##",
+            "auth_token": "##PASSWORD##"
+          }
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gerrit-mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gerrit-mcp-server
+  template:
+    metadata:
+      labels:
+        app: gerrit-mcp-server
+    spec:
+      containers:
+        - name: gerrit-mcp-server
+          image: {{ .Values.config.gitops.gerritMcpServer }}
+          ports:
+            - containerPort: {{ .Values.server.port }}
+          volumeMounts:
+            - name: config
+              mountPath: "/app/gerrit-mcp-server/gerrit_config.json"
+              subPath: gerrit_config.json
+          env:
+            - name: GERRIT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: gerrit-http-password
+                  key: username
+            - name: GERRIT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gerrit-http-password
+                  key: password
+      volumes:
+        - name: config
+          configMap:
+            name: gerrit-mcp-server-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gerrit-mcp-server
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6322
+      targetPort: {{ .Values.server.port }}
+  selector:
+    app: gerrit-mcp-server

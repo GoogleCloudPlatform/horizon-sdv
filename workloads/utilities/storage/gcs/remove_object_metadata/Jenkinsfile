@@ -1,0 +1,67 @@
+// Copyright (c) 2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Description:
+// This job allows the user to remove specific or all metadata from an object stored in a GCS bucket.
+
+pipeline {
+
+  // Parameters defined in groovy/job.groovy
+
+  agent {
+    kubernetes {
+      yaml """\
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          annotations:
+            cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        spec:
+          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+          containers:
+          - name: builder
+            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${UTILITIES_DOCKER_ARTIFACT_PATH_NAME}:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - sleep
+            args:
+            - 1h
+      """.stripIndent()
+    }
+  }
+
+  stages {
+    stage ('Remove Object Metadata') {
+      when {
+        allOf {
+          expression { env.URL_PATH }
+        }
+      }
+      steps {
+        container(name: 'builder') {
+          catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+            sh '''
+              cd ./workloads/common/storage/ || true
+              URL_PATH="${URL_PATH}" \
+              REMOVE_ALL="${REMOVE_ALL}" \
+              KEYS="${KEYS}" \
+              ./gcs_utilities.sh REMOVE_OBJECT_METADATA
+            '''
+            archiveArtifacts artifacts: 'workloads/common/storage/output.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+          }
+        }
+      }
+    }
+  }
+}

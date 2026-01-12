@@ -39,7 +39,7 @@ One-time setup requirements.
 
 The Android revision, i.e. branch or tag to build. Tested versions are below:
 
-- `android-15.0.0_r36` (bp1a)
+- `android-16.0.0_r3` (bp3a)
 
 ### `AAOS_LUNCH_TARGET` <a name="targets"></a>
 
@@ -56,6 +56,10 @@ Examples:
     -   `aosp_cf_arm64_auto-bp1a-userdebug`
 -   Pixel Devices:
     -   `aosp_tangorpro_car-bp1a-userdebug`
+
+### `AAOS_BUILD_CTS`
+
+This builds the Android Automotive Compatibility Test Suite ([CTS](https://source.android.com/docs/compatibility/cts)) test harness from the specified code base, if the `AAOS_LUNCH_TARGET` is that of Cuttlefish, i.e `aosp_cf`.
 
 ### `ANDROID_VERSION`
 
@@ -101,7 +105,7 @@ This provides the URL for the Android repo manifest. Such as:
 
 This is required in order to derive the path to patch within the source tree from the project name.
 
-### `GERRIT_PROJECT` / `GERRIT_CHANGE_NUMBER / GERRIT_PATCHSET_NUMBER`
+### `GERRIT_PROJECT` / `GERRIT_CHANGE_NUMBER / GERRIT_PATCHSET_NUMBER / GERRIT_TOPIC`
 
 These are optional but allow the user to fetch a specific Gerrit patchset if required.
 
@@ -109,7 +113,11 @@ These are optional but allow the user to fetch a specific Gerrit patchset if req
 
 Keep the build VM instance and container running to allow user to connect to it. Useful for debugging build issues, determining target output archives etc. Time in minutes.
 
-Access using `kubectl` e.g. `kubectl exec -it -n jenkins <pod name> -- bash` from `bastion` host.
+Access using `kubectl` e.g. `kubectl exec -it -n jenkins <pod name> -- bash` .
+
+Reference [Fleet management](https://docs.cloud.google.com/kubernetes-engine/enterprise/multicluster-management/gateway) to fetch credentials for a fleet-registered cluster to be used in Connect Gateway, e.g.
+- `gcloud container fleet memberships list`
+- `gcloud container fleet memberships get-credentials sdv-cluster`
 
 ### `ABFS_VERSION`
 
@@ -137,12 +145,29 @@ Define storage solution used to push artifacts.
 
 Currently `GCS_BUCKET` default pushes to GCS bucket, if empty then nothing will be stored.
 
+### `STORAGE_BUCKET_DESTINATION`
+
+Lets you override the default artifact storage destination. If not set, the build derives it automatically, for example:
+
+`gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder_ABFS/<BUILD_NUMBER>`
+
+The override must be a full GCS URI, including the `gs://` prefix, bucket name, and the artifact path. For example:
+
+`gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Releases/010129`
+
+### `STORAGE_LABELS`
+
+Lets you add labels to the artifacts being uploaded to storage.
+
+For GCS buckets, these labels can be applied as key=value pairs and can be provided as a comma-separated or space-separated list.
+
+E.g. `Release=X.Y.Z,Workload=Android`
 
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 

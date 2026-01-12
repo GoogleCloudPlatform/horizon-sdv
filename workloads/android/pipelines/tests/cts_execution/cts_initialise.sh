@@ -44,6 +44,10 @@ function cts_initialise() {
     fi
     # Setup JDK path
     echo "export PATH=${PATH}:${HOME}/android-cts/jdk/bin" >> "${HOME}/.bashrc"
+
+    # Double check CTS Java version was created for correct architecture
+    echo "Java file type:"
+    file "${HOME}"/android-cts/jdk/bin/java || true
 }
 
 # Main program

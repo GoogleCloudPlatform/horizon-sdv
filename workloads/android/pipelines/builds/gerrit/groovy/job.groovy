@@ -31,6 +31,12 @@ by performing builds on that patchset and providing the user with a vote to thei
     pipelineTriggers{
       triggers{
         gerrit{
+          buildCancellationPolicy{
+            abortAbandonedPatchsets(false)
+            abortManualPatchsets(true)
+            abortNewPatchsets(false)
+            abortSameTopic(true)
+          }
           gerritProjects{
             gerritProject{
               compareType('REG_EXP')
@@ -52,9 +58,14 @@ by performing builds on that patchset and providing the user with a vote to thei
     }
   }
 
+  // Delay to avoid multiple gerrit triggers for TOPIC related changes
+  quietPeriod(180)
+
   environmentVariables {
-    env('GERRIT_REPO_SYNC_JOBS', "${REPO_SYNC_JOBS}")
-    env('JENKINS_GCE_CLOUD_LABEL', "${JENKINS_GCE_CLOUD_LABEL}")
+    env('GERRIT_REPO_SYNC_JOBS', '${REPO_SYNC_JOBS}')
+    env('JENKINS_GCE_CLOUD_LABEL', '${JENKINS_GCE_CLOUD_LABEL}')
+    env('USE_LOCAL_AOSP_MIRROR', ${USE_LOCAL_AOSP_MIRROR})
+    env('AOSP_MIRROR_DIR_NAME', '${AOSP_MIRROR_DIR_NAME}')
   }
 
   logRotator {

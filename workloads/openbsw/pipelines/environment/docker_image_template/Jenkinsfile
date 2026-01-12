@@ -13,65 +13,118 @@
 // limitations under the License.
 
 // Description:
-// This pipeline builds the OpenBSW builder Docker image using Kaniko
-// rather than use a Docker to avoid docker in docker privilege issues.
+// This pipeline builds the OpenBSW builder Docker image using BuildKit.
 //
 // References:
-//   * https://github.com/GoogleContainerTools/kaniko
+//   * https://github.com/moby/buildkit
+//   * Image: https://hub.docker.com/r/moby/buildkit
+//     e.g. image: moby/buildkit:v0.24.0
 pipeline {
 
   // Parameters defined in groovy/job.groovy
 
-  agent {
-    kubernetes {
-      yaml """\
-        apiVersion: v1
-        kind: Pod
-        spec:
-          hostname: jenkins-openbsw-build-pod
-          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
-          containers:
-          - name: kaniko
-            image: gcr.io/kaniko-project/executor:debug
-            imagePullPolicy: IfNotPresent
-            command:
-            - /busybox/cat
-            tty: true
-            resources:
-              limits:
-                memory: 8Gi
-              requests:
-                memory: 8Gi
-      """.stripIndent()
-    }
-  }
+  agent none
 
   environment {
-    DESTINATION="--destination=${env.CLOUD_REGION}-docker.pkg.dev/${env.CLOUD_PROJECT}/${env.OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}"
-    KANIKO_OPTIONS="${NO_PUSH == "true" ? "--no-push" : "${DESTINATION}:${IMAGE_TAG}"}"
+    // Update latest tag.
+    REGISTRY="${env.CLOUD_REGION}-docker.pkg.dev"
+    DESTINATION="${REGISTRY}/${env.CLOUD_PROJECT}/${env.OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}"
+    PUSH="${NO_PUSH == "true" ? "false" : "true"}"
+
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          openbsw_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: openbsw
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: openbsw_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-openbsw-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: buildkit
+          image: moby/buildkit:${BUILDKIT_RELEASE_TAG}
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+        nodeSelector:
+          workloadLabel: openbsw
+      """.stripIndent()
   }
 
   stages {
-    stage ('Create Docker Image'){
-      when { expression { env.IMAGE_TAG } }
-      steps {
-        container(name: 'kaniko') {
-          script {
-            currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br/>" + "$BUILD_USER" + "<br/>" + "${env.IMAGE_TAG}"
+    stage ('Start instance'){
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+      stages {
+        stage ('Docker Credentials'){
+          steps {
+            script {
+              currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+            }
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  wget -nv -O docker-credential-gcr.tgz ${DOCKER_CREDENTIALS_URL}
+                  tar -zxf docker-credential-gcr.tgz
+                  chmod +x docker-credential-gcr && mv docker-credential-gcr /usr/bin/
+                  rm -f docker-credential-gcr*.tar.gz
+                  docker-credential-gcr configure-docker --registries=${REGISTRY}
+                '''
+              }
+            }
           }
-          sh '''
-            # Build the docker image and push to Artifact registry using service account configured with
-            # correct roles/permissions.
-            /kaniko/executor -f workloads/openbsw/pipelines/environment/docker_image_template/Dockerfile \
-              -c workloads/openbsw/pipelines/environment/docker_image_template --skip-tls-verify-pull \
-              --insecure --skip-tls-verify "${KANIKO_OPTIONS}" \
-              --build-arg ARM_TOOLCHAIN_URL='''+ARM_TOOLCHAIN_URL+''' \
-              --build-arg CLANG_TOOLS_URL='''+CLANG_TOOLS_URL+''' \
-              --build-arg CMAKE_URL='''+CMAKE_URL+''' \
-              --build-arg LINUX_DISTRIBUTION='''+LINUX_DISTRIBUTION+''' \
-              --build-arg NODEJS_VERSION='''+NODEJS_VERSION+''' \
-              --build-arg TREEFMT_URL='''+TREEFMT_URL+'''
-          '''
+        }
+
+        stage ('Build Docker Image'){
+          when { expression { env.IMAGE_TAG } }
+          steps {
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  cd "${WORKSPACE}/workloads/openbsw/pipelines/environment/docker_image_template/";
+                  buildctl build \
+                   --frontend=dockerfile.v0 \
+                   --local=dockerfile=. \
+                   --local context=. \
+                   --opt build-arg:ABFS="false" \
+                   --opt build-arg:LINUX_DISTRIBUTION=${LINUX_DISTRIBUTION} \
+                   --opt build-arg:NODEJS_VERSION=${NODEJS_VERSION} \
+                   --opt build-arg:ARM_TOOLCHAIN_URL=${ARM_TOOLCHAIN_URL} \
+                   --opt build-arg:CLANG_TOOLS_URL=${CLANG_TOOLS_URL} \
+                   --opt build-arg:CMAKE_URL=${CMAKE_URL} \
+                   --opt build-arg:GCLOUD_CLI_VERSION="${GCLOUD_CLI_VERSION}" \
+                   --opt build-arg:KUBECTL_VERSION="${KUBECTL_VERSION}" \
+                   --opt build-arg:LLVM_PROJECT_URL=${LLVM_PROJECT_URL} \
+                   --opt build-arg:LLVM_ARM_TOOLCHAIN_URL=${LLVM_ARM_TOOLCHAIN_URL} \
+                   --opt build-arg:OPENBSW_GIT_URL=${OPENBSW_GIT_URL} \
+                   --opt build-arg:OPENBSW_GIT_BRANCH=${OPENBSW_GIT_BRANCH} \
+                   --opt build-arg:PLANTUML_URL="${PLANTUML_URL}" \
+                   --opt build-arg:POST_GIT_CLONE_COMMAND="${POST_GIT_CLONE_COMMAND}" \
+                   --opt build-arg:PYELFTOOLS_VERSION=${PYELFTOOLS_VERSION} \
+                   --opt build-arg:PYTHON_VERSION=${PYTHON_VERSION} \
+                   --opt build-arg:SSCACHE_URL=${SSCACHE_URL} \
+                   --opt build-arg:TREEFMT_URL=${TREEFMT_URL} \
+                   --opt platform=linux/amd64 \
+                   --registry-auth-tlscontext host=${REGISTRY},insecure=true \
+                   --output=type=image,name=${DESTINATION}:${IMAGE_TAG},push=${PUSH}
+                '''
+              }
+            }
+          }
         }
       }
     }

@@ -20,6 +20,8 @@ def getAndroidVersion(revision) {
     return "14"
   } else if (revision =~ "android-15") {
     return "15"
+  } else if (revision =~ "android-16") {
+    return "16"
   } else {
     currentBuild.result = 'FAILURE'
     error "Failed to determine Android version from revision: ${revision}"
@@ -36,13 +38,14 @@ pipeline {
   environment {
     ARTIFACT_STORAGE_SOLUTION="${ARCHIVE_ARTIFACTS == "true" ? "GCS_BUCKET" : "NOOP"}"
     GERRIT_API_URL="https://${env.HORIZON_DOMAIN}/gerrit"
+    POD_TEMPLATE = "${USE_LOCAL_AOSP_MIRROR == "true" ? kubernetesPodTemplateWithMirror : kubernetesPodTemplateWithoutMirror}"
+
     def androidVersion="${ANDROID_VERSION != "default" ? ANDROID_VERSION : getAndroidVersion(AAOS_REVISION)}"
-    def rpi="${AAOS_LUNCH_TARGET =~ "rpi" ? "-rpi" : ""}"
     SDK_ANDROID_VERSION="${androidVersion}"
-    STORAGE_CLASS_SUFFIX="android-${androidVersion}"+"${rpi}"
+    STORAGE_CLASS_SUFFIX="android-${SDK_ANDROID_VERSION}"
 
     // Define Pod Template in environment so we can override.
-    def kubernetesPodTemplate = """
+    def kubernetesPodTemplateWithoutMirror = """
       apiVersion: v1
       kind: Pod
       metadata:
@@ -69,11 +72,15 @@ pipeline {
         containers:
         - name: builder
           image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+            appArmorProfile:
+              type: Unconfined
           command:
           - sleep
           args:
-          - 5h
+          - 6h
           resources:
             limits:
               cpu: 98000m
@@ -98,11 +105,79 @@ pipeline {
         nodeSelector:
           workloadLabel: android
     """.stripIndent()
+
+    // Pod template with AOSP Mirror volume mounted as read-only
+    def kubernetesPodTemplateWithMirror = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          aaos_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: android
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-aaos-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+            appArmorProfile:
+              type: Unconfined
+          command:
+          - sleep
+          args:
+          - 5h
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+          volumeMounts:
+            - mountPath: /aaos-cache
+              name: aaos-cache
+            - mountPath: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}
+              readOnly: true
+              name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+        volumes:
+          - name: aaos-cache
+            ephemeral:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: ${JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX}-${STORAGE_CLASS_SUFFIX}
+                  resources:
+                    requests:
+                      storage: 1000Gi
+                  accessModes:
+                    - ReadWriteOnce
+          - name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+            persistentVolumeClaim:
+              claimName: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+        nodeSelector:
+          workloadLabel: android
+    """.stripIndent()
   }
 
   stages {
     stage ('Start Build VM Instance') {
-      agent { kubernetes { yaml kubernetesPodTemplate } }
+      agent { kubernetes { yaml "${POD_TEMPLATE}" } }
       stages {
         stage ('Initialise') {
           steps {
@@ -114,12 +189,9 @@ pipeline {
                 script {
                   env.ANDROID_BUILD_ID=''
                   if ( "${env.AAOS_REVISION}" =~ "android-14.0.0_r30" ) env.ANDROID_BUILD_ID="ap1a-"
-                  if ( "${env.AAOS_REVISION}" =~ "android-14.0.0_r74" ) env.ANDROID_BUILD_ID="ap2a-"
-                  if ( "${env.AAOS_REVISION}" =~ "android-15.0.0_r4" )  env.ANDROID_BUILD_ID="ap3a-"
-                  if ( "${env.AAOS_REVISION}" =~ "android-15.0.0_r10" ) env.ANDROID_BUILD_ID="ap4a-"
-                  if ( "${env.AAOS_REVISION}" =~ "android-15.0.0_r20" ) env.ANDROID_BUILD_ID="bp1a-"
-                  if ( "${env.AAOS_REVISION}" =~ "android-15.0.0_r32" ) env.ANDROID_BUILD_ID="bp1a-"
                   if ( "${env.AAOS_REVISION}" =~ "android-15.0.0_r36" ) env.ANDROID_BUILD_ID="bp1a-"
+                  if ( "${env.AAOS_REVISION}" =~ "android-16.0.0_r3" ) env.ANDROID_BUILD_ID="bp3a-"
+                  if ( "${env.AAOS_REVISION}" =~ "android-16.0.0_r4" ) env.ANDROID_BUILD_ID="bp4a-"
                 }
                 sh '''
                   set +x
@@ -140,25 +212,29 @@ pipeline {
         stage ('Build: sdk_car_x86_64') {
           steps {
             container(name: 'builder') {
-              withCredentials([usernamePassword(credentialsId: env.GERRIT_CREDENTIALS_ID, passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
-                sh '''
-                  export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
-                  export AAOS_REVISION="${AAOS_REVISION}"
-                  export AAOS_LUNCH_TARGET="sdk_car_x86_64-${ANDROID_BUILD_ID}userdebug"
-                  export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
-                  export CLOUD_REGION="${CLOUD_REGION}"
-                  export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
-                  export ANDROID_VERSION="${SDK_ANDROID_VERSION}"
-                  export AAOS_CLEAN="NO_CLEAN"
-                  export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
-                  export GERRIT_SERVER_URL="${GERRIT_API_URL}"
-                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_avd_sdk.sh || true
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
-                '''
-                archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                withCredentials([usernamePassword(credentialsId: env.GERRIT_CREDENTIALS_ID, passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
+                  sh '''
+                    export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
+                    export AAOS_REVISION="${AAOS_REVISION}"
+                    export AAOS_LUNCH_TARGET="sdk_car_x86_64-${ANDROID_BUILD_ID}userdebug"
+                    export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
+                    export CLOUD_REGION="${CLOUD_REGION}"
+                    export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
+                    export ANDROID_VERSION="${SDK_ANDROID_VERSION}"
+                    export AAOS_CLEAN="NO_CLEAN"
+                    export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
+                    export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                    export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
+                    export MIRROR_DIR_FULL_PATH="${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_avd_sdk.sh || true
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
+                  '''
+                  archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+                }
               }
             }
           }
@@ -167,25 +243,29 @@ pipeline {
         stage ('Build: sdk_car_arm64') {
           steps {
             container(name: 'builder') {
-              withCredentials([usernamePassword(credentialsId: 'jenkins-gerrit-http-password', passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
-                sh '''
-                  export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
-                  export AAOS_REVISION="${AAOS_REVISION}"
-                  export AAOS_LUNCH_TARGET="sdk_car_arm64-${ANDROID_BUILD_ID}userdebug"
-                  export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
-                  export CLOUD_REGION="${CLOUD_REGION}"
-                  export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
-                  export ANDROID_VERSION="${SDK_ANDROID_VERSION}"
-                  export AAOS_CLEAN="NO_CLEAN"
-                  export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
-                  export GERRIT_SERVER_URL="${GERRIT_API_URL}"
-                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_avd_sdk.sh || true
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
-                '''
-                archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                withCredentials([usernamePassword(credentialsId: 'jenkins-gerrit-http-password', passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
+                  sh '''
+                    export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
+                    export AAOS_REVISION="${AAOS_REVISION}"
+                    export AAOS_LUNCH_TARGET="sdk_car_arm64-${ANDROID_BUILD_ID}userdebug"
+                    export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
+                    export CLOUD_REGION="${CLOUD_REGION}"
+                    export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
+                    export ANDROID_VERSION="${SDK_ANDROID_VERSION}"
+                    export AAOS_CLEAN="NO_CLEAN"
+                    export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
+                    export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                    export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
+                    export MIRROR_DIR_FULL_PATH="${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_avd_sdk.sh || true
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
+                  '''
+                  archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+                }
               }
             }
           }
@@ -194,23 +274,27 @@ pipeline {
         stage ('Build: aosp_cf_x86_64_auto') {
           steps {
             container(name: 'builder') {
-              withCredentials([usernamePassword(credentialsId: 'jenkins-gerrit-http-password', passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
-                sh '''
-                  export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
-                  export AAOS_REVISION="${AAOS_REVISION}"
-                  export AAOS_LUNCH_TARGET="aosp_cf_x86_64_auto-${ANDROID_BUILD_ID}userdebug"
-                  export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
-                  export CLOUD_REGION="${CLOUD_REGION}"
-                  export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
-                  export AAOS_CLEAN="NO_CLEAN"
-                  export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
-                  export GERRIT_SERVER_URL="${GERRIT_API_URL}"
-                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
-                '''
-                archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                withCredentials([usernamePassword(credentialsId: 'jenkins-gerrit-http-password', passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
+                  sh '''
+                    export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
+                    export AAOS_REVISION="${AAOS_REVISION}"
+                    export AAOS_LUNCH_TARGET="aosp_cf_x86_64_auto-${ANDROID_BUILD_ID}userdebug"
+                    export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
+                    export CLOUD_REGION="${CLOUD_REGION}"
+                    export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
+                    export AAOS_CLEAN="NO_CLEAN"
+                    export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
+                    export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                    export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
+                    export MIRROR_DIR_FULL_PATH="${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
+                  '''
+                  archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+                }
               }
             }
           }
@@ -219,48 +303,57 @@ pipeline {
         stage ('Build: aosp_cf_arm64_auto') {
           steps {
             container(name: 'builder') {
-              withCredentials([usernamePassword(credentialsId: 'jenkins-gerrit-http-password', passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
-                sh '''
-                  export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
-                  export AAOS_REVISION="${AAOS_REVISION}"
-                  export AAOS_LUNCH_TARGET="aosp_cf_arm64_auto-${ANDROID_BUILD_ID}userdebug"
-                  export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
-                  export CLOUD_REGION="${CLOUD_REGION}"
-                  export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
-                  export AAOS_CLEAN="NO_CLEAN"
-                  export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
-                  export GERRIT_SERVER_URL="${GERRIT_API_URL}"
-                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
-                '''
-                archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                withCredentials([usernamePassword(credentialsId: 'jenkins-gerrit-http-password', passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
+                  sh '''
+                    export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
+                    export AAOS_REVISION="${AAOS_REVISION}"
+                    export AAOS_LUNCH_TARGET="aosp_cf_arm64_auto-${ANDROID_BUILD_ID}userdebug"
+                    export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
+                    export CLOUD_REGION="${CLOUD_REGION}"
+                    export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
+                    export AAOS_CLEAN="NO_CLEAN"
+                    export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
+                    export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                    export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
+                    export MIRROR_DIR_FULL_PATH="${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
+                  '''
+                  archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+                }
               }
             }
           }
         }
 
         stage ('Build: aosp_tangorpro_car') {
+          when { expression { !(env.AAOS_REVISION ?: '').contains('android-16.0.0_r') } }
           steps {
             container(name: 'builder') {
-              withCredentials([usernamePassword(credentialsId: 'jenkins-gerrit-http-password', passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
-                sh '''
-                  export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
-                  export AAOS_REVISION="${AAOS_REVISION}"
-                  export AAOS_LUNCH_TARGET="aosp_tangorpro_car-${ANDROID_BUILD_ID}userdebug"
-                  export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
-                  export CLOUD_REGION="${CLOUD_REGION}"
-                  export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
-                  export AAOS_CLEAN="NO_CLEAN"
-                  export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
-                  export GERRIT_SERVER_URL="${GERRIT_API_URL}"
-                  export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
-                  ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
-                '''
-                archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                withCredentials([usernamePassword(credentialsId: 'jenkins-gerrit-http-password', passwordVariable: 'GERRIT_PASSWORD', usernameVariable: 'GERRIT_USERNAME')]) {
+                  sh '''
+                    export AAOS_GERRIT_MANIFEST_URL="${AAOS_GERRIT_MANIFEST_URL}"
+                    export AAOS_REVISION="${AAOS_REVISION}"
+                    export AAOS_LUNCH_TARGET="aosp_tangorpro_car-${ANDROID_BUILD_ID}userdebug"
+                    export AAOS_ARTIFACT_ROOT_NAME="${ANDROID_BUILD_BUCKET_ROOT_NAME}"
+                    export CLOUD_REGION="${CLOUD_REGION}"
+                    export AAOS_BUILD_NUMBER=${BUILD_NUMBER}/${AAOS_LUNCH_TARGET}
+                    export AAOS_CLEAN="NO_CLEAN"
+                    export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
+                    export GERRIT_SERVER_URL="${GERRIT_API_URL}"
+                    export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
+                    export MIRROR_DIR_FULL_PATH="${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
+                    ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
+                  '''
+                  archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+                }
               }
             }
           }

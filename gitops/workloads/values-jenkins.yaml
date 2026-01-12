@@ -1,0 +1,589 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+config:
+  workloads:
+    android:
+      cuttlefish:
+        tag: "v1350"
+      aospMirror:
+        workloadEnv:
+          image: "horizon-sdv/aosp-mirror-workloads/env"
+        mirrorPresets:
+          filestorePVCName: "sdv-aosp-mirror-filestore-pvc"
+          filestorePVCMountPathInContainer: "/mnt/mirror-filestore-pvc"
+          mirrorRootSubdirectoryName: "horizon-mirrors"
+          network: "sdv-network"
+          subnetwork: "sdv-subnet"
+          # region: defined in argocd-config.yaml
+          # zone: defined in argocd-config.yaml
+          # projectID: defined in argocd-config.yaml
+    cloudWorkstations:
+      workloadEnv:
+        image: "horizon-sdv/cloud-ws-workloads/env"
+      clusterPresets:
+        name: "sdv-cloud-ws-cluster"
+        # region: defined in argocd-config.yaml
+        # projectID: defined in argocd-config.yaml
+        network: "sdv-network"
+        subnetwork: "sdv-subnet"
+        privateCluster: false
+      workstationPresets:
+        wsImages:
+          horizonCodeOSS:
+            image: "horizon-sdv/cloud-ws-images/horizon-code-oss"
+          horizonASFP:
+            image: "horizon-sdv/cloud-ws-images/horizon-asfp"
+          horizonAndroidStudio:
+            image: "horizon-sdv/cloud-ws-images/horizon-android-studio"
+    common:
+      serviceAccounts:
+        terraformWorkloadsSA:
+          name: "terraform-workloads-sa"
+controller:
+  sidecars:
+    configAutoReload:
+      enabled: false
+  numExecutors: 1
+  executorMode: "EXCLUSIVE"
+  customJenkinsLabels: ["seed-node"]
+  installPlugins:
+    - antisamy-markup-formatter:173.v680e3a_b_69ff3
+    - apache-httpcomponents-client-4-api:4.5.14-269.vfa_2321039a_83
+    - asm-api:9.9.1-189.vb_5ef2964da_91
+    - authentication-tokens:1.144.v5ff4a_5ec5c33
+    - bootstrap5-api:5.3.8-895.v4d0d8e47fea_d
+    - bouncycastle-api:2.30.1.82-277.v70ca_0b_877184
+    - branch-api:2.1268.v044a_87612da_8
+    - caffeine-api:3.2.3-194.v31a_b_f7a_b_5a_81
+    - checks-api:373.vfe7645102093
+    - cloudbees-folder:6.1073.va_7888eb_dd514
+    - command-launcher:123.v37cfdc92ef67
+    - commons-lang3-api:3.20.0-109.ve43756e2d2b_4
+    - commons-text-api:1.15.0-210.v7480a_da_70b_9e
+    - configuration-as-code:2006.v001a_2ca_6b_574
+    - credentials-binding:702.vfe613e537e88
+    - credentials:1453.v9b_a_29777a_b_fd
+    - display-url-api:2.217.va_6b_de84cc74b_
+    - durable-task:639.vefb_3d8372f6d
+    - echarts-api:6.0.0-1165.vd1283a_3e37d4
+    - eddsa-api:0.3.0.1-19.vc432d923e5ee
+    - font-awesome-api:7.1.0-882.v1dfb_771e3278
+    - git-client:6.4.3
+    - git:5.8.1
+    - github-api:1.330-492.v3941a_032db_2a_
+    - github:1.45.0
+    - google-oauth-plugin:1.335.ve6de40e2db_18
+    - gson-api:2.13.2-173.va_a_092315913c
+    - instance-identity:203.v15e81a_1b_7a_38
+    - ionicons-api:94.vcc3065403257
+    - jackson2-api:2.20.1-423.v13951f6b_6532
+    - jakarta-activation-api:2.1.4-1
+    - jakarta-mail-api:2.1.5-1
+    - jakarta-xml-bind-api:4.0.6-10.v9b_7e1d1fc40b_
+    - javax-activation-api:1.2.0-8
+    - javax-mail-api:1.6.2-11
+    - jaxb:2.3.9-133.vb_ec76a_73f706
+    - jdk-tool:83.v417146707a_3d
+    - jjwt-api:0.11.5-120.v0268cf544b_89
+    - joda-time-api:2.14.0-149.v1c3ce991d1b_9
+    - jquery3-api:3.7.1-619.vdb_10e002501a_
+    - jsch:0.2.16-95.v3eecb_55fa_b_78
+    - json-api:20250517-173.v596efb_962a_31
+    - json-path-api:2.10.0-202.va_9cc16c1e476
+    - junit:1369.v15da_00283f06
+    - kubernetes-client-api:7.3.1-256.v788a_0b_787114
+    - kubernetes-credentials:206.vde31a_b_0f71a_c
+    - mailer:525.v2458b_d8a_1a_71
+    - matrix-project:870.v9db_fcfc2f45b_
+    - metrics:4.2.37-489.vb_6db_69b_ce753
+    - mina-sshd-api-common:2.16.0-167.va_269f38cc024
+    - mina-sshd-api-core:2.16.0-167.va_269f38cc024
+    - oauth-credentials:0.657.v7d8dd90b_0382
+    - okhttp-api:4.12.0-195.vc02552c04ffd
+    - pipeline-build-step:571.v08a_fffd4b_0ce
+    - pipeline-graph-analysis:245.v88f03631a_b_21
+    - pipeline-groovy-lib:787.ve2fef0efdca_6
+    - pipeline-input-step:540.v14b_100d754dd
+    - pipeline-milestone-step:138.v78ca_76831a_43
+    - pipeline-model-api:2.2277.v00573e73ddf1
+    - pipeline-model-definition:2.2277.v00573e73ddf1
+    - pipeline-model-extensions:2.2277.v00573e73ddf1
+    - pipeline-rest-api:2.38
+    - pipeline-stage-step:322.vecffa_99f371c
+    - pipeline-stage-tags-metadata:2.2277.v00573e73ddf1
+    - plain-credentials:199.v9f8e1f741799
+    - plugin-util-api:6.1192.v30fe6e2837ff
+    - prism-api:1.30.0-630.va_e19d17f83b_0
+    - scm-api:724.v7d839074eb_5c
+    - script-security:1385.v7d2d9ec4d909
+    - snakeyaml-api:2.5-143.v93b_c004f89de
+    - ssh-credentials:361.vb_f6760818e8c
+    - sshd:3.374.v19b_d59ce6610
+    - structs:362.va_b_695ef4fdf9
+    - token-macro:477.vd4f0dc3cb_cf1
+    - trilead-api:2.284.v1974ea_324382
+    - variant:70.va_d9f17f859e0
+    - workflow-aggregator:608.v67378e9d3db_1
+    - workflow-api:1384.vdc05a_48f535f
+    - workflow-basic-steps:1098.v808b_fd7f8cf4
+    - workflow-cps:4238.va_6fb_65c1f699
+    - workflow-durable-task-step:1464.v2d3f5c68f84c
+    - workflow-job:1559.va_a_533730b_ea_d
+    - workflow-multibranch:821.vc3b_4ea_780798
+    - workflow-scm-step:466.va_d69e602552b_
+    - workflow-step-api:710.v3e456cc85233
+    - workflow-support:1010.vb_b_39488a_9841
+  additionalPlugins:
+    - ansicolor:1.0.6
+    - authorize-project:2.0.0
+    - build-blocker-plugin:166.vc82fc20b_a_ed6
+    - build-user-vars-plugin:212.vd6b_e9f6d0cdb_
+    - configuration-as-code-groovy:1.1
+    - envinject-api:1.236.v35fd4d7eb_515
+    - envinject:2.926.v69c9b_3896a_96
+    - gerrit-code-review:0.5.0
+    - gerrit-trigger:3.1969.v65d614ec771a_
+    - github-branch-source:1917.v9ee8a_39b_3d0d
+    - google-compute-engine:4.683.v0ce26579a_ee7
+    - google-kubernetes-engine:0.443.vcf71f5903ef3
+    - htmlpublisher:427
+    - job-dsl:1.93
+    - keycloak:2.3.2
+    - kubernetes-credentials-provider:1.299.v610fa_e76761a_
+    - kubernetes:4398.vb_b_33d9e7fe23
+    - mask-passwords:212.v4967a_a_73b_506
+    - parameter-separator:296.v9b_a_90c81160d
+    - pipeline-stage-view:2.38
+    - role-strategy:848.va_a_ea_673cf0b_c
+    - ssh-slaves:3.1085.vc64d040efa_85
+    - startup-trigger-plugin:2.9.4
+    - timestamper:1.30
+  javaOpts: "-Dcom.cloudbees.workflow.rest.external.JobExt.maxRunsPerJob=50"
+  enableRawHtmlMarkupFormatter: true
+  markupFormatter: rawHtml
+  noUsageStatistics: true
+  JCasC:
+    enabled: true
+    security:
+      queueItemAuthenticator:
+        authenticators:
+          - project:
+              disabledStrategies:
+                - "org.jenkinsci.plugins.authorizeproject.strategy.SystemAuthorizationStrategy"
+                - "org.jenkinsci.plugins.authorizeproject.strategy.SpecificUsersAuthorizationStrategy"
+                - "org.jenkinsci.plugins.authorizeproject.strategy.AnonymousAuthorizationStrategy"
+              enabledStrategies:
+                - "org.jenkinsci.plugins.authorizeproject.strategy.TriggeringUsersAuthorizationStrategy"
+    defaultConfig: true
+    configScripts:
+      welcome-message: |
+        credentials:
+          system:
+            domainCredentials:
+              - credentials:
+                - googleRobotPrivateKey:
+                    description: "GCE Creds"
+                    id: "gce-creds"
+                    scope: GLOBAL
+                    projectId: {{ .Values.config.projectID }}
+                    serviceAccountConfig:
+                      json:
+                        filename: {{ .Values.config.projectID }}.json
+                        secretJsonKey: ${base64:${jenkins-gce-creds-gce-creds-json}}
+        jenkins:
+          systemMessage: Welcome to Horizon SDV server.
+          disabledAdministrativeMonitors:
+            # Disable: plugin monitor
+            - "hudson.PluginManager$PluginUpdateMonitor"
+            # Disable: Jenkins Update Notification
+            - "hudson.model.UpdateCenter$CoreUpdateMonitor"
+            # Disable: Update Site WarningsSecurity
+            - "jenkins.security.UpdateSiteWarningsMonitor"
+            - "hudson.util.DoubleLaunchChecker"
+            # Disable: Built-in Node With Agents Executors Configured MonitorSecurity
+            - "jenkins.diagnostics.ControllerExecutorsAgents"
+            # Disable: Role-Based Naming Strategy not enabled
+            - "org.jenkinsci.plugins.rolestrategy.NamingStrategyAdministrativeMonitor"
+          authorizationStrategy:
+            roleBased:
+              permissionTemplates:
+                - name: "horizon-jenkins-workload-developers"
+                  permissions:
+                    - "Job/Read"
+                    - "Job/Discover"
+                    - "Job/Build"
+                    - "View/Read"
+                    - "Job/Configure"
+                    - "Job/Delete"
+                    - "Job/Create"
+                    - "Job/Move"
+                    - "Job/Workspace"
+                    - "Job/Cancel"
+                - name: "horizon-jenkins-workload-users"
+                  permissions:
+                    - "Job/Read"
+                    - "Job/Discover"
+                    - "Job/Build"
+                    - "View/Read"
+                    - "Job/Cancel"
+              roles:
+                global:
+                  - name: "horizon-jenkins-administrators"
+                    description: "Jenkins administration role for unrestricted access."
+                    permissions:
+                      - "Overall/Administer"
+                    entries:
+                      - group: "horizon-jenkins-administrators"
+                      # Example user
+                      # - user: "john.doe@example.com"
+                  - name: "horizon-jenkins-workloads-developers"
+                    description: "Jenkins workloads developers role for workload usage and configuration."
+                    permissions:
+                      - "Overall/Read"
+                      - "Agent/Build"
+                      - "Job/Create"
+                    entries:
+                      - group: "horizon-jenkins-workloads-developers"
+                      # Example user
+                      # - user: "john.doe@example.com
+                  - name: "horizon-jenkins-workloads-users"
+                    description: "Jenkins workloads users role with restricted access to workloads."
+                    permissions:
+                      - "Overall/Read"
+                    entries:
+                      - group: "horizon-jenkins-workloads-users"
+                      # Example user
+                      # - user: "john.doe@example.com
+                items:
+                  - name: "workloads-developers"
+                    description: "Workloads developers item role with unrestricted access."
+                    pattern: ".*"
+                    templateName: "horizon-jenkins-workload-developers"
+                    entries:
+                      - group: "horizon-jenkins-workloads-developers"
+                      # Example user
+                      # - user: "john.doe@example.com
+                  - name: "workloads-users"
+                    description: "Workloads user item role with restricted access."
+                    pattern: ".*"
+                    templateName: "horizon-jenkins-workload-users"
+                    entries:
+                      - group: "horizon-jenkins-workloads-users"
+                      # Example user
+                      # - user: "john.doe@example.com
+          clouds:
+            - computeEngine:
+                cloudName: cuttlefish-vm-main
+                configurations:
+                - bootDiskAutoDelete: true
+                  bootDiskSizeGb: 10
+                  bootDiskSizeGbStr: "10"
+                  bootDiskType: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/{{ .Values.config.zone }}/diskTypes/hyperdisk-balanced"
+                  description: "cuttlefish-vm-main"
+                  javaExecPath: "/usr/bin/java"
+                  labelSet:
+                  - name: "cuttlefish-vm-main"
+                  labelString: "cuttlefish-vm-main"
+                  labels: "cuttlefish-vm-main"
+                  launchTimeoutSeconds: 300
+                  launchTimeoutSecondsStr: "300"
+                  mode: NORMAL
+                  namePrefix: "cuttlefish-vm-main"
+                  numExecutors: 1
+                  numExecutorsStr: "1"
+                  oneShot: true
+                  region: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/regions/{{ .Values.config.region }}"
+                  remoteFs: "/home/jenkins"
+                  retentionTimeMinutes: 6
+                  retentionTimeMinutesStr: "6"
+                  runAsUser: "jenkins"
+                  sshConfiguration:
+                    customPrivateKeyCredentialsId: "jenkins-cuttlefish-vm-ssh-private-key"
+                  template: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/global/instanceTemplates/instance-template-cuttlefish-vm-main"
+                  useInternalAddress: true
+                  zone: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/{{ .Values.config.zone }}"
+                credentialsId: "gce-creds"
+                instanceCapStr: "20"
+                noDelayProvisioning: false
+                projectId: {{ .Values.config.projectID }}
+            - computeEngine:
+                cloudName: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}"
+                configurations:
+                - bootDiskAutoDelete: true
+                  bootDiskSizeGb: 10
+                  bootDiskSizeGbStr: "10"
+                  bootDiskType: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/{{ .Values.config.zone }}/diskTypes/hyperdisk-balanced"
+                  description: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}"
+                  javaExecPath: "/usr/bin/java"
+                  labelSet:
+                  - name: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}"
+                  labelString: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}"
+                  labels: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}"
+                  launchTimeoutSeconds: 300
+                  launchTimeoutSecondsStr: "300"
+                  mode: NORMAL
+                  namePrefix: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}"
+                  numExecutors: 1
+                  numExecutorsStr: "1"
+                  oneShot: true
+                  region: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/regions/{{ .Values.config.region }}"
+                  remoteFs: "/home/jenkins"
+                  retentionTimeMinutes: 6
+                  retentionTimeMinutesStr: "6"
+                  runAsUser: "jenkins"
+                  sshConfiguration:
+                    customPrivateKeyCredentialsId: "jenkins-cuttlefish-vm-ssh-private-key"
+                  template: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/global/instanceTemplates/instance-template-cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}"
+                  useInternalAddress: true
+                  zone: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/{{ .Values.config.zone }}"
+                credentialsId: "gce-creds"
+                instanceCapStr: "20"
+                noDelayProvisioning: false
+                projectId: {{ .Values.config.projectID }}
+            - computeEngine:
+                cloudName: cuttlefish-vm-main-arm64
+                configurations:
+                - bootDiskAutoDelete: true
+                  bootDiskSizeGb: 10
+                  bootDiskSizeGbStr: "10"
+                  bootDiskType: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/us-central1-b/diskTypes/hyperdisk-balanced"
+                  description: "cuttlefish-vm-main-arm64"
+                  javaExecPath: "/usr/bin/java"
+                  labelSet:
+                  - name: "cuttlefish-vm-main-arm64"
+                  labelString: "cuttlefish-vm-main-arm64"
+                  labels: "cuttlefish-vm-main-arm64"
+                  launchTimeoutSeconds: 300
+                  launchTimeoutSecondsStr: "300"
+                  mode: NORMAL
+                  namePrefix: "cuttlefish-vm-main-arm64"
+                  numExecutors: 1
+                  numExecutorsStr: "1"
+                  oneShot: true
+                  region: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/regions/us-central1"
+                  remoteFs: "/home/jenkins"
+                  retentionTimeMinutes: 6
+                  retentionTimeMinutesStr: "6"
+                  runAsUser: "jenkins"
+                  sshConfiguration:
+                    customPrivateKeyCredentialsId: "jenkins-cuttlefish-vm-ssh-private-key"
+                  template: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/global/instanceTemplates/instance-template-cuttlefish-vm-main-arm64"
+                  useInternalAddress: true
+                  zone: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/us-central1-f"
+                credentialsId: "gce-creds"
+                instanceCapStr: "20"
+                noDelayProvisioning: false
+                projectId: {{ .Values.config.projectID }}
+            - computeEngine:
+                cloudName: cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}-arm64
+                configurations:
+                - bootDiskAutoDelete: true
+                  bootDiskSizeGb: 10
+                  bootDiskSizeGbStr: "10"
+                  bootDiskType: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/us-central1-b/diskTypes/hyperdisk-balanced"
+                  description: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}-arm64"
+                  javaExecPath: "/usr/bin/java"
+                  labelSet:
+                  - name: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}-arm64"
+                  labelString: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}-arm64"
+                  labels: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}-arm64"
+                  launchTimeoutSeconds: 300
+                  launchTimeoutSecondsStr: "300"
+                  mode: NORMAL
+                  namePrefix: "cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}-arm64"
+                  numExecutors: 1
+                  numExecutorsStr: "1"
+                  oneShot: true
+                  region: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/regions/us-central1"
+                  remoteFs: "/home/jenkins"
+                  retentionTimeMinutes: 6
+                  retentionTimeMinutesStr: "6"
+                  runAsUser: "jenkins"
+                  sshConfiguration:
+                    customPrivateKeyCredentialsId: "jenkins-cuttlefish-vm-ssh-private-key"
+                  template: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/global/instanceTemplates/instance-template-cuttlefish-vm-{{ .Values.config.workloads.android.cuttlefish.tag }}-arm64"
+                  useInternalAddress: true
+                  zone: "https://www.googleapis.com/compute/v1/projects/{{ .Values.config.projectID }}/zones/us-central1-f"
+                credentialsId: "gce-creds"
+                instanceCapStr: "20"
+                noDelayProvisioning: false
+                projectId: {{ .Values.config.projectID }}
+          globalNodeProperties:
+            - envVars:
+                env:
+                - key: "CLOUD_REGION"
+                  value: {{ .Values.config.region }}
+                - key: "CLOUD_ZONE"
+                  value: {{ .Values.config.zone }}
+                - key: "CLOUD_PROJECT"
+                  value: {{ .Values.config.projectID }}
+                - key: "GERRIT_CREDENTIALS_ID"
+                  value: "jenkins-gerrit-http-password"
+                - key: "HORIZON_DOMAIN"
+                  value: {{ .Values.config.domain }}
+                - key: "HORIZON_GITHUB_URL"
+                  value: {{ .Values.config.workloads.android.url }}
+                - key: "HORIZON_GITHUB_BRANCH"
+                  value: {{ .Values.config.workloads.android.branch }}
+                - key: "ANDROID_BUILD_BUCKET_ROOT_NAME"
+                  value: {{ .Values.config.projectID }}-aaos
+                - key: "ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME"
+                  value: "horizon-sdv/aaos-builder"
+                - key: "CLOUD_BACKEND_BUCKET"
+                  value: {{ .Values.config.backendBucket }}
+                - key: "TERRAFORM_WORKLOADS_SERVICE_ACCOUNT"
+                  value: {{ .Values.config.workloads.common.serviceAccounts.terraformWorkloadsSA.name }}
+                - key: "JENKINS_SERVICE_ACCOUNT"
+                  value: "jenkins-sa"
+                - key: "JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX"
+                  value: "reclaimable-storage-class"
+                - key: "OPENBSW_BUILD_BUCKET_ROOT_NAME"
+                  value: {{ .Values.config.projectID }}-openbsw
+                - key: "OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME"
+                  value: "horizon-sdv/openbsw-builder"
+                - key: "INFRA_DOCKER_ARTIFACT_PATH_NAME"
+                  value: "horizon-sdv/abfs-infra"
+                - key: "ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME"
+                  value: "horizon-sdv/aaos-abfs-builder"
+                - key: "UTILITIES_DOCKER_ARTIFACT_PATH_NAME"
+                  value: "horizon-sdv/gcp-utilities"
+
+                - key: "AOSP_MIRROR_WORKLOADS_ENV_IMAGE_NAME"
+                  value: {{ .Values.config.workloads.android.aospMirror.workloadEnv.image }}
+                - key: "AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME"
+                  value: {{ .Values.config.workloads.android.aospMirror.mirrorPresets.filestorePVCName }}
+                - key: "AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER"
+                  value: {{ .Values.config.workloads.android.aospMirror.mirrorPresets.filestorePVCMountPathInContainer }}
+                - key: "AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME"
+                  value: {{ .Values.config.workloads.android.aospMirror.mirrorPresets.mirrorRootSubdirectoryName }}
+                - key: "AOSP_MIRROR_PRESET_NETWORK_NAME"
+                  value: {{ .Values.config.workloads.android.aospMirror.mirrorPresets.network }}
+                - key: "AOSP_MIRROR_PRESET_SUBNETWORK_NAME"
+                  value: {{ .Values.config.workloads.android.aospMirror.mirrorPresets.subnetwork }}
+
+                - key: "CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME"
+                  value: {{ .Values.config.workloads.cloudWorkstations.workloadEnv.image }}
+                - key: "CLOUD_WS_CLUSTER_PRESET_NAME"
+                  value: {{ .Values.config.workloads.cloudWorkstations.clusterPresets.name }}
+                - key: "CLOUD_WS_CLUSTER_PRESET_NETWORK_NAME"
+                  value: {{ .Values.config.workloads.cloudWorkstations.clusterPresets.network }}
+                - key: "CLOUD_WS_CLUSTER_PRESET_SUBNETWORK_NAME"
+                  value: {{ .Values.config.workloads.cloudWorkstations.clusterPresets.subnetwork }}
+                - key: "CLOUD_WS_CLUSTER_PRESET_PRIVATE_CLUSTER"
+                  value: {{ .Values.config.workloads.cloudWorkstations.clusterPresets.privateCluster }}
+                - key: "CLOUD_WS_HORIZON_CODE_OSS_IMAGE_NAME"
+                  value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonCodeOSS.image }}
+                - key: "CLOUD_WS_HORIZON_ASFP_IMAGE_NAME"
+                  value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonASFP.image }}
+                - key: "CLOUD_WS_HORIZON_ANDROID_STUDIO_IMAGE_NAME"
+                  value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonAndroidStudio.image }}
+        groovy:
+          - script: >
+              println("This is groovy !");
+        jobs:
+          - script: >
+              pipelineJob('Seed Workloads') {
+                description('''<br/><h3 style="margin-bottom: 10px;">Seed Workloads Job</h3>
+                  <p>This seed job is used to to create and update the workload pipeline folders and jobs in Jenkins.</p>
+                  <h4 style="margin-bottom: 10px;">Mandatory Parameters</h4>
+                  <ul><li><code>SEED_WORKLOAD</code>: The name of the workload to populate.</li></ul>
+                  <p>Refer to the README.md in the repository for further information.</p>
+                ''')
+
+                triggers {
+                  hudsonStartupTrigger {
+                    nodeParameterName("")
+                    label("")
+                    quietPeriod("0")
+                    runOnChoice("ON_CONNECT")
+                  }
+                }
+
+                properties {
+                  authorizeProjectProperty {
+                    strategy {
+                      triggeringUsersAuthorizationStrategy()
+                    }
+                  }
+                }
+
+                definition {
+                  cpsScm {
+                    lightweight()
+                    scm {
+                      git {
+                        remote {
+                          url('{{ .Values.config.workloads.android.url }}')
+                          credentials('jenkins-github-creds')
+                        }
+                        branch('*/{{ .Values.config.workloads.android.branch }}')
+                      }
+                    }
+                    scriptPath('workloads/seed/Jenkinsfile')
+                  }
+                }
+              }
+        unclassified:
+          ansiColorBuildWrapper:
+            globalColorMapName: "xterm"
+          buildUserVars:
+            allBuilds: true
+          gerrit-trigger:
+            servers:
+              - name: "Gerrit"
+                noConnectionOnStartup: false
+                config:
+                  buildCurrentPatchesOnly:
+                    abortAbandonedPatchsets: false
+                    abortManualPatchsets: false
+                    abortNewPatchsets: false
+                    abortSameTopic: false
+                    enabled: false
+                  categories:
+                    - verdictDescription: "Code Review"
+                      verdictValue: "Code-Review"
+                    - verdictDescription: "Verified"
+                      verdictValue: "Verified"
+                  gerritAuthKeyFile: "/run/secrets/additional/jenkins-gerrit-ssh-private-key-privateKey"
+                  gerritFrontEndUrl: "https://{{ .Values.config.domain }}/gerrit/"
+                  gerritHostName: "gerrit-service.gerrit.svc.cluster.local"
+                  gerritUserName: "gerrit-admin"
+                  useRestApi: false
+          timestamper:
+            allPipelines: true
+            systemTimeFormat: "'<b>'yyyy-MM-dd HH:mm:ss.SSS'</b> '"
+            elapsedTimeFormat: "'<b>'HH:mm:ss.S'</b> '"
+          globalLibraries:
+            libraries:
+            - defaultVersion: "{{ .Values.config.workloads.android.branch }}"
+              name: "cvd-pipeline-shared-library"
+              retriever:
+                modernSCM:
+                  libraryPath: "workloads/common/jenkins/shared-libraries/cvd-pipeline-shared-library"
+                  scm:
+                    github:
+                      configuredByUrl: true
+                      credentialsId: "jenkins-github-creds"
+                      repoOwner: "{{ .Values.github.repoOwner }}"
+                      repository: "{{ .Values.github.repoName }}"
+                      repositoryUrl: "{{ .Values.config.workloads.android.url }}"
+                      traits:
+                      - gitHubBranchDiscovery:
+                          strategyId: 3
+                      - gitHubPullRequestDiscovery:
+                          strategyId: 2
+                      - gitHubForkDiscovery:
+                          strategyId: 2
+                          trust: "gitHubTrustPermissions"

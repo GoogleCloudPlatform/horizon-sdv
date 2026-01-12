@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,8 @@ resource "google_certificate_manager_certificate" "horizon_sdv_cert" {
   scope   = "DEFAULT"
   managed {
     domains = [
-      google_certificate_manager_dns_authorization.instance.domain
+      google_certificate_manager_dns_authorization.instance.domain,
+      "*.${google_certificate_manager_dns_authorization.instance.domain}"
     ]
     dns_authorizations = [
       google_certificate_manager_dns_authorization.instance.id

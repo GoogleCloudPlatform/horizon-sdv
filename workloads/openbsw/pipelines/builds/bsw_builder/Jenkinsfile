@@ -85,12 +85,23 @@ pipeline {
         - name: builder
           image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME}:${IMAGE_TAG}
           imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
           command:
           - sleep
           args:
-          - 4h
+          - 5h
+          volumeMounts:
+            - name: host-lib-modules
+              mountPath: /lib/modules
+              readOnly: true
         nodeSelector:
           workloadLabel: openbsw
+        volumes:
+          - name: host-lib-modules
+            hostPath:
+              path: /lib/modules
+              type: Directory
     """.stripIndent()
   }
 
@@ -118,6 +129,42 @@ pipeline {
           }
         }
 
+        stage ('Build Documentation') {
+          when {
+            allOf {
+              expression { env.BUILD_DOCUMENTATION == 'true' }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  BUILD_NXP_S32K148="false" \
+                  BUILD_POSIX="false" \
+                  BUILD_UNIT_TESTS="false" \
+                  POSIX_PYTEST="false" \
+                  CODE_COVERAGE="false" \
+                  LIST_UNIT_TESTS="false" \
+                  RUN_UNIT_TESTS="false" \
+                  BUILD_DOCUMENTATION="${BUILD_DOCUMENTATION}" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_build.sh
+                '''
+                archiveArtifacts artifacts: 'openbsw-doc*.*', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+
+                publishHTML target: [
+                  allowMissing: true,
+                  alwaysLinkToLastBuild: true,
+                  keepAll: true,
+                  reportDir: "doxygenOut/html",
+                  reportFiles: 'index.html',
+                  reportName: 'OpenBSW Documentation'
+                ]
+              }
+            }
+          }
+        }
+
         stage ('List Unit Tests') {
           when {
             allOf {
@@ -133,6 +180,7 @@ pipeline {
                   BUILD_NXP_S32K148="false" \
                   BUILD_POSIX="false" \
                   BUILD_UNIT_TESTS="false" \
+                  POSIX_PYTEST="false" \
                   CODE_COVERAGE="false" \
                   LIST_UNIT_TESTS="${LIST_UNIT_TESTS}" \
                   LIST_UNIT_TESTS_CMDLINE="${LIST_UNIT_TESTS_CMDLINE}" \
@@ -160,6 +208,7 @@ pipeline {
                   BUILD_NXP_S32K148="false" \
                   BUILD_POSIX="false" \
                   BUILD_UNIT_TESTS="${BUILD_UNIT_TESTS}" \
+                  POSIX_PYTEST="false" \
                   CODE_COVERAGE="false" \
                   LIST_UNIT_TESTS="false" \
                   RUN_UNIT_TESTS="false" \
@@ -187,6 +236,7 @@ pipeline {
                   BUILD_NXP_S32K148="false" \
                   BUILD_POSIX="false" \
                   BUILD_UNIT_TESTS="false" \
+                  POSIX_PYTEST="false" \
                   CODE_COVERAGE="false" \
                   LIST_UNIT_TESTS="false" \
                   RUN_UNIT_TESTS="${RUN_UNIT_TESTS}" \
@@ -214,6 +264,7 @@ pipeline {
                   BUILD_NXP_S32K148="false" \
                   BUILD_POSIX="false" \
                   BUILD_UNIT_TESTS="false" \
+                  POSIX_PYTEST="false" \
                   LIST_UNIT_TESTS="false" \
                   RUN_UNIT_TESTS="false" \
                   CODE_COVERAGE="${CODE_COVERAGE}" \
@@ -248,6 +299,7 @@ pipeline {
                   CMAKE_SYNC_JOBS="${CMAKE_SYNC_JOBS}" \
                   BUILD_NXP_S32K148="false" \
                   BUILD_POSIX="${BUILD_POSIX}" \
+                  POSIX_PYTEST="false" \
                   BUILD_UNIT_TESTS="false" \
                   CODE_COVERAGE="false" \
                   LIST_UNIT_TESTS="false" \
@@ -255,6 +307,34 @@ pipeline {
                   RUN_UNIT_TESTS="false" \
                   ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_build.sh
                 '''
+              }
+            }
+          }
+        }
+
+        stage ('Run POSIX pyTest') {
+          when {
+            allOf {
+              expression { env.BUILD_POSIX == 'true' }
+              expression { env.POSIX_PYTEST == 'true' }
+              expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+          }
+          steps {
+            container(name: 'builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  POSIX_PYTEST="true" \
+                  BUILD_NXP_S32K148="false" \
+                  BUILD_POSIX="false" \
+                  BUILD_UNIT_TESTS="false" \
+                  CODE_COVERAGE="false" \
+                  LIST_UNIT_TESTS="false" \
+                  RUN_UNIT_TESTS="false" \
+                  POSIX_PYTEST_CMDLINE="${POSIX_PYTEST_CMDLINE}" \
+                  ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_build.sh
+                '''
+                archiveArtifacts artifacts: '*pytest*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
               }
             }
           }
@@ -275,6 +355,7 @@ pipeline {
                   BUILD_POSIX="false" \
                   BUILD_UNIT_TESTS="false" \
                   BUILD_NXP_S32K148="${BUILD_NXP_S32K148}" \
+                  POSIX_PYTEST="false" \
                   CODE_COVERAGE="false" \
                   LIST_UNIT_TESTS="false" \
                   NXP_S32K148_BUILD_CMDLINE="${NXP_S32K148_BUILD_CMDLINE}" \
@@ -298,6 +379,8 @@ pipeline {
               catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                 sh '''
                   OPENBSW_ARTIFACT_ROOT_NAME="${OPENBSW_BUILD_BUCKET_ROOT_NAME}" \
+                  STORAGE_BUCKET_DESTINATION="${STORAGE_BUCKET_DESTINATION}" \
+                  STORAGE_LABELS="${STORAGE_LABELS}" \
                   ./workloads/openbsw/pipelines/builds/bsw_builder/bsw_storage.sh
                 '''
                 archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true

@@ -5,12 +5,14 @@
 - [GitOps in Horizon SDV project](#gitops-in-horizon-sdv-project)
 - [GitOps deployment process](#gitops-deployment-process)
 - [ArgoCD overview](#argocd-overview)
-- [Aplications](#aplications)
+- [Applications](#applications)
     - [Keycloak](#keycloak)
     - [Jenkins](#jenkins)
     - [Gerrit](#gerrit)
     - [MTK Connect](#mtk-connect)
     - [Headlamp](#headlamp)
+    - [Gerrit MCP Server](#gerrit-mcp-server)
+    - [MCP Gateway Registry](#mcp-gateway-registry)
     - [Landing Page](#landing-page)
 - [Dependencies](#dependencies)
     - [Dynamic PVC Provisioner and Releaser](#dynamic-pvc-provisioner-and-releaser)
@@ -18,7 +20,11 @@
     - [Zookeeper](#zookeeper)
     - [MongoDB](#mongodb)
     - [Gerrit Operator](#gerrit-operator)
+    - [Gerrit MCP Server](#gerrit-mcp-server)
     - [External Secrets](#external-secrets)
+    - [External DNS](#external-dns)
+    - [OAuth2 Proxy](#oauth-proxy)
+    - [Token Injector](#token-injector)
     - [Post Jobs](#post-jobs)
 
 ## GitOps overview
@@ -28,38 +34,38 @@ GitOps is a deployment approach that uses git as the source of truth for infrast
 
 ## GitOps in Horizon SDV project
 
-In the Horizon SDV platform, GitOps is used to manage applications and their dependencies using ArgoCD. The platform includes applications such as Keycloak, Gerrit, Jenkins, MTK Connect, and LandingPage, along with dependencies like Dynamic PVC Provisioner and Releaser, PostgreSQL, Zookeeper, MongoDB, Gerrit Operator, and several custom Post Jobs. By managing these components within a GitOps workflow, the platform ensures consistent, automated, and scalable deployments.
+In the Horizon SDV platform, GitOps is used to manage applications and their dependencies using ArgoCD. The platform includes applications such as Keycloak, Gerrit, Jenkins, MTK Connect, MCP Gateway Registry and LandingPage, along with dependencies like Dynamic PVC Provisioner and Releaser, PostgreSQL, Zookeeper, MongoDB, Gerrit Operator, Gerrit MCP Server, External DNS, OAuth2 Proxy, Token Injector and several custom Post Jobs. By managing these components within a GitOps workflow, the platform ensures consistent, automated, and scalable deployments.
 
 
 ## GitOps deployment process
 
 Project executes successively following files and performs operations defined inside.
 
-1. Execute file `terraform/bash-scripts/stage1.sh`:
-    1. perform initial operations done by Terraform,
-    2. clone git repository and checkout on branch pointed by variable `GITHUB_ENV_NAME`.
-2. Execute `gitops/env/stage2/configs/build.sh`:
-    1. dockerize scripts that are stored in `gitops/env/stage2/configs` path.
-3. Execute `gitops/env/stage1/deploy.sh`:
-    1. add the ArgoCD and External Secrets Helm repositories to Helm and update the local repository index to fetch the latest chart versions,
-    2. update variables values in `argocd-secrets.yaml`, `argocd-values.yaml`, `argocd-config.yaml` files.
-4. Apply kubernetes resource in file `argocd-secrets.yaml`:
-    1. configure basic secrets configuration in `argocd` namespace.
-5. Apply kubernetes resource in file `argocd-config.yaml`:
-    1. define configuration of ArgoCD aplication,
-    2. ArgoCD looks in path `gitops/env/stage2` for Kubernetes manifests,
-    3. if aplication sync fails, system retries to sync up to 5 times.
-6. The project uses Helm to manage Kubernetes configurations. Source files are stored in `gitops/env/stage2`:
+1. Create `terraform.tfvars` file at path `terraform/env/` if it does not exist already by copying `terraform/env/terraform.tfvars.sample` file.
+2. Update `terraform.tfvars` with actual configuration values.
+3. Execute file `tools/scripts/deployment/deploy.sh`:
+    1. Check if the tools with required versions have been installed.
+    2. Create `terraform.tfvars` file if missing. It is required to update this file with actual configuration values.
+    3. Check if authenticate to Google Cloud Platform via `gcloud` CLI.
+    4. Initialize Terraform.
+    5. Execute `terraform apply` or `terraform destroy` based on supplied argument.
+4. The Terraform module `terraform/modules/sdv-container-images`
+    1. dockerize scripts that are stored in `terraform/modules/sdv-container-images/images` path.
+5. The Terraform module `terraform/modules/sdv-gke-apps`
+    1. Deploy Argo CD and External Secrets via Helm.
+    2. Create required namespaces, secrets, service accounts, external secrets, secret stores.
+    3. Create required Argo CD Application Project and create `horizon-sdv` Argo CD Application.
+6. The project uses Helm to manage Kubernetes configurations. Source files are stored in `gitops/`:
     1. file `Chart.yaml` defines the Helm chart (name, version etc.),
     2. file `values.yaml` contains default configuration values,
-    3. `gitops/env/stage2/templates` - contains Kubernetes resource definitions (Deployments, Jobs, Service Accounts, etc.).
-
+    3. `gitops/templates` - contains Kubernetes resource definitions (Deployments, Jobs, Service Accounts, etc.).
 
 ### Input parameters
 
 To start GitOps deployment process it is required to provide list of configure parameters. They are used to create applications in the Horizon SDV platform. These parameters are provided as environment variables. List of input configuration parameters is provided below:
 
 - GITHUB_REPO_NAME (repository name, without https://github.com prefix)
+- GITHUB_REPO_BRANCH_NAME (repository branch to be used for deployment)
 - GCP_PROJECT_ID (GCP Project ID)
 - GCP_CLOUD_REGION (GCP Cloud Region)
 - GCP_CLOUD_ZONE (GCP Cloud Zone)
@@ -91,7 +97,7 @@ Additionally, ArgoCD utilizes sync waves, a feature that allows defining the ord
 |           |            |                  |                          | Keycloak Aplication      | Headlamp Application    |                       |                     |           |                      |
 
 
-## Aplications
+## Applications
 
 ### Landing Page
 
@@ -157,7 +163,7 @@ Jenkins provides a CI/CD pipeline execution environment for workloads, currently
 Jenkins is installed using the official OpenSource Helm chart, with custom configurations specific to the Horizon SDV project.
 
 ####  Configuration
-Jenkins is configured using jenkins-init.yaml and jenkins.yaml, which define:
+Jenkins is configured using jenkins-init.yaml, jenkins.yaml, and values-jenkins.yaml, which define:
 - Secrets management for applications.
 - Persistent storage setup.
 - Base Jenkins configuration.
@@ -226,11 +232,49 @@ It is particularly useful for developers, DevOps engineers to manage Kubernetes 
 Headlamp is deployed by helm chart. During installation, an initial configuration is applied. Additionally kubescape is installed as a dependency.
 
 #### Configuration
-To authenticate to headlamp is needed token. Token should be generated via bastion host :
-`kubectl create token headlamp-admin -n headlamp` 
+To Enable authentication via Keycloak (SSO), the `keycloak-post-headlamp` post-job is executed, creates and configures required client, client scopes, user groups on Keycloak to enable SSO authentication. This is enabled by using OAuth2 Proxy and a custom Nginx based token injector solution.
 
-Then just copy generated token and paste it on headlamp login sceen. Access should be possible. Token is valid 1h for first time login.
-SSO autentication is planned in future releases.
+
+### Gerrit MCP Server
+
+#### URL
+This app is not exposed via a public URL.
+
+#### Purpose
+Gerrit MCP Server is used to facilitate communication between AI tools and the Gerrit code review system. It provides a standardized API interface for AI tools to perform operations such as code reviews, submissions, and other interactions with Gerrit.
+
+#### Installation
+Gerrit MCP Server is built from [source code](https://gerrit.googlesource.com/gerrit-mcp-server) during platform infra deployment using `terraform/modules/sdv-container-images` module and deployed as an application using a custom Helm chart config `gitops/templates/gerrit-mcp-server.yaml` and `gitops/apps/gerrit-mcp-server`, created for Horizon SDV project.
+
+#### Configuration
+No additional configuration or integration with other applications is required.
+
+Note that Gerrit MCP Server depends on Gerrit being installed and configured. Also, since it does not have any authentication mechanism of its own, it relies on MCP Gateway Registry's authentication and authorization system to control access.
+
+
+### MCP Gateway Registry
+
+#### URL
+https://mcp.<ENV_NAME>.<HORIZON_DOMAIN>
+
+Ex: https://mcp.demo.horizon-sdv.com
+
+#### Purpose
+MCP Gateway Registry is a centralized application for managing, monitoring and authenticating to MCP (Model Context Protocol) servers and agents deployed in Horizon platform or other environments.
+
+#### Installation
+MCP Gateway Registry is deployed using official prebuilt [container images](https://hub.docker.com/u/mcpgateway), with a custom helm chart config `gitops/templates/mcp-gateway-registry.yaml` and `gitops/apps/mcp-gateway-registry`, created for Horizon SDV project.
+
+It uses the folowing container images:
+- mcpgateway/registry:v1.6.0
+- mcpgateway/auth-server:v1.6.0
+- mcpgateway/mcpgw-server:v1.6.0
+
+During installation, an initial configuration is applied to setup required resources using `gitops/templates/mcp-gateway-registry-init.yaml`.
+
+#### Configuration
+To enable authentication via Keycloak, the `keycloak-post-mcp-gateway-registry` post-job is executed, which creates and configures the necessary clients, admin user, groups, and client mappers in Keycloak. It also generates and updates the required client secrets in Kubernetes for secure communication.
+
 
 ## Dependencies
 
@@ -252,6 +296,15 @@ A management tool designed to simplify the installation and configuration of Ger
 ### External Secrets
 While not directly visible in ArgoCD, External Secrets plays a crucial role in synchronizing secrets between GCP Secret Manager and Kubernetes Secrets.
 
+### External DNS
+Creates, configures and manages DNS records for GCP Cloud DNS Zone based on the set hostname values for gateway-httproute resources.
+
+### OAuth Proxy
+Headlamp is dependant on headlamp-oauth2-proxy for enabling Keycloak based authentication.
+
+### Token Injector
+Headlamp is dependant on headlamp-token-injector for fetching and injecting service account token into authorization header to enable Kubernetes API access to fetch and display required data on the headlamp UI.
+
 ### Post Jobs
 A collection of scripts that handle application-specific configurations when standard methods are insufficient. They also ensure seamless integration between applications.
 
@@ -260,6 +313,7 @@ A collection of scripts that handle application-specific configurations when sta
 - **keycloak-post-jenkins** – Configures Jenkins authentication with Keycloak by generating and updating the necessary secret in Kubernetes for secure communication.
 - **keycloak-post-gerrit** – Prepares a gerrit-admin service account in Keycloak for Gerrit authentication.
 - **keycloak-post-mtk-connect** – Integrates Keycloak with MTK Connect using SAML for centralized authentication.
+- **keycloak-post-mcp-gateway-registry** – Configures authentication with Keycloak by creating and updating the necessary clients, admin user, groups and client mappers in Keycloak. Then generating and updating the necessary client secrets in Kubernetes for secure communication.
 - **mtk-connect-post** – Configures MTK Connect after installation, ensuring it is properly set up for use.
 - **mtk-connect-post-key** – Generates and configures necessary API keys for MTK Connect.
 - **gerrit-post** – Uses the gerrit-admin account to perform the initial setup and configuration of Gerrit.

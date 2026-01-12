@@ -19,7 +19,8 @@ pipelineJob('Android/Tests/CTS Execution') {
     <p>The job runs on a cuttlefish-ready virtual machine instance (refer to the <i>CF Instance Template</i> job) together with running virtual devices (refer to <i>CVD Launcher</i> job). The Compatibility Test Suite is then executed across the virtual devices:
     <ul>
       <li><a href="https://source.android.com/docs/core/tests/tradefed" target="_blank">CTS Trade Federation</a></i> (<tt>cts-tradefed</tt>) - the test harness for CTS - can distribute / shard the tests across the multiple virtual devices </li>
-      <li>The CTS version can either use the default <a href="https://source.android.com/docs/compatibility/cts/downloads" target="_blank">google-released</a> version or a test suite built by the <i>CTS Builder</i> job</i></li>
+      <li>The CTS version can either use the default <a
+href="https://source.android.com/docs/compatibility/cts/downloads" target="_blank">google-released</a> version or a test suite built by the <i>AAOS Builder</i> job with <i>AAOS_BUILD_CTS</i> enabled.</i></li>
     </ul></p>
     <h4 style="margin-bottom: 10px;">Mandatory Parameters</h4>
     <ul>
@@ -27,13 +28,17 @@ pipelineJob('Android/Tests/CTS Execution') {
       <li><code>CUTTLEFISH_DOWNLOAD_URL</code>: The URL of the user's virtual device images to install and launch.</li>
     </ul>
     <p>Refer to the README.md in the respective repository for further details.</p>
+    <h4 style="margin-bottom: 10px;">Resources</h4>
+    <p>Ensure you select appropriate values for <code>NUM_INSTANCES</code>, <code>VM_CPUS</code>, <code>VM_MEMORY_MB</code> that align with the available resources of the VM instance used for test, defined by <code>JENKINS_GCE_CLOUD_LABEL</code>.</p>
+    <p>CVD will automatically resize should users define more than the default resources CVD is configured for (10), e.g <code>NUM_INSTANCES=15</code> will resize the CVD host service to support 15 devices.</p>
     <h4 style="margin-bottom: 10px;">MTK Connect Integration</h4>
     <p>User may choose to enable <a href="http://${HORIZON_DOMAIN}/mtk-connect/portal/testbenches" target="_blank">MTK Connect</a> to allow users monitor virtual devices during testing.</p>
     <h4 style="margin-bottom: 10px;">Test Results and Debugging</h4>
     <p>Test results are stored with the job as artifacts.<br/>
     <p>Users can optionally keep the cuttlefish virtual devices alive for a finite amount of time after the CTS run has completed to facilitate debugging via MTK Connect. This option is only available when MTK Connect is enabled.</p>
     <h4 style="margin-bottom: 10px;">Important Notes</h4>
-    <p>Users are responsible for specifying a valid cuttlefish instance - the job will block if the specified instance does not exist.</p>
+    <p><ul><li>Users are responsible for specifying a valid cuttlefish instance - the job will block if the specified instance does not exist.</li>
+           <li>If tests timeout, then create the Cuttflefish instance template with a larger run duration, see <code>MAX_RUN_DURATION</code>, increase or set to 0 to ignore max runtime.</li></ul></p>
     <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>""")
 
   parameters {
@@ -42,8 +47,10 @@ pipelineJob('Android/Tests/CTS Execution') {
       defaultValue("${JENKINS_GCE_CLOUD_LABEL}")
       description('''<p>The Jenkins GCE Clouds label for the Cuttlefish instance template, e.g.<br/></p>
         <ul>
+          <li>cuttlefish-vm-v1350</li>
           <li>cuttlefish-vm-main</li>
-          <li>cuttlefish-vm-v1180</li>
+          <li>cuttlefish-vm-v1350-arm64</li>
+          <li>cuttlefish-vm-main-arm64</li>
         </ul>''')
       trim(true)
     }
@@ -60,7 +67,9 @@ pipelineJob('Android/Tests/CTS Execution') {
     stringParam {
       name('CUTTLEFISH_DOWNLOAD_URL')
       defaultValue('')
-      description("""<p>Storage URL pointing to the location of the Cuttlefish Virtual Device images and host packages, e.g.<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;</p>""")
+      description("""<p>Mandatory: Storage URL pointing to the location of the Cuttlefish Virtual Device images and host packages, e.g.<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;<br/><br/>
+        <b>Note:</b>
+          <ul><li>if build number is less than 2 digits, then zero pad , i.e. 1 to 9 must be 01 to 09.</li></ul)</p>""")
       trim(true)
     }
 
@@ -75,29 +84,51 @@ pipelineJob('Android/Tests/CTS Execution') {
 
     choiceParam {
       name('ANDROID_VERSION')
-      choices(['15', '14'])
-      description('''<p>Select Android version: Android 15 or 14<br/>
+      choices(['16', '15', '14'])
+      description('''<p>Select Android version: Android 16, 15 or 14<br/>
         Essential for picking the correct test hardness</p>''')
     }
 
     stringParam {
       name('CTS_DOWNLOAD_URL')
       defaultValue('')
-      description("""<p>Optional CTS test harness download URL.<br/>Use official CTS test harness (empty field) or one built from CTS Builder job and stored in GS Bucket, e.g.<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/CTS_Builder/&lt;BUILD_NUMBER&gt;/android-cts.zip</p>""")
+      description("""<p>Optional CTS test harness download URL.<br/>Use official CTS test harness (empty field) or one built from AAOS Builder job and stored in GCS Bucket,
+e.g.<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;/android-cts.zip<br/><br/>
+        <b>Note:</b>
+          <ul><li>if build number is less than 2 digits, then zero pad , i.e. 1 to 9 must be 01 to 09.</li></ul)</p>""")
       trim(true)
     }
 
     stringParam {
       name('CTS_TESTPLAN')
       defaultValue('cts-system-virtual')
-      description('''<p>CTS Test plan to execute, e.g. cts-system-virtual (Android 15), cts-virtual-device-stable (Android 14) etc.</p>''')
+      description('''<p>CTS Test plan to execute, e.g.</p>
+        <ul><li>Android 15 and later: <code>cts-system-virtual</code></li>
+            <li>Android 14: <code>cts-virtual-device-stable</code></li></ul>''')
       trim(true)
     }
 
     stringParam {
       name('CTS_MODULE')
-      defaultValue('CtsDeqpTestCases')
-      description('''<p>CTS module to test, or leave empty if all modules are to be tested.</p>''')
+      defaultValue('')
+      description('''<p>Optional: This defines the CTS test module that will be run, e.g.</p>
+        <ul><li>Android 15 and later: <code>CtsDeqpTestCases</code></li>
+            <li>Android 14: <code>CtsHostsideNumberBlockingTestCases</code></li></ul>
+        <p>If left empty, all CTS test modules will be run.</p>''')
+      trim(true)
+    }
+
+    stringParam {
+      name('CTS_RETRY_STRATEGY')
+      defaultValue('RETRY_ANY_FAILURE')
+      description('''<p>CTS <a href="https://source.android.com/reference/tradefed/com/android/tradefed/retry/RetryStrategy" target="_blank">--retry-strategy</a> option.</p>''')
+      trim(true)
+    }
+
+    stringParam {
+      name('CTS_MAX_TESTCASE_RUN_COUNT')
+      defaultValue('2')
+      description('''<p>CTS <a href="https://source.android.com/docs/core/tests/tradefed/testing/through-tf/auto-retry" target="_blank">--max-testcase-run-count</a> option dependent on retry strategy.</p>''')
       trim(true)
     }
 
@@ -111,21 +142,21 @@ pipelineJob('Android/Tests/CTS Execution') {
 
     stringParam {
       name('NUM_INSTANCES')
-      defaultValue('10')
+      defaultValue('7')
       description('''<p>Number of guest instances to launch (num-instances option)</p>''')
       trim(true)
     }
 
     stringParam {
       name('VM_CPUS')
-      defaultValue('6')
+      defaultValue('4')
       description('''<p>Virtual CPU count (cpus option).</p>''')
       trim(true)
     }
 
     stringParam {
       name('VM_MEMORY_MB')
-      defaultValue('16384')
+      defaultValue('8192')
       description('''<p>total memory available to guest (memory_mb option)</p>''')
       trim(true)
     }
@@ -143,6 +174,13 @@ pipelineJob('Android/Tests/CTS Execution') {
       description('''<p>Enable if wishing to use MTK Connect to view UI of CTS tests on virtual devices</p>''')
     }
 
+    booleanParam {
+      name('MTK_CONNECT_PUBLIC')
+      defaultValue(false)
+      description('''<p>When checked, the MTK Connect testbench is visible to everyone.<br/>
+        By default, testbenches are private and only visible to their creator and MTK Connect administrators.</p>''')
+    }
+
     choiceParam {
       name('CUTTLEFISH_KEEP_ALIVE_TIME')
       choices(['0', '5', '15', '30', '60', '90', '120', '180'])
@@ -153,7 +191,10 @@ pipelineJob('Android/Tests/CTS Execution') {
     stringParam {
       name('CVD_ADDITIONAL_FLAGS')
       defaultValue('')
-      description('''<p>Append additional flags to `cvd` command, e.g. --display0=width=1920,height=1080,dpi=160</p>''')
+      description('''<p>Optional: Append additional optional flags to <code>cvd</code> command, e.g.
+        <ul><li><code>--setupwizard_mode DISABLED --enable_host_bluetooth false --gpu_mode guest_swiftshader</code></li>
+            <li><code>--display0=width=1920,height=1080,dpi=160</code></li>
+            <li><code>--verbosity=DEBUG</code></li></ul></p>''')
       trim(true)
     }
   }

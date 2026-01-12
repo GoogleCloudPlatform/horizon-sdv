@@ -22,8 +22,11 @@ pipelineJob('OpenBSW/Environment/Development Instance') {
     <h4 style="margin-bottom: 10px;">Instance Details</h4>
     <p>Instances can be expensive and therefore there is a maximum up-time before the instance will automatically be terminated.</p>
     <h4 style="margin-bottom: 10px;">Accessing the Instance</h4>
-    <p>Access the instance via <code>bastion</code> host and <code>kubectl</code> command line tool. Example command:</p>
+    <p>Access the instance via <code>kubectl</code> command line tool. Example command:</p>
     <p><code>kubectl exec -it -n jenkins &lt;pod name&gt; -- bash</code></p>
+    <p>Reference <a href="https://docs.cloud.google.com/kubernetes-engine/enterprise/multicluster-management/gateway" target="_blank">Fleet management</a> to fetch credentials for a fleet-registered cluster to be used in Connect Gateway, e.g. <br/>
+    <ul><li><code>gcloud container fleet memberships list</code></li>
+        <li><code>gcloud container fleet memberships get-credentials sdv-cluster</code></li></ul></p>
     <p>Alternatively access Host via MTK Connect by enabling MTK_CONNECT_ENABLE.</p>
     <h4 style="margin-bottom: 10px;">Important Notes</h4>
     <p>Users are responsible for saving their own work to persistent storage before expiry.</p>
@@ -49,6 +52,21 @@ pipelineJob('OpenBSW/Environment/Development Instance') {
       name('MTK_CONNECT_ENABLE')
       defaultValue(false)
       description('''<p>Enable if wishing to use MTK Connect to connect to the host instance.</p>''')
+    }
+
+    booleanParam {
+      name('MTK_CONNECT_PUBLIC')
+      defaultValue(false)
+      description('''<p>When checked, the MTK Connect testbench is visible to everyone.<br/>
+        By default, testbenches are private and only visible to their creator and MTK Connect administrators.</p>''')
+    }
+
+    stringParam {
+      name('NUM_HOST_INSTANCES')
+      defaultValue('1')
+      description('''<p>Number of host instances to create.<p>
+        <p>i.e. the number of devices to create in MTK Connect testbench.</p>''')
+      trim(true)
     }
   }
 
