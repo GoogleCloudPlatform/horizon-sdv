@@ -1,0 +1,136 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.app.name }}-registry
+  namespace: {{ .Values.app.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.app.name }}-registry
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app.name }}-registry
+    spec:
+      initContainers:
+        - name: seed-servers-data
+          image: busybox
+          command: ["sh", "-c"]
+          args:
+            - |
+              # Seed servers data from servers-seed-data into servers-pvc if not present.
+              if [ ! -f /servers/gerrit-mcp-server.json ]; then
+                echo "Initializing servers data..."
+                cp /servers-seed-data/gerrit-mcp-server.json /servers/gerrit-mcp-server.json
+                echo "Servers seed data copied to servers-pvc."
+              else
+                echo "Servers seed data already exists. Skipping seed."
+              fi
+          volumeMounts:
+            - name: servers
+              mountPath: /servers
+            - name: servers-seed-data
+              mountPath: /servers-seed-data
+      containers:
+        - name: registry
+          image: "mcpgateway/{{ .Values.registry.image.repository }}:{{ .Values.registry.image.tag }}"
+          imagePullPolicy: {{ .Values.registry.image.pullPolicy }}
+          {{- if .Values.registry.lifecycle.postStart.enabled }}
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "rm -f /etc/nginx/sites-enabled/default && nginx -s reload || true"]
+          {{- end }}
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+            - containerPort: 7860
+          env:
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-web-keycloak-secret
+                  key: client_secret
+            - name: KEYCLOAK_M2M_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-cli-keycloak-secret
+                  key: client_secret
+            - name: ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-app-admin
+                  key: username
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-app-admin
+                  key: password
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-secret-key
+                  key: secret_key
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.app.name }}-common-config
+          volumeMounts:
+            - name: servers
+              mountPath: /app/registry/servers
+            - name: models
+              mountPath: /app/registry/models
+            - name: logs
+              mountPath: /app/logs
+            - name: scopes
+              mountPath: /app/auth_server/scopes.yml
+              subPath: scopes.yml
+
+      volumes:
+        - name: servers
+          persistentVolumeClaim:
+            claimName: mcp-gateway-registry-servers-pvc
+        - name: models
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        - name: scopes
+          configMap:
+            name: {{ .Values.app.name }}-user-scopes-config
+        - name: servers-seed-data
+          configMap:
+            name: {{ .Values.app.name }}-servers-seed-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.registry.service.name }}
+  namespace: {{ .Values.app.namespace }}
+spec:
+  selector:
+    app: {{ .Values.app.name }}-registry
+  ports:
+    - name: api
+      port: {{ .Values.registry.service.ports.api }}
+      targetPort: 7860
+    - name: http
+      port: {{ .Values.registry.service.ports.http }}
+      targetPort: 80
+    - name: https
+      port: {{ .Values.registry.service.ports.https }}
+      targetPort: 443
+  type: {{ .Values.registry.service.type }}

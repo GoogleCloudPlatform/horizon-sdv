@@ -1,0 +1,117 @@
+# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: horizon-sdv
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: grafana
+    targetRevision: 9.3.0
+    helm:
+      values: |
+        ingress:
+          enabled: false  # Disable traditional ingress since GKE Gateway API is used
+          path: /grafana/?(.*)
+        hosts:
+          - {{ .Values.config.domain }}
+
+        datasources:
+          datasources.yaml:
+            apiVersion: 1
+            datasources:
+              - name: Prometheus
+                type: prometheus
+                access: proxy
+                url: http://prometheus-frontend.monitoring.svc:9090
+                isDefault: true
+                editable: true
+
+        dashboardProviders:
+            dashboardproviders.yaml:
+              apiVersion: 1
+              providers:
+                - name: 'default'
+                  orgId: 1
+                  folder: ''
+                  type: file
+                  disableDeletion: false
+                  editable: true
+                  options:
+                    path: /var/lib/grafana/dashboards/default
+
+        dashboards:
+          default:
+            node-exporter-full:
+              gnetId: 1860
+              revision: 41  # Use the latest revision available
+              datasource: Prometheus
+            container-cpu-usage-vs-throttling:
+              gnetId: 11848
+              revision: 1  # Use the latest revision available
+              datasource: Prometheus
+            k8s-dashboard:
+              gnetId: 15661
+              revision: 1 # Used older version becasue of issues in newest, v2 error  datasource ${DS__VICTORIAMETRICS_PROD_ALL} was not found
+              datasource: Prometheus
+
+        grafana.ini:
+          server:
+            root_url: https://{{ .Values.config.domain }}/grafana
+            serve_from_sub_path: true
+            domain: {{ .Values.config.domain }}
+          auth:
+            disable_login_form: false
+          auth.generic_oauth:
+            verbose_logging: false
+            enabled: true
+            name: keycloak
+            allow_sign_up: true
+            scopes: openid profile email
+            client_id: grafana-oauth
+            client_secret: SOME_EXAMPLE_client_secret123456
+            auth_url: https://{{ .Values.config.domain }}/auth/realms/horizon/protocol/openid-connect/auth
+            token_url: https://{{ .Values.config.domain }}/auth/realms/horizon/protocol/openid-connect/token
+            api_url: https://{{ .Values.config.domain }}/auth/realms/horizon/protocol/openid-connect/userinfo
+            allow_assign_grafana_admin: true
+            role_attribute_path: contains(groups[*], 'horizon-grafana-administrators') && 'Admin' || contains(groups[*], 'horizon-grafana-viewers') && 'Viewer'
+            login_attribute_path: username
+            name_attribute_path: name
+            email_attribute_path: email
+            role_attribute_strict: true
+        assertNoLeakedSecrets: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    - jqPathExpressions:
+        - '.data["grafana.ini"]'
+      kind: ConfigMap
+      name: grafana
+      namespace: monitoring     

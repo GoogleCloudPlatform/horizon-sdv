@@ -50,17 +50,11 @@ This provides the URL for the Android repo manifest. Such as:
 The Android revision, i.e. branch or tag to build. Tested versions are below:
 
 - `horizon/android-14.0.0_r30` (ap1a)
-- `horizon/android-14.0.0_r74` (ap2a - refer to Known Issues)
-- `horizon/android-15.0.0_r4` (ap3a)
-- `horizon/android-15.0.0_r20` (bp1a)
-- `horizon/android-15.0.0_r32` (bp1a)
-- `horizon/android-15.0.0_r36` (bp1a - default)
+- `horizon/android-15.0.0_r36` (bp1a)
+- `horizon/android-16.0.0_r3` (bp3a - default)
 - `android-14.0.0_r30` (ap1a)
-- `android-14.0.0_r74` (ap2a, refer to Known Issues)
-- `android-15.0.0_r4` (ap3a)
-- `android-15.0.0_r20` (bp1a)
-- `android-15.0.0_r32` (bp1a)
 - `android-15.0.0_r36` (bp1a)
+- `android-16.0.0_r3` (bp3a)
 
 ### `AAOS_LUNCH_TARGET` <a name="targets"></a>
 
@@ -71,32 +65,32 @@ Reference: [Codenames, tags, and build numbers](https://source.android.com/docs/
 Examples:
 
 - Virtual Devices:
-    -   `sdk_car_x86_64-ap1a-userdebug`
-    -   `sdk_car_x86_64-ap2a-userdebug`
-    -   `sdk_car_x86_64-ap3a-userdebug`
-    -   `sdk_car_x86_64-bp1a-userdebug`
-    -   `sdk_car_arm64-ap1a-userdebug`
-    -   `sdk_car_arm64-ap2a-userdebug`
-    -   `sdk_car_arm64-ap3a-userdebug`
-    -   `sdk_car_arm64-bp1a-userdebug`
-    -   `aosp_cf_x86_64_auto-ap1a-userdebug`
-    -   `aosp_cf_x86_64_auto-ap2a-userdebug`
-    -   `aosp_cf_x86_64_auto-ap3a-userdebug`
-    -   `aosp_cf_x86_64_auto-bp1a-userdebug`
-    -   `aosp_cf_arm64_auto-ap1a-userdebug`
-    -   `aosp_cf_arm64_auto-ap2a-userdebug`
-    -   `aosp_cf_arm64_auto-ap3a-userdebug`
-    -   `aosp_cf_arm64_auto-bp1a-userdebug`
+    -   `sdk_car_x86_64-ap1a-userdebug` (`android-14.0.0_r30`)
+    -   `sdk_car_x86_64-bp1a-userdebug` (`android-15.0.0_r36` )
+    -   `sdk_car_x86_64-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `sdk_car_arm64-ap1a-userdebug` (`android-14.0.0_r30`)
+    -   `sdk_car_arm64-bp1a-userdebug` (`android-15.0.0_r36` )
+    -   `sdk_car_arm64-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_cf_x86_64_auto-ap1a-userdebug` (`android-14.0.0_r30`)
+    -   `aosp_cf_x86_64_auto-bp1a-userdebug` (`android-15.0.0_r36` )
+    -   `aosp_cf_x86_64_auto-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_cf_arm64_auto-ap1a-userdebug` (`android-14.0.0_r30`)
+    -   `aosp_cf_arm64_auto-bp1a-userdebug` (`android-15.0.0_r36` )
+    -   `aosp_cf_arm64_auto-bp3a-userdebug` (`android-16.0.0_r3`)
 -   Pixel Devices:
-    -   `aosp_tangorpro_car-ap1a-userdebug`
-    -   `aosp_tangorpro_car-ap2a-userdebug`
-    -   `aosp_tangorpro_car-ap3a-userdebug`
-    -   `aosp_tangorpro_car-bp1a-userdebug`
+    -   `aosp_tangorpro_car-ap1a-userdebug` (`android-14.0.0_r30`)
+    -   `aosp_tangorpro_car-bp1a-userdebug` (`android-15.0.0_r36` )
 -   Raspberry Pi:
     -   `aosp_rpi4_car-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_rpi5_car-ap1a-userdebug` (`android-14.0.0_r30`)
-    -   `aosp_rpi4_car-bp1a-userdebug` (`android-15.0.0_r32` | `android-15.0.0_r36` )
-    -   `aosp_rpi5_car-bp1a-userdebug` (`android-15.0.0_r32` | `android-15.0.0_r36` )
+    -   `aosp_rpi4_car-bp1a-userdebug` (`android-15.0.0_r36` )
+    -   `aosp_rpi5_car-bp1a-userdebug` (`android-15.0.0_r36` )
+    -   `aosp_rpi4_car-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_rpi5_car-bp3a-userdebug` (`android-16.0.0_r3`)
+
+### `AAOS_BUILD_CTS`
+
+This builds the Android Automotive Compatibility Test Suite ([CTS](https://source.android.com/docs/compatibility/cts)) test harness from the specified code base, if the `AAOS_LUNCH_TARGET` is that of Cuttlefish, i.e `aosp_cf`.
 
 ### `ANDROID_VERSION`
 
@@ -139,7 +133,11 @@ The minimum is 1 and the maximum is 24.
 
 Keep the build VM instance and container running to allow user to connect to it. Useful for debugging build issues, determining target output archives etc. Time in minutes.
 
-Access using `kubectl` e.g. `kubectl exec -it -n jenkins <pod name> -- bash` from `bastion` host.
+Access using `kubectl` e.g. `kubectl exec -it -n jenkins <pod name> -- bash` .
+
+Reference [Fleet management](https://docs.cloud.google.com/kubernetes-engine/enterprise/multicluster-management/gateway) to fetch credentials for a fleet-registered cluster to be used in Connect Gateway, e.g.
+- `gcloud container fleet memberships list`
+- `gcloud container fleet memberships get-credentials sdv-cluster`
 
 ### `AAOS_ARTIFACT_STORAGE_SOLUTION`
 
@@ -147,7 +145,39 @@ Define storage solution used to push artifacts.
 
 Currently `GCS_BUCKET` default pushes to GCS bucket, if empty then nothing will be stored.
 
-### `GERRIT_PROJECT` / `GERRIT_CHANGE_NUMBER / GERRIT_PATCHSET_NUMBER`
+### `STORAGE_BUCKET_DESTINATION`
+
+Lets you override the default artifact storage destination. If not set, the build derives it automatically, for example:
+
+`gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/<BUILD_NUMBER>`
+
+The override must be a full GCS URI, including the `gs://` prefix, bucket name, and the artifact path. For example:
+
+`gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Releases/010129`
+
+### `STORAGE_LABELS`
+
+Lets you add labels to the artifacts being uploaded to storage.
+
+For GCS buckets, these labels can be applied as key=value pairs and can be provided as a comma-separated or space-separated list.
+
+E.g. `Release=X.Y.Z,Workload=Android`
+
+### `USE_LOCAL_AOSP_MIRROR`
+
+If checked, the build will use the AOSP Mirror setup in your GCP project to fetch Android source code during `repo sync`.
+**Note:**
+-  The AOSP Mirror must be setup prior to running this job. If not setup, the job will fail.
+-  The setup jobs are in folder `Android Workflows -> Environment -> Mirror`.
+
+### `AOSP_MIRROR_DIR_NAME`
+
+This defines the directory name on the Filestore volume where the Mirror is located.
+**Note:**
+-  This is required if `USE_LOCAL_AOSP_MIRROR` is checked.
+-  e.g. If you provided `my-mirror` when creating the mirror, provide the same value here.
+
+### `GERRIT_PROJECT` / `GERRIT_CHANGE_NUMBER / GERRIT_PATCHSET_NUMBER / GERRIT_TOPIC`
 
 These are optional but allow the user to fetch a specific Gerrit patchset if required.
 
@@ -182,16 +212,16 @@ Some targets have their own definitions for `POST_REPO_INITIALISE_COMMAND` and `
 Example 1: Initialise the repos for `aosp_cf_x86_64_auto-bp1a-userdebug`
 ```
 AAOS_GERRIT_MANIFEST_URL=https://dev.horizon-sdv.com/gerrit/android/platform/manifest \
-AAOS_REVISION=horizon/android-15.0.0_r36 \
-AAOS_LUNCH_TARGET=aosp_cf_x86_64_auto-bp1a-userdebug \
+AAOS_REVISION=horizon/android-16.0.0_r3 \
+AAOS_LUNCH_TARGET=aosp_cf_x86_64_auto-bp3a-userdebug \
 ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
 ```
 
 Example 2: Initialise the repos for `aosp_tangorpro_car-bp1a-userdebug` with Gerrit patch set.
 ```
 AAOS_GERRIT_MANIFEST_URL=https://dev.horizon-sdv.com/gerrit/android/platform/manifest \
-AAOS_REVISION=horizon/android-15.0.0_r36 \
-AAOS_LUNCH_TARGET=aosp_tangorpro_car-bp1a-userdebug \
+AAOS_REVISION=horizon/android-16.0.0_r3 \
+AAOS_LUNCH_TARGET=aosp_tangorpro_car-bp3a-userdebug \
 GERRIT_SERVER_URL=https://dev.horizon-sdv.com/gerrit \
 GERRIT_CHANGE_NUMBER=82 \
 GERRIT_PATCHSET_NUMBER=1 \
@@ -202,7 +232,7 @@ GERRIT_PROJECT=android/platform/packages/services/Car \
 ### `aaos_build.sh` <a name="aaos_build"></a>
 This script is responsible for building the given target.
 ```
-AAOS_LUNCH_TARGET=sdk_car_x86_64-bp1a-userdebug \
+AAOS_LUNCH_TARGET=sdk_car_x86_64-bp3a-userdebug \
 AAOS_PARALLEL_BUILD_JOBS=64 \
 ./workloads/android/pipelines/builds/aaos_builder/aaos_build.sh
 ```
@@ -213,8 +243,8 @@ This script creates the addon and devices files required for using AVD images wi
 This is only applicable to AVD `sdk_car` based targets.
 
 ```
-AAOS_LUNCH_TARGET=sdk_car_x86_64-bp1a-userdebug \
-ANDROID_VERSION=15 \
+AAOS_LUNCH_TARGET=sdk_car_x86_64-bp3a-userdebug \
+ANDROID_VERSION=16 \
 ./workloads/android/pipelines/builds/aaos_builder/aaos_avd_sdk.sh
 ```
 
@@ -223,7 +253,7 @@ Not applicable in standalone mode. Storage is currently dependent on Jenkins `BU
 Developers may upload their build artifacts to their own storage solution.
 
 ```
-AAOS_LUNCH_TARGET=sdk_car_x86_64-bp1a-userdebug \
+AAOS_LUNCH_TARGET=sdk_car_x86_64-bp3a-userdebug \
 ./workloads/android/pipelines/builds/aaos_builder/aaos_storage.sh
 ```
 
@@ -231,7 +261,7 @@ AAOS_LUNCH_TARGET=sdk_car_x86_64-bp1a-userdebug \
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 
@@ -267,6 +297,12 @@ These are as follows:
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
+
+-    `AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER`
+
+-    `AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME`
+
+-    `AOSP_MIRROR_DIR_NAME`
 
 ## KNOWN ISSUES <a name="known-issues"></a>
 

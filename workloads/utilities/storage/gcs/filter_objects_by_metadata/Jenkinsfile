@@ -1,0 +1,69 @@
+// Copyright (c) 2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Description:
+// This job allows the user to list all objects in a bucket path based on the metadata that is set on them.
+// The user can choose to list objects with specific metadata (matching the provided key and/or value),
+// objects with any metadata or objects with no metadata.
+
+pipeline {
+
+  // Parameters defined in groovy/job.groovy
+
+  agent {
+    kubernetes {
+      yaml """\
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          annotations:
+            cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        spec:
+          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+          containers:
+          - name: builder
+            image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${UTILITIES_DOCKER_ARTIFACT_PATH_NAME}:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - sleep
+            args:
+            - 1h
+      """.stripIndent()
+    }
+  }
+
+  stages {
+    stage ('Filter Objects by Metadata') {
+      when {
+        allOf {
+          expression { env.BUCKET_PATH }
+        }
+      }
+      steps {
+        container(name: 'builder') {
+          catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+            sh '''
+              cd ./workloads/common/storage/ || true
+              BUCKET_PATH="${BUCKET_PATH}" \
+              FILTER_TYPE="${FILTER_TYPE}" \
+              KEYVALUE_PAIRS="${KEYVALUE_PAIRS}" \
+              ./gcs_utilities.sh FILTER_OBJECTS_BY_METADATA
+            '''
+            archiveArtifacts artifacts: 'workloads/common/storage/output.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+          }
+        }
+      }
+    }
+  }
+}

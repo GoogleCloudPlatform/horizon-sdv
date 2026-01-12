@@ -46,7 +46,7 @@ pipeline {
       when {
         allOf {
           expression { env.MTK_CONNECT_TESTBENCH }
-          expression { env.MTK_CONNECT_TESTBENCH =~ /(CVD_Launcher|CTS_Execution|Development)/ }
+          expression { env.MTK_CONNECT_TESTBENCH =~ /(CVD_Launcher|CTS_Execution|Dev*.*)/ }
         }
       }
       steps {
@@ -58,7 +58,6 @@ pipeline {
               MTK_CONNECT_DOMAIN=${HORIZON_DOMAIN} \
               MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
               MTK_CONNECT_PASSWORD=${MTK_CONNECT_PASSWORD} \
-              MTK_CONNECT_NATIVE_LINUX_INSTALL=false \
               MTK_CONNECT_TESTBENCH=${MTK_CONNECT_TESTBENCH} \
               MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES=true \
               MTK_CONNECT_CONTAINER_ONLY="true" \

@@ -1,0 +1,135 @@
+# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Scopes Configuration for MCP Gateway Registry
+#
+# This file defines three main top-level groups:
+# 1. UI-Scopes: Agent registry permissions (list, get, publish, modify, delete agents) and MCP service access
+# 2. group_mappings: Maps Keycloak groups to scope names
+# 3. Individual group scopes: Detailed MCP server method/tool access for each group
+#
+# Each group has two types of permissions:
+# - Agent permissions: Actions on agent resources (list_agents, get_agent, publish_agent, modify_agent, delete_agent)
+# - MCP server permissions: Methods and tools accessible on specific MCP servers
+#
+# To add a new group, follow these three steps:
+# 1. Add to UI-Scopes: Define agent and service permissions (what agents/services the group can access)
+# 2. Add to group_mappings: Map the Keycloak group name to the internal scope name
+# 3. Add individual group scope entry: Define detailed MCP server methods/tools and agent actions for the group
+
+# ==================== UI-REGISTRY-SCOPES ====================
+UI-Scopes:
+  # Admin scope (wildcard access to all agents and services)
+  mcp-registry-admin:
+    list_agents:
+    - all
+    get_agent:
+    - all
+    publish_agent:
+    - all
+    modify_agent:
+    - all
+    delete_agent:
+    - all
+    list_service:
+    - all
+    register_service:
+    - all
+    health_check_service:
+    - all
+    toggle_service:
+    - all
+    modify_service:
+    - all
+
+  # Users can see all services and agents, but cannot change anything.
+  mcp-registry-user:
+    list_agents:
+    - all
+    get_agent:
+    - all
+    list_service:
+    - all
+    health_check_service:
+    - all
+
+# ==================== MCP SERVER SCOPES ====================
+# Unrestricted servers read access: Wildcard access to all servers with all methods and tools
+mcp-servers-unrestricted/read:
+- server: '*'
+  methods:
+  - initialize
+  - notifications/initialized
+  - ping
+  - tools/list
+  - tools/call
+  - resources/list
+  - resources/templates/list
+  - GET
+  tools: '*'
+
+# Unrestricted servers execute access: Full CRUD operations on all servers (POST, PUT, DELETE in addition to read)
+mcp-servers-unrestricted/execute:
+- server: '*'
+  methods:
+  - all
+  tools:
+  - all
+
+# ==================== MCP AGENTS SCOPES ====================
+# Unrestricted agent read access: Read-only access to all agents
+mcp-agents-unrestricted/read:
+- agents:
+    actions:
+    - action: list_agents
+      resources:
+      - all
+    - action: get_agent
+      resources:
+      - all
+
+# Unrestricted agent execute access: Full CRUD operations on all agents
+mcp-agents-unrestricted/execute:
+- agents:
+    actions:
+    - action: list_agents
+      resources:
+      - all
+    - action: get_agent
+      resources:
+      - all
+    - action: publish_agent
+      resources:
+      - all
+    - action: modify_agent
+      resources:
+      - all
+    - action: delete_agent
+      resources:
+      - all
+
+# ==================== GROUP MAPPINGS ====================
+# Maps external Identity Provider (IdP) groups (e.g., from Keycloak) to internal application scope names.
+# The names on the left are the group names from your IdP.
+# The names in the list on the right are the names of the permission scopes defined in this file
+# (e.g., 'mcp-registry-admins' from UI-Scopes or 'mcp-servers-unrestricted/read' from MCP SERVER SCOPES).
+group_mappings:
+  horizon-mcp-gateway-registry-admins:
+  - mcp-registry-admin # UI scope
+  - mcp-servers-unrestricted/execute # can manage all servers; note: app allows modify_service only when this exact scope name or `/execute` is present in scope name
+  - mcp-agents-unrestricted/execute # can manage all agents
+  horizon-mcp-gateway-registry-users:
+  - mcp-registry-user # UI scope
+  - mcp-servers-unrestricted/read # can view and operate all servers
+  - mcp-agents-unrestricted/read # can view all agents

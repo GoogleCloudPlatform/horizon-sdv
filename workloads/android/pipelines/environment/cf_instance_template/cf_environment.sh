@@ -20,23 +20,44 @@
 
 # Android Cuttlefish Repository that holds supporting tools to prepare host
 # to boot Cuttlefish.
-CUTTLEFISH_REPO_URL=$(echo "${CUTTLEFISH_REPO_URL}" | xargs)
-CUTTLEFISH_REPO_URL=${CUTTLEFISH_REPO_URL:-https://github.com/google/android-cuttlefish.git}
+CUTTLEFISH_URL=$(echo "${CUTTLEFISH_URL}" | xargs)
+CUTTLEFISH_URL=${CUTTLEFISH_URL:-https://github.com/google/android-cuttlefish.git}
 CUTTLEFISH_REVISION=${CUTTLEFISH_REVISION:-main}
-CUTTLEFISH_REPO_NAME=$(basename "${CUTTLEFISH_REPO_URL}" .git)
+REPO_USERNAME=${REPO_USERNAME:-}
+REPO_PASSWORD=${REPO_PASSWORD:-}
+CUTTLEFISH_REPO_NAME=$(basename "${CUTTLEFISH_URL}" .git)
+
+# Create the repo url with credentials, when required but ensure the URL is never echoed.
+if [ -n "${REPO_USERNAME}" ] && [ -n "${REPO_PASSWORD}" ]; then
+    # Include username:password if provided
+    # shellcheck disable=SC2034
+    CUTTLEFISH_REPO_URL="${CUTTLEFISH_URL%%://*}://${REPO_USERNAME//@/%40}:${REPO_PASSWORD}@${CUTTLEFISH_URL#*://}"
+else
+    # shellcheck disable=SC2034
+    CUTTLEFISH_REPO_URL=${CUTTLEFISH_URL}
+fi
+
 # Must use flag because there is inconsistency between tag/branch and dpkg
 # version number, eg main = 1.0.0.
 CUTTLEFISH_UPDATE=${CUTTLEFISH_UPDATE:-false}
 
+# Command tin run in android-cuttlefish repo.
+CUTTLEFISH_POST_COMMAND=${CUTTLEFISH_POST_COMMAND:-}
+
+# OS Version
+OS_VERSION=${OS_VERSION:-}
 # Android CTS test harness URLs, installed on host.
+# Allow override - users may install their own. Defaults set in Groovy.
 # https://source.android.com/docs/compatibility/cts/downloads
-CTS_ANDROID_15_URL="https://dl.google.com/dl/android/cts/android-cts-15_r5-linux_x86-x86.zip"
-CTS_ANDROID_14_URL="https://dl.google.com/dl/android/cts/android-cts-14_r9-linux_x86-x86.zip"
+CTS_ANDROID_16_URL=${CTS_ANDROID_16_URL:-}
+CTS_ANDROID_15_URL=${CTS_ANDROID_15_URL:-}
+CTS_ANDROID_14_URL=${CTS_ANDROID_14_URL:-}
+
+# Curl upgrade command
+CURL_UPDATE_COMMAND=${CURL_UPDATE_COMMAND:-}
+
 # NodeJS Version
 NODEJS_VERSION=${NODEJS_VERSION:-20.9.0}
-
-# Architecture x86_64 is only supported at this time.
-ARCHITECTURE=${ARCHITECTURE:-x86_64}
 
 # Support local vs Jenkins.
 if [ -z "${WORKSPACE}" ]; then
@@ -44,13 +65,14 @@ if [ -z "${WORKSPACE}" ]; then
 else
     CF_SCRIPT_PATH=workloads/android/pipelines/environment/cf_instance_template
 fi
+CUTTLEFISH_LATEST_SHA1_FILENAME="android-cuttlefish-sha1.txt"
 
 # Show variables.
 VARIABLES="Environment:
+        OS_VERSION=${OS_VERSION}
+        CTS_ANDROID_16_URL=${CTS_ANDROID_16_URL}
         CTS_ANDROID_15_URL=${CTS_ANDROID_15_URL}
         CTS_ANDROID_14_URL=${CTS_ANDROID_14_URL}
-
-        ARCHITECTURE=${ARCHITECTURE}
 "
 
 case "$0" in
@@ -63,10 +85,17 @@ case "$0" in
         ;;
     *initialise.sh)
         VARIABLES+="
-        CUTTLEFISH_REPO_URL=${CUTTLEFISH_REPO_URL}
+        CUTTLEFISH_URL=${CUTTLEFISH_URL}
         CUTTLEFISH_REPO_NAME=${CUTTLEFISH_REPO_NAME}
+        REPO_USERNAME=${REPO_USERNAME}
         CUTTLEFISH_REVISION=${CUTTLEFISH_REVISION}
         CUTTLEFISH_UPDATE=${CUTTLEFISH_UPDATE}
+
+        CURL_UPDATE_COMMAND=${CURL_UPDATE_COMMAND}
+
+        CUTTLEFISH_LATEST_SHA1_FILENAME=${CUTTLEFISH_LATEST_SHA1_FILENAME}
+
+        CUTTLEFISH_POST_COMMAND=${CUTTLEFISH_POST_COMMAND}
         "
         ;;
     *)

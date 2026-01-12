@@ -23,16 +23,17 @@ pipeline {
   agent none
 
   environment {
-    STORAGE_CLASS_SUFFIX="android-${ANDROID_VERSION}"
-    STORAGE_SIZE="${ANDROID_VERSION =~ "rpi" ? "500Gi" : "1000Gi"}"
+    STORAGE_CLASS_SUFFIX="android-${ANDROID_VOLUME}"
+    STORAGE_SIZE="${ANDROID_VOLUME =~ "rpi" ? "500Gi" : "1000Gi"}"
 
-    POD_TEMPLATE = "${ABFS == "true" ? kubernetesAbfsPodTemplate : kubernetesPodTemplate }"
+    INITIAL_POD_TEMPLATE="${USE_LOCAL_AOSP_MIRROR == "true" ? kubernetesPodTemplateWithMirror : kubernetesPodTemplateWithoutMirror}"
+    POD_TEMPLATE="${ANDROID_VOLUME =~ "abfs" ? kubernetesAbfsPodTemplate : INITIAL_POD_TEMPLATE }"
 
     ABFS_STORAGE_CLASS_SUFFIX="android-abfs"
     ABFS_STORAGE_SIZE="750Gi"
 
     // Define Pod Template in environment so we can override.
-    def kubernetesPodTemplate = """
+    def kubernetesPodTemplateWithoutMirror = """
       apiVersion: v1
       kind: Pod
       metadata:
@@ -59,11 +60,15 @@ pipeline {
         containers:
         - name: builder
           image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:${IMAGE_TAG}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+            appArmorProfile:
+              type: Unconfined
           command:
           - sleep
           args:
-          - 5h
+          - 10h
           resources:
             limits:
               cpu: 98000m
@@ -85,6 +90,74 @@ pipeline {
                       storage: ${STORAGE_SIZE}
                   accessModes:
                     - ReadWriteOnce
+        nodeSelector:
+          workloadLabel: android
+    """.stripIndent()
+
+    // Pod template with AOSP Mirror volume mounted as read-only
+    def kubernetesPodTemplateWithMirror = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          aaos_pod: "true"
+      spec:
+        tolerations:
+        - key: workloadType
+          operator: Equal
+          value: android
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-aaos-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${ANDROID_BUILD_DOCKER_ARTIFACT_PATH_NAME}:latest
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+            appArmorProfile:
+              type: Unconfined
+          command:
+          - sleep
+          args:
+          - 5h
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+          volumeMounts:
+            - mountPath: /aaos-cache
+              name: aaos-cache
+            - mountPath: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}
+              readOnly: true
+              name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+        volumes:
+          - name: aaos-cache
+            ephemeral:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: ${JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX}-${STORAGE_CLASS_SUFFIX}
+                  resources:
+                    requests:
+                      storage: ${STORAGE_SIZE}
+                  accessModes:
+                    - ReadWriteOnce
+          - name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+            persistentVolumeClaim:
+              claimName: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
         nodeSelector:
           workloadLabel: android
     """.stripIndent()
@@ -140,6 +213,7 @@ pipeline {
         nodeSelector:
           workloadLabel: android-abfs
     """.stripIndent()
+
   }
 
   stages {
@@ -161,9 +235,9 @@ pipeline {
                     MTK_CONNECT_DOMAIN=${HORIZON_DOMAIN} \
                     MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
                     MTK_CONNECT_PASSWORD=${MTK_CONNECT_PASSWORD} \
-                    MTK_CONNECTED_DEVICES="1" \
+                    MTK_CONNECTED_DEVICES=${NUM_HOST_INSTANCES} \
                     MTK_CONNECT_TESTBENCH="${JOB_NAME}-${BUILD_NUMBER}" \
-                    MTK_CONNECT_TESTBENCH_USER="${BUILD_USER_ID}" \
+                    MTK_CONNECT_TESTBENCH_USER=$([ "$MTK_CONNECT_PUBLIC" = "true" ] && echo "everyone" || echo "$BUILD_USER_ID") \
                     MTK_CONNECT_CONTAINER_ONLY="true" \
                     MTK_CONNECT_HOST_ONLY="true" \
                     timeout 15m ./mtk_connect.sh --start

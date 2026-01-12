@@ -24,26 +24,20 @@
 read -r -a ARTIFACT_LIST <<< "${ARTIFACT_LIST}"
 IFS=$'\n' read -r -d '' -a POST_CLEANUP_COMMANDS <<< "$POST_CLEANUP_STRING"
 
-# shellcheck disable=SC2317
+# shellcheck disable=SC2329
 function gcs_bucket() {
-    local -r bucket_name="gs://${ARTIFACT_ROOT_NAME}"
-    # Replace spaces in Jenkins Job Name
-    BUCKET_FOLDER="${JOB_NAME// /_}"
-    local -r destination="${bucket_name}/${BUCKET_FOLDER}/${BUILD_NUMBER}"
-    local -r cloud_url="https://console.cloud.google.com/storage/browser/${ARTIFACT_ROOT_NAME}/${BUCKET_FOLDER}/${BUILD_NUMBER}"
-
     # Remove the old artifacts
-    gcloud storage rm -r "${destination}" || true
+    gcloud storage rm -r "${STORAGE_BUCKET_DESTINATION}" || true
 
     # Wait for old artifacts to be removed.
     # Note: belts and braces because removal used to take time and appear to run in background. Now rm finishes cleanly.
     local -i attempts=0
     local -i max_attempts=5
-    while gcloud storage ls "${destination}" &> /dev/null; do
+    while gcloud storage ls "${STORAGE_BUCKET_DESTINATION}" &> /dev/null; do
         sleep 1.0
         ((attempts++))
         if [ "${attempts}" -gt "${max_attempts}" ]; then
-            echo "ERROR: ${destination} still exists after ${max_attempts}s." >&2
+            echo "ERROR: ${STORAGE_BUCKET_DESTINATION} still exists after ${max_attempts}s." >&2
             # Brute force just let it continue.
             break
         fi
@@ -53,12 +47,12 @@ function gcs_bucket() {
 
     # Print download URL links in console log and file..
     echo ""
-    echo "Artifacts stored in ${destination}" | tee -a "${ARTIFACT_SUMMARY}"
-    echo "Bucket URL: ${cloud_url}" | tee -a "${ARTIFACT_SUMMARY}"
+    echo "Artifacts stored in ${STORAGE_BUCKET_DESTINATION}" | tee -a "${ARTIFACT_SUMMARY}"
+    echo "Bucket URL: ${STORAGE_CLOUD_URL}" | tee -a "${ARTIFACT_SUMMARY}"
     echo "" | tee -a "${ARTIFACT_SUMMARY}"
 
     # Copy artifacts to Google Cloud Storage bucket
-    echo "Storing artifacts to bucket ${bucket_name}"
+    echo "Storing artifacts to bucket."
     for artifact in "${ARTIFACT_LIST[@]}"; do
         for file in ${artifact}; do
             # Look for wildcard files.
@@ -66,11 +60,11 @@ function gcs_bucket() {
                 [ -d "${file}" ] && copycmd="cp -r" || copycmd="cp"
                 # Copy the artifact to the bucket (do not use quotes for cp!)
                 # shellcheck disable=SC2086
-                gcloud storage ${copycmd} "${file}" "${destination}"/ || true
-                echo "Copied ${file} to ${destination}"
+                gcloud storage ${copycmd} "${file}" "${STORAGE_BUCKET_DESTINATION}"/ || true
+                echo "Copied ${file} to ${STORAGE_BUCKET_DESTINATION}"
                 # shellcheck disable=SC2086
                 filename=$(echo ${file} | awk -F / '{print $NF}')
-                echo "    gcloud storage ${copycmd} ${destination}/${filename} ." | tee -a "${ARTIFACT_SUMMARY}"
+                echo "    gcloud storage ${copycmd} ${STORAGE_BUCKET_DESTINATION}/${filename} ." | tee -a "${ARTIFACT_SUMMARY}"
             else
                 echo "WARNING: File $file ignored!"
             fi
@@ -110,7 +104,7 @@ case "${ARTIFACT_STORAGE_SOLUTION}" in
 esac
 
 # Store artifacts to artifact storage.
-if [ -n "${ARTIFACT_STORAGE_SOLUTION}" ] && [ -n "${BUILD_NUMBER}" ]; then
+if [ -n "${ARTIFACT_STORAGE_SOLUTION}" ] && [ -n "${STORAGE_BUCKET_DESTINATION}" ]; then
     if [ "${#ARTIFACT_LIST[@]}" -gt 0 ]; then
         "${ARTIFACT_STORAGE_SOLUTION_FUNCTION}"
     else

@@ -1,0 +1,333 @@
+// Copyright (c) 2026 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// This pipeline job downloads a new mirror or syncs an existing one on
+// the NFS-based mirror volume based on provided parameters.
+
+pipeline {
+  // Parameters defined in workloads/android/pipelines/environment/mirror/sync_mirror/groovy/job.groovy
+
+  agent none
+
+  environment {
+    // Pod template for pre-checks stage
+    def preChecksKubernetesPodTemplate = """\
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: jenkins-aosp-mirror-pre-checks-build-pod
+        labels:
+          aosp_mirror_build_pod: "true"
+      spec:
+        hostname: jenkins-aosp-mirror-pre-checks-build-pod
+        serviceAccountName: ${TERRAFORM_WORKLOADS_SERVICE_ACCOUNT}
+        containers:
+        - name: aosp-mirror-pre-checks-builder-container
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${AOSP_MIRROR_WORKLOADS_ENV_IMAGE_NAME}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          tty: true
+    """.stripIndent()
+
+    // Pod template for main stage
+    def mainKubernetesPodTemplate = """\
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: jenkins-aosp-mirror-sync-mirror-build-pod
+        labels:
+          aosp_mirror_build_pod: "true"
+      spec:
+        nodeSelector:
+            workloadLabel: "android"
+        tolerations:
+        - key: "workloadType"
+          value: "android"
+          effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        # GID (1000) is set at the Pod level
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+        hostname: jenkins-aosp-mirror-sync-mirror-build-pod
+        serviceAccountName: ${TERRAFORM_WORKLOADS_SERVICE_ACCOUNT}
+
+        # Runs as root (UID 0) to grant write permissions to NFS before main container starts
+        initContainers:
+        - name: aosp-mirror-grant-write-permissions-container
+          image: busybox:stable
+          imagePullPolicy: Always
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+          
+          env:
+          - name: TARGET_MOUNT_PATH
+            value: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}
+          - name: TARGET_MIRROR_ROOT_SUBDIR_NAME
+            value: ${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}
+
+          command: ["/bin/sh", "-c"]
+          args: 
+          - |
+            MOUNT_PATH="\${TARGET_MOUNT_PATH}"
+
+            echo "Setting GID 1000 for mount path: \${MOUNT_PATH}"
+            chown :1000 \${MOUNT_PATH}
+
+            echo "Granting write permissions on \${MOUNT_PATH} for GID 1000..."
+            chmod g+w "\${MOUNT_PATH}"
+
+            echo "Setting setgid on \${MOUNT_PATH} so new files/dirs inherit GID 1000..."
+            chmod g+s \${MOUNT_PATH}
+
+            echo "Write permissions of \${MOUNT_PATH} set successfully for GID 1000."
+            ls -ld \${MOUNT_PATH}
+          volumeMounts:
+          - name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+            mountPath: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}
+
+        # Main Container
+        containers:
+        - name: aosp-mirror-sync-mirror-builder-container
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${AOSP_MIRROR_WORKLOADS_ENV_IMAGE_NAME}:latest
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: 7000m
+              memory: 13000Mi
+            requests:
+              cpu: 7000m
+              memory: 13000Mi
+          # Runs as the non-root user (UID 1000)
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+          command:
+          - sleep
+          args:
+          - 24h
+          tty: true
+          volumeMounts:
+          - mountPath: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}
+            readOnly: false
+            name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+
+        volumes:
+        - name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+          persistentVolumeClaim:
+            claimName: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+    """.stripIndent()
+
+    // Pod template for main stage; higher specs for large mirrors
+    def mainKubernetesPodTemplateHighSpec = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        name: jenkins-aosp-mirror-sync-mirror-build-pod
+        labels:
+          aosp_mirror_build_pod: "true"
+      spec:
+        # GID (1000) is set at the Pod level
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+
+        tolerations:
+          - key: workloadType
+            operator: Equal
+            value: android
+            effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
+                - key: cloud_ws_horizon_asfp_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
+                - key: cloud_ws_horizon_android_studio_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+
+        hostname: jenkins-aosp-mirror-sync-mirror-build-pod
+        serviceAccountName: ${TERRAFORM_WORKLOADS_SERVICE_ACCOUNT}
+
+        # Runs as root (UID 0) to grant write permissions to NFS before main container starts
+        initContainers:
+        - name: aosp-mirror-grant-write-permissions-container
+          image: busybox:stable
+          imagePullPolicy: Always
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+          
+          env:
+          - name: TARGET_MOUNT_PATH
+            value: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}
+          - name: TARGET_MIRROR_ROOT_SUBDIR_NAME
+            value: ${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}
+
+          command: ["/bin/sh", "-c"]
+          args: 
+          - |
+            MOUNT_PATH="\${TARGET_MOUNT_PATH}"
+
+            echo "Setting GID 1000 for mount path: \${MOUNT_PATH}"
+            chown :1000 \${MOUNT_PATH}
+
+            echo "Granting write permissions on \${MOUNT_PATH} for GID 1000..."
+            chmod g+w "\${MOUNT_PATH}"
+
+            echo "Setting setgid on \${MOUNT_PATH} so new files/dirs inherit GID 1000..."
+            chmod g+s \${MOUNT_PATH}
+
+            echo "Write permissions of \${MOUNT_PATH} set successfully for GID 1000."
+            ls -ld \${MOUNT_PATH}
+          volumeMounts:
+          - name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+            mountPath: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}
+
+        containers:
+        - name: aosp-mirror-sync-mirror-builder-container
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${AOSP_MIRROR_WORKLOADS_ENV_IMAGE_NAME}:latest
+          imagePullPolicy: Always
+          # Runs as the non-root user (UID 1000)
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+          command:
+          - sleep
+          args:
+          - 24h
+          tty: true
+          volumeMounts:
+          - mountPath: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}
+            readOnly: false
+            name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+
+        volumes:
+        - name: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+          persistentVolumeClaim:
+            claimName: ${AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}
+
+        nodeSelector:
+          workloadLabel: android
+    """.stripIndent()
+
+    // Path for ops scripts
+    def utilsScriptPath = "./workloads/android/pipelines/environment/mirror/utils/utils.sh"
+    def syncMirrorScriptPath = "./workloads/android/pipelines/environment/mirror/sync_mirror/sync_mirror.sh"
+    // Mirror root subdirectory path inside container where all mirrors live
+    def mirrorRootSubdirPath = "${AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}"
+  }
+
+  stages {
+    stage('Prerequisite Infra Check') {
+      agent { kubernetes { yaml preChecksKubernetesPodTemplate } }
+      steps {
+        script {
+          // Validate required parameters are provided
+          if(!params.IMAGE_TAG?.trim()) {error("Required Parameter value NOT provided as input: IMAGE_TAG. An Image Tag for container is needed to use as environment for this job.")}
+          if(!params.MIRROR_DIR?.trim() && !params.SYNC_ALL_EXISTING_MIRRORS) {error("Required Parameter value NOT provided as input: MIRROR_DIR. A Mirror Directory name is needed.")}
+          if(!params.MIRROR_MANIFEST_URL?.trim() && !params.SYNC_ALL_EXISTING_MIRRORS) {error("Required Parameter value NOT provided as input: MIRROR_MANIFEST_URL. A Mirror Manifest URL is needed.")}
+          if(!params.MIRROR_MANIFEST_REF?.trim() && !params.SYNC_ALL_EXISTING_MIRRORS) {error("Required Parameter value NOT provided as input: MIRROR_MANIFEST_REF. A Mirror Manifest Ref is needed.")}
+          if(!params.MIRROR_MANIFEST_FILE?.trim() && !params.SYNC_ALL_EXISTING_MIRRORS) {error("Required Parameter value NOT provided as input: MIRROR_MANIFEST_FILE. A Mirror Manifest File is needed.")}
+          if(!params.REPO_SYNC_JOBS?.trim() && !params.SYNC_ALL_EXISTING_MIRRORS) {error("Required Parameter value NOT provided as input: REPO_SYNC_JOBS. Number of parallel sync jobs for 'repo sync' is needed.")}
+          
+          if(params.SYNC_ALL_EXISTING_MIRRORS) {
+            currentBuild.description = "$BUILD_USER" + "<br/>" + "Sync All Mirrors"
+          } else {
+            currentBuild.description = "$BUILD_USER" + "<br/>" + "${params.MIRROR_DIR}" + "<br/>" + "${params.MIRROR_MANIFEST_URL}"
+          }
+
+          echo 'Checking prerequisite infra exists...'
+          container(name: 'aosp-mirror-pre-checks-builder-container') {
+            try {
+              sh """/bin/bash -c '
+                source "${utilsScriptPath}"
+                if check_aosp_mirror_pvc_exists ${env.AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME} "jenkins"; then
+                  echo "[SUCCESS] Prerequisite check passed. PVC ${env.AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME} found in namespace jenkins."
+                else
+                  exit 1
+                fi
+              ' """
+            }
+            catch (err) {
+              currentBuild.result = 'FAILURE'
+              error("${err}\n[ERROR] Prerequisites check failed. PVC '${env.AOSP_MIRROR_PRESET_FILESTORE_PVC_NAME}' not found in namespace 'jenkins'.\nPlease run the 'Mirror > Create Mirror Infra' pipeline first.")
+            }
+          }
+        }
+      }
+    }
+    
+    stage('Sync Mirror Operation') {
+      agent { kubernetes { yaml mainKubernetesPodTemplateHighSpec } }
+      steps {
+        script {
+          echo 'Syncing Mirror with remote...'
+
+          container(name: 'aosp-mirror-sync-mirror-builder-container') {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+              sh """
+                "${syncMirrorScriptPath}" "${mirrorRootSubdirPath}" "${SYNC_ALL_EXISTING_MIRRORS}" "${MIRROR_DIR}" "${MIRROR_MANIFEST_URL}" "${MIRROR_MANIFEST_REF}" "${MIRROR_MANIFEST_FILE}" "${REPO_SYNC_JOBS}" "${BUILD_USER}"
+              """
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Post-build actions for success or failure
+  post {
+    success {
+      echo "Status: SUCCESS - Mirror sync job completed."
+    }
+    failure {
+      echo "Status: FAILURE - Mirror sync job failed."
+    }
+    always {
+      echo "Job finished."
+    }
+  }
+}

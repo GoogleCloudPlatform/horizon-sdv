@@ -1,5 +1,147 @@
 # Horizon SDV Release Notes
 
+## Horizon SDV - Release 3.0.0 (2025-12-19) 
+
+### Summary
+
+Horizon SDV 3.0.0 extends platform capabilities with support for Android 15 and the latest extensions of OpenBSW. Horizon 3.0.0 also delivers multiple new feature and several improvements over Rel. 2.0.1 along with critical bug fixes.
+
+The set of new features in version 3.0.0 includes, among others:
+
+- **Simplified Deployment Flow :** We have overhauled the deployment process to make it more intuitive and efficient. The new flow reduces complexity, minimizing the steps required to get your environment up and running.
+
+- **ARM64 Support (Bare Metal) :** We have expanded our infrastructure support to include ARM64 Bare Metal. This allows you to run your workloads natively on ARM architecture, ensuring higher performance and closer parity with automotive edge hardware.
+
+- **Gemini Code Assist :** Supercharge your development with the integration of **Gemini Code Assist** and the Gerrit MCP Server. You can now leverage Google's state-of-the-art AI to generate code, explain complex logic, debug issues faster and make use of agentic code review workflows directly within your development environment.
+
+- **Advanced Monitoring with Grafana :** Gain deeper insights into your infrastructure with our new Grafana integration. You can now visualize and monitor POD and Instance metrics in real-time, helping you optimize resource usage and diagnose performance bottlenecks quickly.
+
+***
+### New Features
+
+| ID | Feature | Description |
+|----|--------|-------------|
+| TAA-924 | Simplified Horizon Deployment Flow | Simplified and automated the Horizon SDV platform deployment by removing GitHub Actions, enabling faster adoption by community teams and reducing human error. |
+| TAA-511 | Gemini Code Assist in R3 – Gerrit MCP Server integration | Use company’s codebase as a knowledge base for Gemini Code Assist within the IDE to receive code suggestions & explanations tailored to known codebase, libraries and corporate standards. |
+| TAA-365 | ARM64 GCP VM (Bare Metal) support for Cuttlefish | ARM64 GCP VM support for Android builds and testing with Cuttlefish |
+| TAA-595 | Monitoring of POD/Instance metrics with Grafana | Access to CPU/Memory/Storage metrics for pods and instances, to more easily investigate and debug container, pod and instance related problems and its impact on platform performance. |
+| TAA-944 | Android pipeline update to Android 16 | Support for Android16 for AAOS, CF and CTS in Horizon pipelines. |
+| TAA-946 | Extend OpenBSW support with additional features | Support for Eclipse Foundation OpenBSW workload features that were not included in Horizon-SDV R2.0.0 |
+| TAA-889 | Horizon R3 Security update | Selected open-source applications and tools which are part of Horizon SDV platform are updated to the latest stable versions |
+| TAA-377 | Google AOSP Repo Mirroring | NFS based mirror of AOSP repos deployed in the K8s cluster. |
+| TAA-947 | ABFS update for R3 | Corrections and minor ABFS updates delivered from Google in Release 3.0.0 timeframe. |
+| TAA-1072 | Cloud Artefact storage management | Android and OpenBSW build jobs have been modified to allow the user to specify metadata to be added to the stored artifacts during the upload process. Implementation is supported for GCP storage option only |
+| TAA-1001 | Kubernetes Dashboard SSO integration | Kubernetes Dashboard SSO integration |
+| TAA-945 | Replace deprecated Kaniko tool | Replace deprecated Google Kaniko tool for building container images with new Buildkit tool. |
+| TAA-941 | IAA demo case. | Support for Partner demo in IAA Messe show. The main technical scope is to apply a binary APK file to the Android code, help building it and flash it to selected targets (Cuttlefish and potentially Pixel) according to Partner specification. |
+
+***
+
+### Improved Features
+
+See details in `horizon-sdv/docs/release-notes-3-0-0.md`
+
+| ID | Summary |
+|----|-------------|
+| TAA-1171 | Create Workloads area in Gitops section |
+| TAA-862 | Improvements Structure of Test pipelines |
+| TAA-1111 | Unified CTS Build process |
+| TAA-1265 | [Gerrit] Support GERRIT_TOPIC with existing gerrit-triggers plugin |
+| TAA-1271 | Support custom machine types for Cuttlefish |
+| TAA-1269 | Adjust CTS/CVD options |
+
+***
+
+### Bug Fixes
+
+| ID        | Summary |
+|-----------|-------------|
+| TAA-993   | [ABFS] Missing permission for jenkins-sa for ABFS server |
+| TAA-1063  | [Security] Axios Security update 1.12.0 (dependabot) |
+| TAA-904   | ABFS unmount doesn't work |
+| TAA-1090  | [Android 16] Cuttlefish builds fail (x86/arm) |
+| TAA-1080  | [OpenBSW] Builds no longer functional (main) |
+| TAA-1110  | [OpenBSW] pyTest failure |
+| TAA-1103  | [Android 16] CTS 16_r2 reports 15_r5 |
+| TAA-1145  | Update filter (gcloud compute instance-templates list) |
+| TAA-1161  | [ARM64] Subnet working utils too quiet |
+| TAA-1113  | [ABFS] COS Images no longer available |
+| TAA-1118  | [ABFS] CASFS kernel module update required (6.8.0-1029-gke) |
+| TAA-1176  | [CF] CTS CtsDeqpTestCases execution on main not completing in reasonable time (x86) |
+| TAA-1186  | Incorrect Headlamp Token Injector Argo CD App Project |
+| TAA-1196  | AOSP Mirror changes break standard builds |
+| TAA-1201  | AOSP Mirror sync failures |
+| TAA-1200  | AOSP Mirror URLs and branches incorrect |
+| TAA-1203  | AOSP Mirror repo sync failing on HTTP 429 (rate limits) |
+| TAA-1205  | AOSP Mirror - no support for dev build instance |
+| TAA-1198  | AOSP Mirror does not support Warm nor Gerrit Builds |
+| TAA-1204  | AOSP Mirror repo sync failing - SyncFailFastError |
+| TAA-1214  | AOSP Mirror ab is an |
+| TAA-1219  | [Cuttlefish] Host installer failures masked |
+| TAA-1202  | AOSP Mirror blocking concurrent jobs incorrectly configured |
+| TAA-1238  | [Cuttlefish] Update to v1.31.0 - v1.30.0 has changed from stable to unstable. |
+| TAA-1241  | [Android] Mirror should not be using OpenBSW nodes for jobs AM |
+| TAA-1247  | [Workloads] Remove chmod and use git executable bit |
+| TAA-1249  | [GCP] Client Secret now masked (security clarification) |
+| TAA-1264  | [CVD] Logs are no longer being archived |
+| TAA-1261  | [Cuttlefish] gnu.org down blocking builds |
+| TAA-1266  | Pipeline does not fail when IMAGE_TAG is empty and NO_PUSH=true |
+| TAA-1267  | [CWS] OSS Workstation blocking regex incorrect (non-blocking) |
+| TAA-1258  | [Cuttlefish] VM instance template default disk too small. |
+| TAA-1233  | [Jenkins] Plugin updates for fixes |
+| TAA-1278  | [Cuttlefish] SSH/SCP errors on VM instance creation |
+| TAA-1283  | Mismatch in githubApp secrets (TAA-1054) |
+| TAA-1277  | [Jenkins] Plugin updates for fixes |
+| TAA-1279  | [RPI] Android 16 RPI builds now failing |
+| TAA-1282  | [GCP] Cluster deletion not removing load balancers |
+| TAA-1257  | [Cuttlefish] android-cuttlefish build failure (regression) |
+| TAA-1273  | [Cuttlefish] android-cuttlefish CVD device issues (regression) |
+| TAA-1149  | [K8S] Reduce parallel jobs to reduce costs |
+| TAA-1162  | [K8S] Revert parallel jobs change to reduce costs |
+| TAA-1191  | Monitoring deployment related hotfixes |
+| TAA-1114  | [ABFS] Update env/dev license (Oct'25) |
+| TAA-1116  | [Android] Android 15 and 16 AVD missing SPDX BOM |
+| TAA-1192  | [MTKC] Support additional hosts for dev and test instances |
+| TAA-1207  | Mirror/Create-Mirror: Add parameter for size of the mirror NFS PVC |
+| TAA-1208  | Mirror/Sync-Mirror: Sync all mirrors when SYNC_ALL_EXISTING_MIRRORS is selected |
+| TAA-1211  | [Android] Simplify Dev Build instance job |
+| TAA-1218  | [Grafana] ArgoCD on Dev shows 'Out Of Sync' |
+| TAA-1231  | R2 - GitHub Actions workflow fails |
+| TAA-1038  | [Jenkins] CF scripts - update to retain color |
+| TAA-907   | Multibranch is not supported in ABFS |
+| TAA-862   | Improvement to structure of Test pipelines |
+| TAA-788   | Jenkins AAOS Build failure - Gerrit secrets/tokens mismatch |
+| TAA-1088  | [NPM] Move wait-on post node install |
+| TAA-1115  | [STORAGE] Override default paths |
+| TAA-1160  | [ARM64] Lack of available instances on us-central1-b/f zone |
+| TAA-1274  | [Cuttlefish] CTS hangs - android-cuttlefish issues |
+| TAA-1290  | [Cuttlefish] ARM64 builds broken on f2fs-tools (missing) |
+| TAA-1253  | [MTK Connect] ERROR: script returned exit code 92/1 |
+
+***
+## Horizon SDV - Release 2.0.1 (2025-09-24) 
+
+### Summary
+Hot fix release for Rel.2.0.1 with emergency fix for Helm repo endpoint issues, and minor documentation updates.
+
+### New Features
+N/A
+
+### Improved Features
+- New simplified Release Notes format.
+
+### Bug Fixes
+
+|  ID       | Summary                                                      |
+|-----------|--------------------------------------------------------------|
+| TAA-1002  | [Jenkins] Install ansicolor plugin for CWS                   |
+| TAA-1005  | Horizon provisioning failure - Due to outdated Helm install steps |
+| TAA-1007  | Cloud WS - Workstation Image builds fail due to Helm Debian repo (OSS) migration |
+| TAA-1040  | Remove references to private repo in Horizon files           |
+| TAA-1045  | OSS Bitnami helm charts EOL       
+
+***
+
 ## Horizon SDV - Release 2.0.1 (2025-09-24) 
 
 ### Summary
@@ -178,4 +320,3 @@ N/A
 | TAA-354  | [Jenkins] CVD adb devices not always working as expected                                 |
 
 ***
-

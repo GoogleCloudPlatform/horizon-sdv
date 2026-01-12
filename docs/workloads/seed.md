@@ -36,13 +36,41 @@ Specifies which workload(s) to seed
 - `openbsw` seed the OpenBSW workload.
 - `cloud-workstations` seed the Cloud Workstations workload.
 
+### `BUILDKIT_RELEASE_TAG`
+The version of Buildkit to use to build the container image.
+
+### `DOCKER_CREDENTIALS_URL`
+URL of Google docker credentials helper, required to allow access to the project artifact registry.
+
+### `GCLOUD_CLI_VERSION`
+Version of [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/release-notes) to install.
+Define `latest` if wishing to use the latest available version.
+
+### `KUBECTL_VERSION`
+Version of `kubectl` to install. The version is typically `1:${GCLOUD_CLI_VERSION}`.
+Define `latest` if wishing to use the latest available version.
+
 ### `REPO_SYNC_JOBS`
 Defines the number of parallel sync jobs when running `repo sync`.
 This value will propogate to Android pipeline jobs.
 
+Consider the value carefully and whether using Google Opensource Gerrit repos, local repos or even the AOSP Mirror.
+
 ### `CUTTLEFISH_GCE_CLOUD_LABEL`
 This is the label that identifies the GCE Cloud label which will be used to identify the Cuttlefish VM instance.
 This value will propogate to Android pipeline jobs.
+
+## `USE_LOCAL_AOSP_MIRROR`
+If checked, the build will use the AOSP Mirror setup in your GCP project to fetch Android source code during `repo sync`.
+**Note:**
+-  The AOSP Mirror must be setup prior to running this job. If not setup, the job will fail.
+-  The setup jobs are in folder `Android Workflows -> Environment -> Mirror`.
+
+### `AOSP_MIRROR_DIR_NAME`
+This defines the directory name on the Filestore volume where the Mirror is located.
+**Note:**
+-  This is required if `USE_LOCAL_AOSP_MIRROR` is checked.
+-  e.g. If you provided `my-mirror` when creating the mirror, provide the same value here.
 
 ## `ABFS_VERSION`
 Defines the version for use with the ABFS server, uploader and build jobs.
@@ -50,16 +78,27 @@ Defines the version for use with the ABFS server, uploader and build jobs.
 ## `ABFS_CASFS_VERSION`
 Defines the ABFS CASFS version for use with the ABFS build jobs.
 
+## `ABFS_COS_IMAGE_REF`
+Defines the ABFS Containerized OS images used on server and uploader instances.
+
+Use `gcloud compute images list --no-standard-images --project=cos-cloud | grep lts` to check for available LTS images.
+
 ## `ABFS_REPOSITORY`
 Defines the artifact repository from where to retrieve the ABFS packages.
 
 ## `UPLOADER_MANIFEST_SERVER`
-
 ABFS manifest source URL. Used for seeding ABFS builds, blobs/objects.
 
 ### `OPENBSW_IMAGE_TAG`
 Defines the name of the build image tag used for OpenBSW pipelines.
 This value will propogate to OpenBSW pipeline jobs.
+
+### `OPENBSW_GIT_URL`
+This provides the URL for the OpenBSW repository. Such as:
+- https://github.com/eclipse-openbsw/openbsw.git
+
+### `OPENBSW_GIT_BRANCH`
+This provides the branch/tag revision for the OpenBSW repository.
 
 ### Groovy Scripts <a name="groovyscripts"></a>
 
@@ -134,7 +173,7 @@ Then the workload stages append their unique replacements, e.g.
 > Environment variables can be referenced in Groovy files, but they are replaced with their actual values before the Groovy files are executed by the seed job. This approach avoids the need for explicit script approval, which is required when using the `getProperty` Groovy method to resolve environment variables.
 > The replacement of environment variables with their actual values is performed in the _"Prepare Groovy files"_ stage of the seed job. Therefore, it is crucial to update the replacements list in the Jenkinsfile whenever new environment variables are added to Groovy scripts.
 > To ensure that environment variables are properly replaced, please refer to the [Seed Workloads](seed.md#groovymethods) documentation for more information on how to update the replacements list in the Jenkinsfile.
-> Environment variables are defined in the `gitops/env/stage2/templates/jenkins.yaml` file (CasC).
+> Environment variables are defined in the `gitops/workloads/values-jenkins.yaml` file (CasC).
 
 To make changes to pipeline jobs (or folders):
 

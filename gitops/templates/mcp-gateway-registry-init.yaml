@@ -1,0 +1,131 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-gateway-registry-sa
+  namespace: mcp-gateway-registry
+  annotations:
+    iam.gke.io/gcp-service-account: gke-mcp-gateway-registry-sa@{{ .Values.config.projectID }}.iam.gserviceaccount.com
+    argocd.argoproj.io/sync-wave: "1"
+---
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: mcp-gateway-registry-secret-store
+  namespace: mcp-gateway-registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  provider:
+    gcpsm:
+      projectID: {{ .Values.config.projectID }}
+      auth:
+        workloadIdentity:
+          clusterLocation: {{ .Values.config.region }}
+          clusterName: sdv-cluster
+          serviceAccountRef:
+            name: mcp-gateway-registry-sa
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: mcp-gateway-registry-app-admin
+  namespace: mcp-gateway-registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: mcp-gateway-registry-secret-store
+  target:
+    name: mcp-gateway-registry-app-admin
+    creationPolicy: Owner
+    template:
+      type: Opaque
+      data:
+        username: "mcp-gateway-registry-admin"
+        password: "{{ `{{ .password | toString }}` }}"
+  data:
+    - secretKey: password
+      remoteRef:
+        key: mcp-gateway-registry-admin-password-b64
+        decodingStrategy: Base64
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: mcp-gateway-registry-secretkey-gen
+  namespace: mcp-gateway-registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  length: 64
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: mcp-gateway-registry-secret-key
+  namespace: mcp-gateway-registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  refreshInterval: 0s
+  target:
+    name: mcp-gateway-registry-secret-key
+    creationPolicy: Owner
+    template:
+      type: Opaque
+      engineVersion: v2
+      data:
+        # map generator output into the key
+        secret_key: "{{ `{{ .password | toString }}` }}"
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: mcp-gateway-registry-secretkey-gen
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: mcp-gateway-registry-rwo
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+provisioner: pd.csi.storage.gke.io
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+reclaimPolicy: Delete
+parameters:
+  type: pd-standard
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mcp-gateway-registry-servers-pvc
+  namespace: mcp-gateway-registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: mcp-gateway-registry-rwo
+  volumeMode: Filesystem

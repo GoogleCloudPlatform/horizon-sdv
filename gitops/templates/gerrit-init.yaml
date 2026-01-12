@@ -1,0 +1,105 @@
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gerrit-sa
+  namespace: gerrit
+  annotations:
+    iam.gke.io/gcp-service-account: gke-gerrit-sa@{{ .Values.config.projectID }}.iam.gserviceaccount.com
+    argocd.argoproj.io/sync-wave: "1"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gerrit-ssh-private-key
+  namespace: gerrit
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+type: Opaque
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jenkins-gerrit-ssh-private-key
+  namespace: jenkins
+  labels:
+    jenkins.io/credentials-type: "basicSSHUserPrivateKey"
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    jenkins.io/credentials-description: "Gerrit SSH Private Key"
+type: Opaque
+stringData:
+  username: "gerrit-admin"
+---
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: gerrit-secret-store
+  namespace: gerrit
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  provider:
+    gcpsm:
+      projectID: {{ .Values.config.projectID }}
+      auth:
+        workloadIdentity:
+          clusterLocation: {{ .Values.config.region }}
+          clusterName: sdv-cluster
+          serviceAccountRef:
+            name: gerrit-sa
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: gerrit-ssh-private-key-secret
+  namespace: gerrit
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  refreshInterval: 10s
+  secretStoreRef:
+    kind: SecretStore
+    name: gerrit-secret-store
+  target:
+    name: gerrit-ssh-private-key
+    creationPolicy: Merge
+  data:
+    - secretKey: privatekey
+      remoteRef:
+        key: gerrit-admin-ssh-key-b64
+        decodingStrategy: Base64
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: jenkins-gerrit-ssh-private-key-secret
+  namespace: jenkins
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  refreshInterval: 10s
+  secretStoreRef:
+    kind: SecretStore
+    name: jenkins-secret-store
+  target:
+    name: jenkins-gerrit-ssh-private-key
+    creationPolicy: Merge
+  data:
+    - secretKey: privateKey
+      remoteRef:
+        key: gerrit-admin-ssh-key-b64
+        decodingStrategy: Base64

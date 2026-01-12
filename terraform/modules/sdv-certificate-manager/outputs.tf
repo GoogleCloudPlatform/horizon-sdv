@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,14 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-output "record_name_to_insert" {
-  value = google_certificate_manager_dns_authorization.instance.dns_resource_record.0.name
-}
-
-output "record_type_to_insert" {
-  value = google_certificate_manager_dns_authorization.instance.dns_resource_record.0.type
-}
-
-output "record_data_to_insert" {
-  value = google_certificate_manager_dns_authorization.instance.dns_resource_record.0.data
+output "dns_auth_record" {
+  description = "The full DNS record object required for authz."
+  value       = google_certificate_manager_dns_authorization.instance.dns_resource_record[0]
 }

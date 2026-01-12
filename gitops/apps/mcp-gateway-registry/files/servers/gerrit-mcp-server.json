@@ -1,0 +1,12 @@
+{
+  "server_name": "gerrit-mcp-server",
+  "description": "MCP Server for Horizon-SDV Gerrit",
+  "path": "/gerrit-mcp-server/",
+  "proxy_pass_url": "http://gerrit-mcp-server.gerrit.svc.cluster.local:6322/",
+  "tags": [],
+  "num_tools": 0,
+  "num_stars": 0,
+  "is_python": false,
+  "license": "MIT",
+  "tool_list": []
+}

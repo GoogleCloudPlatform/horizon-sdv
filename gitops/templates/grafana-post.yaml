@@ -1,0 +1,84 @@
+# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-writer-sa
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: grafana-writer-role
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "delete", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: grafana-writer-rolebinding
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+subjects:
+  - kind: ServiceAccount
+    name: grafana-writer-sa
+roleRef:
+  kind: Role
+  name: grafana-writer-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: grafana-cluster-writer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: grafana-writer-sa
+    namespace: monitoring
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: grafana-post-job
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    argocd.argoproj.io/hook: Sync
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 120
+  template:
+    spec:
+      serviceAccountName: grafana-writer-sa
+      containers:
+        - name: grafana-post-container
+          env:
+            - name: DEBUG
+              value: "0"
+          image: {{ .Values.config.postjobs.grafana }}
+          imagePullPolicy: Always
+      restartPolicy: Never

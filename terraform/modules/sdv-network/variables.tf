@@ -34,3 +34,26 @@ variable "router_name" {
   description = "Define the router name"
   type        = string
 }
+
+variable "enable_arm64" {
+  description = "Enable ARM64 networking"
+  type        = bool
+}
+
+variable "arm64_region" {
+  description = "Define the ARM64 region"
+  type        = string
+}
+
+variable "arm64_subnetwork" {
+  description = "Define the ARM64 Subnetwork name"
+  type        = string
+}
+
+variable "arm64_pods_range" {
+  type = string
+}
+
+variable "arm64_services_range" {
+  type = string
+}

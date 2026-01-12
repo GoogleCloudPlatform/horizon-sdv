@@ -10,11 +10,15 @@
 
 During developing the Android workload and workflow/pipelines, sometimes it may be necessary to gain access to a VM build instance in order to develop build jobs. The instance will have the build caches, persistent storage mounted.
 
-Those that require access must be able to connect to the `bastion` host and then access the pod using `kubectl`, e.g.
+Those that require access must be able to connect to the pod using `kubectl`, e.g.
 
 ```
 kubectl exec -it -n jenkins <pod name> -- bash
 ```
+
+Reference [Fleet management](https://docs.cloud.google.com/kubernetes-engine/enterprise/multicluster-management/gateway) to fetch credentials for a fleet-registered cluster to be used in Connect Gateway, e.g.
+- `gcloud container fleet memberships list`
+- `gcloud container fleet memberships get-credentials sdv-cluster`
 
 Alternatively access Host via MTK Connect by enabling MTK_CONNECT_ENABLE.
 
@@ -33,13 +37,11 @@ One-time setup requirements.
 
 **Jenkins Parameters:** Defined in the groovy job definition `groovy/job.groovy`.
 
-### `ABFS`
-
-Enable if using an ABFS instance. This does not require a disk pool, simply allows user to work with ABFS on a build instance.
-
-### `ANDROID_VERSION`
+### `ANDROID_VOLUME`
 
 This specifies which build disk pool to use for the development instance.
+
+For ABFS build instances you select the `abfs` to mount persistent volume used to store the ABFS cache.
 
 ### `INSTANCE_MAX_UPTIME`
 
@@ -49,11 +51,34 @@ This is the maximum time that the instance may be running before it is automatic
 
 Enable if wishing to use MTK Connect to connect to the host instance rather than kubectl.
 
+### `MTK_CONNECT_PUBLIC`
+
+When checked, the MTK Connect testbench is visible to everyone and can be shared.
+By default, testbenches are private and only visible to their creator and MTK Connect administrators.
+
+### `NUM_HOST_INSTANCES`
+
+Number of host instances to create for dev instances. This is effectively the number of devices that will be created associated with the development instance testbench in MTK Connect.
+
+### `USE_LOCAL_AOSP_MIRROR`
+
+If checked, the build instance will mount the AOSP Mirror setup in your GCP project to fetch Android source code during `repo sync`.
+**Note:**
+-  The AOSP Mirror must be setup prior to running this job. If not setup, the job will fail.
+-  The setup jobs are in folder `Android Workflows -> Environment -> Mirror`.
+
+### `AOSP_MIRROR_DIR_NAME`
+
+This defines the directory name on the Filestore volume where the Mirror is located.
+**Note:**
+-  This is required if `USE_LOCAL_AOSP_MIRROR` is checked.
+-  e.g. If you provided `my-mirror` when creating the mirror, provide the same value here.
+
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 
@@ -83,3 +108,9 @@ These are as follows:
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
+
+-    `AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER`
+
+-    `AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME`
+
+-    `AOSP_MIRROR_DIR_NAME`

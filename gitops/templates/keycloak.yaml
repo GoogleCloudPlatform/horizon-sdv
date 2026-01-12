@@ -1,0 +1,77 @@
+# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keycloak
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: horizon-sdv
+  source:
+    chart: keycloakx
+    repoURL: https://codecentric.github.io/helm-charts
+    targetRevision: {{ .Values.config.applications.keycloak.version }}
+    helm:
+      values: |
+        command:
+          - "/opt/keycloak/bin/kc.sh"
+          - "--verbose"
+          - "start"
+          - "--http-port=8080"
+          - "--hostname-strict=false"
+          - "--spi-events-listener-jboss-logging-success-level=info"
+          - "--spi-events-listener-jboss-logging-error-level=warn"
+
+        extraEnv: |
+          - name: KEYCLOAK_ADMIN
+            value: admin
+          - name: KEYCLOAK_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: keycloak-initial-creds
+                key: password
+          - name: JAVA_OPTS_APPEND
+            value: >-
+              -XX:MaxRAMPercentage=50.0
+              -Djgroups.dns.query=keycloak-keycloakx-headless
+
+        dbchecker:
+          enabled: true
+
+        database:
+          existingSecret: postgresql-initial-creds
+          vendor: postgres
+          port: 5432
+          hostname: postgresql
+          username: dbusername
+          database: keycloak
+
+        service:
+          httpPort: 8080
+
+        proxy:
+          mode: xforwarded
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keycloak
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated: {}

@@ -1,0 +1,73 @@
+// Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+pipeline {
+
+  agent none
+
+  environment {
+
+    // Define Pod Template in environment so we can override storageClassName.
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      spec:
+        hostname: jenkins-abfs-uploader-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: abfs-uploader-builder
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${INFRA_DOCKER_ARTIFACT_PATH_NAME}:${INFRA_IMAGE_TAG}
+          imagePullPolicy: Always
+          command:
+          - sleep
+          args:
+          - 5h
+          tty: true
+    """.stripIndent()
+  }
+
+  stages {
+    stage ('Start Instance') {
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+      stages {
+        stage ('Uploader Action') {
+          steps {
+            container(name: 'abfs-uploader-builder') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                withCredentials([string(credentialsId: 'jenkins-abfs-license-b64', variable: "JENKINS_ABFS_LICENSE_B64")]) {
+                  script {
+                    currentBuild.description = "Action: ${ABFS_TERRAFORM_ACTION}" + "<br/>" + "$BUILD_USER"
+                  }
+                  sh '''
+                    cd ./workloads/android/pipelines/environment/abfs/uploader_administration/uploader_operations/
+                    ABFS_TERRAFORM_ACTION="${ABFS_TERRAFORM_ACTION}" \
+                    UPLOADER_COUNT="${UPLOADER_COUNT}" \
+                    UPLOADER_MACHINE_TYPE="${UPLOADER_MACHINE_TYPE}" \
+                    UPLOADER_DATADISK_SIZE_GB="${UPLOADER_DATADISK_SIZE_GB}" \
+                    UPLOADER_MANIFEST_SERVER="${UPLOADER_MANIFEST_SERVER}" \
+                    UPLOADER_GIT_BRANCH="${UPLOADER_GIT_BRANCH}" \
+                    UPLOADER_MANIFEST_FILE="${UPLOADER_MANIFEST_FILE}" \
+                    ABFS_COS_IMAGE_REF="${ABFS_COS_IMAGE_REF}" \
+                    ABFS_LICENSE_B64=${ABFS_LICENSE_B64:-$JENKINS_ABFS_LICENSE_B64} \
+                    ./abfs_uploader_run.sh
+                  '''
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

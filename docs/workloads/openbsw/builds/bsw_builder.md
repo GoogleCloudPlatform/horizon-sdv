@@ -18,6 +18,8 @@ This job automates the build process for the Eclipse Foundation OpenBSW software
 
 The job offers the following build targets and options:
 
+- Documentation:
+  - Creates OpenBSW documentation from doxygen.
 - Unit Tests:
   - Build unit tests
   - Run unit tests (all or individual test library)
@@ -69,6 +71,7 @@ This provides the branch/tag revision for the OpenBSW repository.
 ### `POST_GIT_CLONE_COMMAND`
 
 Optional parameter that allows the user to include additional commands to run after the repository has been cloned.
+Useful to pin OpenBSW to a particular sha1.
 
 ### `IMAGE_TAG`
 
@@ -83,6 +86,14 @@ Defines the number of parallel sync jobs when running `cmake` commands.
 ### `CODE_COVERAGE`
 
 Enable code coverage for unit tests. Only applicable when `BUILD_UNIT_TESTS` and `RUN_UNIT_TESTS` are enabled.
+
+### `BUILD_DOCUMENTATION`
+
+Use this to build the OpenBSW documentation using doxygen. PublishHTML is used in Jenkins so you can view the HTML output, or simply download the archive.
+
+To view in Jenkins correctly, you would have to lower the [content security level](https://www.jenkins.io/doc/book/security/configuring-content-security-policy/) from `Script Console`, allowing the full HTML to be accessible, e.g.
+
+`System.setProperty("hudson.model.DirectoryBrowserSupport.CSP", "")`
 
 ### `LIST_UNIT_TESTS`
 
@@ -102,6 +113,10 @@ Build the unit tests. This will build `all` or that which is specified in `UNIT_
 Specify whether to build all tests or a specific test. See `LIST_UNIT_TESTS` which will generate a list of all available
 tests.
 
+e.g. `UNIT_TEST_TARGET` set to `bspTest`:
+
+Creates `build/tests/Debug/libs/bsw/bsp/test/gtest` which can be used with `RUN_UNIT_TESTS_CMDLINE`.
+
 ### `UNIT_TESTS_CMDLINE`
 
 The command that is used to build unit tests. Users may choose to override or retain default.
@@ -116,11 +131,9 @@ The command that is used to run unit tests. If the `UNIT_TEST_TARGET` is `all` t
 individual targets, it is recommended to either run the test target directly or use `ctest` and specify the test target
 directory.
 
-e.g. `UNIT_TEST_TARGET` set to `bspTest`:
+e.g. `UNIT_TEST_TARGET` set to `bspTest` use the following override:
 
-`cmake-build-unit-tests/openbsw/libs/bsw/bsp/test/gtest/bspTest`
-or
-`ctest --test-dir cmake-build-unit-tests/openbsw/libs/bsw/bsp/test/gtest -j7`
+`ctest --test-dir build/tests/Debug/libs/bsw/bsp/test/gtest --parallel ${CMAKE_SYNC_JOBS}`
 
 ### `BUILD_POSIX`
 
@@ -133,6 +146,14 @@ The command that is used to build the POSIX platform target. Users may choose to
 ### `POSIX_ARTIFACT`
 
 The artifact to store. Default is the `app.referenceApp.elf`.
+
+### `POSIX_PYTEST`
+
+Run python tests on POSIX application. User may also run using the POSIX test job.
+
+### `POSIX_PYTEST_CMDLINE`
+
+The command that will be used to run the pyTest on the POSIX platform target.
 
 ### `BUILD_NXP_S32K148`
 
@@ -150,7 +171,11 @@ The artifact to store. Default is the `app.referenceApp.elf`.
 
 Keep the build VM instance and container running to allow user to connect to it. Useful for debugging build issues, determining target output archives etc. Time in minutes.
 
-Access using `kubectl` e.g. `kubectl exec -it -n jenkins <pod name> -- bash` from `bastion` host.
+Access using `kubectl` e.g. `kubectl exec -it -n jenkins <pod name> -- bash`
+
+Reference [Fleet management](https://docs.cloud.google.com/kubernetes-engine/enterprise/multicluster-management/gateway) to fetch credentials for a fleet-registered cluster to be used in Connect Gateway, e.g.
+- `gcloud container fleet memberships list`
+- `gcloud container fleet memberships get-credentials sdv-cluster`
 
 ### `OPENBSW_ARTIFACT_STORAGE_SOLUTION`
 
@@ -158,11 +183,21 @@ Define storage solution used to push artifacts.
 
 Currently `GCS_BUCKET` default pushes to GCS bucket, if empty then nothing will be stored.
 
+### `STORAGE_BUCKET_DESTINATION`
+
+Lets you override the default artifact storage destination. If not set, the build derives it automatically, for example:
+
+`gs://${OPENBSW_BUILD_BUCKET_ROOT_NAME}/OpenBSW/Builds/BSW_Builder/<BUILD_NUMBER>`
+
+The override must be a full GCS URI, including the `gs://` prefix, bucket name, and the artifact path. For example:
+
+`gs://${OPENBSW_BUILD_BUCKET_ROOT_NAME}/OpenBSW/Releases/010129`
+
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 

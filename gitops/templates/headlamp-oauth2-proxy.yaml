@@ -1,0 +1,86 @@
+# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: headlamp-oauth2-proxy
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  project: horizon-sdv
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: headlamp-oauth2-proxy
+      namespace: headlamp
+      jsonPointers:
+        - /data
+  source:
+    chart: oauth2-proxy
+    repoURL: https://oauth2-proxy.github.io/manifests
+    targetRevision: 8.3.0
+    helm:
+      values: |
+        config:
+          clientID: "oauth2-headlamp"
+
+        extraArgs:
+          provider: "oidc"
+          oidc-issuer-url: "https://{{ .Values.config.domain }}/auth/realms/horizon"
+          redirect-url: "https://{{ .Values.config.domain }}/headlamp/oauth2/callback"
+          cookie-secure: "true"
+          cookie-samesite: "lax"
+          scope: "openid profile email groups"
+          upstream: "http://headlamp-token-injector.headlamp.svc.cluster.local:8080/"
+          http-address: "0.0.0.0:4180"
+          pass-user-headers: "true"
+          pass-authorization-header: "false"
+          set-xauthrequest: "true"
+          allowed-group: "horizon-headlamp-administrators"
+          oidc-groups-claim: "groups"
+          skip-jwt-bearer-tokens: "false"
+          skip-provider-button: "true"
+          cookie-expire: "2h"
+          email-domain: "*"
+          proxy-prefix: "/headlamp/oauth2"
+          cookie-path: "/headlamp"
+          reverse-proxy: "true"
+
+        extraEnv:
+          - name: OAUTH2_PROXY_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: headlamp-oauth2-proxy
+                key: client-secret
+          - name: OAUTH2_PROXY_COOKIE_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: headlamp-oauth2-proxy
+                key: cookie-secret
+
+        service:
+          enabled: true
+          type: ClusterIP
+          portNumber: 80
+          targetPort: 4180
+          portName: http
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: headlamp
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated: {}

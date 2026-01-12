@@ -9,7 +9,7 @@
 
 ## Overview <a name="overview"></a>
 
-Immediately after initial launch, Jenkins contains a single job - _Seed Workloads_ - which is defined in `gitops/env/stage2/templates/jenkins.yaml` (CasC).
+Immediately after initial launch, Jenkins contains a single job - _Seed Workloads_ - which is defined in `gitops/workloads/values-jenkins.yaml` (CasC).
 
 The _Seed Workloads_ job uses the groovy definitions to initialise the jobs required for each workload.
 <br>It also allows users to update Jenkins to pull in any changes made to the groovy definitions - these can be new job definitions and/or changes to existing jobs.
@@ -38,7 +38,7 @@ To run pipeline jobs, users must have access to Jenkins and be granted permissio
 > [!IMPORTANT]
 > **Persistence**
 >
-> These manually updated permissions do not persist across a Jenkins restart. To ensure persistence, we recommend adding users to the `gitops/env/stage2/templates/jenkins.yaml` file, e.g..
+> These manually updated permissions do not persist across a Jenkins restart. To ensure persistence, we recommend adding users to the `gitops/templates/jenkins.yaml` file, e.g..
 > - Update `authorizationStrategy` → `roleBased` → `roles` → `global`:
 >   - Add the user to the respective group entry, e.g.
 > ```
@@ -53,7 +53,7 @@ To run pipeline jobs, users must have access to Jenkins and be granted permissio
 > [!NOTE]
 > **Disabling the plugin**
 >
-> If user wishes to disable the plugin, then remove the plugin and configuration from `gitops/env/stage2/templates/jenkins.yaml`:
+> If user wishes to disable the plugin, then remove the plugin and configuration from `gitops/templates/jenkins.yaml`:
 > - Remove the plugin from the `additionalPlugins` section:
 >   - `role-strategy:743.v142ea_b_d5f1d3`
 >
@@ -76,7 +76,7 @@ There are also Groovy files that define the folder structure within Jenkins, e.g
 
 ### Initial Jenkins Configuration
 
-Upon initial launch, Jenkins contains a single job called _"Seed Workloads"_, defined in `gitops/env/stage2/templates/jenkins.yaml` (CasC).
+Upon initial launch, Jenkins contains a single job called _"Seed Workloads"_, defined in `gitops/templates/jenkins.yaml` (CasC).
 
 ### Seed Workloads Job Functionality
 
@@ -141,7 +141,7 @@ For more detailed information on each of these components, refer to existing Gro
 > Environment variables can be referenced in Groovy files, but they are replaced with their actual values before the Groovy files are executed by the seed job. This approach avoids the need for explicit script approval, which is required when using the `getProperty` Groovy method to resolve environment variables.
 > The replacement of environment variables with their actual values is performed in the _"Prepare Groovy files"_ stage of the seed job. Therefore, it is crucial to update the replacements list in the Jenkinsfile whenever new environment variables are added to Groovy scripts.
 > To ensure that environment variables are properly replaced, please refer to the [Seed Workloads](../seed.md#groovymethods) documentation for more information on how to update the replacements list in the Jenkinsfile.
-> Environment variables are defined in the `gitops/env/stage2/templates/jenkins.yaml` file (CasC).
+> Environment variables are defined in the `gitops/templates/jenkins.yaml` file (CasC).
 
 
 ### Update Existing Jobs

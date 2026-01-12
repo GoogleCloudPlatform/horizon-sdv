@@ -90,6 +90,9 @@ BUILD_INFO_FILE="${WORKSPACE}/build_info.txt"
 UNIT_TESTS_RESULTS_FILE="${WORKSPACE}/unit_test_results.txt"
 UNIT_TESTS_LIST_FILE="${ORIG_WORKSPACE}/unit_test_list.txt"
 
+# pyTest results artifacts.
+PYTEST_RESULTS_FILE="${WORKSPACE}/pytest_result.txt"
+
 # Post git clone commands
 # shellcheck disable=SC2034
 declare -a POST_GIT_CLONE_COMMANDS_LIST
@@ -107,17 +110,21 @@ BUILD_POSIX=${BUILD_POSIX:-true}
 BUILD_NXP_S32K148=${BUILD_NXP_S32K148:-true}
 UNIT_TEST_TARGET=${UNIT_TEST_TARGET:-all}
 CODE_COVERAGE=${CODE_COVERAGE:-false}
+POSIX_PYTEST=${POSIX_PYTEST:-false}
+BUILD_DOCUMENTATION=${BUILD_DOCUMENTATION:-false}
 
 # Configure and generate the build systems before building.
-UNIT_TESTS_CMDLINE=${UNIT_TESTS_CMDLINE:-cmake -DBUILD_UNIT_TESTS=ON -DCMAKE_BUILD_TYPE=Debug -B cmake-build-unit-tests -S executables/unitTest && cmake --build cmake-build-unit-tests -j${CMAKE_SYNC_JOBS} --target ${UNIT_TEST_TARGET}}
-LIST_UNIT_TESTS_CMDLINE=${LIST_UNIT_TESTS_CMDLINE:-cmake -DBUILD_UNIT_TESTS=ON -DCMAKE_BUILD_TYPE=Debug -B cmake-build-unit-tests -S executables/unitTest && cmake --build cmake-build-unit-tests --target help -j${CMAKE_SYNC_JOBS}}
-RUN_UNIT_TESTS_CMDLINE=${RUN_UNIT_TESTS_CMDLINE:-ctest --test-dir cmake-build-unit-tests -j${CMAKE_SYNC_JOBS}}
-POSIX_BUILD_CMDLINE=${POSIX_BUILD_CMDLINE:-cmake -B cmake-build-posix -S executables/referenceApp && cmake --build cmake-build-posix --target app.referenceApp -j${CMAKE_SYNC_JOBS}}
-NXP_S32K148_BUILD_CMDLINE=${NXP_S32K148_BUILD_CMDLINE:-cmake -B cmake-build-s32k148 -S executables/referenceApp -DBUILD_TARGET_PLATFORM='S32K148EVB' --toolchain ../../admin/cmake/ArmNoneEabi-gcc.cmake && cmake --build cmake-build-s32k148 --target app.referenceApp -j${CMAKE_SYNC_JOBS}}
+UNIT_TESTS_CMDLINE=${UNIT_TESTS_CMDLINE:-cmake --preset tests-posix-debug && cmake --build --preset tests-debug --target ${UNIT_TEST_TARGET} -j${CMAKE_SYNC_JOBS}}
+LIST_UNIT_TESTS_CMDLINE=${LIST_UNIT_TESTS_CMDLINE:-cmake --preset tests-posix-debug && cmake --build --preset tests-debug --target help -j${CMAKE_SYNC_JOBS}}
+RUN_UNIT_TESTS_CMDLINE=${RUN_UNIT_TESTS_CMDLINE:-ctest --preset tests-posix-debug --parallel ${CMAKE_SYNC_JOBS}}
+POSIX_BUILD_CMDLINE=${POSIX_BUILD_CMDLINE:-cmake --preset posix-freertos && cmake --build --preset posix-freertos -j${CMAKE_SYNC_JOBS}}
+NXP_S32K148_BUILD_CMDLINE=${NXP_S32K148_BUILD_CMDLINE:-cmake --preset s32k148-gcc-freertos && cmake --build --preset s32k148-gcc-freertos -j${CMAKE_SYNC_JOBS}}
+POSIX_PYTEST_CMDLINE=${POSIX_PYTEST_CMDLINE:-./tools/enet/bring-up-ethernet.sh && ./tools/can/bring-up-vcan0.sh && cd test/pyTest/ && pytest --target=posix --app=freertos}
+BUILD_DOCUMENTATION_CMDLINE=${BUILD_DOCUMENTATION_CMDLINE:-cd doc && doxygen Doxyfile && cd -}
 
 # Artifacts
-POSIX_ARTIFACT=${POSIX_ARTIFACT:-"cmake-build-posix/app.referenceApp.elf"}
-NXP_S32K148_ARTIFACT=${NXP_S32K148_ARTIFACT:-"cmake-build-s32k148/app.referenceApp.elf"}
+POSIX_ARTIFACT=${POSIX_ARTIFACT:-"build/posix-freertos/executables/referenceApp/application/Release/app.referenceApp.elf"}
+NXP_S32K148_ARTIFACT=${NXP_S32K148_ARTIFACT:-"build/s32k148-freertos-gcc/executables/referenceApp/application/RelWithDebInfo/app.referenceApp.elf"}
 
 # Post build commands
 declare -a POST_BUILD_COMMANDS
@@ -145,7 +152,31 @@ if ${BUILD_POSIX}; then
     )
     POST_BUILD_COMMANDS+=(
         "mkdir -p artifacts/posix"
-        "cp -f ${POSIX_ARTIFACT} artifacts/posix || true"
+        "tar -zcf posix.tgz tools test/pyTest ${POSIX_ARTIFACT}"
+        "mv posix.tgz artifacts/posix"
+    )
+fi
+
+if ${BUILD_DOCUMENTATION}; then
+    POST_BUILD_COMMANDS+=(
+        "cd doc && python3 -m coverxygen --format summary --xml-dir doxygenOut/xml/ --src-dir .. --output - | tee ${WORKSPACE}/openbsw-doc-overage.txt && cd -"
+        "cd doc && tar -zcf ${WORKSPACE}/openbsw-documentation.tgz doxygenOut && cd -"
+        "cd doc && cp -rf doxygenOut \"${ORIG_WORKSPACE}\" && cd -"
+        "cp -f ${WORKSPACE}/openbsw-documentation.tgz \"${ORIG_WORKSPACE}\""
+        "cp -f ${WORKSPACE}/openbsw-doc-overage.txt \"${ORIG_WORKSPACE}\""
+    )
+    OPENBSW_ARTIFACT_LIST+=(
+        "${WORKSPACE}/openbsw-documentation.tgz"
+        "${WORKSPACE}/openbsw-doc-overage.txt"
+    )
+fi
+
+if ${POSIX_PYTEST}; then
+    OPENBSW_ARTIFACT_LIST+=(
+        "${PYTEST_RESULTS_FILE}"
+    )
+    POST_BUILD_COMMANDS+=(
+        "cp -f ${PYTEST_RESULTS_FILE} \"${ORIG_WORKSPACE}\""
     )
 fi
 
@@ -156,7 +187,10 @@ if ${BUILD_NXP_S32K148}; then
     POST_BUILD_COMMANDS+=(
         "mkdir -p artifacts/s32k148"
         "cp -f ${NXP_S32K148_ARTIFACT} artifacts/s32k148 || true"
-        "cp -f cmake-build-s32k148/application/application.map artifacts/s32k148 || true"
+        "cp -f build/s32k148-freertos-gcc/application.map artifacts/s32k148 || true"
+        "cp -f build/s32k148-threadx-gcc/application.map artifacts/s32k148 || true"
+        "cp -f build/s32k148-freertos-clang/application.map artifacts/s32k148 || true"
+        "cp -f build/s32k148-threadx-clang/application.map artifacts/s32k148 || true"
     )
 fi
 
@@ -202,11 +236,13 @@ case "$0" in
         RUN_UNIT_TESTS=${RUN_UNIT_TESTS}
         BUILD_POSIX=${BUILD_POSIX}
         BUILD_NXP_S32K148=${BUILD_NXP_S32K148}
+        POSIX_PYTEST=${POSIX_PYTEST}
 
         LIST_UNIT_TESTS_CMDLINE=${LIST_UNIT_TESTS_CMDLINE}
         UNIT_TESTS_CMDLINE=${UNIT_TESTS_CMDLINE}
         RUN_UNIT_TESTS_CMDLINE=${RUN_UNIT_TESTS_CMDLINE}
         POSIX_BUILD_CMDLINE=${POSIX_BUILD_CMDLINE}
+        POSIX_PYTEST_CMDLINE=${POSIX_PYTEST_CMDLINE}
         NXP_S32K148_BUILD_CMDLINE=${NXP_S32K148_BUILD_CMDLINE}
 
         UNIT_TESTS_LIST_FILE=${UNIT_TESTS_LIST_FILE}

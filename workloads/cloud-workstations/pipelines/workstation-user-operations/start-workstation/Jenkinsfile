@@ -90,7 +90,6 @@ pipeline {
           container(name: 'cloud-ws-builder') {
             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
               sh """
-                chmod +x "${scriptPath}"
                 ${scriptPath} ${tfBackendBucket} ${tfvarsJsonFilePath} ${currentBuildUser}
               """
             }

@@ -1,0 +1,94 @@
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jenkins
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: horizon-sdv
+  sources:
+    - chart: jenkins
+      repoURL: https://charts.jenkins.io
+      targetRevision: {{ .Values.config.workloads.android.helm.version }}
+      helm:
+        values: |
+          github:
+              repoOwner: {{ .Values.github.repoOwner }}
+              repoName: {{ .Values.github.repoName }}
+          config:
+            projectID: {{ .Values.config.projectID }}
+            region: {{ .Values.config.region }}
+            zone: {{ .Values.config.zone }}
+            backendBucket: {{ .Values.config.backendBucket }}
+            domain: {{ .Values.config.domain }}
+            workloads:
+              android:
+                url: {{ .Values.config.workloads.android.url }}
+                branch: {{ .Values.config.workloads.android.branch }}
+          controller:
+            jenkinsUrl: https://{{ .Values.config.domain }}/jenkins
+            jenkinsUriPrefix: /jenkins
+            additionalExistingSecrets:
+              - name: jenkins-keycloak
+                keyName: keycloakJson
+              - name: jenkins-gerrit-ssh-private-key
+                keyName: privateKey
+              - name: jenkins-gerrit-http-password
+                keyName: password
+              - name: jenkins-gce-creds
+                keyName: gce-creds-json
+            JCasC:
+              securityRealm: |-
+                keycloak:
+                  keycloakJson: ${jenkins-keycloak-keycloakJson}
+                  keycloakRespectAccessTokenTimeout: false
+                  keycloakValidate: false
+          agent:
+            containerCap: 20
+          persistence:
+            accessMode: "ReadWriteOnce"
+            enabled: true
+            existingClaim: "jenkins-home-volume"
+          rbac:
+            readSecrets: true
+          admin:
+            createSecret: true
+            existingSecret: jenkins-initial-creds
+            userkey: jenkins-admin-user
+            passwordkey: jenkins-admin-password
+        valueFiles:
+          - $values/gitops/workloads/values-jenkins.yaml
+    - repoURL: {{ .Values.spec.source.repoURL }}
+      targetRevision: {{ .Values.spec.source.targetRevision }}
+      ref: values
+      path: gitops/workloads
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: jenkins
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated: {}
+  ignoreDifferences:
+    - kind: Secret
+      name: jenkins
+      namespace: jenkins
+      jsonPointers:
+        - /data

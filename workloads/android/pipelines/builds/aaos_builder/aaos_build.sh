@@ -40,7 +40,7 @@ if [ -n "${AAOS_MAKE_CMDLINE}" ]; then
     source build/envsetup.sh
     if ! lunch "${AAOS_LUNCH_TARGET}"
     then
-        echo "ERROR: lunch ${AAOS_LUNCH_TARGET}"
+        echo -e "\033[1;31mERROR: lunch ${AAOS_LUNCH_TARGET}\033[0m"
         exit 1
     fi
 
@@ -50,7 +50,7 @@ if [ -n "${AAOS_MAKE_CMDLINE}" ]; then
     eval "${AAOS_MAKE_CMDLINE}"
     RESULT=$?
 else
-    echo "Error: make command line undefined!"
+    echo -e "\033[1;31mERROR: make command line undefined!\033[0m"
     exit 1
 fi
 

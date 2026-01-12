@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,34 +20,59 @@ data "google_project" "project" {}
 
 module "vpc" {
   source  = "terraform-google-modules/network/google"
-  version = "~> 9.1"
+  version = "~> 13.0.0"
 
   project_id   = data.google_project.project.project_id
   network_name = var.network
   routing_mode = "GLOBAL"
 
-  subnets = [
-    {
-      subnet_name              = var.subnetwork
-      subnet_region            = var.region
-      subnet_ip                = "10.1.0.0/24"
-      enable_ula_internal_ipv6 = true
-      private_ip_google_access = false
-    }
-  ]
+  subnets = concat(
+    [
+      {
+        subnet_name              = var.subnetwork
+        subnet_region            = var.region
+        subnet_ip                = "10.1.0.0/24"
+        enable_ula_internal_ipv6 = true
+        private_ip_google_access = false
+      }
+    ],
+    var.enable_arm64 ? [
+      {
+        subnet_name              = var.arm64_subnetwork
+        subnet_region            = var.arm64_region
+        subnet_ip                = "10.2.0.0/24"
+        enable_ula_internal_ipv6 = true
+        private_ip_google_access = false
+      }
+    ] : []
+  )
 
-  secondary_ranges = {
-    "${var.subnetwork}" = [
-      {
-        range_name    = "pods-range"
-        ip_cidr_range = "10.10.0.0/16"
-      },
-      {
-        range_name    = "services-range"
-        ip_cidr_range = "10.12.0.0/16"
-      },
-    ]
-  }
+  secondary_ranges = merge(
+    {
+      "${var.subnetwork}" = [
+        {
+          range_name    = "pods-range"
+          ip_cidr_range = "10.10.0.0/16"
+        },
+        {
+          range_name    = "services-range"
+          ip_cidr_range = "10.12.0.0/16"
+        },
+      ]
+    },
+    var.enable_arm64 ? {
+      "${var.arm64_subnetwork}" = [
+        {
+          range_name    = "pods-range-us"
+          ip_cidr_range = var.arm64_pods_range
+        },
+        {
+          range_name    = "services-range-us"
+          ip_cidr_range = var.arm64_services_range
+        }
+      ]
+    } : {}
+  )
 
   routes = [
     {

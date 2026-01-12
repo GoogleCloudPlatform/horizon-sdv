@@ -7,21 +7,15 @@ Currently it is designed to run a base set of builds that can be used to verify 
 
 It supports the following branches:
 
--   `android-14.0.0_r30`
--   `android-14.0.0_r74`
--   `android-15.0.0_r4`
--   `android-15.0.0_r20`
--   `android-15.0.0_r32`
--   `android-15.0.0_r36`
+-   `horizon/android-14.0.0_r30`
+-   `horizon/android-15.0.0_r36`
+-   `horizon/android-16.0.0_r3`
 
 The branch is used to derive the full name (build identifier) of the build targets, e.g.
 
 -   `android-14.0.0_r30` -> `sdk_car_x86_64-ap1a-userdebug`
--   `android-14.0.0_r74` -> `sdk_car_x86_64-ap2a-userdebug`
--   `android-15.0.0_r4` -> `sdk_car_x86_64-ap3a-userdebug`
--   `android-15.0.0_r20` -> `sdk_car_x86_64-bp1a-userdebug`
--   `android-15.0.0_r32` -> `sdk_car_x86_64-bp1a-userdebug`
 -   `android-15.0.0_r36` -> `sdk_car_x86_64-bp1a-userdebug`
+-   `android-16.0.0_r3` -> `sdk_car_x86_64-bp3a-userdebug`
 
 It builds the following targets:
 
@@ -49,7 +43,7 @@ To successfully run the pipeline, ensure that the referenced Cuttlefish instance
 
 ## Gerrit Triggers
 
-The pipeline is triggered by a Gerrit patchset change based on Gerrit Triggers plugin. It uses the Horizon default path and branch name prefixes:
+The pipeline is triggered by a Gerrit patchset change, or topic update based on Gerrit Triggers plugin. It uses the Horizon default path and branch name prefixes:
 - Project prefix path: `android` separates projects into Android workload.
 - Branch prefix path: `horizon` and separates branch names from upstream branches.
 
@@ -60,6 +54,12 @@ properties{
   pipelineTriggers{
     triggers{
       gerrit{
+        buildCancellationPolicy{
+          abortAbandonedPatchsets(false)
+          abortManualPatchsets(true)
+          abortNewPatchsets(false)
+          abortSameTopic(true)
+        }
         gerritProjects{
           gerritProject{
             compareType('REG_EXP')
@@ -86,7 +86,7 @@ properties{
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 
@@ -125,6 +125,12 @@ These are as follows:
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
+
+-    `AOSP_MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER`
+
+-    `AOSP_MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME`
+
+-    `AOSP_MIRROR_DIR_NAME`
 
 ## KNOWN ISSUES <a name="known-issues"></a>
 

@@ -13,69 +13,92 @@
 // limitations under the License.
 
 // Description:
-// This pipeline builds the ABFS builder Docker image using Kaniko.
+// This pipeline builds the ABFS builder Docker image using BuildKit.
 //
 // References:
-//   * https://github.com/GoogleContainerTools/kaniko
+//   * https://github.com/moby/buildkit
+//   * Image: https://hub.docker.com/r/moby/buildkit
+//     e.g. image: moby/buildkit:v0.24.0
 pipeline {
 
   // Parameters defined in groovy/job.groovy
 
-  agent {
-    kubernetes {
-      yaml """\
-        apiVersion: v1
-        kind: Pod
-        spec:
-          hostname: jenkins-aaos-abfs-build-pod
-          serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
-          containers:
-          - name: kaniko
-            image: gcr.io/kaniko-project/executor:debug
-            imagePullPolicy: IfNotPresent
-            command:
-            - /busybox/cat
-            tty: true
-            resources:
-              limits:
-                memory: 8Gi
-              requests:
-                memory: 8Gi
-      """.stripIndent()
-    }
-  }
-
-  // Block concurrent builds to avoid clashing.
-  options {
-    buildBlocker (useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '.*Docker.*')
-  }
+  agent none
 
   environment {
     // Update latest tag.
-    DESTINATION="--destination=${env.CLOUD_REGION}-docker.pkg.dev/${env.CLOUD_PROJECT}/${env.ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}"
-    KANIKO_OPTIONS="${NO_PUSH == "true" ? "--no-push" : "${DESTINATION}:${IMAGE_TAG}"}"
+    REGISTRY="${env.CLOUD_REGION}-docker.pkg.dev"
+    DESTINATION="${REGISTRY}/${env.CLOUD_PROJECT}/${env.ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}"
+    PUSH="${NO_PUSH == "true" ? "false" : "true"}"
+
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      spec:
+        hostname: jenkins-aaos-abfs-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: buildkit
+          image: moby/buildkit:${BUILDKIT_RELEASE_TAG}
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              memory: 8Gi
+            requests:
+              memory: 8Gi
+      """.stripIndent()
   }
 
   stages {
-    stage ('Create Docker Image'){
-      when { expression { env.IMAGE_TAG } }
-      steps {
-        container(name: 'kaniko') {
-          script {
-            currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+    stage ('Start instance'){
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+      stages {
+        stage ('Docker Credentials'){
+          steps {
+            script {
+              currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+            }
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  wget -nv -O docker-credential-gcr.tgz ${DOCKER_CREDENTIALS_URL}
+                  tar -zxf docker-credential-gcr.tgz
+                  chmod +x docker-credential-gcr && mv docker-credential-gcr /usr/bin/
+                  rm -f docker-credential-gcr*.tar.gz
+                  docker-credential-gcr configure-docker --registries=${REGISTRY}
+                '''
+              }
+            }
           }
-          sh '''
-            # Build the docker image and push to Artifact registry using service account configured with
-            # correct roles/permissions.
-            /kaniko/executor -f workloads/android/pipelines/environment/docker_image_template/Dockerfile \
-              -c workloads/android/pipelines/environment/abfs/docker_image_template --skip-tls-verify-pull \
-              --insecure --skip-tls-verify "${KANIKO_OPTIONS}" \
-              --build-arg NODEJS_VERSION='''+NODEJS_VERSION+''' \
-              --build-arg LINUX_DISTRIBUTION='''+LINUX_DISTRIBUTION+''' \
-              --build-arg GOOGLE_DISTRIBUTION_REGISTRY="${GOOGLE_DISTRIBUTION_REGISTRY}" \
-              --build-arg ABFS_DISTRIBUTION_REGISTRY="${ABFS_DISTRIBUTION_REGISTRY}" \
-              --build-arg ABFS="true"
-          '''
+        }
+
+        stage ('Build Docker Image'){
+          when { expression { env.IMAGE_TAG } }
+          steps {
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  cd "${WORKSPACE}/workloads/android/pipelines/environment/docker_image_template/";
+                  buildctl build \
+                   --frontend=dockerfile.v0 \
+                   --local=dockerfile=. \
+                   --local context=. \
+                   --opt build-arg:ABFS="true" \
+                   --opt build-arg:LINUX_DISTRIBUTION=${LINUX_DISTRIBUTION} \
+                   --opt build-arg:NODEJS_VERSION=${NODEJS_VERSION} \
+                   --opt build-arg:GOOGLE_DISTRIBUTION_REGISTRY="${GOOGLE_DISTRIBUTION_REGISTRY}" \
+                   --opt build-arg:ABFS_DISTRIBUTION_REGISTRY="${ABFS_DISTRIBUTION_REGISTRY}" \
+                   --opt build-arg:GCLOUD_CLI_VERSION="${GCLOUD_CLI_VERSION}" \
+                   --opt build-arg:KUBECTL_VERSION="${KUBECTL_VERSION}" \
+                   --opt platform=linux/amd64 \
+                   --registry-auth-tlscontext host=${REGISTRY},insecure=true \
+                   --output=type=image,name=${DESTINATION}:${IMAGE_TAG},push=${PUSH}
+                '''
+              }
+            }
+          }
         }
       }
     }

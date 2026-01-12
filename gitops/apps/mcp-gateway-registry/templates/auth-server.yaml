@@ -1,0 +1,90 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.app.name }}-auth-server
+  namespace: {{ .Values.app.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.app.name }}-auth-server
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app.name }}-auth-server
+    spec:
+      containers:
+        - name: auth-server
+          image: "mcpgateway/{{ .Values.authServer.image.repository }}:{{ .Values.authServer.image.tag }}"
+          imagePullPolicy: {{ .Values.authServer.image.pullPolicy }}
+          ports:
+            - containerPort: 8888
+          env:
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-web-keycloak-secret
+                  key: client_secret
+            - name: KEYCLOAK_M2M_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-cli-keycloak-secret
+                  key: client_secret
+            - name: ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-app-admin
+                  key: username
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-app-admin
+                  key: password
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-registry-secret-key
+                  key: secret_key
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.app.name }}-common-config
+          volumeMounts:
+            - name: scopes
+              mountPath: /app/scopes.yml
+              subPath: scopes.yml
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: scopes
+          configMap:
+            name: {{ .Values.app.name }}-user-scopes-config
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.authServer.service.name }}
+  namespace: {{ .Values.app.namespace }}
+spec:
+  selector:
+    app: {{ .Values.app.name }}-auth-server
+  ports:
+    - protocol: TCP
+      port: {{ .Values.authServer.service.ports.api }}
+      targetPort: 8888
+  type: {{ .Values.authServer.service.type }}

@@ -187,6 +187,10 @@ Bucket URL: https://console.cloud.google.com/storage/browser/sdva-2108202401-ope
 
 This storage location will be required for the POSIX tests section later in this document, e.g. `gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/23/posix`.
 
+**Running pyTest against POSIX Application**
+
+See `POSIX_PYTEST`, only applicable when `POSIX_BUILD` is selected and will run the default set of python tests against the application. User may choose to run these on the host via MTK Connect, in which case refer to the description in `Jenkins` → `OpenBSW Workflows` → `Tests` → `POSIX`.
+
 ### <span style="color:#335bff">4.3 S32K148 Target<a name="4-3-s32k148"></a></span>
 
 **Building S32K148 Target**
@@ -207,7 +211,7 @@ Artifacts stored in gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18
 Bucket URL: https://console.cloud.google.com/storage/browser/sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18
 
     gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18/build_info.txt .
-    gcloud storage cp -r gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18/s32k148 .
+    gcloud storage cp -r gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18/s32k148-gcc .
 ```
 Within the `s32k148` storage bucket directory, the following has been stored for later retrieval and use on NXP evaluation boards:
 
@@ -225,14 +229,14 @@ This section provides an overview of how to test the OpenBSW target builds in Ho
 The testing is achieved using MTK Connect and its HOST API which will connect to the POSIX platform that the application
 can be run on.
 
-To test the previous POSIX application built in _4.2 POSIX Target_ above, follow these steps:
+To test the previous POSIX application built in _4.2 POSIX Target_ above, follow these steps (and instructions covered
+in the Jenkins job description):
 
 1. **Navigate to Jenkins:** Go to `Jenkins` → `OpenBSW Workflows` → `Tests` → `POSIX` → `Build with Parameters`
 2. **Enter POSIX bucket URL:** In `OPENBSW_DOWNLOAD_URL` put the URL you have from section _4.2 POSIX Target_, e.g.
    `gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/23/posix`
-3. **LAUNCH_APPLICATION_NAME:** (Optional) Refer to the [POSIX](../tests/posix.md) documentation.
-4. **POSIX_KEEP_ALIVE_TIME:** (Optional) Refer to the [POSIX](../tests/posix.md) documentation.
-5. **Start the Build:** Select `Build` and wait for the job to enter `Keep Devices Alive` stage.
+3. **POSIX_KEEP_ALIVE_TIME:** (Optional) Refer to the [POSIX](../tests/posix.md) documentation.
+4. **Start the Build:** Select `Build` and wait for the job to enter `Keep Devices Alive` stage.
 
 **MTK Connect HOST access**
 
@@ -259,7 +263,16 @@ To test the previous POSIX application built in _4.2 POSIX Target_ above, follow
 
     Note: The log above shows the Testbench to book, e.g. `MTK Connect Testbench: OpenBSW/Tests/POSIX-3`
 
-3. **Test the console:** Refer to [Using the application console](https://eclipse-openbsw.github.io/openbsw/sphinx_docs/doc/learning/console/index.html).
+3. **Test the console:**
+
+    Refer to `Jenkins` → `OpenBSW Workflows` → `Tests` → `POSIX` description for command to use to test with application console, e.g.
+    Refer to [Using the application console](https://eclipse-openbsw.github.io/openbsw/sphinx_docs/doc/learning/console/index.html).
+
+4. **Test using pytest:**
+
+    Refer to `Jenkins` → `OpenBSW Workflows` → `Tests` → `POSIX` description for command to use to test the application using pytest, e.g.
+    `pytest target=posix`
+
 
 ### <span style="color:#335bff">5.2 S32K148 Target<a name="5-2-hardware"></a></span>
 
@@ -272,7 +285,7 @@ Note that testing the NXP S32K148 platform is not currently supported in this re
 To download the application, use the following command, which will be shown in the respective `BSW Builder` jobs
 artifact file, eg. `openbsw-1-artifacts.txt`:
 
-`gcloud storage cp -r gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/1/s32k148 .`
+`gcloud storage cp -r gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/01/s32k148-gcc .`
 
 **Flashing the Application**
 
@@ -296,10 +309,6 @@ These resources provide further details on the Eclipse Foundation OpenBSW, inclu
 
 Future releases of the Eclipse Foundation OpenBSW in Horizon SDV will include additional features and functionality that are not currently available, such as:
 
-- [Virtual CAN](https://eclipse-openbsw.github.io/openbsw/sphinx_docs/doc/learning/can/index.html)
-- [Documentation generation support](https://github.com/eclipse-openbsw/openbsw/tree/main/doc)
 - [S32K148 platform testing](https://eclipse-openbsw.github.io/openbsw/sphinx_docs/doc/learning/setup/setup_env_host_ubuntu.html#s32k148-platform)
-- [pytest environment](https://github.com/eclipse-openbsw/openbsw/tree/main/test/pyTest)
-- Multi-system software development, e.g OpenBSW and Android pipelines integrated.
 
 These upcoming enhancements will further expand the capabilities of the OpenBSW offering, providing users with even more tools and resources to support their development needs.

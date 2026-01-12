@@ -29,7 +29,7 @@ pipeline {
         stage ('MTK Connect to Host Device') {
           steps {
             script {
-              currentBuild.description = "$BUILD_USER"
+              currentBuild.description = "${params.JENKINS_GCE_CLOUD_LABEL}" + "<br/>" + "$BUILD_USER"
             }
             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
               withCredentials([usernamePassword(credentialsId: 'jenkins-mtk-connect-apikey', passwordVariable: 'MTK_CONNECT_PASSWORD', usernameVariable: 'MTK_CONNECT_USERNAME')]) {
@@ -39,9 +39,9 @@ pipeline {
                   MTK_CONNECT_DOMAIN=${HORIZON_DOMAIN} \
                   MTK_CONNECT_USERNAME=${MTK_CONNECT_USERNAME} \
                   MTK_CONNECT_PASSWORD=${MTK_CONNECT_PASSWORD} \
-                  MTK_CONNECTED_DEVICES="1" \
+                  MTK_CONNECTED_DEVICES=${NUM_HOST_INSTANCES} \
                   MTK_CONNECT_TESTBENCH="${JOB_NAME}-${BUILD_NUMBER}" \
-                  MTK_CONNECT_TESTBENCH_USER="${BUILD_USER_ID}" \
+                  MTK_CONNECT_TESTBENCH_USER=$([ "$MTK_CONNECT_PUBLIC" = "true" ] && echo "everyone" || echo "$BUILD_USER_ID") \
                   MTK_CONNECT_HOST_ONLY="true" \
                   timeout 15m ./mtk_connect.sh --start
                    cd - || true

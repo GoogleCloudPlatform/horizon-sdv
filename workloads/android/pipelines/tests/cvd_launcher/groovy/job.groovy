@@ -35,8 +35,10 @@ pipelineJob('Android/Tests/CVD Launcher') {
       defaultValue("${JENKINS_GCE_CLOUD_LABEL}")
       description('''<p>The Jenkins GCE Clouds label for the Cuttlefish instance template, e.g.<br/></p>
         <ul>
+          <li>cuttlefish-vm-v1350</li>
           <li>cuttlefish-vm-main</li>
-          <li>cuttlefish-vm-v1180</li>
+          <li>cuttlefish-vm-v1350-arm64</li>
+          <li>cuttlefish-vm-main-arm64</li>
         </ul>''')
       trim(true)
     }
@@ -44,7 +46,9 @@ pipelineJob('Android/Tests/CVD Launcher') {
     stringParam {
       name('CUTTLEFISH_DOWNLOAD_URL')
       defaultValue('')
-      description("""<p>Storage URL pointing to the location of the Cuttlefish Virtual Device images and host packages, e.g.<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;</p>""")
+      description("""<p>Mandatory: Storage URL pointing to the location of the Cuttlefish Virtual Device images and host packages, e.g.<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;<br/><br/>
+        <b>Note:</b>
+          <ul><li>if build number is less than 2 digits, then zero pad , i.e. 1 to 9 must be 01 to 09.</li></ul)</p>""")
       trim(true)
     }
 
@@ -87,15 +91,25 @@ pipelineJob('Android/Tests/CVD Launcher') {
 
     stringParam {
       name('VM_MEMORY_MB')
-      defaultValue('16384')
+      defaultValue('8192')
       description('''<p>total memory available to guest (memory_mb option)</p>''')
       trim(true)
+    }
+
+    booleanParam {
+      name('MTK_CONNECT_PUBLIC')
+      defaultValue(false)
+      description('''<p>When checked, the MTK Connect testbench is visible to everyone.<br/>
+        By default, testbenches are private and only visible to their creator and MTK Connect administrators.</p>''')
     }
 
     stringParam {
       name('CVD_ADDITIONAL_FLAGS')
       defaultValue('')
-      description('''<p>Append additional flags to `cvd` command, e.g. --display0=width=1920,height=1080,dpi=160</p>''')
+      description('''<p>Optional: Append additional optional flags to <code>cvd</code> command, e.g.
+        <ul><li><code>--setupwizard_mode DISABLED --enable_host_bluetooth false --gpu_mode guest_swiftshader</code></li>
+            <li><code>--display0=width=1920,height=1080,dpi=160</code></li>
+            <li><code>--verbosity=DEBUG</code></li></ul></p>''')
       trim(true)
     }
   }

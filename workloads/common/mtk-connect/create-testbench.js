@@ -241,7 +241,7 @@ async function configureDevice(i) {
 
     if (MTK_CONNECT_LAUNCH_APPLICATION_NAME) {
       console.log('openbsw app name');
-      data.interface.terminal.types[0].args = ['-c', 'cd /home/builder; su builder -c "eval ./posix/${MTK_CONNECT_LAUNCH_APPLICATION_NAME}"', ''];
+      data.interface.terminal.types[0].args = ['-c', 'cd /home/builder; su builder -c "eval ${MTK_CONNECT_LAUNCH_APPLICATION_NAME}"', ''];
     }
     await axios.patch(`/api/v1/agents/${agent.id}/devices/${index}`, data);
   }

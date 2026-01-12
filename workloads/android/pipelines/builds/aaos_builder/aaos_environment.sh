@@ -30,9 +30,9 @@
 #        artifacts (GCS_BUCKET default).
 #  - AAOS_ARTIFACT_ROOT_NAME: the name of the bucket to store artifacts.
 #  - ANDROID_VERSION: the Android version (default: 14).
-#  - REPO_SYNC_JOBS: the number of parallel repo sync jobs to use Default: 2).
+#  - REPO_SYNC_JOBS: the number of parallel repo sync jobs to use Default: 3).
 #  - MAX_REPO_SYNC_JOBS: the maximum number of parallel repo sync jobs
-#        supported. (Default: 24).
+#        supported. (Default: 14).
 #  - OVERRIDE_MAKE_COMMAND: the make command line to use
 #  - POST_REPO_INITIALISE_COMMAND: additional vendor commands for repo initialisation.
 #  - POST_REPO_COMMAND: additional vendor commands initialisation post repo sync.
@@ -40,12 +40,16 @@
 #        to retain space for current build.
 #  - AAOS_PARALLEL_BUILD_JOBS: define the number of parallel build jobs. Default
 #        let the build run as many jobs in parallel,  otherwise define max number.
+#  - USE_LOCAL_AOSP_MIRROR: Use the AOSP Gerrit mirror to repo sync from.
+#  - AOSP_MIRROR_DIR_NAME: The mirror directory.
+#  - MIRROR_DIR_FULL_PATH: The full mirror path.
 #
 # For Gerrit review change sets:
 #  - GERRIT_SERVER_URL: URL of Gerrit server.
 #  - GERRIT_PROJECT: the name of the project to download.
 #  - GERRIT_CHANGE_NUMBER: the change number of the changeset to download.
 #  - GERRIT_PATCHSET_NUMBER: the patchset number of the changeset to download.
+#  - GERRIT_TOPIC: the topic identifying the changes to fetch.
 #
 # If running standalone, only AAOS_CLEAN and AAOS_LUNCH_TARGET apply, eg.
 #
@@ -73,7 +77,7 @@ unset BUILD_NUMBER
 # hostname: jenkins-aaos-build-pod
 
 AAOS_DEFAULT_REVISION=$(echo "${AAOS_DEFAULT_REVISION}" | xargs)
-AAOS_DEFAULT_REVISION=${AAOS_DEFAULT_REVISION:-android-15.0.0_r36}
+AAOS_DEFAULT_REVISION=${AAOS_DEFAULT_REVISION:-android-16.0.0_r3}
 
 # Android branch/tag:
 AAOS_REVISION=${AAOS_REVISION:-${AAOS_DEFAULT_REVISION}}
@@ -93,26 +97,33 @@ ABFS_MOUNT_POINT="abfs"
 UPLOADER_MANIFEST_SERVER=${UPLOADER_MANIFEST_SERVER:-android.googlesource.com}
 
 # Google Repo Sync parallel jobs value
-REPO_SYNC_JOBS=${REPO_SYNC_JOBS:-2}
-MAX_REPO_SYNC_JOBS=${MAX_REPO_SYNC_JOBS:-24}
+REPO_SYNC_JOBS=${REPO_SYNC_JOBS:-3}
+MAX_REPO_SYNC_JOBS=${MAX_REPO_SYNC_JOBS:-14}
 # Set up the parallel sync job argument based on value.
-# Min 1, Max 24.
+# Min 1, Max 14.
 REPO_SYNC_JOBS_ARG="-j$(( REPO_SYNC_JOBS < 1 ? 1 : REPO_SYNC_JOBS > MAX_REPO_SYNC_JOBS ? MAX_REPO_SYNC_JOBS : REPO_SYNC_JOBS ))"
 # If empty let the build system decide otherwise override with -j<NUMBER>, e.g. -j64
 AAOS_PARALLEL_BUILD_JOBS=${AAOS_PARALLEL_BUILD_JOBS:-}
+
+# AOSP Mirror parameters
+USE_LOCAL_AOSP_MIRROR=${USE_LOCAL_AOSP_MIRROR:-false}
+AOSP_MIRROR_DIR_NAME=${AOSP_MIRROR_DIR_NAME:-}
 
 # Check we have a target defined.
 AAOS_LUNCH_TARGET=$(echo "${AAOS_LUNCH_TARGET}" | xargs)
 # Default if not defined (important for initial pipeline build)
 AAOS_LUNCH_TARGET=${AAOS_LUNCH_TARGET:-sdk_car_x86_64-ap1a-userdebug}
 if [ -z "${AAOS_LUNCH_TARGET}" ]; then
-    echo "Error: please define AAOS_LUNCH_TARGET"
-    exit 255
+    echo -e "\033[1;31mError: please define AAOS_LUNCH_TARGET\033[0m"
+    exit 1
 fi
 
 # Android Version
 ANDROID_VERSION=${ANDROID_VERSION:-14}
 case "${ANDROID_VERSION}" in
+    16)
+        ANDROID_API_LEVEL=36
+        ;;
     15)
         ANDROID_API_LEVEL=35
         ;;
@@ -146,7 +157,7 @@ else
 fi
 
 # Disk space ceiling, remove older build targets if insufficient space.
-DISK_SPACE_WATERMARK=${DISK_SPACE_WATERMARK:-84}
+DISK_SPACE_WATERMARK=${DISK_SPACE_WATERMARK:-88}
 if [[ "${AAOS_LUNCH_TARGET}" =~ "rpi" ]]; then
     DISK_SPACE_WATERMARK=78
 fi
@@ -294,6 +305,7 @@ declare -a POST_STORAGE_COMMANDS=(
 # to build the image.
 case "${AAOS_LUNCH_TARGET}" in
     aosp_rpi*)
+        AAOS_BUILD_CTS="false"
         AAOS_MAKE_CMDLINE="m bootimage systemimage vendorimage -j${AAOS_PARALLEL_BUILD_JOBS}"
         # FIXME: we can build full flashable image but may require special
         # permissions, for now host the individual parts.
@@ -319,13 +331,26 @@ case "${AAOS_LUNCH_TARGET}" in
                     "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-15.0.0_r4/remove_projects.xml"
                 )
                 ;;
-            *)
+            *bp1a*)
                 # bp1a fallthrough: android-15.0.0_r36 / android-15.0.0_r32 / android-15.0.0_r20
                 POST_REPO_INITIALISE_COMMANDS_LIST=(
                     "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-15.0/manifest_brcm_rpi.xml --create-dirs"
                     "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-15.0/remove_projects.xml"
                 )
                 ;;
+            *bp3a*)
+                # bp3a fallthrough: android-16.0.0_r3
+                POST_REPO_INITIALISE_COMMANDS_LIST=(
+                    "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-16.0.0_r3/manifest_brcm_rpi.xml --create-dirs"
+                    "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-16.0.0_r3/remove_projects.xml"
+                )
+                ;;
+            *bp4a*)
+                # bp3a fallthrough: android-16.0.0_r4
+                POST_REPO_INITIALISE_COMMANDS_LIST=(
+                    "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-16.0/manifest_brcm_rpi.xml --create-dirs"
+                    "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-16.0/remove_projects.xml"
+                )
         esac
 
         # Clean up the manifests to avoid issues when versions change.
@@ -335,8 +360,11 @@ case "${AAOS_LUNCH_TARGET}" in
         )
         ;;
     sdk_car*)
+        AAOS_BUILD_CTS="false"
         AAOS_MAKE_CMDLINE="m -j${AAOS_PARALLEL_BUILD_JOBS}&& m emu_img_zip -j${AAOS_PARALLEL_BUILD_JOBS}&& m sbom -j${AAOS_PARALLEL_BUILD_JOBS}"
+        # Newer versions, sbom is under SOONG
         AAOS_ARTIFACT_LIST+=(
+            "${OUT_DIR}/soong/sbom/sdk_car_${AAOS_ARCH}/sbom.spdx.json"
             "${OUT_DIR}/target/product/emulator_car64_${AAOS_ARCH}/sbom.spdx.json"
             "${OUT_DIR}/target/product/emulator_car64_${AAOS_ARCH}/${AAOS_SDK_SYSTEM_IMAGE_PREFIX}*.zip"
             "${OUT_DIR}/target/product/emulator_car64_${AAOS_ARCH}/${AAOS_SDK_ADDON_FILE}"
@@ -356,26 +384,34 @@ case "${AAOS_LUNCH_TARGET}" in
         # Trade Federation Wifi APK from repo.
         WIFI_APK_PATH_NAME="tools/tradefederation/core/res/apks/wifiutil/${WIFI_APK_NAME}"
 
-        AAOS_ARTIFACT_LIST+=(
-            "${OUT_DIR}/dist/cvd-host_package.tar.gz"
-            "${OUT_DIR}/dist/sbom/sbom.spdx.json"
-            "${OUT_DIR}/dist/aosp_cf_${AAOS_ARCH}_auto-img*.zip"
-            "${WIFI_APK_NAME}"
-        )
         POST_BUILD_COMMANDS=(
             "[ -f ${WIFI_APK_PATH_NAME} ] && cp -f ${WIFI_APK_PATH_NAME} . || ${WIFI_APK_FALLBACK_CMD}"
         )
 
-        # If the AAOS_BUILD_CTS variable is set, build only the cts image.
-        if [[ "$AAOS_BUILD_CTS" -eq 1 ]]; then
-            AAOS_MAKE_CMDLINE="m cts -j32"
+        # If the AAOS_BUILD_CTS variable is set, build CTS only.
+        if [[ "${AAOS_BUILD_CTS}" == "true" ]]; then
+            # CTS causes OOMs if too may threads are used when building, more threads more memory it requires!
+            # Reduce by half to ensure builds succeed.
+            threads=$(( $(nproc) / 2 ))
+            threads=$(( threads < 1 ? 1 : threads ))
+  
+            # Always build aosp_cf and then CTS.
+            AAOS_MAKE_CMDLINE="m cts -j ${threads}"
             AAOS_ARTIFACT_LIST+=("${OUT_DIR}/host/linux-x86/cts/android-cts.zip")
+        else
+            AAOS_ARTIFACT_LIST+=(
+                "${OUT_DIR}/dist/cvd-host_package.tar.gz"
+                "${OUT_DIR}/dist/sbom/sbom.spdx.json"
+                "${OUT_DIR}/dist/aosp_cf_${AAOS_ARCH}_auto-img*.zip"
+                "${WIFI_APK_NAME}"
+            )
         fi
         POST_STORAGE_COMMANDS+=(
             "rm -f ${WIFI_APK_NAME}"
         )
         ;;
     *tangorpro_car*)
+        AAOS_BUILD_CTS="false"
         AAOS_ARTIFACT_LIST+=(
             "${OUT_DIR}.tgz"
         )
@@ -412,8 +448,12 @@ case "${AAOS_LUNCH_TARGET}" in
                     "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
                 )
                 ;;
+            *bp3a*)
+                echo -e "\033[1;31mTAA-1094: ${AAOS_LUNCH_TARGET} is not currently supported on ${AAOS_REVISION}!\033[0m"
+                exit 1
+                ;;
             *)
-                # android-15.0.0_r32/r36: https://developers.google.com/android/drivers (same as bp1a above)
+                # android-16.0.0_r2/r3: https://developers.google.com/android/drivers (same as bp1a above)
                 POST_REPO_COMMAND_LIST=(
                     "curl --output - https://dl.google.com/dl/android/aosp/google_devices-tangorpro-bp1a.250505.005-fb23c626.tgz | tar -xzvf - "
                     "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
@@ -480,6 +520,9 @@ GERRIT_SERVER_URL=${GERRIT_SERVER_URL%/}
 GERRIT_PROJECT=$(echo "${GERRIT_PROJECT}" | xargs)
 GERRIT_CHANGE_NUMBER=$(echo "${GERRIT_CHANGE_NUMBER}" | xargs)
 GERRIT_PATCHSET_NUMBER=$(echo "${GERRIT_PATCHSET_NUMBER}" | xargs)
+GERRIT_TOPIC=$(echo "${GERRIT_TOPIC}" | xargs)
+# Holds changes that will be used to provide vote on verified label.
+GERRIT_CHANGES_FILE="${ORIG_WORKSPACE}/gerrit-changes.txt"
 
 # Define artifact storage strategy and functions.
 AAOS_ARTIFACT_STORAGE_SOLUTION=${AAOS_ARTIFACT_STORAGE_SOLUTION:-"GCS_BUCKET"}
@@ -516,6 +559,11 @@ case "$0" in
             GERRIT_PROJECT=${GERRIT_PROJECT}
             GERRIT_CHANGE_NUMBER=${GERRIT_CHANGE_NUMBER}
             GERRIT_PATCHSET_NUMBER=${GERRIT_PATCHSET_NUMBER}
+            GERRIT_TOPIC=${GERRIT_TOPIC}
+
+            USE_LOCAL_AOSP_MIRROR=${USE_LOCAL_AOSP_MIRROR}
+            AOSP_MIRROR_DIR_NAME=${AOSP_MIRROR_DIR_NAME}
+            MIRROR_DIR_FULL_PATH=${MIRROR_DIR_FULL_PATH}
             "
         else
             VARIABLES+="
@@ -640,6 +688,16 @@ function create_workspace() {
         fi
     fi
     cd "${WORKSPACE}" || true
+
+    if [[ "${ABFS_BUILDER}" == "false" ]]; then
+        if [[ "${AAOS_LUNCH_TARGET}" =~ "aosp_cf_arm64" ]]; then
+            # TAA-1095 workaround
+            BUG_FIX="rm -rf out && ln -sf ${OUT_DIR} out"
+            echo -e "\033[1;31mTAA-1095: workaround for Android 16 OUT_DIR issue:\033[0m"
+            echo "${BUG_FIX}"
+            eval "${BUG_FIX}"
+        fi
+    fi
 }
 
 function recreate_workspace() {

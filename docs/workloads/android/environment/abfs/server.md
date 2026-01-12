@@ -19,6 +19,8 @@ Before creating the ABFS Server VM instance, the following dependencies must be 
 - **ABFS License Deployment**: The ABFS license provided by Google must be deployed on the platform using GitHub environment secrets and Terraform workflow.
 - **Docker Infra Image Template Job**:The Docker Infra Image Template job must be run, and the Docker image must be available in the registry.
 
+Consider using `Get Server Details` to ensure the server has been provisioned correctly.
+
 Additional details are available in `docs/workloads/android/abfs.md`.
 
 
@@ -70,11 +72,14 @@ The sha1 for Google Terraform modules for ABFS.
 
 This is a local override of the ABFS license that was created in GitHub environment secrets and stored as a kubernetes secret. It's purpose is to allow users test license updates locally, prior to updating GitHub, Terraform and ArgoCD to apply the license formally to the project.
 
+### `ABFS_COS_IMAGE_REF`
+Defines the ABFS Containerized OS images used on server and uploader instances.
+
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 

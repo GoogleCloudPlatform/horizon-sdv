@@ -24,7 +24,7 @@ JOB_NAME=${JOB_NAME:-BSW_POSIX}
 
 # Download URL for artifacts.
 OPENBSW_DOWNLOAD_URL=$(echo "${OPENBSW_DOWNLOAD_URL}" | xargs)
-OPENBSW_DOWNLOAD_URL=${OPENBSW_DOWNLOAD_URL:-gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/5}
+OPENBSW_DOWNLOAD_URL=${OPENBSW_DOWNLOAD_URL:-gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/01}
 # Strip any trailing slashes as this can impact on the download URL.
 OPENBSW_DOWNLOAD_URL=${OPENBSW_DOWNLOAD_URL%/}
 

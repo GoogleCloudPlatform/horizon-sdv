@@ -34,8 +34,11 @@ function bsw_download_artifacts() {
             ;;
     esac
 
-    # Binaries require executable permissions.
-    chmod -R 755 "${HOME}"/posix
+    # Unpack POSIX application, tools and pyTest artifacts
+    cd "${HOME}"/posix || exit
+    tar -zxf posix.tgz
+    rm -rf posix.tgz
+    cd - || exit
 }
 
 bsw_download_artifacts

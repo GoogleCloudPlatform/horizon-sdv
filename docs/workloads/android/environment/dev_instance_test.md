@@ -37,15 +37,24 @@ This is the label that identifies the GCE Cloud label which will be used to iden
 
 Note: The value provided must correspond to a cloud instance or the job will hang.
 
+### `MTK_CONNECT_PUBLIC`
+
+When checked, the MTK Connect testbench is visible to everyone and can be shared.
+By default, testbenches are private and only visible to their creator and MTK Connect administrators.
+
 ### `INSTANCE_MAX_UPTIME`
 
 This is the maximum time that the instance may be running before it is automatically terminated and deleted. This is important to avoid leaving expensive instances in running state.
+
+### `NUM_HOST_INSTANCES`
+
+Number of host instances to create for test instances. This is effectively the number of devices that will be created associated with the development instance testbench in MTK Connect.
 
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.
 
-These are defined in Jenkins CasC `jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
+These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jenkins UI under `Manage Jenkins` -> `System` -> `Global Properties` -> `Environment variables`.
 
 These are as follows:
 

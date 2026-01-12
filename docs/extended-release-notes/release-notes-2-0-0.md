@@ -513,7 +513,7 @@ The addition of the Role Based Strategy Plugin to Jenkins requires users perform
 > [!NOTE]  
 >Disabling the plugin
 >
->If user wishes to disable the plugin, then remove the plugin and configuration `from gitops/env/stage2/templates/jenkins.yaml`:
+>If user wishes to disable the plugin, then remove the plugin and configuration `from gitops/templates/jenkins.yaml`:
 >
 >1. Remove the plugin from the additionalPlugins section within the yaml file:
 >

@@ -37,11 +37,29 @@
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")"/aaos_environment.sh "$0"
 
+# Format STORAGE_PATH as a zero-padded two-digit string (e.g. 7/aaa -> 07/aaa, 7 -> 07)
+# shellcheck disable=SC2329
+function pad_first_number_if_numeric() {
+    local width=${1:-2} s=$2 head rest
+    head=${s%%/*}
+    [[ $s == */* ]] && rest="/${s#*/}" || rest=
+    if [[ $head =~ ^[0-9]+$ ]]; then
+        printf "%0*d%s\n" "$width" "$head" "$rest"
+    else
+        echo "$s" # Return the original.
+    fi
+}
+
+# Replace spaces in Jenkins Job Name
+BUCKET_FOLDER="${JOB_NAME// /_}"
+STORAGE_PATH=$(pad_first_number_if_numeric 2 "${AAOS_BUILD_NUMBER}")
+# Use default or use your own
+export STORAGE_BUCKET_DESTINATION=${STORAGE_BUCKET_DESTINATION:-gs://${AAOS_ARTIFACT_ROOT_NAME}/${BUCKET_FOLDER}/${STORAGE_PATH}}
+export BUCKET_RELATIVE_DESTINATION="${STORAGE_BUCKET_DESTINATION#gs://}"
+export STORAGE_CLOUD_URL=${STORAGE_CLOUD_URL:-https://console.cloud.google.com/storage/browser/${BUCKET_RELATIVE_DESTINATION}}
+
 export ARTIFACT_LIST="${AAOS_ARTIFACT_LIST[*]}"
-export ARTIFACT_ROOT_NAME="${AAOS_ARTIFACT_ROOT_NAME}"
 export ARTIFACT_SUMMARY="${ORIG_WORKSPACE}/${AAOS_LUNCH_TARGET}-artifacts.txt"
-export BUILD_NUMBER="${AAOS_BUILD_NUMBER}"
-export JOB_NAME="${JOB_NAME}"
 POST_CLEANUP_STRING=""
 export POST_CLEANUP_STRING
 POST_CLEANUP_STRING="$(printf "%s\n" "${POST_STORAGE_COMMANDS[@]}")"
@@ -49,4 +67,16 @@ export ARTIFACT_STORAGE_SOLUTION="${AAOS_ARTIFACT_STORAGE_SOLUTION}"
 export ARTIFACT_STORAGE_SOLUTION_FUNCTION="${AAOS_ARTIFACT_STORAGE_SOLUTION_FUNCTION}"
 export WORKSPACE="${ORIG_WORKSPACE}"
 "${ORIG_WORKSPACE}"/workloads/common/storage/storage.sh
+
+export STORAGE_LABELS="${STORAGE_LABELS}"
+case "${ARTIFACT_STORAGE_SOLUTION}" in
+    GCS_BUCKET)
+        export URL_PATH="${STORAGE_BUCKET_DESTINATION}/"
+        export KEYVALUE_PAIRS="${STORAGE_LABELS}"
+        "${ORIG_WORKSPACE}"/workloads/common/storage/gcs_utilities.sh ADD_OBJECT_METADATA || true
+        ;;
+    *)
+        echo "Utility to add metadata using $ARTIFACT_STORAGE_SOLUTION not available"
+        ;;
+esac
 exit "$?"

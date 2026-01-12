@@ -35,15 +35,17 @@ pipelineJob('Android/Environment/Docker Image Template') {
     stringParam {
       name('IMAGE_TAG')
       defaultValue('latest')
-      description('''<p>Image tag for the builder image.</p>''')
+      description('''<p><b>Mandatory:</b> Image tag for the builder image.</p>''')
       trim(true)
     }
+
     stringParam {
       name('LINUX_DISTRIBUTION')
-      defaultValue('debian:12')
+      defaultValue('ubuntu:22.04')
       description('''<p>Define the Linux distribution to use, e.g.</p></br>
         <ul><li>debian:12</li>
-            <li>ubuntu:22.04</li></ul>''')
+            <li>ubuntu:22.04</li>
+            <li>ubuntu:jammy-20251203</li></ul>''')
       trim(true)
     }
     stringParam {
@@ -51,6 +53,40 @@ pipelineJob('Android/Environment/Docker Image Template') {
       defaultValue("${NODEJS_VERSION}")
       description('''<p>NodeJS version.<br/>
         This is installed using <i>nvm</i> on the instance template to be compatible with other tooling.</p>''')
+      trim(true)
+    }
+
+    separator {
+      name('Common Parameters: Docker templates')
+      sectionHeader('Common Parameters: Docker templates')
+      sectionHeaderStyle("${HEADER_STYLE}")
+      separatorStyle("${SEPARATOR_STYLE}")
+    }
+
+    stringParam {
+      name('BUILDKIT_RELEASE_TAG')
+      defaultValue("${BUILDKIT_RELEASE_TAG}")
+      description('''<p>BuildKit tag, see <a target="_blank"  href=https://hub.docker.com/r/moby/buildkit>buildkit releases</a>.</p>''')
+      trim(true)
+    }
+    stringParam {
+      name('DOCKER_CREDENTIALS_URL')
+      defaultValue("${DOCKER_CREDENTIALS_URL}")
+      description('''<p>Docker credentials helper URL, e.g. <a target="_blank" href=https://cloud.google.com/artifact-registry/docs/docker/authentication#standalone-helper>credentials helper</a>.</p>''')
+      trim(true)
+    }
+
+    stringParam {
+      name('GCLOUD_CLI_VERSION')
+      defaultValue("${GCLOUD_CLI_VERSION}")
+      description('''<p>Version of <a target="_blank" https://docs.cloud.google.com/sdk/docs/release-notes>Google Cloud CLI</a>.<br/>Note: Define <code>latest</code> if wishing to use the latest available version.</p>''')
+      trim(true)
+    }
+
+    stringParam {
+      name('KUBECTL_VERSION')
+      defaultValue("${KUBECTL_VERSION}")
+      description('''<p>Version of <code>kubectl</code>. Typically based on <a target="_blank" https://docs.cloud.google.com/sdk/docs/release-notes>Google Cloud CLI</a><br/>Note: Define <code>latest</code> if wishing to use the latest available version.</p>''')
       trim(true)
     }
   }
