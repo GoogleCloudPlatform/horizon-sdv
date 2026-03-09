@@ -1,4 +1,4 @@
 {
-    "format": "key",
-    "value": "<KEY>"
+    "format": "local",
+    "key": "<KEY>"
 }
