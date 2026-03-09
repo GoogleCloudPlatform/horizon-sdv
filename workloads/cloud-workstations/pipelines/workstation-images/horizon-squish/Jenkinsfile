@@ -23,7 +23,7 @@
 //   * https://github.com/GoogleContainerTools/kaniko
 
 pipeline {
-  // Parameters defined in workloads/cloud-workstations/pipelines/workstation-images/horizon-squish-for-android/groovy/job.groovy
+  // Parameters defined in partner/qt/cloud_workstations/horizon-squish/groovy/job.groovy
 
   agent none
 
@@ -107,8 +107,8 @@ pipeline {
               echo "$SQUISH_LICENSE_FILE" > /kaniko/squish-license
               # Build the docker image and push to Artifact registry using service account configured with
               # correct roles/permissions.
-              /kaniko/executor -f workloads/cloud-workstations/pipelines/workstation-images/horizon-squish-for-android/Dockerfile \
-                -c workloads/cloud-workstations/pipelines/workstation-images/horizon-squish-for-android \
+              /kaniko/executor -f partner/qt/cloud_workstations/horizon-squish/Dockerfile \
+                -c partner/qt/cloud_workstations/horizon-squish \
                 --secret id=squish-license,src=/kaniko/squish-license \
                 --skip-tls-verify-pull --insecure --skip-tls-verify "${KANIKO_OPTIONS}"
             '''

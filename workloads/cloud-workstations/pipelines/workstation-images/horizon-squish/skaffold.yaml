@@ -22,4 +22,4 @@ metadata:
 build:
   artifacts:
   - image: squish-for-android
-    context: .
+    context: ../../../../../partner/qt/cloud_workstations/horizon-squish/

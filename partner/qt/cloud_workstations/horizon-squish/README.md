@@ -4,6 +4,22 @@ This cloudworkstation is meant to provide the user with a Squish installation re
 
 For more information regarding Squish and how to use the specifics please have a look at the [official documentation](https://doc.qt.io/squish/squish-for-android-tutorials.html).
 
+## Guide: Additions to the `values-jenkins.yaml`
+
+Please provide the following additions to the [`values-jenkins.yaml`](../../../../gitops/workloads/values-jenkins.yaml):
+
+- under `controller:JCasC:configScripts:welcome-message:globalNodeProperties:envVars:env`:
+```yaml
+- key: "CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME"
+  value: {{ .Values.config.workloads.cloudWorkstations.workstationPresets.wsImages.horizonSquishForAndroid.image }}
+```
+
+- under `config:workloads:cloudWorkstations:workstationPresets:wsImages`:
+```yaml
+horizonSquishForAndroid:
+    image: "horizon-sdv/cloud-ws-images/horizon-squish-for-android"
+```
+
 ## Guide: Providing the Squish License Key
 
 This document outlines the steps required to provide the Squish License Key to the automated build pipeline. The pipeline uses Jenkins for orchestration and Kaniko for secure, rootless Docker image builds.
