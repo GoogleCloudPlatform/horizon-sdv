@@ -39,12 +39,11 @@ FROM us-west1-docker.pkg.dev/cloud-workstations-images/predefined/base
 ARG COMMAND_LINE_TOOLS_VERSION=11076708
 
 # Install Squish and Android cmd-tools
-RUN --mount=type=secret,id=squish-license,target=/kaniko/squish-license \
-  mkdir -p /opt/google && \
-  wget https://filesender.qt.io/?s=download&token=d6a1739e-b8f8-40aa-b7ba-74593fbba9cc -O /opt/google/squish-for-android.run && \
+RUN mkdir -p /opt/google && \
+  wget <URL> -O /opt/google/squish-for-android.run && \
   chmod +x /opt/google/squish-for-android.run && \
   # Perform unattended Squish installation
-  /opt/google/squish-for-android unattended=1 targetdir=/home/user/squish licensekey=$(sed '1q;d' /kaniko/squish-license) && \
+  /opt/google/squish-for-android unattended=1 targetdir=/home/user/squish licensekey=<LICENSE_KEY> && \
   rm /opt/google/squish-for-android.run && \
   wget https://dl.google.com/android/repository/commandlinetools-linux-${COMMAND_LINE_TOOLS_VERSION}_latest.zip -O commandlinetools.zip && \
   unzip commandlinetools.zip -d /opt/google/ && \

@@ -101,18 +101,13 @@ pipeline {
           script {
             currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
           }
-          withCredentials([string(credentialsId: 'squish-license-file', variable: "SQUISH_LICENSE_FILE")]) {
-            sh '''
-              # Pass secret to kaniko
-              echo "$SQUISH_LICENSE_FILE" > /kaniko/squish-license
-              # Build the docker image and push to Artifact registry using service account configured with
-              # correct roles/permissions.
-              /kaniko/executor -f partner/qt/cloud_workstations/horizon-squish/Dockerfile \
-                -c partner/qt/cloud_workstations/horizon-squish \
-                --secret id=squish-license,src=/kaniko/squish-license \
-                --skip-tls-verify-pull --insecure --skip-tls-verify "${KANIKO_OPTIONS}"
-            '''
-          }
+          sh '''
+            # Build the docker image and push to Artifact registry using service account configured with
+            # correct roles/permissions.
+            /kaniko/executor -f partner/qt/cloud_workstations/horizon-squish/Dockerfile \
+              -c partner/qt/cloud_workstations/horizon-squish \
+              --skip-tls-verify-pull --insecure --skip-tls-verify "${KANIKO_OPTIONS}"
+          '''
         }
       }
     }

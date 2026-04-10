@@ -20,52 +20,26 @@ horizonSquishForAndroid:
     image: "horizon-sdv/cloud-ws-images/horizon-squish-for-android"
 ```
 
-## Guide: Providing the Squish License Key
+## Guide: Providing the Squish License Key and URL
 
-This document outlines the steps required to provide the Squish License Key to the automated build pipeline. The pipeline uses Jenkins for orchestration and Kaniko for secure, rootless Docker image builds.
+This document outlines the steps required to provide the Squish License Key and the download URL to the automated build pipeline.
 
 ### Prerequisites
 
-- Access to the Jenkins instance hosting the horizon-squish-for-android pipeline.
-
 - A valid Squish License Key (provided by [The Qt Company](https://www.qt.io/quality-assurance/download)).
 
-- Permissions to manage Jenkins Credentials within the relevant folder or global scope.
+### Add the Secret and URL to the Dockerfile
 
-### Add the Secret to Jenkins
+1. Open the [Dockerfile](Dockerfile)
 
-The pipeline is configured to look for a specific credential ID. You must store your license key in Jenkins to make it available to the build environment.
+2. Navigate to the `RUN` command
 
-1. Navigate to your Jenkins dashboard.
-
-2. Go to Manage Jenkins > Credentials.
-
-3. Select the appropriate Domain (usually "(global)").
-
-4. Click Add Credentials.
-
-5. Configure the following settings:
-
-    - Kind: Secret text
-
-    - Scope: Global (or limited to the specific folder if applicable)
-
-    - Secret: Paste your Squish License Key here.
-
-    - ID: squish-license-file  (This must match exactly)
-
-    - Description: License key for Squish for Android workstation builds.
-
-6. Click Create.
-
-> **Security Note**: The license key is only available during the RUN command in the Dockerfile. It is not stored in the final image layers or environment variables, ensuring your license remains private.
+3. Replace `<URL>` and `<LICENSE_KEY>` with the once provided by The Qt Company
 
 ### Troubleshooting
 
 If the build fails during the "Create Docker Image" stage, check the following:
 
-- Credential ID: Ensure the ID in Jenkins is exactly squish-license-file.
-
 - Expired License: Verify the license string itself is still valid with The Qt Company.
 
-- Kaniko Logs: Check the Jenkins console output. If you see an error like secret id=squish-license not found, verify that the --secret flag is correctly set in the sh block of the Jenkinsfile.
+- URL still valid: Verify the URL is still valid with The Qt Company.
