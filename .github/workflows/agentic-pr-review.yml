@@ -55,7 +55,7 @@ jobs:
         if: steps.check_key.outputs.has_key == 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: "gemini-2.0-flash"
+          GEMINI_MODEL: "gemini-2.5-flash"
         run: |
           python tools/scripts/agentic_review.py main > review_output.md || echo "Review script failed" > review_output.md
           echo -e "\n---\n" >> review_output.md

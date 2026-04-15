@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants and Configuration
-DEFAULT_MODEL = "gemini-2.0-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 MAX_DIFF_SIZE = 100000  # limit diff to ~100k chars to avoid token limits
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
