@@ -25,12 +25,23 @@ GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 def get_git_diff(base_branch="main"):
     """Gets the diff between the current state and the base branch."""
     try:
-        # Check if base branch exists
-        subprocess.run(["git", "rev-parse", "--verify", base_branch], check=True, capture_output=True)
+        # Try to resolve the base branch (it might be a local branch or origin/branch)
+        base_ref = None
+        for ref in [base_branch, f"origin/{base_branch}"]:
+            res = subprocess.run(["git", "rev-parse", "--verify", ref], capture_output=True, text=True)
+            if res.returncode == 0:
+                base_ref = ref
+                break
         
-        # 1. Get staged/unstaged changes compared to base_branch
+        if not base_ref:
+            logger.error(f"Could not resolve base branch '{base_branch}' locally or on origin.")
+            return None
+
+        logger.info(f"Using base ref: {base_ref}")
+        
+        # 1. Get staged/unstaged changes compared to base_ref
         # Use ... to get the diff from the common ancestor (merge base)
-        diff_committed = subprocess.run(["git", "diff", f"{base_branch}...HEAD"], capture_output=True, text=True, check=True).stdout
+        diff_committed = subprocess.run(["git", "diff", f"{base_ref}...HEAD"], capture_output=True, text=True, check=True).stdout
         diff_unstaged = subprocess.run(["git", "diff", "HEAD"], capture_output=True, text=True, check=True).stdout
         
         # 2. Handle untracked files
@@ -51,7 +62,8 @@ def get_git_diff(base_branch="main"):
             
         return full_diff if full_diff.strip() else None
     except subprocess.CalledProcessError as e:
-        logger.error(f"Error getting git diff: {e.stderr}")
+        stderr_msg = e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr
+        logger.error(f"Error getting git diff: {stderr_msg}")
         return None
 
 def create_requests_session():
