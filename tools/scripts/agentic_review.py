@@ -4,23 +4,32 @@ import subprocess
 import sys
 import json
 import requests
+import logging
+import time
+from urllib3.util import Retry
+from requests.adapters import HTTPAdapter
 
-# This script performs an agentic code review using the Gemini API.
-# It compares the current branch with 'main' and sends the diff to Gemini for analysis.
-#
-# Prerequisites:
-# - GEMINI_API_KEY environment variable set.
-# - 'git' installed and available in PATH.
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stderr
+)
+logger = logging.getLogger(__name__)
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+# Constants and Configuration
+DEFAULT_MODEL = "gemini-2.0-flash"
+MAX_DIFF_SIZE = 100000  # limit diff to ~100k chars to avoid token limits
+GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 def get_git_diff(base_branch="main"):
-    """Gets the diff between the current state (including unstaged/untracked) and the base branch."""
+    """Gets the diff between the current state and the base branch."""
     try:
         # Check if base branch exists
         subprocess.run(["git", "rev-parse", "--verify", base_branch], check=True, capture_output=True)
         
         # 1. Get staged/unstaged changes compared to base_branch
+        # Use ... to get the diff from the common ancestor (merge base)
         diff_committed = subprocess.run(["git", "diff", f"{base_branch}...HEAD"], capture_output=True, text=True, check=True).stdout
         diff_unstaged = subprocess.run(["git", "diff", "HEAD"], capture_output=True, text=True, check=True).stdout
         
@@ -29,40 +38,67 @@ def get_git_diff(base_branch="main"):
         diff_untracked = ""
         for f in untracked_files:
             if os.path.isfile(f):
-                # Using 'git diff --no-index /dev/null <file>' to generate a diff for new files
-                res = subprocess.run(["git", "diff", "--no-index", "/dev/null", f], capture_output=True, text=True)
-                diff_untracked += res.stdout
+                # Only include files smaller than 1MB to avoid bloating the diff
+                if os.path.getsize(f) < 1024 * 1024:
+                    res = subprocess.run(["git", "diff", "--no-index", "/dev/null", f], capture_output=True, text=True)
+                    diff_untracked += res.stdout
 
         full_diff = diff_committed + diff_unstaged + diff_untracked
+        
+        if len(full_diff) > MAX_DIFF_SIZE:
+            logger.warning(f"Diff size ({len(full_diff)}) exceeds limit ({MAX_DIFF_SIZE}). Truncating...")
+            full_diff = full_diff[:MAX_DIFF_SIZE] + "\n\n... [Diff Truncated due to size limit] ..."
+            
         return full_diff if full_diff.strip() else None
     except subprocess.CalledProcessError as e:
-        print(f"Error getting git diff: {e.stderr}")
+        logger.error(f"Error getting git diff: {e.stderr}")
         return None
+
+def create_requests_session():
+    """Creates a requests session with retry logic."""
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    return session
 
 def call_gemini_api(diff_content):
     """Sends the diff to Gemini API for review."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        print("Error: GEMINI_API_KEY environment variable not set.")
+        logger.error("GEMINI_API_KEY environment variable not set.")
         sys.exit(1)
+
+    model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
+    api_url = f"{GEMINI_API_BASE_URL}/{model}:generateContent?key={api_key}"
 
     prompt = f"""
     You are an expert software engineer and security auditor.
     Review the following code diff for a Pull Request towards the 'main' branch of the Horizon SDV project.
     
-    Focus on:
-    1.  **Security**: Check for secrets, insecure configurations, or potential vulnerabilities.
+    CRITICAL INSTRUCTIONS:
+    1.  **Security**: Check for secrets (keys, tokens), insecure configurations, or potential vulnerabilities.
     2.  **Best Practices**: Check for code quality, naming conventions, and idiomatic patterns.
-    3.  **Correctness**: Identify potential bugs or logical errors.
-    4.  **Maintainability**: Suggest improvements for readability and structure.
-    5.  **Project Specifics**: Adhere to Horizon SDV standards (e.g., shell scripts should use 'set -e', Terraform should be well-structured).
+    3.  **Correctness**: Identify potential bugs, logical errors, or edge cases.
+    4.  **Maintainability**: Suggest improvements for readability, structure, and documentation.
+    5.  **Project Specifics**: 
+        - Shell scripts MUST use 'set -e'.
+        - Terraform MUST be modular and follow project structure.
+        - Documentation MUST be updated if code changes warrant it.
+    
+    If no issues are found, provide a brief positive summary.
+    If issues are found, be specific and provide actionable advice.
     
     Code Diff:
     ```diff
     {diff_content}
     ```
     
-    Provide your review in a structured format (e.g., markdown) with clear actionable feedback.
+    Provide your review in a structured Markdown format with clear headings.
     """
 
     payload = {
@@ -74,20 +110,33 @@ def call_gemini_api(diff_content):
             }
         ],
         "generationConfig": {
-            "temperature": 0.2,
-            "topP": 0.8,
-            "topK": 40,
-            "maxOutputTokens": 2048,
+            "temperature": 0.1,  # Lower temperature for more deterministic/factual review
+            "topP": 0.95,
+            "maxOutputTokens": 4096,
         }
     }
 
     headers = {"Content-Type": "application/json"}
-    response = requests.post(f"{GEMINI_API_URL}?key={api_key}", headers=headers, json=payload)
-
-    if response.status_code == 200:
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-    else:
-        print(f"Error calling Gemini API: {response.status_code} - {response.text}")
+    session = create_requests_session()
+    
+    try:
+        response = session.post(api_url, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        
+        result = response.json()
+        if "candidates" in result and result["candidates"]:
+            candidate = result["candidates"][0]
+            if "content" in candidate and "parts" in candidate["content"]:
+                return candidate["content"]["parts"][0]["text"]
+            elif "finishReason" in candidate and candidate["finishReason"] != "STOP":
+                logger.warning(f"Gemini finished with reason: {candidate['finishReason']}")
+                return f"Review partial or blocked. Reason: {candidate['finishReason']}"
+        
+        logger.error(f"Unexpected API response structure: {json.dumps(result)}")
+        return None
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API Request failed: {e}")
         return None
 
 def main():
@@ -95,22 +144,22 @@ def main():
     if len(sys.argv) > 1:
         base_branch = sys.argv[1]
 
-    print(f"Comparing current branch with {base_branch}...")
+    logger.info(f"Comparing current branch with {base_branch}...")
     diff = get_git_diff(base_branch)
     
     if not diff:
-        print("No changes found or error occurred.")
-        sys.exit(0)
+        print("## Agentic Review\nNo changes found or error occurred during diff generation.")
+        return
 
-    print("Sending diff to Gemini for agentic review...")
+    logger.info("Sending diff to Gemini for agentic review...")
     review = call_gemini_api(diff)
     
     if review:
-        print("\n=== AGENTIC PR REVIEW ===\n")
+        print("\n## Agentic PR Review 🤖\n")
         print(review)
-        print("\n==========================\n")
+        print("\n---\n*Review powered by Gemini Flash 2.0*")
     else:
-        print("Failed to get review from Gemini.")
+        print("## Agentic Review\nFailed to get review from Gemini. Check workflow logs for details.")
         sys.exit(1)
 
 if __name__ == "__main__":

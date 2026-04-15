@@ -4,10 +4,21 @@ on:
   pull_request:
     branches:
       - main
+    # Only run when relevant files change to save costs/tokens
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+
+# Prevent multiple concurrent reviews on the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   review:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
@@ -21,34 +32,42 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
+          cache: 'pip' # Enable pip caching
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests urllib3
 
       - name: Run Agentic Review
+        if: env.GEMINI_API_KEY != ''
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: "gemini-2.0-flash"
         run: |
-          python tools/scripts/agentic_review.py main > review_output.md
-          echo -e "\n\n" >> review_output.md
+          python tools/scripts/agentic_review.py main > review_output.md || echo "Review script failed" > review_output.md
+          echo -e "\n---\n" >> review_output.md
 
       - name: Run OSS Scan
         run: |
-          python tools/scripts/oss_scan.py >> review_output.md
+          python tools/scripts/oss_scan.py >> review_output.md || echo "OSS Scan failed" >> review_output.md
 
       - name: Post Review Comment
-        if: success()
+        if: success() && hashFiles('review_output.md') != ''
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const reviewOutput = fs.readFileSync('review_output.md', 'utf8');
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: reviewOutput
-            });
+            const path = 'review_output.md';
+            if (fs.existsSync(path)) {
+              const reviewOutput = fs.readFileSync(path, 'utf8').trim();
+              if (reviewOutput) {
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: reviewOutput
+                });
+              }
+            }
