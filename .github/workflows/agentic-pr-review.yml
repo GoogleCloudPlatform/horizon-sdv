@@ -1,9 +1,10 @@
 name: Agentic PR Review
 
 on:
-  pull_request:
+  push:
+    # Trigger for all branches
     branches:
-      - main
+      - '**'
     # Only run when relevant files change to save costs/tokens
     paths-ignore:
       - '**.md'
