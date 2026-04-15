@@ -9,7 +9,7 @@ The lab exercises are organised into three levels:
 - **Proficiency** (Objective: Intermediate Training, building on foundational knowledge, this training provides additional guidance on leveraging advanced features of the platform.)
 - **Innovation** (Objective: Developers have the flexibility to explore and experiment with the platform as they see fit, with the expectation that they will provide feedback to the broader team, helping to shape and improve the platform.)
 
-These exercises cater for two types of developers:
+These exercises cater to two types of developers:
 
 - [**Application Developers**](#5-application-developer): Those who may use Android Studio as their primary development and testing platform.
 - [**Platform Developers**](#6-platform-developer): Those who may focus on Cuttlefish and hardware platform targets.
@@ -20,7 +20,7 @@ These exercises cater for two types of developers:
 > - When following the guide make sure to use the latest Android revision available. Revisions in Jenkins move while
 >   this guide is unchanged.
 > - Developers are free to choose their own path and are not limited to a single approach.
->   - They can select the labs that works best for them, or participate in both, without any restrictions or siloing.
+>   - They can select the labs that work best for them, or participate in both, without any restrictions or siloing.
 > - There is some common setup required, outlined in the following section:
 >   - [4. Common Developer Preparation](#4-common-developer-preparation)
 
