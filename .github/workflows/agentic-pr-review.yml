@@ -41,8 +41,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests urllib3
 
+      - name: Check for API Key
+        id: check_key
+        run: |
+          if [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then
+            echo "::warning::GEMINI_API_KEY is missing. AI Review will be skipped. Please add it to your repository secrets."
+            echo "has_key=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_key=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run Agentic Review
-        if: env.GEMINI_API_KEY != ''
+        if: steps.check_key.outputs.has_key == 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: "gemini-2.0-flash"
