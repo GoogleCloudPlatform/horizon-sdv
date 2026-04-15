@@ -76,5 +76,20 @@ The system can be customized using GitHub Secrets and Variables:
 - `GEMINI_API_KEY` (Secret): **Required.** Your Google AI Studio API key.
 - `GEMINI_MODEL` (Variable): **Optional.** Defaults to `gemini-2.0-flash`. Can be set to `gemini-1.5-pro` for deeper analysis.
 
+## 🍴 Forking & Contribution Workflow
+
+If you do not have direct push access to the repository, use the following workflow to contribute your changes:
+
+1.  **Fork the Repository**: Click the 'Fork' button on the [original GitHub repo](https://github.com/GoogleCloudPlatform/horizon-sdv).
+2.  **Run the Setup Script**: Use the provided script to reconfigure your local environment:
+    ```bash
+    bash tools/scripts/setup_fork.sh <YOUR_GITHUB_USERNAME>
+    ```
+3.  **Push and Pull Request**:
+    ```bash
+    git push -u origin Agentic_PR_Review
+    ```
+    Navigate to your fork on GitHub and initiate a Pull Request.
+
 ---
 *Note: This tool is intended to assist human reviewers and should not be the sole basis for security or architectural decisions.*
