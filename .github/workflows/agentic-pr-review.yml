@@ -61,14 +61,23 @@ jobs:
           script: |
             const fs = require('fs');
             const path = 'review_output.md';
-            if (fs.existsSync(path)) {
-              const reviewOutput = fs.readFileSync(path, 'utf8').trim();
-              if (reviewOutput) {
-                github.rest.issues.createComment({
-                  issue_number: context.issue.number,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  body: reviewOutput
-                });
-              }
+            if (!fs.existsSync(path)) return;
+            
+            const reviewOutput = fs.readFileSync(path, 'utf8').trim();
+            if (!reviewOutput) return;
+
+            if (context.eventName === 'pull_request') {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: reviewOutput
+              });
+            } else if (context.eventName === 'push') {
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+                body: reviewOutput
+              });
             }

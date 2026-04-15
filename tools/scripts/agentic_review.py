@@ -78,7 +78,7 @@ def call_gemini_api(diff_content):
 
     prompt = f"""
     You are an expert software engineer and security auditor.
-    Review the following code diff for a Pull Request towards the 'main' branch of the Horizon SDV project.
+    Review the following code diff for a Pull Request or Push towards the 'main' branch of the Horizon SDV project.
     
     CRITICAL INSTRUCTIONS:
     1.  **Security**: Check for secrets (keys, tokens), insecure configurations, or potential vulnerabilities.
@@ -88,10 +88,17 @@ def call_gemini_api(diff_content):
     5.  **Project Specifics**: 
         - Shell scripts MUST use 'set -e'.
         - Terraform MUST be modular and follow project structure.
-        - Documentation MUST be updated if code changes warrant it.
+    
+    6.  **Actionable Feedback & Fixes**:
+        - When suggesting a code change, provide it as a GitHub "Suggested Change" block if possible.
+        - Format: 
+          ```suggestion
+          <your suggested code here>
+          ```
+        - Be concise and focus on high-impact improvements.
     
     If no issues are found, provide a brief positive summary.
-    If issues are found, be specific and provide actionable advice.
+    If issues are found, be specific and provide actionable advice with code suggestions.
     
     Code Diff:
     ```diff
