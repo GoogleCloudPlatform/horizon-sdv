@@ -38,6 +38,17 @@ FROM us-west1-docker.pkg.dev/cloud-workstations-images/predefined/base
 
 ARG COMMAND_LINE_TOOLS_VERSION=11076708
 
+# Squish dependencies
+RUN apt-get update && apt-get install -y \
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-render-util0 \
+    libxcb-xinerama0 \
+    libxcb-xkb1 \
+    libxkbcommon-X11-0 && \
+    apt-get clean
+
 # Install Squish and Android cmd-tools
 RUN mkdir -p /opt/google && \
   wget <URL> -O /opt/google/squish-for-android.run && \
