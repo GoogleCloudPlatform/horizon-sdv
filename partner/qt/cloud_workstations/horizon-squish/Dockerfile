@@ -54,7 +54,7 @@ RUN mkdir -p /opt/google && \
   wget <URL> -O /opt/google/squish-for-android.run && \
   chmod +x /opt/google/squish-for-android.run && \
   # Perform unattended Squish installation
-  /opt/google/squish-for-android unattended=1 targetdir=/home/user/squish licensekey=<LICENSE_KEY> && \
+  /opt/google/squish-for-android unattended=1 targetdir=/home/user/squish licensekey=<LICENSE_KEY> telemetry=0 && \
   rm /opt/google/squish-for-android.run && \
   wget https://dl.google.com/android/repository/commandlinetools-linux-${COMMAND_LINE_TOOLS_VERSION}_latest.zip -O commandlinetools.zip && \
   unzip commandlinetools.zip -d /opt/google/ && \
