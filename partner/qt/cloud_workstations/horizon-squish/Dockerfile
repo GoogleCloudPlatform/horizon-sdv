@@ -46,7 +46,7 @@ RUN apt-get update && apt-get install -y \
     libxcb-render-util0 \
     libxcb-xinerama0 \
     libxcb-xkb1 \
-    libxkbcommon-X11-0 && \
+    libxkbcommon-x11-0 && \
     apt-get clean
 
 # Install Squish and Android cmd-tools
@@ -54,7 +54,7 @@ RUN mkdir -p /opt/google && \
   wget <URL> -O /opt/google/squish-for-android.run && \
   chmod +x /opt/google/squish-for-android.run && \
   # Perform unattended Squish installation
-  /opt/google/squish-for-android unattended=1 targetdir=/home/user/squish licensekey=<LICENSE_KEY> telemetry=0 && \
+  /opt/google/squish-for-android unattended=1 targetdir=/home/user/squish licensekey=<LICENSE_KEY> && \
   rm /opt/google/squish-for-android.run && \
   wget https://dl.google.com/android/repository/commandlinetools-linux-${COMMAND_LINE_TOOLS_VERSION}_latest.zip -O commandlinetools.zip && \
   unzip commandlinetools.zip -d /opt/google/ && \
@@ -168,7 +168,7 @@ RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.d
 
 # Install JDK -> needed for Squish for Android instrumentation
 RUN apt-get update && apt-get install -y \
-    openjdk-18-jdk && \
+    openjdk-17-jdk && \
     apt-get clean
 
 # Merge assets into the container.
