@@ -27,17 +27,13 @@ pipeline {
 
   agent none
 
-  // Block concurrent builds to avoid clashing.
-  options {
-    buildBlocker (useBuildBlocker: true, blockLevel: 'GLOBAL', scanQueueFor: 'BUILDABLE', blockingJobs: '(?i)Cloud-Workstations/.*/Workstation-Images/.*Docker.*')
-  }
-
   environment {
     // Update latest tag.
     REGISTRY="${env.CLOUD_REGION}-docker.pkg.dev"
     DESTINATION="${REGISTRY}/${env.CLOUD_PROJECT}/${env.CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME}"
     PUSH="${NO_PUSH == "true" ? "false" : "true"}"
     HORIZON_DOMAIN="${env.HORIZON_DOMAIN}"
+    GOOGLE_CLOUD_PROJECT="${env.CLOUD_PROJECT}"
 
     def kubernetesPodTemplate = """
       apiVersion: v1
@@ -74,12 +70,11 @@ pipeline {
         hostname: jenkins-cloud-ws-image-build-pod
         serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
         containers:
-        - name: kaniko
-          image: gcr.io/kaniko-project/executor:debug
-          imagePullPolicy: IfNotPresent
-          command:
-          - /busybox/cat
-          tty: true
+        - name: buildkit
+          image: moby/buildkit:${BUILDKIT_RELEASE_TAG}
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
           resources:
             limits:
               cpu: 98000m
@@ -93,21 +88,49 @@ pipeline {
   }
 
   stages {
-    stage ('Create Docker Image'){
+    stage ('Start instance'){
       agent { kubernetes { yaml kubernetesPodTemplate } }
-      when { expression { env.IMAGE_TAG } }
-      steps {
-        container(name: 'kaniko') {
-          script {
-            currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+      stages {
+        stage ('Docker Credentials'){
+          steps {
+            script {
+              currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+            }
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  wget -nv -O docker-credential-gcr.tgz ${DOCKER_CREDENTIALS_URL}
+                  tar -zxf docker-credential-gcr.tgz
+                  chmod +x docker-credential-gcr && mv docker-credential-gcr /usr/bin/
+                  rm -f docker-credential-gcr*.tar.gz
+                  docker-credential-gcr configure-docker --registries=${REGISTRY}
+                '''
+              }
+            }
           }
-          sh '''
-            # Build the docker image and push to Artifact registry using service account configured with
-            # correct roles/permissions.
-            /kaniko/executor -f partner/qt/cloud_workstations/horizon-squish/Dockerfile \
-              -c partner/qt/cloud_workstations/horizon-squish \
-              --skip-tls-verify-pull --insecure --skip-tls-verify "${KANIKO_OPTIONS}"
-          '''
+        }
+
+        stage ('Build Docker Image'){
+          when { expression { env.IMAGE_TAG } }
+          steps {
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  cd "${WORKSPACE}/partner/qt/cloud_workstations/horizon-squish/";
+                  cp -r "${WORKSPACE}/workloads/cloud-workstations/pipelines/workstation-images/common-utils/" ./common-utils/;
+                  buildctl build \
+                    --frontend=dockerfile.v0 \
+                    --local=dockerfile=. \
+                    --local context=. \
+                    --opt platform=linux/amd64 \
+                    --opt build-arg:HORIZON_DOMAIN=${HORIZON_DOMAIN} \
+                    --opt build-arg:GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT} \
+                    --registry-auth-tlscontext host=${REGISTRY},insecure=true \
+                    --output=type=image,name=${DESTINATION}:${IMAGE_TAG},push=${PUSH}
+                '''
+              }
+            }
+          }
         }
       }
     }

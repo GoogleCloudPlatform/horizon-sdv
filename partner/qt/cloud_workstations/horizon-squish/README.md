@@ -17,7 +17,16 @@ Please provide the following additions to the [`values-jenkins.yaml`](../../../.
 - under `config:workloads:cloudWorkstations:workstationPresets:wsImages`:
 ```yaml
 horizonSquishForAndroid:
-    image: "horizon-sdv/cloud-ws-images/horizon-squish-for-android"
+    image: "horizon-sdv/cloud-ws-images/horizon-squish"
+```
+
+## Guide: Additions to the `Jenkisfile`
+
+Please provide the following additions to the [`Jenkinsfile`](../../../../workloads/seed/Jenkinsfile):
+
+To the array describing the workstation images add the following entry:
+```yaml
+['${CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME}', "${CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME}"],
 ```
 
 ## Guide: Providing the Squish License Key and URL
