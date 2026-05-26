@@ -1,0 +1,143 @@
+// Copyright (C) 2025 The Qt Company Ltd.
+// All rights reserved.
+//
+// This file is part of Squish.
+//
+// Licensees holding a valid Squish License Agreement may use this
+// file in accordance with the Squish License Agreement provided with
+// the Software.
+//
+// This file is provided AS IS with NO WARRANTY OF ANY KIND, INCLUDING THE
+// WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+//
+// See the LICENSE file in this directory.
+//
+// Contact qatools.support@qt.io if any conditions of this licensing are
+// not clear to you.
+
+// Description:
+// This pipeline builds a preset `squish-for-android` Docker image for use in GCP Cloud Workstations config
+// Pipeline uses Kaniko to avoid docker in docker privilege issues.
+//
+// References:
+//   * https://github.com/GoogleContainerTools/kaniko
+
+pipeline {
+  // Parameters defined in partner/qt/cloud_workstations/horizon-squish/groovy/job.groovy
+
+  agent none
+
+  environment {
+    // Update latest tag.
+    REGISTRY="${env.CLOUD_REGION}-docker.pkg.dev"
+    DESTINATION="${REGISTRY}/${env.CLOUD_PROJECT}/${env.CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME}"
+    PUSH="${NO_PUSH == "true" ? "false" : "true"}"
+    HORIZON_DOMAIN="${env.HORIZON_DOMAIN}"
+    GOOGLE_CLOUD_PROJECT="${env.CLOUD_PROJECT}"
+
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        labels:
+          cloud_ws_horizon_squish_for_android_build_pod: "true"
+      spec:
+        tolerations:
+          - key: workloadType
+            operator: Equal
+            value: android
+            effect: "NoSchedule"
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: aaos_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
+                - key: cloud_ws_horizon_asfp_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
+                - key: cloud_ws_horizon_android_studio_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
+                - key: cloud_ws_horizon_squish_for_android_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+        hostname: jenkins-cloud-ws-image-build-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: buildkit
+          image: moby/buildkit:${BUILDKIT_RELEASE_TAG}
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              cpu: 98000m
+              memory: 180000Mi
+            requests:
+              cpu: 98000m
+              memory: 180000Mi
+        nodeSelector:
+          workloadLabel: android
+    """.stripIndent()
+  }
+
+  stages {
+    stage ('Start instance'){
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+      stages {
+        stage ('Docker Credentials'){
+          steps {
+            script {
+              currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+            }
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  wget -nv -O docker-credential-gcr.tgz ${DOCKER_CREDENTIALS_URL}
+                  tar -zxf docker-credential-gcr.tgz
+                  chmod +x docker-credential-gcr && mv docker-credential-gcr /usr/bin/
+                  rm -f docker-credential-gcr*.tar.gz
+                  docker-credential-gcr configure-docker --registries=${REGISTRY}
+                '''
+              }
+            }
+          }
+        }
+
+        stage ('Build Docker Image'){
+          when { expression { env.IMAGE_TAG } }
+          steps {
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  cd "${WORKSPACE}/partner/qt/cloud_workstations/horizon-squish/";
+                  cp -r "${WORKSPACE}/workloads/cloud-workstations/pipelines/workstation-images/common-utils/" ./common-utils/;
+                  buildctl build \
+                    --frontend=dockerfile.v0 \
+                    --local=dockerfile=. \
+                    --local context=. \
+                    --opt platform=linux/amd64 \
+                    --opt build-arg:HORIZON_DOMAIN=${HORIZON_DOMAIN} \
+                    --opt build-arg:GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT} \
+                    --registry-auth-tlscontext host=${REGISTRY},insecure=true \
+                    --output=type=image,name=${DESTINATION}:${IMAGE_TAG},push=${PUSH}
+                '''
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -78,5 +78,9 @@ Below variables have their values defined in `gitops/values.yaml` and then refer
     - Name of the Docker image on GCP Artifact registry for Android Studio (`horizon-android-studio`), that is used in Cloud Workstations.
     - Used by pipeline: `Horizon Android Studio`
 
+-   `CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME`
+    - Name of the Docker image on GCP Artifact registry for Android Studio (`horizon-android-studio`), that is used in Cloud Workstations.
+    - Used by pipeline: `Horizon Squish for Android`
+
 ## Known Issues <a name="known-issues"></a>
 THe builds for `Horizon Android Studio for Platform (ASfP)` and `Horizon Android Studio` pipelines may fail during a certain period citing 503 HTTP issues. This is a problem at Google's end - something out of our scope and we can only try building these images later again.
