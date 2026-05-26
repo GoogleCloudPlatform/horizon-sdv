@@ -6,11 +6,11 @@ After=network-online.target
 [Service]
 Type=simple
 User=user
-PAMName=login
-PIDFile=/home/user/.vnc/%H:1.pid
+Environment=HOME=/home/user USER=user DISPLAY=:1
 ExecStartPre=/bin/bash -c '/usr/bin/vncserver -kill :1 > /dev/null 2>&1 || :'
-ExecStart=/bin/bash -l -c '/usr/bin/vncserver :1 -geometry 1920x1200 -depth 24 -localhost no -fg -SecurityTypes None --I-KNOW-THIS-IS-INSECURE'
-ExecStop=/bin/bash -c '/usr/bin/vncserver -kill :1 > /dev/null 2>&1 || :'
+ExecStartPre=/bin/bash -c 'rm -rf /tmp/.X11-unix/X1 /tmp/.X1-lock || :'
+ExecStart=/usr/bin/vncserver :1 -geometry 1920x1200 -depth 24 -localhost no -fg -SecurityTypes None --I-KNOW-THIS-IS-INSECURE
+ExecStop=/usr/bin/vncserver -kill :1
 Restart=always
 RestartSec=3
 

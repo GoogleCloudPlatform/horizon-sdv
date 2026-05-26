@@ -20,13 +20,24 @@ horizonSquishForAndroid:
     image: "horizon-sdv/cloud-ws-images/horizon-squish"
 ```
 
-## Guide: Additions to the `Jenkisfile`
+## Guide: Additions to the `Jenkinsfile`
 
 Please provide the following additions to the [`Jenkinsfile`](../../../../workloads/seed/Jenkinsfile):
 
 To the array describing the workstation images add the following entry:
 ```yaml
 ['${CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME}', "${CLOUD_WS_HORIZON_SQUISH_FOR_ANDROID_IMAGE_NAME}"],
+```
+
+and under [`Jenkinsfile`](../../../../workloads/android/pipelines/environment/mirror/sync_mirror/Jenkinsfile):
+
+To the array describing the `mainKubernetesPodTemplateHighSpec`, under `spec:affinity:podAffinity:requiredDuringSchedulingIgnoredDuringExecution:`:
+```yaml
+- labelSelector:
+    matchExpressions:
+    - key: cloud_ws_horizon_squish_for_android_build_pod
+      operator: Exists
+  topologyKey: kubernetes.io/hostname 
 ```
 
 ## Guide: Providing the Squish License Key and URL
@@ -43,7 +54,7 @@ This document outlines the steps required to provide the Squish License Key and 
 
 2. Navigate to the `RUN` command
 
-3. Replace `<URL>` and `<LICENSE_KEY>` with the once provided by The Qt Company
+3. Replace `<URL>` and `<LICENSE_KEY>` with the one provided by The Qt Company
 
 ### Troubleshooting
 

@@ -37,6 +37,11 @@ RUN git clone --quiet --depth 1 --branch $NOVNC_BRANCH https://github.com/novnc/
 FROM us-west1-docker.pkg.dev/cloud-workstations-images/predefined/base
 
 ARG COMMAND_LINE_TOOLS_VERSION=11076708
+ARG HORIZON_DOMAIN
+ARG GOOGLE_CLOUD_PROJECT
+ARG NODE_MAJOR=20
+
+ENV GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT}"
 
 # Squish dependencies
 RUN apt-get update && apt-get install -y \
@@ -180,6 +185,10 @@ RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.d
     update-alternatives --set gnome-www-browser /usr/bin/google-chrome-stable && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Create X11 and noVNC directories with user permission
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix && \
+    mkdir -p /home/user/.vnc && chown -R 1000:users /home/user/.vnc
 
 # Merge assets into the container
 COPY assets/. /

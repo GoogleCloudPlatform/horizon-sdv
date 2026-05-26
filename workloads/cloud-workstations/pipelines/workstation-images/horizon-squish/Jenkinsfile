@@ -64,6 +64,11 @@ pipeline {
               topologyKey: kubernetes.io/hostname
             - labelSelector:
                 matchExpressions:
+                - key: cloud_ws_horizon_android_studio_build_pod
+                  operator: Exists
+              topologyKey: kubernetes.io/hostname
+            - labelSelector:
+                matchExpressions:
                 - key: cloud_ws_horizon_squish_for_android_build_pod
                   operator: Exists
               topologyKey: kubernetes.io/hostname
