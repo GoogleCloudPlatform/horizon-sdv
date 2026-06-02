@@ -346,6 +346,15 @@ Steps to start the Terraform workflow.
 
 ## Section #3 - Post-Deployment Setup
 
+### Domain Setup via GCP
+
+If you do not have a domain registered already you can do so via GCP.
+
+1. Go to: Network Services → Cloud Domains → Register Domain
+1. Choose a domain name `<HORIZON_DOMAIN>`
+1. Select Cloud DNS and enable DNSSEC
+1. create
+
 ### Section #3a - Update Nameservers
 To make your Cloud DNS zone active and reachable on the internet, you must update the Nameservers at your Domain Registrar. You must "point" your domain from the registrar to Google Cloud.
 
@@ -361,13 +370,54 @@ To make your Cloud DNS zone active and reachable on the internet, you must updat
 
 The process may differ based on your Domain Registrar.
 
+#### Update Nameservers for GCP Registered Domains
+
+Grab Terraform's Name Servers
+1. Go to Network Services > Cloud DNS in your console.
+1. Click on the Terraform zone: `dev-horizon-sdv-com.`
+1. Look for the record with the type `NS`.
+1. Under the "Data" column, you will see 4 lines that look like `ns-cloud-xx.googledomains.com.`. Copy all 4 of those lines.
+
+Link them together
+1. Go back to your Cloud DNS zones list and click on the root zone: `<HORIZON_DOMAIN>-com.`
+1. Click + Add Standard (or Add Record Set) at the top.
+1. DNS Name: type `<SUB_DOMAIN>` in the box (so the full name below it reads `<SUB_DOMAIN>.<HORIZON_DOMAIN>-com.`).
+1. Resource Record Type: select `NS` from the dropdown.
+1. Data: Paste the 4 lines you copied earlier.
+1. Click Create.
+
 #### DNSSEC implementation details (if enabled)
 
 If you set `sdv_dns_dnssec_enabled = true` in `terraform.tfvars`, Terraform creates a Cloud DNS zone with DNSSEC. The following applies only when DNSSEC is enabled; you can set `sdv_dns_dnssec_enabled = false` to skip these steps.
 
-- **Zone creation and authorization:** When DNSSEC is enabled, Terraform creates a zone during deployment. You must verify that the account is authorized to create that zone. This can be done in [Google Search Console](https://search.google.com/search-console).
+##### Zone creation and authorization 
 
-- **DS record (optional):** After the zone is created by Terraform, you can retrieve a **DS** record and add it to the main `horizon-sdv.com` zone to make the domain fully DNSSEC compliant. The setup works even without this step.
+When DNSSEC is enabled, Terraform creates a zone during deployment. You must verify that the account is authorized to create that zone.
+This can be done in [Google Search Console](https://search.google.com/search-console).
+
+1. In the Domain box on the left, type `<HORIZON_DOMAIN>.com` and click Continue.
+1. If it says "Ownership auto-verified": You are done. You can close the tab.
+1. If it gives you a TXT record to copy:
+   1. Copy the TXT record.
+   1. Go back to your root Cloud DNS zone (`<HORIZON_DOMAIN>-com`).
+   1. Click + Add Standard. Leave the DNS name blank (so it applies to the root domain), select TXT as the type, paste the code, and save it.
+   1. Go back to the Search Console and click Verify.
+
+##### DS record (optional)
+After the zone is created by Terraform, you can retrieve a **DS** record and add it to the main `horizon-sdv.com` zone to make the domain fully DNSSEC compliant. The setup works even without this step.
+
+1. Get the Key from Terraform:
+   1. Go to Network Services > Cloud DNS.
+   1. Click on your Terraform zone: `dev-horizon-sdv-com.`
+   1. Look in the top-right corner of the screen and click Registrar Setup.
+   1. You will see a section for DS Records. Copy the data.
+1. Paste the Key into your Main Zone:
+   1. Go back to your Cloud DNS zones list and click your root zone: `<HORIZON_DOMAIN>-com`.
+   1. Click + Add Standard (Add record).
+   1. DNS Name: type `<SUB_DOMAIN>.`
+   1. Resource Record Type: select `DS`.
+   1. Data: Paste the DS record data you copied from the other tab.
+   1. Click Create.
 
 - **Verification:** DNSSEC can be verified on the [DNSSEC Debugger](https://dnssec-debugger.verisignlabs.com/) site.
 
@@ -947,3 +997,34 @@ A manual workaround for this error, run the below command,
 ```shell
 gcloud compute ssl-policies delete gke-ssl-policy --global --project=sdva-2108202401
 ```
+
+### Section #6f Homepage not reachable after deployment
+
+If you cannot access `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>` but you can access `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/argocd` you most likely encounter a cluster issue. 
+
+Log in with the Argo CD admin credentials:
+- **Username:** `admin`
+- **Password:** Retrieve from GCP Secret Manager under the secret named `argocd-admin-password-b64`. Could be retrieve from terraform.tfvars configuration file manual_secrets named s5 (if set).
+
+  - If the password should not work you need to set a new password in `terraform.tfvars` appr. line 184 `manual_secrets = { s5 = <mypw> ...`
+  - redeploy
+
+- After login to argocd check the health state of the `horizon-sdv` application.
+- If it should be unhealthy hit “refresh” and then “sync”.
+- Wait for the cluster to update and recover to “Healthy” state.
+
+
+### Section #6g Jenkins cant run pipeline as admin
+
+If you should be unable to run any pipeline as admin while getting an error regarding unsufficient permissions try the steps below.
+
+1. Go to Manage Jenkins > Manage and Assign Roles > Assign Roles
+1. Under Global Roles:
+   1. In the "User/group to add" box, type your exact email you are logged in with (see user profile in jenkins): yourname@yourmail.com
+   1. Click Add.
+   1. In the new row that appears, check the box for horizon-jenkins-administrators.
+1. Under Item Roles:
+   1. In the "User/group to add" box, type your exact email again: yourname@yourmail.com
+   1. Click Add.
+   1. Check the box for workloads-developers.
+1. Click Save at the bottom of the page.
