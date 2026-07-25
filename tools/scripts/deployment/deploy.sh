@@ -195,17 +195,11 @@ check_auth() {
   # Define the path to the ADC file path (default)
   ADC_FILE="$HOME/.config/gcloud/application_default_credentials.json"
 
-  # Check if the ADC file exists
-  if [[ ! -f "$ADC_FILE" ]]; then
-    log_warn "Application Default Credentials (ADC) file not found."
-    NEED_LOGIN=true
+  if gcloud auth application-default print-access-token >/dev/null 2>&1; then
+    NEED_LOGIN=false
   else
-    if ! gcloud auth application-default print-access-token &>/dev/null; then
-      log_warn "ADC token is expired or invalid."
-      NEED_LOGIN=true
-    else
-      NEED_LOGIN=false
-    fi
+    log_warn "Application Default Credentials not available."
+    NEED_LOGIN=true
   fi
 
   # Login if needed
