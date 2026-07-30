@@ -493,7 +493,10 @@ module "base" {
         ]
         roles = toset([
           "roles/editor",
-          "roles/iam.serviceAccountTokenCreator"
+          "roles/iam.serviceAccountTokenCreator",
+          # Module IAMPolicyMember resources (e.g. gitops/modules/squish-workstation) bind project IAM roles;
+          # roles/editor does not include resourcemanager.projects.setIamPolicy.
+          "roles/resourcemanager.projectIamAdmin"
         ])
       }
     },

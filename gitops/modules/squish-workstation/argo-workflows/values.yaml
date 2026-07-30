@@ -1,0 +1,63 @@
+# Copyright (c) 2026 The Qt Company Ltd., All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Values marked "set by parent" come from the squish-workstation Application (../templates/application-argo-workflows.yaml).
+# Defaults below only allow standalone `helm lint` / `helm template`.
+
+# Namespace where WorkflowTemplates and submitted Workflows run (set by parent: {namespacePrefix}workflows).
+workflowNamespace: workflows
+
+# Namespace where Argo Events Sensors are installed (set by parent: {namespacePrefix}argo-events).
+eventsNamespace: argo-events
+
+# Set by parent.
+parentModuleName: squish-workstation
+gcpProjectId: ""
+
+# Git source for the image build context (set by parent from the Module Manager repo URL/revision).
+sourceRepo:
+  url: ""
+  revision: HEAD
+# Set by parent from config.scm.authMethod. app/userpass use per-run {{workflow.uid}}-pipeline-git-creds
+# created by the prepare-pipeline-git-creds ClusterWorkflowTemplate (workloads-common).
+scmAuthMethod: ""
+# Optional Secret (username/password) for a private HTTPS repo when scmAuthMethod is neither app nor userpass.
+sourceRepoSecret: ""
+
+# Image build context inside sourceRepo.
+dockerfileDir: gitops/modules/squish-workstation/image
+
+# ClusterWorkflowTemplate from workloads-common (hard dependency).
+clusterWorkflowTemplateName: common-docker-image-build
+
+# Service accounts: image build runs as workflow-executor (Secret Manager accessor, Artifact Registry writer);
+# the smoke test needs roles/workstations.admin and runs as workflow-executor-elevated.
+serviceAccounts:
+  init: workflow-executor
+  execute: workflow-executor-elevated
+
+# Image with gcloud for the prerequisite checks and smoke test.
+cloudSdkImage: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+
+# Squish settings (set by parent; see ../values.yaml).
+squish:
+  region: ""
+  clusterName: squish-workstation-cluster
+  configName: squish-workstation-config
+  artifactRepository: squish-workstation
+  imageName: squish
+  imageTag: latest
+  licenseSecretName: squish-license-key
+  build:
+    baseImage: ""

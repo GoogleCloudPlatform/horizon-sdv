@@ -1,0 +1,54 @@
+# Copyright (c) 2026 The Qt Company Ltd., All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Child Application: squish-workstation-init (image build) and squish-workstation-execute (smoke test)
+# WorkflowTemplates plus their Sensors. Separate Application so Argo CD only validates WorkflowTemplates
+# after the Argo Workflows CRDs exist.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mod-{{ .Values.moduleName }}-argo-workflows
+  namespace: {{ .Values.argocd.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.moduleName }}
+    horizon-sdv.io/module: {{ .Values.moduleName }}
+    horizon-sdv.io/app-role: child
+    horizon-sdv.io/module-manager-managed: "true"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocd.project }}
+  source:
+    repoURL: {{ .Values.repo.url | quote }}
+    targetRevision: {{ .Values.repo.revision | quote }}
+    path: gitops/modules/squish-workstation/argo-workflows
+    helm:
+      values: |
+        workflowNamespace: {{ .Values.config.namespacePrefix }}workflows
+        eventsNamespace: {{ .Values.config.namespacePrefix }}argo-events
+        parentModuleName: {{ .Values.moduleName | quote }}
+        gcpProjectId: {{ .Values.config.projectID | quote }}
+        sourceRepo:
+          url: {{ .Values.repo.url | quote }}
+          revision: {{ .Values.repo.revision | quote }}
+        scmAuthMethod: {{ (.Values.config.scm | default dict).authMethod | default "" | quote }}
+        squish:
+{{ include "squish-workstation.settings" . | indent 10 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.config.namespacePrefix }}workflows
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated: {}
