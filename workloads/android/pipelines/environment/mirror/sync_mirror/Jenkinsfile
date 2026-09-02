@@ -309,7 +309,7 @@ pipeline {
           container(name: 'mirror-sync-mirror-builder-container') {
             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
               sh """
-                "${syncMirrorScriptPath}" "${mirrorRootSubdirPath}" "${SYNC_ALL_EXISTING_MIRRORS}" "${MIRROR_DIR}" "${MIRROR_MANIFEST_URL}" "${MIRROR_MANIFEST_REF}" "${MIRROR_MANIFEST_FILE}" "${REPO_SYNC_JOBS}" "${BUILD_USER}"
+                "${syncMirrorScriptPath}" "${mirrorRootSubdirPath}" "${SYNC_ALL_EXISTING_MIRRORS}" "${MIRROR_DIR}" "${MIRROR_MANIFEST_URL}" "${MIRROR_MANIFEST_REF}" "${MIRROR_MANIFEST_FILE}" "${REPO_SYNC_JOBS}" "${BUILD_USER}" "${REPO_SYNC_TIMEOUT}"
               """
             }
           }

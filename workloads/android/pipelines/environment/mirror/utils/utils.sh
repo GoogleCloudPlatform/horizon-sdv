@@ -443,6 +443,73 @@ remove_stale_git_locks() {
   find "${mirror_path}" -name "*.lock" -print -delete || log_warning "Failed to cleanup some lock files, proceeding with sync."
 }
 
+# Prints process state (e.g. S, R, Z) or empty if PID is gone.
+# Returns void
+repo_sync_process_state() {
+  local pid=$1
+  ps -o state= -p "${pid}" 2>/dev/null | tr -d '[:space:]' || true
+}
+
+# Function to stop a background repo sync tree via its process group.
+# Sends TERM, waits briefly, then KILL. Falls back to single-PID kill if the
+# job shares the shell's process group (avoids killing the Jenkins shell).
+# Args: leader_pid [grace_seconds] [pgid]
+# Returns void; does not exit the shell
+cleanup_repo_sync_process_group() {
+  local leader_pid=$1
+  local grace_seconds=${2:-30}
+  local pgid=${3:-}
+  local shell_pgid
+  local waited=0
+  local use_process_group=0
+  local leader_state
+
+  if [[ -z "${leader_pid}" ]]; then
+    return 0
+  fi
+
+  if [[ -z "${pgid}" ]]; then
+    pgid=$(ps -o pgid= -p "${leader_pid}" 2>/dev/null | tr -d ' ' || true)
+  fi
+  shell_pgid=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ' || true)
+
+  if [[ -n "${pgid}" && "${pgid}" -ne 0 && ( -z "${shell_pgid}" || "${pgid}" -ne "${shell_pgid}" ) ]]; then
+    use_process_group=1
+  fi
+
+  if [[ ${use_process_group} -eq 1 ]]; then
+    log_info "Stopping repo sync process group (pgid=${pgid}, leader_pid=${leader_pid})..."
+    kill -TERM -- "-${pgid}" 2>/dev/null || true
+  elif kill -0 "${leader_pid}" 2>/dev/null; then
+    log_warning "Repo sync process group is unavailable or matches the shell PGID; falling back to single-PID kill (pid=${leader_pid})."
+    kill -TERM "${leader_pid}" 2>/dev/null || true
+  fi
+
+  while (( waited < grace_seconds )); do
+    leader_state=$(repo_sync_process_state "${leader_pid}")
+    if [[ -z "${leader_state}" || "${leader_state}" == Z* ]]; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  if [[ ${use_process_group} -eq 1 ]]; then
+    # Leader may already be gone while child git processes remain in the group.
+    kill -KILL -- "-${pgid}" 2>/dev/null || true
+  elif kill -0 "${leader_pid}" 2>/dev/null; then
+    kill -KILL "${leader_pid}" 2>/dev/null || true
+  fi
+
+  # Only wait/reap when the leader is gone or a zombie; avoid hang if kill was blocked.
+  leader_state=$(repo_sync_process_state "${leader_pid}")
+  if [[ -n "${leader_state}" && "${leader_state}" != Z* ]]; then
+    log_warning "Repo sync leader (pid=${leader_pid}) still alive after TERM/KILL; skipping wait to avoid hang."
+  else
+    wait "${leader_pid}" 2>/dev/null || true
+  fi
+}
+
 # Function to initialize a new repo on local with mirror manifest
 # Returns void; exit 1 on failure
 initialise_new_repo() {
@@ -467,7 +534,7 @@ initialise_new_repo() {
 }
 
 # Function to perform repo sync with Google's source
-# Returns 0 on success; 1 on failure (exits on critical errors only)
+# Returns 0 on success; 1 on failure; 124 on timeout (exits on critical errors only)
 sync_mirror() {
   local mirror_path=${1:-"."} # Default to current directory if no argument is provided
   local manifest_url=$2
@@ -475,12 +542,19 @@ sync_mirror() {
   local manifest_file=$4
   local repo_sync_jobs=$5
   local operation_type=${6:-"updated"} # Default to "updated" if no argument is provided
-  check_missing_func_args mirror_path manifest_url manifest_ref manifest_file repo_sync_jobs operation_type
+  local repo_sync_timeout=${7:-"20h"} # Max wall time for a single repo sync (GNU timeout duration)
+  check_missing_func_args mirror_path manifest_url manifest_ref manifest_file repo_sync_jobs operation_type repo_sync_timeout
 
   local start_time_in_seconds
   start_time_in_seconds=$(date +%s)
   local end_time_in_seconds
   local formatted_elapsed_time
+  local heartbeat_interval_seconds=300 # 5 minutes
+  local repo_sync_pid
+  local repo_sync_pgid
+  local sync_status
+  local monitor_mode_was_on=0
+  local state
 
   # Ensure parallel sync jobs are at least 1, and not more than nproc value
   local jobs=$repo_sync_jobs
@@ -493,22 +567,64 @@ sync_mirror() {
     jobs=$max_jobs
   fi
 
-  log_info "Starting repo sync inside '${mirror_path}' with details:\n Manifest URL:'${manifest_url}'\n Manifest Ref:'${manifest_ref}'\n Manifest File:'${manifest_file}'\n Parallel jobs: ${jobs}\n Sync started at [$(date)]..."
+  log_info "Starting repo sync inside '${mirror_path}' with details:\n Manifest URL:'${manifest_url}'\n Manifest Ref:'${manifest_ref}'\n Manifest File:'${manifest_file}'\n Parallel jobs: ${jobs}\n Timeout: ${repo_sync_timeout}\n Sync started at [$(date)]...\n This may take several hours; status updates will be logged periodically."
 
   cd "${mirror_path}" || log_error "Failed to cd into mirror path '${mirror_path}'."
 
-  repo sync \
+  # TAA-1244: run repo sync in background with heartbeat + configurable hard timeout.
+  # stdout is left unredirected so sync_mirror_with_retries can tee it for git-lock detection.
+  # Enable monitor mode so the background job gets its own process group (for abort cleanup).
+  if [[ $- == *m* ]]; then
+    monitor_mode_was_on=1
+  else
+    set -m || true
+  fi
+
+  timeout --signal=TERM --kill-after=30s "${repo_sync_timeout}" \
+    repo sync \
     -j"${jobs}" \
     --optimized-fetch \
     --prune \
     --retry-fetches=3 \
     --auto-gc \
-    --no-clone-bundle
+    --no-clone-bundle &
+  repo_sync_pid=$!
+  repo_sync_pgid=$(ps -o pgid= -p "${repo_sync_pid}" 2>/dev/null | tr -d ' ' || true)
 
-  local sync_status=$?
+  if [[ ${monitor_mode_was_on} -eq 0 ]]; then
+    set +m
+  fi
+
+  trap 'cleanup_repo_sync_process_group "${repo_sync_pid}" 30 "${repo_sync_pgid}"; remove_stale_git_locks "${mirror_path}"; exit 130' INT TERM
+
+  while true; do
+    state=$(repo_sync_process_state "${repo_sync_pid}")
+    if [[ -z "${state}" || "${state}" == Z* ]]; then
+      break
+    fi
+    sleep "${heartbeat_interval_seconds}"
+    state=$(repo_sync_process_state "${repo_sync_pid}")
+    if [[ -n "${state}" && "${state}" != Z* ]]; then
+      log_info "Repo sync still running (pid=${repo_sync_pid}, elapsed=$(( $(date +%s) - start_time_in_seconds ))s)..."
+    fi
+  done
+
+  set +e
+  wait "${repo_sync_pid}"
+  sync_status=$?
+  set -e
+  trap - INT TERM
 
   end_time_in_seconds=$(date +%s)
   formatted_elapsed_time=$(get_formatted_elapsed_time "$start_time_in_seconds" "$end_time_in_seconds")
+
+  if [[ $sync_status -eq 124 ]]; then
+    log_warning "Repo sync timed out after '${repo_sync_timeout}'. Time elapsed: [${formatted_elapsed_time}]"
+    # Belt-and-suspenders: timeout should have signalled the group; reap any survivors and locks.
+    cleanup_repo_sync_process_group "${repo_sync_pid}" 30 "${repo_sync_pgid}"
+    remove_stale_git_locks "${mirror_path}"
+    return 124
+  fi
 
   if [[ $sync_status -ne 0 ]]; then
     log_warning "Failed to perform repo sync. Time elapsed: [${formatted_elapsed_time}]"
@@ -517,10 +633,10 @@ sync_mirror() {
 
   log_success "Repo sync completed at [$(date)].\n Time elapsed: [${formatted_elapsed_time}].\n Local mirror ${operation_type}."
 
-  return 0
-
   log_info "Performing aggressive garbage collection..."
   repo forall -c "git gc --aggressive --prune=all" || log_error "Failed to perform garbage collection post repo sync."
+
+  return 0
 }
 
 # Function to sync mirror with retries (and handling git lock errors)
@@ -534,13 +650,15 @@ sync_mirror_with_retries() {
   local operation_type=${6:-"updated"} # created/updated; Default to "updated" if no argument is provided
   local metadata_file_path="$7"
   local metadata_root_key="$8"
-  check_missing_func_args mirror_path manifest_url manifest_ref manifest_file repo_sync_jobs operation_type metadata_file_path metadata_root_key
+  local repo_sync_timeout=${9:-"20h"}
+  check_missing_func_args mirror_path manifest_url manifest_ref manifest_file repo_sync_jobs operation_type metadata_file_path metadata_root_key repo_sync_timeout
 
   local mirror_dir_name
   mirror_dir_name=$(basename "$mirror_path")
   local log_file="/tmp/sync_mirror_${mirror_dir_name}.log"
   local attempt=1
   local max_retries=3
+  local sync_exit
 
   # Update metadata file with latest mirror details before starting sync
   update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "manifest_ref" "${manifest_ref}"
@@ -552,51 +670,63 @@ sync_mirror_with_retries() {
     # Before starting sync, update status to 'syncing' in metadata file
     update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "status" "syncing"
 
-    # Tee the output to the log file for post-mortem analysis
-    if sync_mirror "${mirror_path}" "${manifest_url}" "${manifest_ref}" "${manifest_file}" "${repo_sync_jobs}" "${operation_type}" | tee "${log_file}"; then
+    # Tee the output to the log file for post-mortem analysis; use PIPESTATUS to
+    # distinguish timeout (124) from other failures so retries are skipped on timeout.
+    set +e
+    sync_mirror "${mirror_path}" "${manifest_url}" "${manifest_ref}" "${manifest_file}" "${repo_sync_jobs}" "${operation_type}" "${repo_sync_timeout}" | tee "${log_file}"
+    sync_exit=${PIPESTATUS[0]}
+    set -e
+
+    if [[ $sync_exit -eq 0 ]]; then
       # SUCCESS: Update metadata and return successfully
       update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "status" "ready"
       update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "last_successful_sync_time" "$(date)"
 
       log_success "Repo sync succeeded for '${mirror_dir_name}' on attempt ${attempt}."
       return 0
-    else
-      log_warning "Repo sync failed on attempt ${attempt}."
-      update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "status" "error"
-
-      # Check if this is the final attempt
-      if (( attempt >= max_retries )); then
-        log_warning "Max retries reached. Final sync failure.\n Repo sync failed after ${max_retries} attempts."
-        return 1
-      fi
-
-      # Potential remediation
-      # Check for Git lock error
-      if grep -qE "${GIT_LOCK_ERR_PATTERN}" "${log_file}"; then
-        log_info "Detected Git lock error. Removing stale git lock files (expected to take 20-30 mins)..."
-        remove_stale_git_locks "${mirror_path}"
-        ((attempt+=1))
-        continue
-      fi
-
-      # Reduce parallel jobs to 3 for second attempt to avoid potential rate-limiting (when syncing AOSP from Google)
-      if (( attempt + 1 == 2 )); then
-        log_info "Reducing parallel sync jobs to 3 for second attempt."
-        repo_sync_jobs=3
-        update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "repo_sync_jobs" "${repo_sync_jobs}"
-      # Reduce parallel jobs to 1 for third and last attempt to avoid potential rate-limiting (when syncing AOSP from Google)
-      elif (( attempt + 1 == max_retries )); then
-        log_info "Reducing parallel sync jobs to 1 for last attempt."
-        repo_sync_jobs=1
-        update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "repo_sync_jobs" "${repo_sync_jobs}"
-      fi
-
-      # Standard Delay and Retry
-      log_info "Waiting ${RETRY_DELAY_SECONDS} seconds before next retry..."
-      sleep "${RETRY_DELAY_SECONDS}"
-
-      ((attempt+=1))
     fi
+
+    log_warning "Repo sync failed on attempt ${attempt}."
+    update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "status" "error"
+
+    # Timeout: do not retry (avoids burning multiple full timeout windows)
+    if [[ $sync_exit -eq 124 ]]; then
+      log_warning "Repo sync timed out for '${mirror_dir_name}'. Skipping further retries."
+      return 1
+    fi
+
+    # Check if this is the final attempt
+    if (( attempt >= max_retries )); then
+      log_warning "Max retries reached. Final sync failure.\n Repo sync failed after ${max_retries} attempts."
+      return 1
+    fi
+
+    # Potential remediation
+    # Check for Git lock error
+    if grep -qE "${GIT_LOCK_ERR_PATTERN}" "${log_file}"; then
+      log_info "Detected Git lock error. Removing stale git lock files (expected to take 20-30 mins)..."
+      remove_stale_git_locks "${mirror_path}"
+      ((attempt+=1))
+      continue
+    fi
+
+    # Reduce parallel jobs to 3 for second attempt to avoid potential rate-limiting (when syncing AOSP from Google)
+    if (( attempt + 1 == 2 )); then
+      log_info "Reducing parallel sync jobs to 3 for second attempt."
+      repo_sync_jobs=3
+      update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "repo_sync_jobs" "${repo_sync_jobs}"
+    # Reduce parallel jobs to 1 for third and last attempt to avoid potential rate-limiting (when syncing AOSP from Google)
+    elif (( attempt + 1 == max_retries )); then
+      log_info "Reducing parallel sync jobs to 1 for last attempt."
+      repo_sync_jobs=1
+      update_mirror_metadata_value "${metadata_file_path}" "${metadata_root_key}" "${mirror_dir_name}" "repo_sync_jobs" "${repo_sync_jobs}"
+    fi
+
+    # Standard Delay and Retry
+    log_info "Waiting ${RETRY_DELAY_SECONDS} seconds before next retry..."
+    sleep "${RETRY_DELAY_SECONDS}"
+
+    ((attempt+=1))
   done
 }
 
