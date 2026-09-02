@@ -136,6 +136,20 @@ pipelineJob('Android/Environment/Mirror/Sync Mirror') {
       ''')
       trim(true)
     }
+
+    stringParam {
+      name('REPO_SYNC_TIMEOUT')
+      defaultValue('20h')
+      description('''Maximum wall-clock time allowed for a single <i>repo sync</i> before the job fails (GNU <i>timeout</i> duration format, e.g. <i><code>20h</code></i>, <i><code>12h</code></i>).<br/>
+        <b>Note:</b>
+        <ul>
+          <li>Applies to each mirror sync call (including when <strong><code>SYNC_ALL_EXISTING_MIRRORS</code></strong> is selected).</li>
+          <li>Default <i><code>20h</code></i> is below the Sync Mirror container keep-alive (<i><code>24h</code></i>) so a hung sync is stopped before the pod expires.</li>
+          <li>Increase for very large initial mirrors if needed; a timeout does not retry.</li>
+        </ul>
+      ''')
+      trim(true)
+    }
   }
 
   // Block build if certain jobs are running.

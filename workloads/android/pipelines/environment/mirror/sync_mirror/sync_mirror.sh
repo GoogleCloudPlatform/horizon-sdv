@@ -25,6 +25,7 @@ MIRROR_MANIFEST_REF="$5"
 MIRROR_MANIFEST_FILE="$6"
 REPO_SYNC_JOBS="$7"
 BUILD_USER="$8"
+REPO_SYNC_TIMEOUT="${9:-20h}"
 
 METADATA_FILE_NAME="metadata.yaml"
 METADATA_FILE_FULL_PATH="${MIRROR_ROOT_SUBDIR_PATH}/${METADATA_FILE_NAME}"
@@ -47,6 +48,7 @@ process_single_mirror() {
   local build_user="$6"
   local metadata_file_path="$7"
   local metadata_root_key="$8"
+  local repo_sync_timeout="${9:-20h}"
 
   local sync_type="created"
   local mirror_dir_name
@@ -107,7 +109,8 @@ process_single_mirror() {
     "${repo_sync_jobs}" \
     "${sync_type}" \
     "${metadata_file_path}" \
-    "${metadata_root_key}"
+    "${metadata_root_key}" \
+    "${repo_sync_timeout}"
 
   local sync_status=$?
 
@@ -169,7 +172,8 @@ if [[ "${SYNC_ALL_EXISTING_MIRRORS}" == "true" ]]; then
       "${repo_sync_jobs}" \
       "${build_user}" \
       "${METADATA_FILE_FULL_PATH}" \
-      "${METADATA_FILE_ROOT_KEY}" ; then
+      "${METADATA_FILE_ROOT_KEY}" \
+      "${REPO_SYNC_TIMEOUT}" ; then
       log_success "Successfully synced mirror: '${mirror_name}'"
 
       succeeded_mirrors_list+=("${mirror_name}") || log_error "Failed to add mirror to succeeded list: '${mirror_name}'"
@@ -209,7 +213,8 @@ else
     "${REPO_SYNC_JOBS}" \
     "${BUILD_USER}" \
     "${METADATA_FILE_FULL_PATH}" \
-    "${METADATA_FILE_ROOT_KEY}" ; then
+    "${METADATA_FILE_ROOT_KEY}" \
+    "${REPO_SYNC_TIMEOUT}" ; then
     log_success "Sync completed successfully for mirror: '${MIRROR_DIR}'"
   else
     log_error "Sync failed for mirror: '${MIRROR_DIR}'"
