@@ -328,7 +328,9 @@ if [[ "${ENABLE_GEMINI_AI_ASSISTANT}" == "true" ]] && [[ "${AAOS_BUILD_STAGE_FAI
     AAOS_ARTIFACT_LIST+=(
       "${ORIG_WORKSPACE}/gemini-assist/"
       "${ORIG_WORKSPACE}/*.json"
+      "${ORIG_WORKSPACE}/traces/"
       "/aaos-cache/aaos_builds/gemini-assist/"
+      "/aaos-cache/aaos_builds/traces/"
       "/aaos-cache/aaos_builds/headless_output*.json"
       "/aaos-cache/aaos_builds/gemini-client-error.zip"
     )

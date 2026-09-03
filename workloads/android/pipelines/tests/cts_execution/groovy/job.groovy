@@ -304,6 +304,12 @@ pipelineJob('Android/Tests/CTS Execution') {
       description('''<p>Enable Gemini AI to support in diagnosis of test failures.</p>''')
     }
 
+    choiceParam {
+      name('AI_REVIEW_RUNTIME')
+      description('''<p>AI Review runtime: <code>gemini-cli</code> (CLI, default) or <code>agy</code> (Antigravity SDK).</p>''')
+      choices(['gemini-cli', 'agy'])
+    }
+
     booleanParam {
       name('GEMINI_ANALYSE_ON_SUCCESS')
       defaultValue(false)

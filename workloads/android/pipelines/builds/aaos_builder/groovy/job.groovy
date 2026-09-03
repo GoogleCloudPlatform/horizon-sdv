@@ -154,6 +154,12 @@ pipelineJob('Android/Builds/AAOS Builder') {
       description('''<p>Enable Gemini AI assistant to provide potential solutions to any build failures.</p>''')
     }
 
+    choiceParam {
+      name('AI_REVIEW_RUNTIME')
+      description('''<p>AI Review runtime: <code>gemini-cli</code> (CLI, default) or <code>agy</code> (Antigravity SDK).</p>''')
+      choices(['gemini-cli', 'agy'])
+    }
+  
     stringParam {
       name('GEMINI_COMMAND_LINE')
       defaultValue("gemini ${model} --yolo --output-format json")

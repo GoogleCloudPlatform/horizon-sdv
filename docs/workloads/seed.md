@@ -137,10 +137,10 @@ Override the model to use.
 The version of gemini-cli to be installed.
 Run `npm view @google/gemini-cli versions` for a full list of valid versions.
 
-### `GOOGLE_ADK_VERSION`
+### `ANTIGRAVITY_SDK_VERSION`
 
-The version of google-adk to be installed.
-Run `pip index versions google-adk` for a full list of valid versions.
+The version of antigravity SDK to be installed.
+Run `pip index versions google-antigravity` for a full list of valid versions.
 
 ### Groovy Scripts <a name="groovyscripts"></a>
 

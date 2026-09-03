@@ -209,6 +209,12 @@ pipelineJob(cvdJobFullName) {
       description('''<p>Enable <b>Gemini AI Assistant</b> triage on failure (same pipeline stage pattern as CTS Execution). Uses sequenced prompts under <code>cvd_launcher/prompt/sequenced</code> (guest <code>kernel.log</code>, <code>launcher.log</code>, userspace logcat under <code>**/logs/</code>, host <code>cvd</code> logs). <b>Experimental:</b> output may vary slightly between runs; you may <b>re-run</b> the job to get another pass over the same artifacts. Not a substitute for engineering review of images and bootconfig.</p>''')
     }
 
+    choiceParam {
+      name('AI_REVIEW_RUNTIME')
+      description('''<p>AI Review runtime: <code>gemini-cli</code> (CLI, default) or <code>agy</code> (Antigravity SDK).</p>''')
+      choices(['gemini-cli', 'agy'])
+    }
+
     booleanParam {
       name('GEMINI_ANALYSE_ON_SUCCESS')
       defaultValue(false)

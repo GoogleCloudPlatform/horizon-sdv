@@ -31,7 +31,9 @@
 #   2. Optional GEMINI_ARTIFACTS_COMMAND (e.g. unzip logs into analysis dir).
 #   3. Optional review-pre hook (GEMINI_HOOK_DIR + GEMINI_HOOK_PROFILE).
 #   4. Rewrite /workspace-prefixed prompt paths to REPO_ROOT when Argo uses /workspace.
-#   5. gemini_initialise.sh → timeout … gemini_analysis.sh (capture exit code).
+#   5. Analysis runtime (AI_REVIEW_RUNTIME):
+#        gemini-cli (default) → gemini_initialise.sh + gemini_analysis.sh
+#        agy → workloads/common/agentic-ai/antigravity/harness.py
 #   6. Optional review-post hook.
 #   7. Optional move_gemini_artifacts (skip if GEMINI_SKIP_MOVE_ARTIFACTS=1).
 #   8. Trim empty headless JSON; optional GEMINI_POST_REVIEW_COMMAND.
@@ -144,15 +146,36 @@ export GEMINI_COMMAND_LINE="${GEMINI_COMMAND_LINE}"
 GEMINI_AI_EXECUTION_TIMEOUT_HOURS="${GEMINI_AI_EXECUTION_TIMEOUT_HOURS:-${GEMINI_AI_EXECUTION_TIMEOUT:-2}}"
 export GEMINI_AI_EXECUTION_TIMEOUT_HOURS
 
-echo -e "${GREEN}Initialise + analyse${NC} (timeout ${GEMINI_AI_EXECUTION_TIMEOUT_HOURS}h)…"
-"${REPO_ROOT}"/workloads/common/agentic-ai/gemini/gemini_initialise.sh
-timeout "${GEMINI_AI_EXECUTION_TIMEOUT_HOURS}"h "${REPO_ROOT}"/workloads/common/agentic-ai/gemini/gemini_analysis.sh
-GEMINI_EXIT_CODE="$?"
-if [[ "${GEMINI_EXIT_CODE}" -eq 0 ]]; then
-  echo -e "${GREEN}gemini_analysis.sh finished OK (exit 0)${NC}"
-else
-  echo -e "${ORANGE}gemini_analysis.sh exit code ${GEMINI_EXIT_CODE}${NC}"
-fi
+AI_REVIEW_RUNTIME="${AI_REVIEW_RUNTIME:-gemini-cli}"
+export AI_REVIEW_RUNTIME
+echo -e "${GREEN}Analyse runtime${NC}=${AI_REVIEW_RUNTIME} (timeout ${GEMINI_AI_EXECUTION_TIMEOUT_HOURS}h)…"
+
+case "${AI_REVIEW_RUNTIME}" in
+  agy|AGY)
+    timeout "${GEMINI_AI_EXECUTION_TIMEOUT_HOURS}"h \
+    bash "${REPO_ROOT}/workloads/common/agentic-ai/antigravity/run_agy_ai_review.sh"
+    GEMINI_EXIT_CODE="$?"
+    if [[ "${GEMINI_EXIT_CODE}" -eq 0 ]]; then
+      echo -e "${GREEN}AGY AI review finished OK (exit 0)${NC}"
+    else
+      echo -e "${ORANGE}AGY AI review exit code ${GEMINI_EXIT_CODE}${NC}"
+    fi
+    ;;
+  gemini-cli)
+    "${REPO_ROOT}"/workloads/common/agentic-ai/gemini/gemini_initialise.sh
+    timeout "${GEMINI_AI_EXECUTION_TIMEOUT_HOURS}"h "${REPO_ROOT}"/workloads/common/agentic-ai/gemini/gemini_analysis.sh
+    GEMINI_EXIT_CODE="$?"
+    if [[ "${GEMINI_EXIT_CODE}" -eq 0 ]]; then
+      echo -e "${GREEN}gemini_analysis.sh finished OK (exit 0)${NC}"
+    else
+      echo -e "${ORANGE}gemini_analysis.sh exit code ${GEMINI_EXIT_CODE}${NC}"
+    fi
+    ;;
+  *)
+    echo -e "${RED}ERROR: unsupported AI_REVIEW_RUNTIME=${AI_REVIEW_RUNTIME} (use gemini-cli|agy)${NC}"
+    GEMINI_EXIT_CODE=1
+    ;;
+esac
 
 # ---------------------------------------------------------------------------
 # Optional post-hook (review-post-${GEMINI_HOOK_PROFILE}.sh)

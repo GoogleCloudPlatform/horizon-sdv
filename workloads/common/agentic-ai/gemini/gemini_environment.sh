@@ -152,6 +152,7 @@ JOB_NAME=${JOB_NAME:-aaos}
 declare -a GEMINI_ARTIFACT_LIST=()
 GEMINI_ARTIFACT_LIST+=(
   "${GEMINI_ARTIFACT_WRITE_ROOT}/${GEMINI_ARTIFACT_PATH}/"
+  "${GEMINI_ARTIFACT_WRITE_ROOT}/traces/"
   "${GEMINI_ARTIFACT_WRITE_ROOT}/*.json"
 )
 
@@ -171,6 +172,13 @@ function move_gemini_artifacts() {
     if [[ -z "$src_dir" || -z "$target_dir" ]]; then
         echo -e "${RED}ERROR: Usage: move_gemini_artifacts <src_dir> <target_dir>${NC}"
         return 1
+    fi
+
+    # Move Antigravity traces.
+    if [[ -d "${src_dir}/traces" && "${src_dir%/}" != "${target_dir%/}" ]]; then
+        mkdir -p "${target_dir}/traces"
+        mv "${src_dir}/traces"/* "${target_dir}/traces/" >/dev/null 2>&1 || true
+        rmdir "${src_dir}/traces" >/dev/null 2>&1 || true
     fi
 
     echo -e "${GREEN}Transferring artifacts from ${src_dir} to ${target_dir}${NC}"

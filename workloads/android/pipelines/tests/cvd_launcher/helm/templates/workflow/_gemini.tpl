@@ -131,6 +131,8 @@ Description:
             value: "/workspace"
           - name: WORKSPACE
             value: "/workspace"
+          - name: AI_REVIEW_RUNTIME
+            value: {{ $root.Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
           - name: GEMINI_ANALYSIS_PATH
             value: "/workspace/test-results"
           - name: ANALYSIS_WORKING_DIRECTORY
