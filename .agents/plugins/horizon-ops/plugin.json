@@ -1,0 +1,4 @@
+{
+  "name": "horizon-ops",
+  "description": "Horizon SDV operations and deployment plugin for provisioning GKE infrastructure, configuring Terraform, and automating post-deployment setup."
+}

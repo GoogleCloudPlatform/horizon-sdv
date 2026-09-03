@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Cloud Build pipeline for Horizon SDV Terraform deployment.
+# Runs containerized Terraform plan, apply, or destroy directly in Google Cloud.
+
+steps:
+  # Step 1: Build the Horizon Deployer Image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-deployer'
+    args:
+      - 'build'
+      - '-t'
+      - 'horizon-deployer:latest'
+      - '-f'
+      - 'tools/scripts/deployment/container/Dockerfile'
+      - 'tools/scripts/deployment'
+
+  # Step 2: Execute Deployment directly as a Cloud Build native container step
+  - name: 'horizon-deployer:latest'
+    id: 'run-deployment'
+    entrypoint: 'bash'
+    args:
+      - '/workspace/.agents/plugins/horizon-ops/skills/horizon-deploy/scripts/cloud-runner.sh'
+      - '$_ACTION'
+
+substitutions:
+  _ACTION: '-p'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '7200s'
