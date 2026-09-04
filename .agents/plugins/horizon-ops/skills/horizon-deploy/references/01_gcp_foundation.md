@@ -165,36 +165,14 @@ EOF
 
 ---
 
-## 4. Upfront Cloud DNS Setup & Nameserver Delegation Notice
+## 4. Cloud DNS Managed Zone (Terraform-Managed)
 
-To ensure DNS propagation and Google-managed SSL certificate validation happen in parallel while Terraform provisions the GKE cluster, retrieve or create the Cloud DNS managed zone early:
+Cloud DNS managed zones (`google_dns_managed_zone.sdv-cloud-dns-zone`) are provisioned and managed directly by Terraform as part of the core infrastructure deployment.
 
-```bash
-ZONE_NAME="dev-horizon-sdv-com"
-DNS_NAME="dev.<ROOT_DOMAIN>."
-
-# Create zone if it does not exist
-gcloud dns managed-zones create $ZONE_NAME \
-  --dns-name=$DNS_NAME \
-  --description="Managed by Horizon" \
-  --project=<GCP_PROJECT_ID> || true
-
-# Retrieve assigned Google nameservers
-gcloud dns managed-zones describe $ZONE_NAME \
-  --project=<GCP_PROJECT_ID> \
-  --format="value(nameServers)"
-```
-
-> [!IMPORTANT]
-> **Instruct User Upfront**:
-> Output the 4 assigned nameservers directly to the user at the start of the workflow:
-> ```text
-> dev.<ROOT_DOMAIN>.   IN   NS   ns-cloud-d1.googledomains.com.
-> dev.<ROOT_DOMAIN>.   IN   NS   ns-cloud-d2.googledomains.com.
-> dev.<ROOT_DOMAIN>.   IN   NS   ns-cloud-d3.googledomains.com.
-> dev.<ROOT_DOMAIN>.   IN   NS   ns-cloud-d4.googledomains.com.
-> ```
-> Instruct the user to add these records in their DNS provider now so DNS and SSL certificates are active by the time the deployment finishes.
+> [!NOTE]
+> **No Manual Zone Pre-Creation**:
+> Do **not** pre-create the Cloud DNS zone manually before Terraform executes, as this causes resource collision errors (`409 Conflict`) during `terraform apply`.
+> Once Terraform provisions the zone, the deployment script queries the live nameserver records directly from Google Cloud (`gcloud dns managed-zones describe ...`) and presents the exact assigned nameservers to the user.
 
 ---
 

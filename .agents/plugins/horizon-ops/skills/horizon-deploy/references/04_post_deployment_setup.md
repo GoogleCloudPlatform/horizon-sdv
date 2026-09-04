@@ -8,17 +8,15 @@ This runbook covers critical post-deployment configurations required to bring th
 
 To route internet traffic to the GKE ingress, update your domain nameservers.
 
-### 1.1 For GCP-Registered Domains or Cloud DNS Root Zones
-When Terraform creates the subdomain zone `<SUB_DOMAIN>-horizon-sdv-com` (DNS Name: `<SUB_DOMAIN>.<HORIZON_DOMAIN>`):
-1. Navigate to **Network Services** → **Cloud DNS**.
-2. Click the Terraform-managed zone: `<SUB_DOMAIN>-horizon-sdv-com`.
-3. Locate the `NS` record and copy all 4 values (`ns-cloud-xx.googledomains.com.`).
-4. Go to your root DNS zone for `<HORIZON_DOMAIN>` (e.g. `your-domain-com`).
-5. Click **+ Add Standard** / **Add Record Set**:
-   - **DNS Name**: `<SUB_DOMAIN>`
-   - **Resource Record Type**: `NS`
-   - **Data**: Paste the 4 nameserver lines copied above.
-6. Save the record.
+### 1.1 Retrieve Live Nameservers from Google Cloud
+When Terraform creates the subdomain zone `<SUB_DOMAIN>-horizon-sdv-com` (DNS Name: `<SUB_DOMAIN>.<HORIZON_DOMAIN>.`):
+1. Query the live nameservers directly from Google Cloud:
+   ```bash
+   ZONE_NAME="<SUB_DOMAIN>-horizon-sdv-com"
+   gcloud dns managed-zones describe $ZONE_NAME --project=<GCP_PROJECT_ID> --format="value(nameServers)"
+   ```
+2. In your DNS provider console for `<HORIZON_DOMAIN>`, add an `NS` record set for subdomain `<SUB_DOMAIN>` containing the exact 4 returned nameservers.
+3. Save the records and allow standard DNS propagation.
 
 ### 1.2 DNSSEC Authorization (If `sdv_dns_dnssec_enabled = true`)
 1. In [Google Search Console](https://search.google.com/search-console), verify ownership of `<HORIZON_DOMAIN>`.

@@ -149,25 +149,6 @@ When triggering the deployment:
    gcloud storage buckets create gs://$BUCKET_NAME --project=<GCP_PROJECT_ID> --location=europe-west1 --uniform-bucket-level-access || true
    gcloud storage buckets update gs://$BUCKET_NAME --project=<GCP_PROJECT_ID> --versioning || true
    ```
-9. **Flag Cloud DNS Nameservers Upfront for Early Delegation**:
-   Create or retrieve the Cloud DNS managed zone for `dev.<ROOT_DOMAIN>` and immediately present the 4 assigned nameservers to the user:
-   ```bash
-   ZONE_NAME="dev-horizon-sdv-com"
-   DNS_NAME="dev.<ROOT_DOMAIN>."
-   gcloud dns managed-zones create $ZONE_NAME --dns-name=$DNS_NAME --description="Managed by Horizon" --project=<GCP_PROJECT_ID> || true
-   gcloud dns managed-zones describe $ZONE_NAME --project=<GCP_PROJECT_ID> --format="value(nameServers)"
-   ```
-   > [!IMPORTANT]
-   > **Upfront Action for User**:
-   > Display the 4 Cloud DNS nameservers immediately:
-   > ```text
-   > dev.<ROOT_DOMAIN>.   IN   NS   ns-cloud-d1.googledomains.com.
-   > dev.<ROOT_DOMAIN>.   IN   NS   ns-cloud-d2.googledomains.com.
-   > dev.<ROOT_DOMAIN>.   IN   NS   ns-cloud-d3.googledomains.com.
-   > dev.<ROOT_DOMAIN>.   IN   NS   ns-cloud-d4.googledomains.com.
-   > ```
-   > Instruct the user: *"Please add these NS delegation records in your DNS provider now so DNS propagation and SSL certificate validation occur in parallel while Terraform provisions the infrastructure."*
-
 ### Phase 2: Auto-Generate `terraform.tfvars` (Password-Free)
 *Follow: [references/02_terraform_configuration.md](./references/02_terraform_configuration.md)*
 1. Ensure `locals.tf` includes `s7` and `s13` in `secret_password_specs` for native auto-generation of Keycloak credentials.
@@ -217,7 +198,22 @@ When triggering the deployment:
 
    *(Fallback local admin credentials for individual services are safely stored in GCP Secret Manager and can be queried on-demand only if specifically requested for emergency break-glass scenarios)*.
 
-3. Update nameservers for `<SUB_DOMAIN>.<HORIZON_DOMAIN>`.
+3. **Query & Display Live Cloud DNS Nameservers from Google Cloud**:
+   > [!IMPORTANT]
+   > **Always Query Live Nameservers from GCP Source**:
+   > Never hardcode or assume nameserver values. Always query the definitive nameservers directly from the Terraform-managed Cloud DNS zone in Google Cloud:
+   > ```bash
+   > ZONE_NAME="<ENV_NAME>-horizon-sdv-com"
+   > gcloud dns managed-zones describe $ZONE_NAME --project=<GCP_PROJECT_ID> --format="value(nameServers)"
+   > ```
+   > Present the exact 4 returned nameservers to the user:
+   > ```text
+   > <ENV_NAME>.<ROOT_DOMAIN>.   IN   NS   <ACTUAL_NS_1>.
+   > <ENV_NAME>.<ROOT_DOMAIN>.   IN   NS   <ACTUAL_NS_2>.
+   > <ENV_NAME>.<ROOT_DOMAIN>.   IN   NS   <ACTUAL_NS_3>.
+   > <ENV_NAME>.<ROOT_DOMAIN>.   IN   NS   <ACTUAL_NS_4>.
+   > ```
+   > Instruct the user to configure these NS delegation records in their DNS provider.
 4. Connect to GKE via Connect Gateway (`gcloud container fleet memberships get-credentials`).
 5. **Inspect & Verify Argo CD Sync Waves (Wave 0 to Wave 7)**:
    Verify that all multi-wave components have synchronized:
