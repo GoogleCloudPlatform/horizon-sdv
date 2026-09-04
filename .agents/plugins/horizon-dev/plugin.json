@@ -1,0 +1,4 @@
+{
+  "name": "horizon-dev",
+  "description": "Horizon SDV developer plugin for authoring and scaffolding modular extensions, declarative KCC cloud resources, Argo Workflows & Sensors, and Developer Portal integrations."
+}
