@@ -31,8 +31,7 @@ FROM ${GCP_REGION}-docker.pkg.dev/cloud-workstations-images/predefined/code-oss 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG APT_OPTS="-y --no-install-recommends"
 ARG CURL_OPTS="-fsSL --retry 3 --connect-timeout 10 --max-time 300"
-ARG BUILDER_PKGS="config-package-dev curl debhelper-compat devscripts equivs git golang"
-ARG LIBTINFO5_VERSION="6.3-2ubuntu0.2_amd64"
+ARG BUILDER_PKGS="config-package-dev curl debhelper-compat devscripts equivs git golang libtinfo6"
 ARG RETRY_ATTEMPTS=3
 ARG RETRY_DELAY=5
 ARG CUTTLEFISH_RETRY_ATTEMPTS=8
@@ -49,8 +48,6 @@ RUN . /google/scripts/common.sh && \
     export RETRY_DELAY=${RETRY_DELAY} && \
     retry "apt-get update" && \
     retry "apt-get install ${APT_OPTS} ${BUILDER_PKGS}" && \
-    curl ${CURL_OPTS} -O "http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_${LIBTINFO5_VERSION}.deb" && \
-    retry "apt-get install ${APT_OPTS} ./libtinfo5_${LIBTINFO5_VERSION}.deb" && \
     retry "${CUTTLEFISH_RETRY_ATTEMPTS}" "${RETRY_DELAY}" "git clone https://github.com/google/android-cuttlefish" && \
     /google/scripts/patch_sources.sh /android-cuttlefish && \
     retry 5 "${RETRY_DELAY}" "/android-cuttlefish/tools/buildutils/build_packages.sh" && \
@@ -77,8 +74,6 @@ ARG INSTALL_ABFS_CLIENT=false
 ARG DEBIAN_FRONTEND=noninteractive
 
 ENV GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT}"
-# Shared MCP Gateway core + Gemini and Antigravity MCP agents.
-# Stable paths via ENV so bridge entries in client configs keep resolving.
 ENV HORIZON_MCP_LIB="/usr/local/lib/horizon-mcp" \
     GEMINI_MCP_AGENT_PATH="/usr/local/bin/gemini-mcp-agent" \
     ANTIGRAVITY_MCP_AGENT_PATH="/usr/local/bin/antigravity-mcp-agent"
