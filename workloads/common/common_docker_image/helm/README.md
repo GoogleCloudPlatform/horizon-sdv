@@ -16,7 +16,11 @@ limitations under the License. -->
 
 Reusable ClusterWorkflowTemplate for Docker image builds. Use it to build images from
 different directories by overriding `dockerfileDir` and `buildArgs` at submit
-time. When using a local repo PVC, pass absolute paths (e.g., `/workspace-local/...`).
+time, or to execute a multi-target Docker Buildx Bake definition by passing `bakeFile`
+(relative to `dockerfileDir`). When `bakeFile` is set, `docker buildx bake` runs
+against the `buildkitd` sidecar with `IMAGE` (`<region>-docker.pkg.dev/<project>/<dockerArtifactPathName>:<imageTag>`),
+`GCP_REGION` (`cloudRegion`), and all `KEY=VALUE` lines from `buildArgs` exported as environment variables for HCL `variable` blocks.
+When using a local repo PVC, pass absolute paths (e.g., `/workspace-local/...`).
 
 This template **does not clone Git**; it expects a **`source`** input artifact at **`/workspace`** (or a local mount). Callers such as **aaos-builder** or **aaos-builder-runtime-image** supply the git artifact (or mount). No **`pipelineRepoUrl`** / credentials belong in this chart.
 
