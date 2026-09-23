@@ -49,6 +49,8 @@ spec:
             value: v0.24.0
           - name: dockerfileDir
             value: .
+          - name: bakeFile
+            value: ""
           - name: buildArgs
             value: ""
           - name: platform
@@ -76,7 +78,7 @@ spec:
             privileged: true
           resources:
             limits:
-              memory: 4Gi
+              memory: 8Gi
             requests:
               memory: 4Gi
           volumeMounts:
@@ -101,6 +103,8 @@ spec:
             value: "{{ "{{" }}inputs.parameters.dockerCredentialsUrl{{ "}}" }}"
           - name: DOCKERFILE_DIR
             value: "{{ "{{" }}inputs.parameters.dockerfileDir{{ "}}" }}"
+          - name: BAKE_FILE
+            value: "{{ "{{" }}inputs.parameters.bakeFile{{ "}}" }}"
           - name: BUILD_ARGS
             value: "{{ "{{" }}inputs.parameters.buildArgs{{ "}}" }}"
           - name: PLATFORM
@@ -179,6 +183,27 @@ spec:
               exit 1
             fi
             cd "${CONTEXT_ROOT}"
+            if [ -n "${BAKE_FILE:-}" ]; then
+              apk add --no-cache docker-cli docker-cli-buildx >/dev/null
+              export IMAGE="${DESTINATION}:${IMAGE_TAG}"
+              export GCP_REGION="${CLOUD_REGION}"
+              export BUILDX_BAKE_ENTITLEMENTS_FS=0
+              while IFS= read -r line; do
+                trimmed=$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                if [ -n "${trimmed}" ]; then
+                  export "${trimmed?}"
+                fi
+              done <<EOF
+            $(printf '%b' "${BUILD_ARGS}")
+            EOF
+              docker buildx create --name bk --driver remote "${BUILDKIT_HOST}" --use >/dev/null
+              set -- -f "${BAKE_FILE}" --set "*.platform=${PLATFORM}"
+              if [ "${PUSH}" = "true" ]; then
+                set -- "$@" --push
+              fi
+              docker buildx bake "$@"
+              exit $?
+            fi
             formatted_build_args=""
             formatted_build_args=$(printf "%b" "${BUILD_ARGS}" | while IFS= read -r line; do
               if [ -n "$(echo "$line" | tr -d '[:space:]')" ]; then
