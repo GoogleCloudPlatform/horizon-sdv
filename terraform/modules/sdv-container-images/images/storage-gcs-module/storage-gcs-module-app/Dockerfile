@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 
-FROM --platform=linux/amd64 golang:1.22-bookworm AS build
+FROM --platform=linux/amd64 golang:1.26-bookworm AS build
 
 WORKDIR /src
 
