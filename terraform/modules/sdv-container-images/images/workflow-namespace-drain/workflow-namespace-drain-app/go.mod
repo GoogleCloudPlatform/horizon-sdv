@@ -16,7 +16,7 @@ module github.com/acn-horizon-sdv/workflow-namespace-drain
 
 go 1.25.0
 
-replace golang.org/x/crypto => golang.org/x/crypto v0.50.0
+replace golang.org/x/crypto => golang.org/x/crypto v0.56.0
 
 require (
 	k8s.io/apimachinery v0.35.5

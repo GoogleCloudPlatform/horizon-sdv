@@ -16,7 +16,7 @@ module github.com/acn-horizon-sdv/module-manager
 
 go 1.25.0
 
-replace golang.org/x/crypto => golang.org/x/crypto v0.50.0
+replace golang.org/x/crypto => golang.org/x/crypto v0.56.0
 
 require (
 	gopkg.in/yaml.v3 v3.0.1
