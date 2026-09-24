@@ -32,6 +32,7 @@ import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import { Link } from 'react-router-dom';
 import { HORIZON_LOGO_SRC } from '../constants';
 import { authService } from '../utils/auth';
+import BuildIcon from '@mui/icons-material/Build';
 
 const HORIZON_SDV_REPO = 'https://github.com/GoogleCloudPlatform/horizon-sdv';
 const DEPLOYMENT_GUIDE_URL =
@@ -143,6 +144,15 @@ export function WelcomePage() {
           startIcon={<AdminPanelSettingsIcon />}
         >
           Administration → Settings
+        </Button>
+        <Button
+          component={Link}
+          to="/tools"
+          variant="outlined"
+          size="large"
+          startIcon={<BuildIcon />}
+        >
+          Tools
         </Button>
       </Stack>
 

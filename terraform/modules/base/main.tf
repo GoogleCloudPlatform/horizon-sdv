@@ -121,7 +121,10 @@ module "sdv_container_images" {
     for name, image in local.images : name => {
       directory       = image.directory
       version         = image.build_version
-      build_args      = try(image.build_args, {})
+      build_args = merge(
+        try(image.build_args, {}),
+        name == "horizon-dev-portal" ? { HORIZON_CLI_VERSION = image.build_version } : {}
+      )
       context_path    = try(image.context_path, null)
       dockerfile_path = try(image.dockerfile_path, null)
       platform        = try(image.platform, null)

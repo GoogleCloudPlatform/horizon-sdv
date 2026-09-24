@@ -31,6 +31,7 @@ Usage:
   %s config <init|get|set> ...
   %s auth <login|logout|refresh|whoami> [flags]
   %s catalog get [--output text|json] [flags]   (default output: text)
+  %s version [--output text|json]
   %s workflow <submit|wait|logs|abort|delete|show|list|get|running|history|download-artifact> ... [flags]
 
   %s ci <submit|wait|logs|abort|delete|show|list|get|...> ...   (alias for %s workflow)
@@ -69,7 +70,7 @@ Examples (submit + wait):
   %s workflow submit --module sample --template sample-smoke-test --params-json '{"sampleEnv":"jenkins"}' --output json -q
   %s workflow wait <workflowName>
 
-`, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p)
+`, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p)
 }
 
 func main() {
@@ -106,6 +107,11 @@ func main() {
 	case "catalog":
 		if err := runCatalog(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "catalog: %v\n", err)
+			os.Exit(1)
+		}
+	case "version":
+		if err := runVersion(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "version: %v\n", err)
 			os.Exit(1)
 		}
 	case "workflow":

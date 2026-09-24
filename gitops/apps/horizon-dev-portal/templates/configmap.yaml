@@ -30,3 +30,4 @@ data:
   KEYCLOAK_TOKEN_PATH: {{ .Values.config.keycloakTokenPath | quote }}
   KEYCLOAK_CLIENT_ID: {{ .Values.config.keycloakClientId | quote }}
   HORIZON_API_CI_CLIENT_ID: {{ .Values.config.horizonApiCiClientId | quote }}
+  CLI_DIST_DIR: "/cli-dist"

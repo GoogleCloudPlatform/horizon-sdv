@@ -58,6 +58,12 @@ tools/horizon/horizon
 **/dist/
 **/dist-ssr/
 
+# Staged CLI sources copied into the portal Docker context (terraform local_file).
+terraform/modules/sdv-container-images/images/horizon-dev-portal/horizon-dev-portal/cli/
+
+# Local CLI binaries for Windows
+tools/horizon/horizon.exe
+
 # Vite dev cache
 **/.vite/
 

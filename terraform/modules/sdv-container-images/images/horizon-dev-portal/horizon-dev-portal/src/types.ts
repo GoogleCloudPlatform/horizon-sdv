@@ -97,6 +97,23 @@ export interface CatalogResponse {
   entries: CatalogEntry[];
 }
 
+/** GET /api/cli/v1/manifest */
+export interface CliArtifact {
+  os: string;
+  arch: string;
+  filename: string;
+  sha256: string;
+  sizeBytes: number;
+  downloadPath: string;
+}
+
+export interface CliManifest {
+  name: string;
+  version: string;
+  buildDate: string;
+  artifacts: CliArtifact[];
+}
+
 export interface WorkflowSummary {
   name: string;
   namespace: string;

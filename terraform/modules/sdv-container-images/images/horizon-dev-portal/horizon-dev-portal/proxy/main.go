@@ -106,6 +106,8 @@ func main() {
 	})
 	mux.Handle("/api/mm/", newMMProxy(mmURL, verifier))
 	mux.Handle("/api/horizon/", newHorizonProxy(haURL, ci))
+	var cliVer bearerVerifier = oidcBearerVerifier{inner: verifier}
+	registerCLIRoutes(mux, env("CLI_DIST_DIR", "/cli-dist"), cliVer)
 	mux.Handle("/", spaHandler(htmlBaseTagHref(normalizePublicPath(env("PUBLIC_PATH", "")))))
 
 	log.Printf("listening on %s", addr)
