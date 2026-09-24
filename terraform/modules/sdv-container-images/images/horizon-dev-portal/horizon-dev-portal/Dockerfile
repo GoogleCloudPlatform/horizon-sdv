@@ -14,6 +14,15 @@
 
 # SPDX-License-Identifier: Apache-2.0
 
+# CLI sources are staged into ./cli (terraform local_file, or copy tools/horizon/*.{go,mod,sum}).
+FROM golang:1.25-alpine AS cli
+WORKDIR /src
+COPY cli/ ./
+ARG HORIZON_CLI_VERSION=dev
+ARG HORIZON_CLI_COMMIT=unknown
+ENV HORIZON_CLI_COMMIT=$HORIZON_CLI_COMMIT
+RUN go run mkdist.go /out "$HORIZON_CLI_VERSION"
+
 FROM node:20-alpine AS frontend
 ENV HUSKY=0
 WORKDIR /app
@@ -32,6 +41,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /horizon-dev-portal .
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=backend /horizon-dev-portal /horizon-dev-portal
+COPY --from=cli /out /cli-dist
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/horizon-dev-portal"]

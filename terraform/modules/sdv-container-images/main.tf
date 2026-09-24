@@ -18,19 +18,38 @@ locals {
     for name, img in var.images : name => coalesce(try(img.context_path, null), "${path.module}/images/${img.directory}/${name}")
   }
 
+  horizon_cli_root = abspath("${path.module}/../../../tools/horizon")
+  horizon_cli_files = toset([
+    for f in fileset(local.horizon_cli_root, "{*.go,go.mod,go.sum}") : f
+    if !endswith(f, "_test.go")
+  ])
+  portal_image_key = "horizon-dev-portal"
+
   # When context_path is set, skip hashing paths that match local npm/build artifacts (like .dockerignore).
   docker_context_files = {
     for name, img in var.images : name => sort([
       for f in fileset(local.docker_context[name], "**") : f
       if try(img.context_path, null) == null ? true : !(
-        startswith(f, "node_modules/") || startswith(f, "dist/") || startswith(f, ".git/")
+        startswith(f, "node_modules/") || startswith(f, "dist/") || startswith(f, ".git/") || startswith(f, "cli/")
       )
     ])
   }
 }
 
+# Copy Horizon CLI sources into the portal Docker context (legacy builder cannot use additional_contexts).
+resource "local_file" "horizon_cli_docker_src" {
+  for_each = contains(keys(var.images), local.portal_image_key) ? {
+    for f in local.horizon_cli_files : f => f
+  } : {}
+
+  content  = file("${local.horizon_cli_root}/${each.value}")
+  filename = "${local.docker_context[local.portal_image_key]}/cli/${each.value}"
+}
+
 resource "docker_image" "sdv-container-images" {
   for_each = var.images
+
+  depends_on = [local_file.horizon_cli_docker_src]
 
   name = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"
   build {
@@ -56,6 +75,11 @@ resource "docker_image" "sdv-container-images" {
     dockerfile_sha = try(each.value.dockerfile_path, null) != null ? filesha1(each.value.dockerfile_path) : ""
 
     platform_sha = try(each.value.platform, null) != null ? each.value.platform : ""
+
+    horizon_cli_sha = each.key == local.portal_image_key ? sha1(join("", [
+      for f in sort(tolist(local.horizon_cli_files)) :
+      filesha1("${local.horizon_cli_root}/${f}")
+    ])) : ""
   }
 }
 

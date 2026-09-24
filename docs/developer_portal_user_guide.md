@@ -210,7 +210,23 @@ Replace placeholder values (marked with `<...>`) with your environment-specific 
 
 #### Installation
 
-##### Prerequisite
+##### Download from Developer Portal (recommended)
+
+Sign in to Developer Portal (`https://<your-horizon-domain>/developer-portal/`) and open **Tools** in the sidebar (or Welcome → Tools).
+
+1. Download the binary for your OS and architecture.
+2. Linux: `chmod +x horizon` and move it to your `PATH` (e.g.: `sudo mv horizon /usr/local/bin/horizon`).
+3. macOS (Apple Silicon / arm64): `chmod +x horizon`, remove the quarantine attribute (`xattr -d com.apple.quarantine horizon`) to avoid macOS Gatekeeper warnings for the unsigned binary, and move it to your `PATH` (e.g.: `sudo mv horizon /usr/local/bin/horizon`).
+4. Windows: keep `horizon.exe` on your `PATH`. Windows SmartScreen may warn because the file is unsigned.
+5. Verify:
+
+```bash
+horizon version
+```
+
+**Expected:** The version and the build date match the values displayed on the Tools page. The build date is displayed directly below the version.
+
+##### Contributor: build from source
 
 Go [1.22+](https://go.dev/dl/) must be installed. Verify with:
 

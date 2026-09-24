@@ -59,6 +59,32 @@ export async function apiMm(path: string, init: RequestInit = {}): Promise<Respo
   return fetchWithAuth(url, init);
 }
 
+/** Horizon CLI download API via proxy (user JWT required, same as apiMm). */
+export async function apiCli(path: string, init: RequestInit = {}): Promise<Response> {
+  const originBase = getAppOriginBase();
+  const url = `${originBase}/api/cli${path.startsWith('/') ? path : `/${path}`}`;
+  return fetchWithAuth(url, init);
+}
+
+/**
+ * Parse a CLI API JSON body. Vite's SPA fallback can return HTML with HTTP 200 when
+ * `/api/cli` is not handled; that used to surface as `Unexpected token '<'`.
+ */
+export async function readCliJson<T>(resp: Response): Promise<T> {
+  const ct = (resp.headers.get('content-type') ?? '').toLowerCase();
+  if (!ct.includes('json')) {
+    const preview = (await resp.text()).trim().slice(0, 160);
+    if (preview.startsWith('<')) {
+      throw new Error(
+        `CLI API returned HTML instead of JSON (HTTP ${resp.status}). For npm run dev, from tools/horizon run:
+         go run mkdist.go %TEMP%\\horizon-cli-dist <horizon_version>, e.g.: go run mkdist.go %TEMP%\\horizon-cli-dist 4.3.0`
+      );
+    }
+    throw new Error(`CLI API returned non-JSON (HTTP ${resp.status}): ${preview || 'empty body'}`);
+  }
+  return resp.json() as Promise<T>;
+}
+
 /**
  * Horizon API via same-origin proxy: only the confidential CI client (K8s secret) talks to Horizon.
  * No browser Bearer — avoids user JWT / refresh issues. On 401 the proxy drops stale CI; retry a few times.

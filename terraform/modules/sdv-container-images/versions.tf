@@ -17,5 +17,8 @@ terraform {
     docker = {
       source = "kreuzwerker/docker"
     }
+    local = {
+      source = "hashicorp/local"
+    }
   }
 }

@@ -109,8 +109,8 @@ locals {
     # Developer portal (Vite + Go proxy). context_path is set so sdv-container-images trigger hashing skips node_modules/dist (same as former external client tree).
     "horizon-dev-portal" = {
       directory      = "horizon-dev-portal"
-      build_version  = "1.1.0"
-      deploy_version = "1.1.0"
+      build_version  = "1.1.1"
+      deploy_version = "1.1.1"
       context_path   = abspath("${path.module}/../sdv-container-images/images/horizon-dev-portal/horizon-dev-portal")
       platform       = "linux/amd64"
     }
