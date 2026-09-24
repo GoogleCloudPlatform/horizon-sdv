@@ -33,6 +33,452 @@ limitations under the License. -->
 <td valign="top" width="14%"><p><strong>Version</strong></p>
 </td>
 
+<td valign="top" width="86%"><p><strong>Release 4.3.0</strong></p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="14%"><p><strong>Date</strong></p>
+</td>
+
+<td valign="top" width="86%"><p><strong>DD.MM.2026</strong></p>
+</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Summary</h2>
+<p><strong>Horizon SDV 4.3.0</strong> is the minor release which extends the Horizon Developer Portal with a prebuilt, downloadable <strong>Horizon CLI</strong> for all supported platforms, and introduces the first <strong>EXPERIMENTAL partner contribution</strong> to Horizon: the <strong>RemotiveTopology (System of Systems)</strong> module contributed by RemotiveLabs.</p>
+
+<p>Horizon 4.3.0 also delivers feature improvements and security fixes for vulnerable open-source modules used in Horizon containers.</p>
+
+<p>Horizon SDV 4.3.0 package offers fully verified and documented upgrade patch (from Rel.4.2.0 to Rel.4.3.0). (see details in /docs/guides/upgrade_guide_4_2_0_to_4_3_0.md)</p>
+
+<h2>New Features</h2>
+
+<table width="100%">
+<tbody>
+<tr>
+<th valign="top" width="12%"><p><strong>ID</strong></p>
+</th>
+
+<th valign="top" width="24%"><p><strong>Feature</strong></p>
+</th>
+
+<th valign="top" width="64%"><p><strong>Description</strong></p>
+</th>
+</tr>
+
+<tr>
+<td valign="top" width="12%"><p>TAA-1841</p>
+</td>
+
+<td valign="top" width="24%"><p><strong>Horizon Portal enhancements - Download Horizon CLI</strong></p>
+</td>
+
+<td valign="top" width="64%"><p><strong>Summary</strong></p>
+<p>Signed-in Developer Portal users can download a ready-to-run Horizon CLI binary for their OS/architecture. The binary matches the CLI built into that cluster&#39;s Developer Portal image, so end users no longer need to clone the repository and install a Go development environment to build the CLI themselves. Building from source remains possible; the portal download is the documented default install path.</p>
+<p>Binaries are <strong>not</strong> served as unauthenticated static files. They are served only through <code>/api/cli</code> after the same OIDC Bearer check as Module Manager.</p>
+<p><strong>Supported platforms</strong></p>
+<ul>
+<li>
+<p>Linux amd64</p>
+</li>
+
+<li>
+<p>Linux arm64</p>
+</li>
+
+<li>
+<p>Windows amd64</p>
+</li>
+
+<li>
+<p>macOS on Apple Silicon (darwin arm64)</p>
+</li>
+</ul>
+<p><strong>Changes</strong></p>
+<p><strong>Horizon CLI (TAA-2060)</strong></p>
+<ul>
+<li>
+<p>Add <code>horizon version [--output text|json]</code> reporting the version and build date stamped at build time (local builds report <code>dev</code>).</p>
+</li>
+
+<li>
+<p>Add <code>tools/horizon/mkdist.go</code> to cross-compile the supported platforms, emit SHA-256 checksums, and write <code>manifest.json</code>.</p>
+</li>
+</ul>
+<p><strong>Developer Portal (TAA-2060 / TAA-2111)</strong></p>
+<ul>
+<li>
+<p>Proxy: <code>GET /api/cli/v1/manifest</code> and <code>GET /api/cli/v1/download/{os}/{arch}</code> (<code>proxy/cli.go</code>), served from <code>CLI_DIST_DIR</code> (default <code>/cli-dist</code>).</p>
+</li>
+
+<li>
+<p>New <strong>Tools</strong> page at <code>/tools</code> (sidebar and Welcome page) with a tab-based layout for future tools. The <strong>Horizon CLI</strong> tab detects the user&#39;s platform, offers the preferred download, shows version and build date (dd/mm/yyyy), and allows copying the SHA-256 checksum.</p>
+</li>
+
+<li>
+<p>Platform-specific installation and verification instructions on the Tools page.</p>
+</li>
+</ul>
+<p><strong>Image / GitOps / Terraform (TAA-2060)</strong></p>
+<ul>
+<li>
+<p>Multi-stage Developer Portal Dockerfile: the CLI is cross-compiled during the image build and shipped in <code>/cli-dist</code> of the distroless image.</p>
+</li>
+
+<li>
+<p><code>tools/horizon</code> sources are staged into the portal Docker build context, so the portal image is rebuilt when CLI sources change. <code>HORIZON_CLI_VERSION</code> is taken from the portal <code>build_version</code>.</p>
+</li>
+
+<li>
+<p><code>horizon-dev-portal</code> bumped <strong>1.1.0 → 4.3.0</strong> (<code>terraform/modules/base/locals.tf</code>, GitOps <code>values.yaml</code>).</p>
+</li>
+</ul>
+<p><strong>Documentation (TAA-2080)</strong></p>
+<ul>
+<li>
+<p><code>docs/developer_portal_user_guide.md</code>: Download from Developer Portal is the recommended install path, including macOS arm64 steps (removal of the quarantine attribute for the unsigned binary).</p>
+</li>
+</ul>
+<p><strong>Actions</strong></p>
+<ol start="1">
+<li>
+<p>Deploy the updated <code>horizon-dev-portal</code> image (4.3.0) per your environment rollout.</p>
+</li>
+
+<li>
+<p>Sign in to the Developer Portal (<code>https://&lt;your-horizon-domain&gt;/developer-portal/</code>) and open <strong>Tools → Horizon CLI</strong>.</p>
+</li>
+
+<li>
+<p>Download the binary for your platform, verify the SHA-256 checksum, and run <code>horizon version</code>. The version and build date match the values shown on the Tools page.</p>
+</li>
+</ol>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%"><p>TAA-2057</p>
+</td>
+
+<td valign="top" width="24%"><p><strong>RemotiveTopology (System of Systems) module - RemotiveLabs partner contribution [EXPERIMENTAL]</strong></p>
+</td>
+
+<td valign="top" width="64%"><p><strong>Summary</strong></p>
+<p>First partner contribution integrated into Horizon according to the partner contribution guidelines (<code>docs/contributing.md</code>), contributed by RemotiveLabs (<a href="https://github.com/GoogleCloudPlatform/horizon-sdv/pull/58">GoogleCloudPlatform/horizon-sdv#58</a>). The new <code>remotive-topology</code> module runs <a href="https://docs.remotivelabs.com/">RemotiveTopology</a> vehicle-system simulations (&quot;system of systems&quot;) on ephemeral GCE VMs, following the Horizon SDV Packer → KCC <code>ComputeInstanceTemplate</code> → ephemeral GCE driver pattern (parity with <code>cf_instance_template</code> and <code>cvd_launcher</code>).</p>
+<p>The module is <strong>EXPERIMENTAL</strong>: behavior, parameters and availability can change without notice.</p>
+<p><strong>Changes</strong></p>
+<p><strong>New module</strong></p>
+<ul>
+<li>
+<p><code>gitops/modules/remotive-topology</code> registered in the Module Manager catalog (hard dependency: <code>workloads-common</code>) with a Developer Portal overview page.</p>
+</li>
+
+<li>
+<p>Argo workflows under <code>workloads/remotive/pipelines</code>:</p>
+
+<ul>
+<li>
+<p><code>remotive-builder-image</code>: builder container image (packer, gcloud, kubectl) built through the shared <code>common-docker-image-build</code> ClusterWorkflowTemplate.</p>
+</li>
+
+<li>
+<p><code>remotive-instance-template</code>: Packer bake (Docker CE, remotivebusd, remotivelabs-cli) and publication of a KCC <code>ComputeInstanceTemplate</code>.</p>
+</li>
+
+<li>
+<p><code>remotive-launcher</code>: per-run ephemeral VM (KCC <code>ComputeInstance</code> and GCS message passing, no SSH from the pod) that builds and runs the topology. The topology project is provided per run as a <code>.tgz</code> / <code>.tar.gz</code> archive (<code>topologyDownloadUrl</code>, <code>topologyName</code>); no topology project is shipped in the repository.</p>
+</li>
+</ul>
+</li>
+
+<li>
+<p>Remotive <code>ComputeInstanceTemplate</code> CRs are published into a dedicated <code>&lt;prefix&gt;remotive-kcc</code> namespace. Disabling <code>workloads-android</code> no longer removes Remotive instance templates, and disabling <code>remotive-topology</code> removes them (TAA-2110).</p>
+</li>
+</ul>
+<p><strong>Shared components</strong></p>
+<ul>
+<li>
+<p>MTK Connect: new <code>MTK_CONNECT_TUNNEL_LIST</code> (named TCP tunnels), <code>MTK_CONNECT_DEVICE_NAME_LIST</code>, <code>MTK_CONNECT_TUNNEL_DEVICE_NAME</code> and <code>MTK_CONNECT_TERMINAL_USER</code> parameters. Topology ports and Android adb endpoints are exposed as MTK Connect tunnels and devices.</p>
+</li>
+
+<li>
+<p>Module Manager <strong>0.3.2 → 0.3.3</strong>: startup sync injects <code>MODULE_CONFIG</code> only into parent Applications, so <code>workloads-android</code> / <code>workloads-common</code> no longer stay in UPDATE IN PROGRESS after a Module Manager restart; per-module KCC namespace teardown.</p>
+</li>
+
+<li>
+<p>Cloud NAT (<code>terraform/modules/sdv-network/nat.tf</code>): dynamic port allocation enabled (64-4096 ports per VM) to support many concurrent egress connections.</p>
+</li>
+
+<li>
+<p>CVD Launcher: support for newer <code>cvd</code> versions.</p>
+</li>
+</ul>
+<p><strong>Actions</strong></p>
+<ol start="1">
+<li>
+<p>Create the RemotiveCloud auth Secret with a revocable, least-privilege service-account token: <code>kubectl -n &lt;prefix&gt;workflows create secret generic workflow-remotive-cloud-auth --from-literal=token=&lt;token&gt; --from-literal=organization=&lt;organization-id&gt;</code>.</p>
+</li>
+
+<li>
+<p>Enable <code>remotive-topology</code> in the Developer Portal (Administration → Modules) and wait until its status changes to READY.</p>
+</li>
+
+<li>
+<p>Run <code>remotive-builder-image</code> once, then <code>remotive-instance-template</code>, then <code>remotive-launcher</code> per topology run.</p>
+</li>
+</ol>
+<p>Documentation: <code>workloads/remotive/README.md</code>. Example topologies: <a href="https://github.com/remotivelabs/remotivelabs-topology-examples/">remotivelabs-topology-examples</a>.</p>
+</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Improved Features</h2>
+
+<table width="100%">
+<tbody>
+<tr>
+<th valign="top" width="12%"><p><strong>ID</strong></p>
+</th>
+
+<th valign="top" width="24%"><p><strong>Feature</strong></p>
+</th>
+
+<th valign="top" width="64%"><p><strong>Description</strong></p>
+</th>
+</tr>
+
+<tr>
+<td valign="top" width="12%"><p>TAA-1244</p>
+</td>
+
+<td valign="top" width="24%"><p><strong>[Android] Mirror sync should show some status when syncing</strong></p>
+</td>
+
+<td valign="top" width="64%"><p><strong>Summary</strong></p>
+<p>Android Mirror sync now reports visible progress during <code>repo sync</code> and enforces a configurable hard timeout, so long-running mirror syncs no longer look hung in the Jenkins console.</p>
+<p><strong>Changes</strong></p>
+<ul>
+<li>
+<p><code>repo sync</code> runs in the background with a heartbeat log line every 5 minutes (PID and elapsed time).</p>
+</li>
+
+<li>
+<p>New Jenkins parameter <code>REPO_SYNC_TIMEOUT</code> (GNU <code>timeout</code> duration, default <code>20h</code>) on Sync Mirror. On timeout the whole <code>repo sync</code> process group is stopped and the job fails without retry.</p>
+</li>
+
+<li>
+<p>Output is kept in a log file for post-mortem analysis.</p>
+</li>
+</ul>
+<p><strong>Actions</strong></p>
+<p>Run the Seed Workloads pipeline so the new <code>REPO_SYNC_TIMEOUT</code> parameter is added to Sync Mirror.</p>
+</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Documentation update</h2>
+
+<ul>
+<li><p>Rel.4.3.0 provides updates in Horizon documentation.</p>
+
+<ul>
+<li><p>New <strong>Upgrade Guide</strong> (/docs/guides/upgrade_guide_4_2_0_to_4_3_0.md) for Rel.4.2.0 -&gt; Rel.4.3.0 upgrade.</p>
+</li>
+
+<li><p>Developer Portal and Horizon CLI</p>
+
+<ul>
+<li><p><code>docs/developer_portal_user_guide.md</code> (Horizon CLI download and installation from the Developer Portal)</p>
+</li>
+</ul>
+</li>
+
+<li><p>RemotiveTopology (System of Systems) module</p>
+
+<ul>
+<li><p><code>workloads/remotive/README.md</code></p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+<h2>Bug Fixes</h2>
+
+<table width="100%">
+<tbody>
+<tr>
+<td valign="top" width="10%"><p><strong>ID</strong></p>
+</td>
+
+<td valign="top" width="24%"><p><strong>Bug</strong></p>
+</td>
+
+<td valign="top" width="51%"><p><strong>Description</strong></p>
+</td>
+
+<td valign="top" width="15%"><p><strong>SHA</strong></p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%"><p>TAA-2112</p>
+</td>
+
+<td valign="top" width="24%"><p>[Security] grpc-go module update (1.81.0 -&gt; 1.83.2)</p>
+</td>
+
+<td valign="top" width="51%"><p><strong>Summary</strong></p>
+<p>Upgrades <code>google.golang.org/grpc</code> from <code>v1.81.0</code> to <code>v1.83.2</code> to resolve the reported security finding.</p>
+<p><strong>Verification</strong></p>
+<p>Deployed to a lab environment, enabled android workloads, triggered Seed jobs in Jenkins, and sanity-checked that application and admin components open correctly.</p>
+</td>
+
+<td valign="top" width="15%">
+<ul>
+<li><p><em>pending merge</em></p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%"><p>TAA-2113</p>
+</td>
+
+<td valign="top" width="24%"><p>[Security] OSS Axios module update to 1.20.0</p>
+</td>
+
+<td valign="top" width="51%"><p><strong>Summary</strong></p>
+<p>Upgrades <code>axios</code> to <code>1.20.0</code> to resolve the reported security finding.</p>
+<p><strong>Verification</strong></p>
+<p>Deployed to a lab environment, enabled android workloads, triggered Seed jobs in Jenkins, and sanity-checked that application and admin components open correctly.</p>
+</td>
+
+<td valign="top" width="15%">
+<ul>
+<li><p><em>pending merge</em></p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%"><p>TAA-2114</p>
+</td>
+
+<td valign="top" width="24%"><p>[Security] open-telemetry/opentelemetry-go module update to v1.46.0</p>
+</td>
+
+<td valign="top" width="51%"><p><strong>Summary</strong></p>
+<p>Upgrades <code>go.opentelemetry.io/otel</code> to <code>v1.46.0</code> to resolve the reported security finding.</p>
+<p><strong>Verification</strong></p>
+<p>Deployed to a lab environment, enabled android workloads, triggered Seed jobs in Jenkins, and sanity-checked that application and admin components open correctly.</p>
+</td>
+
+<td valign="top" width="15%">
+<ul>
+<li><p><em>pending merge</em></p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%"><p>TAA-2120</p>
+</td>
+
+<td valign="top" width="24%"><p>[Security] PostCSS module update (8.5.21 -&gt; 8.5.26)</p>
+</td>
+
+<td valign="top" width="51%"><p><strong>Summary</strong></p>
+<p>Upgrades <code>postcss</code> from <code>8.5.21</code> to <code>8.5.26</code> in <code>horizon-dev-portal</code> and <code>horizon-preflight/preflight-web</code>.</p>
+<p><strong>Verification</strong></p>
+<p>Deployed to a lab environment; Developer Portal CSS output and the Preflight workstation start screen render correctly.</p>
+</td>
+
+<td valign="top" width="15%">
+<ul>
+<li><p><em>pending merge</em></p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%"><p>TAA-2121</p>
+</td>
+
+<td valign="top" width="24%"><p>[Security] nanoid module update (3.3.11 -&gt; 6.0.1)</p>
+</td>
+
+<td valign="top" width="51%"><p><strong>Summary</strong></p>
+<p>Upgrades <code>nanoid</code> from <code>3.3.11</code> to <code>6.0.1</code> in <code>horizon-dev-portal</code> and <code>horizon-preflight/preflight-web</code>.</p>
+<p><strong>Verification</strong></p>
+<p>Deployed to a lab environment; Developer Portal CSS output and the Preflight workstation start screen render correctly.</p>
+</td>
+
+<td valign="top" width="15%">
+<ul>
+<li><p><em>pending merge</em></p>
+</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td valign="top" width="10%"><p>TAA-2149</p>
+</td>
+
+<td valign="top" width="24%"><p>[Download CLI] Deployment version and token path corrections after testing</p>
+</td>
+
+<td valign="top" width="51%"><p><strong>Summary</strong></p>
+<p>Corrections to the Horizon CLI download feature found during release testing.</p>
+<p><strong>Changes</strong></p>
+<ul>
+<li><p>The Developer Portal image version is aligned with the release number: <code>horizon-dev-portal</code> is tagged <code>4.3.0</code> rather than continuing its own <code>1.1.x</code> line, in <code>terraform/modules/base/locals.tf</code> and the GitOps chart values.</p>
+</li>
+<li><p><code>horizon login</code> and <code>horizon logout</code> now print the token cache path actually in use, resolved through <code>tokenCachePath()</code>, instead of a hardcoded <code>~/.config/horizon/token.json</code> that could be wrong when the location differs.</p>
+</li>
+<li><p><code>docs/developer_portal_user_guide.md</code> extended with the corresponding CLI sections.</p>
+</li>
+</ul>
+</td>
+
+<td valign="top" width="15%">
+<ul>
+<li><p><code>491b4f171</code></p>
+</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Known Issues</h2>
+<p><strong>Horizon CLI:</strong> Binaries downloaded from the Developer Portal are not code-signed. Windows SmartScreen may show a warning, and on macOS the quarantine attribute must be removed (<code>xattr -d com.apple.quarantine horizon</code>) before first run. See <code>docs/developer_portal_user_guide.md</code>.</p>
+
+<hr>
+<table width="100%">
+<tbody>
+<tr>
+<td valign="top" width="14%"><p><strong>Platform</strong></p>
+</td>
+
+<td valign="top" width="86%"><p><strong>Horizon SDV</strong></p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="14%"><p><strong>Version</strong></p>
+</td>
+
 <td valign="top" width="86%"><p><strong>Release 4.2.0</strong></p>
 </td>
 </tr>

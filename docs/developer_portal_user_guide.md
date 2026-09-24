@@ -248,7 +248,7 @@ go build -o horizon .
 **Expected:** No errors. A `horizon` binary is created in the current directory.
 
 ##### Move to PATH
-
+- For Linux/macOS:
 ```bash
 sudo mv horizon /usr/local/bin/
 ```
@@ -259,10 +259,35 @@ Or a user-local install can be used instead:
 mv horizon ~/go/bin/
 ```
 
-##### Verify installation
+- For Windows:
 
+Create a directory for command-line tools, for example:
+```powershell
+New-Item -ItemType Directory -Force -Path C:\Tools
+```
+Move the binary:
+```powershell
+Move-Item .\horizon.exe C:\Tools\
+```
+Temporarily add C:\Tools to PATH for the current PowerShell session:
+```powershell
+$env:Path += ";C:\Tools"
+```
+Note: This change applies only to the current PowerShell session. To make it permanent, add C:\Tools to your User PATH through Windows Environment Variables.
+
+From this point onward in the current PowerShell session, all examples can be executed as:
+```powershell
+horizon.exe <command>
+```
+
+##### Verify installation
+- Linux/macOS:
 ```bash
 horizon --help
+```
+- Windows (in the current session, do not open a new tab):
+```powershell
+horizon.exe --help
 ```
 
 **Expected:** Usage text is printed, starting with:
@@ -290,9 +315,13 @@ This places the binary in `$GOBIN` (defaults to `~/go/bin`). Ensure that directo
 #### Environment Setup
 
 Before running any test, set your Horizon domain:
-
+- Linux/macOS:
 ```bash
 export HORIZON_DOMAIN="<your-horizon-domain>"
+```
+- Windows:
+```powershell
+$env:HORIZON_DOMAIN = "<your-horizon-domain>"
 ```
 
 Or use `--domain` on each command instead.
@@ -305,15 +334,20 @@ Or use `--domain` on each command instead.
 - Keycloak client configured for the target domain
 
 ##### Log in via device flow
-
+- Linux/macOS:
 ```bash
 horizon auth login --device --domain "$HORIZON_DOMAIN" --write-config
+```
+- Windows:
+```powershell
+horizon.exe auth login --device --domain $env:HORIZON_DOMAIN --write-config
 ```
 
 A verification URL is printed to stderr. Open it in a browser and complete the sign-in.
 
 **Expected output (stderr):**
 
+- Linux/macOS:
 ```
 Open this URL in a browser (sign in with your Horizon user):
 https://<domain>/auth/realms/horizon/...
@@ -321,14 +355,31 @@ https://<domain>/auth/realms/horizon/...
 Logged in. Token saved to ~/.config/horizon/token.json
 Wrote defaults to /home/<user>/.config/horizon/config.yaml
 ```
+- Windows:
+```
+Logged in. Token saved to C:\Users\<user>\.config\horizon\token.json
+Wrote defaults to C:\Users\<user>\AppData\Roaming\horizon\config.yaml
+```
 
 ##### Verify token was stored
-
+- Linux/macOS:
 ```bash
 ls -la ~/.config/horizon/token.json
 ```
+- Windows:
+```powershell
+Test-Path "$HOME\.config\horizon\token.json"
+```
 
-**Expected:** File exists with permissions `0600`.
+**Expected:**
+- Linux/macOS:
+```
+File exists with permissions `0600`.
+```
+- Windows:
+```
+True
+```
 
 ##### Verify identity
 
@@ -384,6 +435,7 @@ horizon catalog get --output json
 
 ##### Submit a workflow
 
+- Linux/macOS:
 ```bash
 horizon workflow submit \
   --module sample \
@@ -391,6 +443,14 @@ horizon workflow submit \
   --params-json '{"sampleEnv":"cli-test","sampleBuildId":"tcli02-001","sampleNote":"test-run"}' \
   --output json -q
 ```
+- Windows:
+```powershell
+horizon.exe workflow submit `
+  --module sample `
+  --template sample-smoke-test `
+  --params-json '{"sampleEnv":"cli-test","sampleBuildId":"tcli02-001","sampleNote":"test-run"}' `
+  --output json -q
+  ```
 
 **Expected output (stdout):** JSON containing the workflow name:
 
@@ -405,14 +465,24 @@ horizon workflow submit \
 
 Save the workflow name:
 
+- Linux/macOS:
 ```bash
 export WF_NAME="<generated-workflow-name>"
+```
+- Windows:
+```powershell
+$env:WF_NAME = "<generated-workflow-name>"
 ```
 
 ##### Inspect the workflow for submitted-from
 
+- Linux/macOS:
 ```bash
 horizon workflow show "$WF_NAME" --output json | grep -i submittedFrom
+```
+- Windows:
+```powershell
+horizon.exe workflow show $env:WF_NAME --output json | Select-String "submittedFrom"
 ```
 
 **Expected output:** The JSON includes `"submittedFrom"` with value `"horizon-cli"`:
@@ -425,8 +495,13 @@ This confirms the CLI sent the `X-Horizon-Submitted-From: horizon-cli` header an
 
 ##### Verify via text output
 
+- Linux/macOS:
 ```bash
 horizon workflow show "$WF_NAME"
+```
+- Windows:
+```powershell
+horizon.exe workflow show $env:WF_NAME
 ```
 
 **Expected:** The summary block under "Workflow detail" includes a `"submittedFrom": "horizon-cli"` entry.
@@ -440,8 +515,13 @@ horizon workflow show "$WF_NAME"
 
 ##### Stream logs
 
+- Linux/macOS:
 ```bash
 horizon workflow logs "$WF_NAME"
+```
+- Windows:
+```powershell
+horizon.exe workflow logs $env:WF_NAME
 ```
 
 **Expected:** Log lines stream to stdout in the format `[stageName] [timestamp] [message]`. The stream ends with:
@@ -456,8 +536,13 @@ If the workflow has already completed, historical logs are printed (non-follow m
 
 Run this while the workflow is still active (phase is not Succeeded/Failed/Error/Aborted):
 
+- Linux/macOS:
 ```bash
 horizon workflow abort "$WF_NAME"
+```
+- Windows:
+```powershell
+horizon.exe workflow abort $env:WF_NAME
 ```
 
 **Expected output (stderr):**
@@ -470,8 +555,13 @@ If the workflow has already reached a terminal phase, the command exits silently
 
 Verify the abort took effect:
 
+- Linux/macOS:
 ```bash
 horizon workflow show "$WF_NAME" --output json | grep '"phase"'
+```
+- Windows:
+```powershell
+horizon.exe workflow show $env:WF_NAME --output json | Select-String '"phase"'
 ```
 
 **Expected:** `"phase": "Aborted"` (may take a few seconds to transition).
@@ -480,15 +570,26 @@ horizon workflow show "$WF_NAME" --output json | grep '"phase"'
 
 This requires a completed workflow that produced output artifacts. First check for available artifacts:
 
+- Linux/macOS:
 ```bash
 horizon workflow show "$WF_NAME"
+```
+- Windows:
+```powershell
+horizon.exe workflow show $env:WF_NAME
 ```
 
 Look for `outputArtifact:` lines in the output. If artifacts exist, generate a signed URL:
 
+- Linux/macOS:
 ```bash
 horizon workflow download-artifact "$WF_NAME" "<artifact-name>" --generate-signed-url
 ```
+- Windows:
+```powershell
+horizon.exe workflow download-artifact $env:WF_NAME "<artifact-name>" --generate-signed-url
+```
+Note: If multiple artifacts share the same name, download-artifact may return HTTP 409 Conflict. Inspect the workflow output and use additional disambiguation options such as --template-name if available.
 
 **Expected output (stdout):**
 
@@ -498,8 +599,13 @@ signed-url: https://storage.googleapis.com/...
 
 ##### Download an artifact to a file (optional)
 
+- Linux/macOS:
 ```bash
 horizon workflow download-artifact "$WF_NAME" "<artifact-name>" -o ./artifact-output
+```
+- Windows:
+```powershell
+horizon.exe workflow download-artifact $env:WF_NAME "<artifact-name>" -o ./artifact-output
 ```
 
 **Expected:** A progress bar on stderr followed by a completion message. The file `./artifact-output` is created with the artifact contents.
@@ -514,44 +620,82 @@ horizon auth logout
 
 **Expected output (stderr):**
 
+- Linux/macOS:
 ```
 Removed ~/.config/horizon/token.json (if present).
+```
+- Windows:
+```
+Removed C:\Users\<user>\.config\horizon\token.json (if present).
 ```
 
 #### Uninstall
 
 ##### Remove the binary
 
+- Linux/macOS:
 ```bash
 sudo rm "$(which horizon)"
+```
+- Windows:
+```powershell
+Remove-Item (Get-Command horizon.exe).Source
 ```
 
 Expected: No errors. Verify with:
 
+- Linux/MacOS:
 ```bash
 which horizon
 ```
+- Windows
+```powershell
+Get-Command horizon.exe
+```
 
-Expected: No output, or `horizon not found`.
+Expected:
+- Linux/macOS:
+No output, or `horizon not found`.
+- Windows:
+Get-Command : The term 'horizon.exe' is not recognized as the name of a cmdlet, function,
+script file, or operable program.
 
 ##### Remove configuration and cached tokens
 
+- Linux/macOS:
 ```bash
 rm -rf ~/.config/horizon/
+```
+- Windows:
+```powershell
+Remove-Item "$env:APPDATA\horizon" -Recurse -Force
+Remove-Item "$HOME\.config\horizon" -Recurse -Force
 ```
 
 This deletes both `config.yaml` and `token.json`.
 
 ##### Verify removal
 
+- Linux/macOS:
 ```bash
 ls ~/.config/horizon/
+```
+- Windows:
+```powershell
+Test-Path "$env:APPDATA\horizon"
+Test-Path "$HOME\.config\horizon"
 ```
 
 **Expected:**
 
+- Linux/macOS:
 ```
 ls: cannot access '/home/<user>/.config/horizon/': No such file or directory
+```
+- Windows:
+```
+False
+False
 ```
 
 ### Expose label (catalog and portal links)
