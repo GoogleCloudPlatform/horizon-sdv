@@ -184,7 +184,11 @@ func runAuthLogin(args []string) error {
 	if err := saveTokenCache(tc); err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stderr, "Logged in. Token saved to ~/.config/horizon/token.json")
+	p, err := tokenCachePath()
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "Logged in. Token saved to %s\n",p)
 	if *writeConfig {
 		apiBase := cfg.BaseURL
 		if err := mergeLoginIntoConfigFile(cfg.Domain, apiBase, kb, realm); err != nil {
@@ -277,7 +281,11 @@ func runAuthLogout() error {
 	if err := clearTokenCache(); err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stderr, "Removed ~/.config/horizon/token.json (if present).")
+	p, err2 := tokenCachePath()
+	if err2 != nil {
+		return err2
+	}
+	fmt.Fprintf(os.Stderr, "Removed %s (if present).\n", p)
 	return nil
 }
 
