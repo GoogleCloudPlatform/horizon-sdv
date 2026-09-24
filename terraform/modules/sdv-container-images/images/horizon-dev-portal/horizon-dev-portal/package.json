@@ -40,13 +40,15 @@
     "husky": "^9.1.7",
     "is-ci": "^4.1.0",
     "lint-staged": "^16.1.6",
-    "postcss": "^8.5.15",
+    "postcss": "8.5.26",
     "prettier": "^3.6.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4"
   },
   "overrides": {
-    "react-is": "19.3.0-canary-fef12a01-20260413"
+    "react-is": "19.3.0-canary-fef12a01-20260413",
+    "postcss": "8.5.26",
+    "nanoid": "6.0.1"
   }
 }
