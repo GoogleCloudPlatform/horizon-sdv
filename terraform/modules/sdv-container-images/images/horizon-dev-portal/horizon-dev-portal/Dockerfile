@@ -23,7 +23,7 @@ ARG HORIZON_CLI_COMMIT=unknown
 ENV HORIZON_CLI_COMMIT=$HORIZON_CLI_COMMIT
 RUN go run mkdist.go /out "$HORIZON_CLI_VERSION"
 
-FROM node:20-alpine AS frontend
+FROM node:22-alpine AS frontend
 ENV HUSKY=0
 WORKDIR /app
 COPY package.json package-lock.json* .npmrc* ./
