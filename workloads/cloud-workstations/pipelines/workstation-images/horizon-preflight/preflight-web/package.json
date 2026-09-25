@@ -20,7 +20,7 @@
     "globals": "^15.9.0",
     "jsdom": "^26.0.0",
     "marked": "^18.0.0",
-    "postcss": "8.5.26",
+    "postcss": "^8.5.26",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.0.0",
@@ -34,7 +34,7 @@
     "material-symbols": "^0.44.0"
   },
   "overrides": {
-    "postcss": "8.5.26",
-    "nanoid": "6.0.1"
+    "postcss": "^8.5.26",
+    "nanoid": "^6.0.1"
   }
 }

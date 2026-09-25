@@ -27,7 +27,7 @@ ARG PREFLIGHT_WEB_REPO=""
 ARG PREFLIGHT_WEB_DIR=""
 
 ARG ALPINE_VERSION=3.19
-ARG NODE_VERSION=20-slim
+ARG NODE_VERSION=22-slim
 
 ###############################################################
 # Stage: web-builder
