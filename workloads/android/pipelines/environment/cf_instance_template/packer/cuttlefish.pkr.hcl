@@ -172,6 +172,12 @@ variable "iap_tunnel_launch_wait" {
   description = "Seconds to wait for IAP tunnel before treating launch as failed (plugin default is shorter)."
 }
 
+variable "state_timeout" {
+  type        = string
+  default     = "20m"
+  description = "How long to wait for packer image registration. System default of 5m may not be enough"
+}
+
 source "googlecompute" "cuttlefish" {
   project_id              = var.project_id
   source_image_project_id = [var.source_image_project_id]
@@ -188,6 +194,7 @@ source "googlecompute" "cuttlefish" {
   use_internal_ip         = true
   use_iap                 = var.use_iap
   ssh_timeout             = var.ssh_timeout
+  state_timeout           = var.state_timeout
   iap_tunnel_launch_wait  = var.iap_tunnel_launch_wait
   ssh_username            = var.ssh_username
   image_name              = var.image_name
