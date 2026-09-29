@@ -1,0 +1,14 @@
+.gcloudignore
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Ensure terraform.tfvars is included for Cloud Build deployments
+!terraform/env/terraform.tfvars
