@@ -77,3 +77,12 @@ spec:
       overviewServiceNamespace: {{ .Values.namespace | quote }}
       hardDependencies:
         - workloads-common
+    - name: aaos-sdv-dev-env
+      path: gitops/modules/aaos-sdv-dev-env
+      overviewPath: portal/overview.html
+      overviewService: mod-aaos-sdv-dev-env-overview
+      overviewServiceNamespace: {{ .Values.namespace | quote }}
+      # Requires ClusterWorkflowTemplate common-docker-image-build.
+      hardDependencies:
+        - workloads-common
+

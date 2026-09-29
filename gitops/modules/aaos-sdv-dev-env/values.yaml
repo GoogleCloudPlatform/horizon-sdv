@@ -1,0 +1,39 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Module name (injected by Module Manager when enabling). Derives child Application names.
+moduleName: ""
+
+# Namespace where Module Manager runs; the overview Service is created here so the
+# Developer Portal can reach it (matches catalog overviewServiceNamespace).
+moduleManagerNamespace: module-manager
+
+# ArgoCD namespace and project for the child Application (passed by Module Manager).
+argocd:
+  namespace: argocd
+  project: horizon-sdv
+
+# Repo URL and revision for the child Application (passed by Module Manager).
+repo:
+  url: ""
+  revision: HEAD
+
+# Environment config injected by Module Manager (projectID, region, zone, namespacePrefix, ...).
+config: {}
+
+# Service backing the Developer Portal overview page (must match catalog overviewService).
+overviewServiceName: mod-aaos-sdv-dev-env-overview
+
+# Per soft-dependency module name -> enabled. Unused by this module; kept for Module Manager.
+softFeaturesEnabled: {}
