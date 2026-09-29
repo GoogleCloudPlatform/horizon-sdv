@@ -1,0 +1,336 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# WorkflowTemplates for module aaos-sdv-dev-env (Horizon catalog: exposed).
+# Argo Events Sensors: templates/sensors.yaml.
+#
+# The image sources (Dockerfile, docker/docker-bake.hcl, and all assets) live in
+# the public repository github.com/google/aaos-sdv-demos and are cloned at run
+# time; nothing is vendored here, and no credentials are needed.
+#
+# Both the cicd-foundation base layers (preflight, common, remote-desktop with
+# INSTALL_GUACAMOLE=false, and android-studio-for-platform) and the demo layer
+# are built as a single BuildKit target graph from aaos-sdv-demos/docker/docker-bake.hcl,
+# with intermediate layers cached in Artifact Registry via CACHE_REPO.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ .Values.parentModuleName }}-init
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    app.kubernetes.io/name: init
+    horizon-sdv.io/expose: "true"
+    horizon-sdv.io/module: {{ .Values.parentModuleName }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: run-init
+  serviceAccountName: {{ include "aaos-sdv-dev-env.workflowServiceAccountName" . }}
+  archiveLogs: true
+  ttlStrategy:
+    secondsAfterCompletion: {{ .Values.workflowDefaults.ttlStrategy.secondsAfterCompletion }}
+    secondsAfterFailure: {{ .Values.workflowDefaults.ttlStrategy.secondsAfterFailure }}
+  arguments:
+    parameters:
+      - name: horizonSubmittedFrom
+        value: ""
+        description: Populated by the Developer Portal / Horizon CLI. Leave empty.
+  templates:
+    - name: run-init
+      dag:
+        tasks:
+          - name: preflight-aaos-sdv-demos
+            template: preflight-aaos-sdv-demos
+
+    # Cheap preflight. Catches an unreachable repository or a missing revision in
+    # seconds, rather than after a multi-GB image build.
+    - name: preflight-aaos-sdv-demos
+      container:
+        image: {{ .Values.spec.gitImage }}
+        command: [sh, -c]
+        env:
+          - name: AAOS_SDV_DEMOS_REPO
+            value: {{ .Values.spec.aaosSdvDemosRepo | quote }}
+          - name: AAOS_SDV_DEMOS_REVISION
+            value: {{ .Values.spec.aaosSdvDemosRevision | quote }}
+          - name: GIT_TERMINAL_PROMPT
+            value: "0"
+        args:
+          - |
+            set -eu
+            echo "Checking ${AAOS_SDV_DEMOS_REPO} at revision ${AAOS_SDV_DEMOS_REVISION}..."
+            if ! LS_REMOTE=$(git ls-remote --heads "${AAOS_SDV_DEMOS_REPO}" "${AAOS_SDV_DEMOS_REVISION}" 2>&1); then
+              echo "ERROR: could not reach ${AAOS_SDV_DEMOS_REPO}."
+              echo "${LS_REMOTE}"
+              exit 1
+            fi
+            if [ -z "${LS_REMOTE}" ]; then
+              echo "ERROR: revision '${AAOS_SDV_DEMOS_REVISION}' does not exist on ${AAOS_SDV_DEMOS_REPO}."
+              exit 1
+            fi
+            echo "OK: ${LS_REMOTE}"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ .Values.parentModuleName }}-execute
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    app.kubernetes.io/name: execute
+    horizon-sdv.io/expose: "true"
+    horizon-sdv.io/module: {{ .Values.parentModuleName }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: run-execute
+  serviceAccountName: {{ include "aaos-sdv-dev-env.workflowServiceAccountName" . }}
+  archiveLogs: true
+  podMetadata:
+    annotations:
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+  ttlStrategy:
+    secondsAfterCompletion: {{ .Values.workflowDefaults.ttlStrategy.secondsAfterCompletion }}
+    secondsAfterFailure: {{ .Values.workflowDefaults.ttlStrategy.secondsAfterFailure }}
+  arguments:
+    parameters:
+      - name: horizonSubmittedFrom
+        value: ""
+        description: Populated by the Developer Portal / Horizon CLI. Leave empty.
+  templates:
+    - name: run-execute
+      dag:
+        tasks:
+          # Delegates to the shared ClusterWorkflowTemplate from module
+          # workloads-common, executing aaos-sdv-demos/docker/docker-bake.hcl via
+          # `docker buildx bake` against its buildkitd sidecar.
+          - name: build-image
+            templateRef:
+              name: {{ .Values.clusterWorkflowTemplateName | quote }}
+              template: build
+              clusterScope: true
+            arguments:
+              artifacts:
+                - name: source
+                  path: /workspace
+                  git:
+                    repo: {{ .Values.spec.aaosSdvDemosRepo | quote }}
+                    revision: {{ .Values.spec.aaosSdvDemosRevision | quote }}
+                    depth: 1
+              parameters:
+                - name: horizonSubmittedFrom
+                  value: '{{ "{{" }}workflow.parameters.horizonSubmittedFrom{{ "}}" }}'
+                - name: cloudProject
+                  value: {{ .Values.gcpProjectId | quote }}
+                - name: cloudRegion
+                  value: {{ .Values.gcpRegion | quote }}
+                - name: dockerArtifactPathName
+                  value: {{ .Values.spec.dockerArtifactPathName | quote }}
+                - name: imageTag
+                  value: {{ .Values.spec.imageTag | quote }}
+                - name: dockerfileDir
+                  value: "."
+                - name: bakeFile
+                  value: "docker/docker-bake.hcl"
+                - name: buildArgs
+                  value: |
+                    CICD_FOUNDATION_REF={{ .Values.spec.cicdFoundationRef }}
+                    CACHE_REPO={{ include "aaos-sdv-dev-env.cacheRepo" . }}
+
+          - name: build-snapshot
+            depends: build-image.Succeeded
+            template: run-build-snapshot
+            arguments:
+              parameters:
+                - name: workstationCluster
+                  value: {{ .Values.spec.workstationCluster | quote }}
+                - name: builderConfig
+                  value: {{ .Values.spec.builderConfig | quote }}
+
+          - name: test-artifacts
+            depends: build-snapshot.Succeeded
+            template: run-test-artifacts
+            arguments:
+              parameters:
+                - name: workstationCluster
+                  value: {{ .Values.spec.workstationCluster | quote }}
+                - name: testerConfig
+                  value: 'tester-config-{{ "{{" }}workflow.uid{{ "}}" }}'
+                - name: candidateSnapshotName
+                  value: '{{ "{{" }}tasks.build-snapshot.outputs.parameters.candidateSnapshotName{{ "}}" }}'
+
+          - name: promote-snapshot
+            depends: test-artifacts.Succeeded
+            template: run-promote-snapshot
+            arguments:
+              parameters:
+                - name: workstationCluster
+                  value: {{ .Values.spec.workstationCluster | quote }}
+                - name: candidateSnapshotName
+                  value: '{{ "{{" }}tasks.build-snapshot.outputs.parameters.candidateSnapshotName{{ "}}" }}'
+
+    # ------------------------------------------------------------------------
+    # Cloud Workstations / Compute Engine steps.
+    #
+    # These drive gcloud rather than Config Connector (KCC). The cluster runs
+    # the GKE Config Connector add-on at v1.126.0, which ships WorkstationCluster
+    # but neither WorkstationConfig nor Workstation, so for most of this there is
+    # no CRD to use at all. Availability aside, the builder/tester lifecycle is
+    # one-shot and imperative and hinges on a persistent disk name that only
+    # exists at runtime, which a reconciling controller models poorly. The one
+    # resource that would suit KCC is the long-lived promoted config; see
+    # README.md for the full rationale and the conditions for revisiting it.
+    #
+    # Each step's body lives under files/ and is mounted at /scripts by
+    # configmap-scripts.yaml, so the shell code can be read, diffed, linted and
+    # executed outside the cluster instead of being embedded in this YAML.
+    # ------------------------------------------------------------------------
+    - name: run-build-snapshot
+      inputs:
+        parameters:
+          - name: workstationCluster
+          - name: builderConfig
+      outputs:
+        parameters:
+          - name: candidateSnapshotName
+            valueFrom:
+              path: /tmp/candidate_snapshot_name
+      container:
+        image: {{ .Values.spec.cloudSdkImage }}
+        command: [sh, /scripts/build-snapshot.sh]
+        env:
+          - name: PROJECT
+            value: {{ .Values.gcpProjectId | quote }}
+          - name: REGION
+            value: {{ .Values.gcpRegion | quote }}
+          - name: CLUSTER
+            value: '{{ "{{" }}inputs.parameters.workstationCluster{{ "}}" }}'
+          - name: CONFIG
+            value: '{{ "{{" }}inputs.parameters.builderConfig{{ "}}" }}'
+          - name: WORKFLOW_UID
+            value: '{{ "{{" }}workflow.uid{{ "}}" }}'
+          - name: CONTAINER_IMAGE
+            value: {{ include "aaos-sdv-dev-env.outputImage" . | quote }}
+        volumeMounts:
+          - name: scripts
+            mountPath: /scripts
+            readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ .Values.parentModuleName }}-scripts
+            defaultMode: 0555
+
+    - name: run-test-artifacts
+      inputs:
+        parameters:
+          - name: workstationCluster
+          - name: testerConfig
+          - name: candidateSnapshotName
+      container:
+        image: {{ .Values.spec.cloudSdkImage }}
+        command: [sh, /scripts/test-artifacts.sh]
+        env:
+          - name: PROJECT
+            value: {{ .Values.gcpProjectId | quote }}
+          - name: REGION
+            value: {{ .Values.gcpRegion | quote }}
+          - name: CLUSTER
+            value: '{{ "{{" }}inputs.parameters.workstationCluster{{ "}}" }}'
+          - name: CONFIG
+            value: '{{ "{{" }}inputs.parameters.testerConfig{{ "}}" }}'
+          - name: WORKFLOW_UID
+            value: '{{ "{{" }}workflow.uid{{ "}}" }}'
+          - name: CANDIDATE_SNAP
+            value: '{{ "{{" }}inputs.parameters.candidateSnapshotName{{ "}}" }}'
+          - name: CONTAINER_IMAGE
+            value: {{ include "aaos-sdv-dev-env.outputImage" . | quote }}
+          - name: MACHINE_TYPE
+            value: {{ .Values.spec.testerMachineType | quote }}
+          - name: ACCELERATOR_TYPE
+            value: {{ .Values.spec.acceleratorType | quote }}
+          - name: ACCELERATOR_COUNT
+            value: {{ .Values.spec.acceleratorCount | quote }}
+          - name: BATS_FILE
+            value: /scripts/test_artifacts.bats
+        volumeMounts:
+          - name: scripts
+            mountPath: /scripts
+            readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ .Values.parentModuleName }}-scripts
+            defaultMode: 0555
+
+    - name: run-promote-snapshot
+      inputs:
+        parameters:
+          - name: workstationCluster
+          - name: candidateSnapshotName
+      container:
+        image: {{ .Values.spec.cloudSdkImage }}
+        command: [sh, /scripts/promote-snapshot.sh]
+        env:
+          - name: PROJECT
+            value: {{ .Values.gcpProjectId | quote }}
+          - name: REGION
+            value: {{ .Values.gcpRegion | quote }}
+          - name: CLUSTER
+            value: '{{ "{{" }}inputs.parameters.workstationCluster{{ "}}" }}'
+          - name: CANDIDATE_SNAP
+            value: '{{ "{{" }}inputs.parameters.candidateSnapshotName{{ "}}" }}'
+          - name: PROMOTED_CONFIG
+            value: {{ .Values.spec.promotedConfig | quote }}
+          - name: CONTAINER_IMAGE
+            value: {{ include "aaos-sdv-dev-env.outputImage" . | quote }}
+          - name: MACHINE_TYPE
+            value: {{ .Values.spec.testerMachineType | quote }}
+          - name: ACCELERATOR_TYPE
+            value: {{ .Values.spec.acceleratorType | quote }}
+          - name: ACCELERATOR_COUNT
+            value: {{ .Values.spec.acceleratorCount | quote }}
+        volumeMounts:
+          - name: scripts
+            mountPath: /scripts
+            readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ .Values.parentModuleName }}-scripts
+            defaultMode: 0555

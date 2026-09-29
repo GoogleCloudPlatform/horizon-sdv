@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Step scripts for the aaos-sdv-dev-env pipeline, mounted at /scripts by the
+# workflow templates.
+#
+# The scripts live as real files under files/ rather than as inline `args:`
+# blocks so that they can be read, diffed, shell-linted and executed locally.
+# This follows the same pattern as workloads-common's
+# prepare-github-app-git-creds, which mounts files/github_app_installation_token.py
+# the same way.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.parentModuleName }}-scripts
+  namespace: {{ .Values.workflowNamespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app.kubernetes.io/name: {{ .Values.parentModuleName }}
+data:
+  build-snapshot.sh: |
+{{ .Files.Get "files/build-snapshot.sh" | indent 4 }}
+  test-artifacts.sh: |
+{{ .Files.Get "files/test-artifacts.sh" | indent 4 }}
+  promote-snapshot.sh: |
+{{ .Files.Get "files/promote-snapshot.sh" | indent 4 }}
+  test_artifacts.bats: |
+{{ .Files.Get "files/test_artifacts.bats" | indent 4 }}
