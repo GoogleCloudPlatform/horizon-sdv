@@ -1,0 +1,111 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Project-level IAM for the single ABFS runtime service account. Additive
+# (IAMPolicyMember): grants it every project role the data plane needs — Spanner,
+# GCS, monitoring, logging.
+#
+# Under the GCE-metadata identity model this SA is BOTH the workloads' Google
+# identity AND the dedicated ABFS node pool's node service account (see docs/02 §1b),
+# so the monitoring/logging/stackdriver grants below also cover node health. It must
+# additionally hold Artifact Registry read on the project that hosts the ABFS image
+# (a separate project — grant that there, not here).
+#
+# member references the SA by email (abfs-runtime@YOUR_PROJECT_ID...), so the
+# grants work whether the SA is created by 10-* or is a pre-existing, already-licensed
+# SA (e.g. abfs-sa).
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-runtime-spanner-dbuser
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-runtime
+  role: roles/spanner.databaseUser
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-runtime-storage-objectadmin
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-runtime
+  role: roles/storage.objectAdmin
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-runtime-monitoring-metricwriter
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-runtime
+  role: roles/monitoring.metricWriter
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-runtime-monitoring-viewer
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-runtime
+  role: roles/monitoring.viewer
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-runtime-stackdriver-metadatawriter
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-runtime
+  role: roles/stackdriver.resourceMetadata.writer
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-runtime-logging-logwriter
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-runtime
+  role: roles/logging.logWriter
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID

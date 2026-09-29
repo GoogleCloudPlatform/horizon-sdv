@@ -1,0 +1,217 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if include "abfs.licensed" . }}
+# Gerrit uploaders. StatefulSet gives stable pod identities
+# (<namePrefix>-<ordinal>) that match the pusher-config pusher names, and per-pod
+# PVCs provide each uploader's data disk (the PD CSI driver handles format/mount).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "abfs.uploader.name" . }}
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.uploader.selectorLabels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  serviceName: {{ include "abfs.uploader.name" . }}
+  replicas: {{ .Values.uploader.count }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "abfs.uploader.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "abfs.labels" . | nindent 8 }}
+        {{- include "abfs.uploader.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.uploader.preStartHooks .Values.podAnnotations }}
+      annotations:
+        {{- if .Values.uploader.preStartHooks }}
+        checksum/pre-start-hooks: {{ .Values.uploader.preStartHooks | toYaml | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccounts.uploader }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      hostPID: {{ .Values.hostPID }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (.Values.uploader.nodeSelector | default .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (.Values.uploader.tolerations | default .Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- if .Values.casfs.requireReady }}
+        # Gate on the casfs kernel module being loaded on the node first.
+        {{- include "abfs.waitForCasfsInit" . | nindent 8 }}
+        {{- end }}
+        # Don't start an uploader until the ABFS server is reachable AND the
+        # pusher-config ref exists (gates on the bootstrap Job completing). This is a
+        # plain ABFS client (no casfs mount) → hardened security context.
+        - name: wait-for-server
+          image: {{ include "abfs.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.restrictedSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              SRV="{{ include "abfs.server.name" . }}:{{ .Values.server.service.port }}"
+              echo "waiting for ABFS server $SRV"
+              until (exec 3<>/dev/tcp/{{ include "abfs.server.name" . }}/{{ .Values.server.service.port }}) 2>/dev/null; do
+                echo "...server not reachable yet"; sleep 5;
+              done
+              echo "server reachable; waiting for pusher-config ref"
+              # Do NOT serve until the bootstrap Job has written the ref. The Job writes
+              # it via `put-ref -p abfs-meta -s default-server` reading "<hash> config"
+              # from stdin; the matching get-ref reads the ref name "config" from stdin.
+              # Poll until it returns a hash.
+              until echo config | abfs --remote-servers "$SRV" --tunnel-ports 0 {{ include "abfs.clientFlags" . }} \
+                  test-client get-ref -p abfs-meta -s default-server 2>/dev/null | grep -q .; do
+                echo "...pusher-config ref not present yet"; sleep 5;
+              done
+              echo "pusher-config ref present"
+      containers:
+        - name: abfs-uploader
+          image: {{ include "abfs.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Image entrypoint reads RUN_MODE; args are the uploader ABFS command.
+          args:
+            - --tunnel-ports
+            - "0"
+            - --remote-servers
+            - {{ include "abfs.server.name" . }}:{{ .Values.server.service.port }}
+            - --lfs={{ .Values.gitLfsEnabled }}
+            {{- include "abfs.clientArgsYaml" . | nindent 12 }}
+            {{- range .Values.extraParams }}
+            - {{ . | quote }}
+            {{- end }}
+            - git-pusher
+            - --config
+            - config:git-pusher/default
+            - --storage-path
+            - {{ .Values.uploader.dataDisk.mountPath }}
+            {{- range .Values.uploader.extraParams }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            {{- include "abfs.gomaxprocsEnv" . | nindent 12 }}
+            - name: RUN_MODE
+              value: "uploader"
+            - name: NEEDS_GIT
+              value: "true"
+            - name: GIT_LFS_ENABLED
+              value: {{ .Values.gitLfsEnabled | quote }}
+            - name: HOME
+              value: "/home/abfs-server"
+            {{- if .Values.otel.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.endpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_SERVICE_NAME
+              value: "abfs-uploader"
+            {{- end }}
+          ports:
+            - name: pusher
+              containerPort: {{ .Values.pusher.defaults.port }}
+          # --privileged --cap-add=all to use the casfs mount (module loaded on the
+          # node per casfs.provider — see docs/02 §1b).
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.uploader.resources | nindent 12 }}
+          {{- if .Values.uploader.probes.readiness.enabled }}
+          readinessProbe:
+            {{- include "abfs.probe" (dict "cfg" .Values.uploader.probes.readiness "port" .Values.pusher.defaults.port) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.uploader.probes.liveness.enabled }}
+          livenessProbe:
+            {{- include "abfs.probe" (dict "cfg" .Values.uploader.probes.liveness "port" .Values.pusher.defaults.port) | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: abfs-server-storage
+              mountPath: {{ .Values.uploader.dataDisk.mountPath }}
+            # Writable HOME ($HOME=/home/abfs-server): git-cookie-authdaemon + abfs
+            # config/cache write here, and the dir is not present in the image.
+            - name: home
+              mountPath: /home/abfs-server
+            {{- if .Values.uploader.preStartHooks }}
+            - name: pre-start-hooks
+              mountPath: /etc/abfs/pre-start.d
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: home
+          emptyDir: {}
+        {{- if .Values.uploader.preStartHooks }}
+        - name: pre-start-hooks
+          configMap:
+            name: abfs-uploader-pre-start-hooks
+            defaultMode: 0755
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        # Stable PVC name for each uploader's data disk.
+        name: abfs-server-storage
+        # volumeClaimTemplates are immutable, so use only the stable selector label subset
+        # here — version/chart labels from abfs.labels (helm.sh/chart, app.../version)
+        # cannot change on an existing StatefulSet.
+        labels:
+          {{- include "abfs.uploader.selectorLabels" . | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.uploader.dataDisk.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.uploader.dataDisk.size }}
+{{- end }}

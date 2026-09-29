@@ -1,0 +1,191 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Supporting IAM for the CI/CD foundation:
+#  * abfs-cloudbuild     — Cloud Build runtime SA (pushes images to Artifact
+#                          Registry, reads the SSM repo, reads the webhook secret).
+#  * abfs-cicd-scheduler — Cloud Scheduler SA (invokes the Cloud Build triggers).
+#  * abfs-cws-runner     — Cloud Workstations instance SA (runs the workstation VMs;
+#                          referenced by host.gceInstance.serviceAccountRef).
+# Plus the workstations.workstationCreator / workstations.user grants for the
+# developers who create / use workstations.
+# Tighten roles to least privilege for your org.
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: abfs-cloudbuild
+  namespace: abfs
+spec:
+  displayName: ABFS CI/CD Cloud Build runtime
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: abfs-cicd-scheduler
+  namespace: abfs
+spec:
+  displayName: ABFS CI/CD Cloud Scheduler invoker
+---
+# Cloud Workstations VM runtime SA (host.gceInstance.serviceAccountRef in
+# 45-workstations.yaml).
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: abfs-cws-runner
+  namespace: abfs
+spec:
+  displayName: ABFS Cloud Workstations VM runtime
+---
+# Workload Identity: allow the abfs-cloudbuild KSA (used by the SSM-seed Job in
+# 48-ssm-seed-job.yaml) to impersonate the abfs-cloudbuild GSA.
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-cloudbuild-wi
+  namespace: abfs
+spec:
+  member: "serviceAccount:YOUR_PROJECT_ID.svc.id.goog[abfs/abfs-cloudbuild]"
+  role: roles/iam.workloadIdentityUser
+  resourceRef:
+    apiVersion: iam.cnrm.cloud.google.com/v1beta1
+    kind: IAMServiceAccount
+    name: abfs-cloudbuild
+---
+# Cloud Build SA -> push to Artifact Registry
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-cloudbuild-ar-writer
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-cloudbuild
+  role: roles/artifactregistry.writer
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+# Cloud Build SA -> write build logs
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-cloudbuild-logwriter
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-cloudbuild
+  role: roles/logging.logWriter
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+# Cloud Build SA -> standard build permissions (storage, logs, etc). The
+# user-specified build SA needs this when triggers set serviceAccountRef.
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-cloudbuild-builder
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-cloudbuild
+  role: roles/cloudbuild.builds.builder
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+# Cloud Build SA -> read the SSM repo source (project-level read).
+# NOTE: roles/securesourcemanager.repoReader does NOT appear in the vendored KCC
+# samples/tests (0 hits); it is the documented SSM repo-read role. Verify against
+# your project's available roles before applying.
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-cloudbuild-ssm-reader
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-cloudbuild
+  role: roles/securesourcemanager.repoReader
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+# Cloud Build SA -> read the webhook secret (used by the CloudBuildTrigger
+# webhookConfig.secretRef in 43-cloud-build.yaml).
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-cloudbuild-webhook-secret-accessor
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-cloudbuild
+  role: roles/secretmanager.secretAccessor
+  resourceRef:
+    apiVersion: secretmanager.cnrm.cloud.google.com/v1beta1
+    kind: SecretManagerSecret
+    name: abfs-cicd-webhook
+---
+# Scheduler SA -> invoke Cloud Build triggers
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-scheduler-cloudbuild-editor
+  namespace: abfs
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: abfs-cicd-scheduler
+  role: roles/cloudbuild.builds.editor
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+# Workstation creators. The principal is provided as a member string
+# (user:/group:/serviceAccount:...) so leave it a REPLACE_ token.
+# NOTE: roles/workstations.workstationCreator does NOT appear in the vendored KCC
+# samples/tests (0 hits); it is the documented Cloud Workstations creator role.
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-cws-creator
+  namespace: abfs
+spec:
+  member: "REPLACE_CWS_CREATOR"
+  role: roles/workstations.workstationCreator
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID
+---
+# Workstation users (the developers who launch and use the workstations).
+# NOTE: roles/workstations.user does NOT appear in the vendored KCC samples/tests
+# (0 hits); it is the documented Cloud Workstations user role.
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: abfs-cws-user
+  namespace: abfs
+spec:
+  member: "REPLACE_CWS_USER"
+  role: roles/workstations.user
+  resourceRef:
+    kind: Project
+    external: projects/YOUR_PROJECT_ID

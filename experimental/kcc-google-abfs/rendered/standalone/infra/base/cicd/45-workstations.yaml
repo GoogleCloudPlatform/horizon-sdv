@@ -1,0 +1,155 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Cloud Workstations cluster + ONE config PER custom image. The configs reference
+# the :latest custom images built by the Cloud Build pipeline, fanned out
+# one-per-image so each image gets its own launchable config.
+#
+# Host spec: machineType n2-standard-32, disablePublicIPAddresses true,
+# enableNestedVirtualization true (default), boot disk 100GB, persistent disk
+# 1000GB pd-ssd ext4 reclaim RETAIN, and all three shielded options true.
+#
+# Uses the EXISTING / Shared VPC network + subnet (you provide refs).
+#
+# GPU BOOST OMITTED: a "gpu" boost (n1-standard-96, nvidia-tesla-t4) would be a
+# natural addition, but the WorkstationConfig CRD in this KCC version exposes NO
+# boostConfigs / accelerators fields under host.gceInstance, so GPU boost is not
+# expressible here. Add it via gcloud/console post-apply, or upgrade KCC if/when
+# the field lands.
+---
+apiVersion: workstations.cnrm.cloud.google.com/v1beta1
+kind: WorkstationCluster
+metadata:
+  name: abfs-workstations
+  namespace: abfs
+spec:
+  projectRef:
+    external: "projects/YOUR_PROJECT_ID"
+  # e.g. europe-west4
+  location: europe-west3
+  networkRef:
+    external: "projects/YOUR_PROJECT_ID/global/networks/vpc-abfs"
+  subnetworkRef:
+    external: "projects/YOUR_PROJECT_ID/regions/europe-west3/subnetworks/subnet-abfs"
+  # --- Private endpoint (uncomment to make the cluster endpoint private) ---
+  # privateClusterConfig:
+  #   enablePrivateEndpoint: true
+---
+# --- Config 1/3: android-studio -------------------------------------------------
+apiVersion: workstations.cnrm.cloud.google.com/v1beta1
+kind: WorkstationConfig
+metadata:
+  name: android-studio
+  namespace: abfs
+spec:
+  parentRef:
+    name: abfs-workstations
+  # Idle timeout (3600s).
+  idleTimeout: "3600s"
+  runningTimeout: "43200s"
+  host:
+    gceInstance:
+      # e.g. n2-standard-32
+      machineType: "n2-standard-4"
+      # Boot disk size in GB (100).
+      bootDiskSizeGB: 100
+      # abfs-cws-runner GSA (see 46-cicd-iam.yaml).
+      serviceAccountRef:
+        external: "abfs-cws-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+      # No public IP on the workstation VM.
+      disablePublicIPAddresses: true
+      # Enable nested virtualization.
+      enableNestedVirtualization: true
+      # Shielded VM: enable all three options.
+      shieldedInstanceConfig:
+        enableSecureBoot: true
+        enableVTPM: true
+        enableIntegrityMonitoring: true
+  container:
+    # The :latest tag built by the android-studio pipeline into Artifact Registry.
+    image: "europe-west3-docker.pkg.dev/YOUR_PROJECT_ID/abfs-workstation-images/android-studio:latest"
+  # Persistent home disk: 1000GB pd-ssd ext4, reclaim RETAIN.
+  persistentDirectories:
+    - mountPath: "/home"
+      gcePD:
+        sizeGB: 1000
+        fsType: "ext4"
+        diskType: "pd-ssd"
+        reclaimPolicy: "RETAIN"
+---
+# --- Config 2/3: android-studio-for-platform ------------------------------------
+apiVersion: workstations.cnrm.cloud.google.com/v1beta1
+kind: WorkstationConfig
+metadata:
+  name: android-studio-for-platform
+  namespace: abfs
+spec:
+  parentRef:
+    name: abfs-workstations
+  idleTimeout: "3600s"
+  runningTimeout: "43200s"
+  host:
+    gceInstance:
+      machineType: "n2-standard-4"
+      bootDiskSizeGB: 100
+      serviceAccountRef:
+        external: "abfs-cws-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+      disablePublicIPAddresses: true
+      enableNestedVirtualization: true
+      shieldedInstanceConfig:
+        enableSecureBoot: true
+        enableVTPM: true
+        enableIntegrityMonitoring: true
+  container:
+    image: "europe-west3-docker.pkg.dev/YOUR_PROJECT_ID/abfs-workstation-images/android-studio-for-platform:latest"
+  persistentDirectories:
+    - mountPath: "/home"
+      gcePD:
+        sizeGB: 1000
+        fsType: "ext4"
+        diskType: "pd-ssd"
+        reclaimPolicy: "RETAIN"
+---
+# --- Config 3/3: code-oss -------------------------------------------------------
+apiVersion: workstations.cnrm.cloud.google.com/v1beta1
+kind: WorkstationConfig
+metadata:
+  name: code-oss
+  namespace: abfs
+spec:
+  parentRef:
+    name: abfs-workstations
+  idleTimeout: "3600s"
+  runningTimeout: "43200s"
+  host:
+    gceInstance:
+      machineType: "n2-standard-4"
+      bootDiskSizeGB: 100
+      serviceAccountRef:
+        external: "abfs-cws-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+      disablePublicIPAddresses: true
+      enableNestedVirtualization: true
+      shieldedInstanceConfig:
+        enableSecureBoot: true
+        enableVTPM: true
+        enableIntegrityMonitoring: true
+  container:
+    image: "europe-west3-docker.pkg.dev/YOUR_PROJECT_ID/abfs-workstation-images/code-oss:latest"
+  persistentDirectories:
+    - mountPath: "/home"
+      gcePD:
+        sizeGB: 1000
+        fsType: "ext4"
+        diskType: "pd-ssd"
+        reclaimPolicy: "RETAIN"

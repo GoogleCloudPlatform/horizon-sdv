@@ -1,0 +1,87 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# High-Performance Sandbox overrides for Standalone ABFS deployment
+# Configured for upgraded n4-highmem-32 GKE nodes with Autoscaling.
+
+# Gate server/uploaders/bootstrap on the licensed node pool existing
+licensed: true
+
+# GCP Project ID
+projectId: YOUR_PROJECT_ID
+
+# Spanner Instance & Database configurations (must match KCC names)
+spanner:
+  instance: abfs
+  database: abfs
+
+# GCS blob storage bucket name (must match KCC name)
+bucket: YOUR_PROJECT_ID-abfs-blobs
+
+# ABFS Server Resource Scaling
+server:
+  resources:
+    # HIGH PERFORMANCE SEEDING OPTION (Requires n2-highmem-80 or larger nodes to fit K8s allocatable overhead):
+    # requests:
+    #   cpu: "64"
+    #   memory: 512Gi
+    # limits:
+    #   memory: 512Gi
+    # Scaled to consume a full n4-highmem-32 node to keep up with 3 uploaders
+    requests:
+      cpu: "28"
+      memory: 192Gi
+    limits:
+      memory: 192Gi
+
+# ABFS Uploader Resource & Replica Scaling (Full production-grade allocation)
+# Note: The 192Gi memory request mathematically guarantees 1 uploader per n4-highmem-32 VM (Result = 3 VMs total)
+uploader:
+  # 3 concurrent uploader streams for high-speed seeding
+  count: 3
+  resources:
+    # HIGH PERFORMANCE SEEDING OPTION (Requires n2-highmem-80 or larger nodes to fit K8s allocatable overhead):
+    # requests:
+    #   cpu: "48"
+    #   memory: 192Gi
+    # limits:
+    #   memory: 192Gi
+    requests:
+      cpu: "16"
+      memory: 192Gi
+    limits:
+      memory: 192Gi  # Guaranteed QoS: Mathematically reserves the entire node for this uploader
+  dataDisk:
+    size: 1500Gi
+    storageClass: hyperdisk-balanced
+
+# ============================ PUSHER CONFIG ==================================
+pusher:
+  manifestProjectUrl: https://android.googlesource.com/platform/manifest
+  # --- FULL PRODUCTION CONFIG (Commented out for sandbox testing) ---
+  # branchFiles:
+  #   - branch: main
+  #     file: default.xml
+  #   - branch: android-16.0.0_r4
+  #     file: default.xml
+
+  # --- FAST SANDBOX TESTING CONFIG ---
+  # Limit the sync to the android16 branch to speed up testing
+  branchFiles:
+    - branch: android-16.0.0_r4
+      file: default.xml
+
+vpa:
+  enabled: true
+  updateMode: "Off"

@@ -1,0 +1,87 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if include "abfs.licensed" . }}
+# PodDisruptionBudgets bound voluntary disruptions (node drains/upgrades). The
+# server default is OFF (singleton — any PDB blocks drains); the uploader default
+# keeps at least count-1 pushers up. Set exactly one of minAvailable/maxUnavailable.
+{{- if and .Values.server.enabled .Values.server.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "abfs.server.name" . }}
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.server.selectorLabels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if ne (toString .Values.server.pdb.minAvailable) "" }}
+  minAvailable: {{ .Values.server.pdb.minAvailable }}
+  {{- else if ne (toString .Values.server.pdb.maxUnavailable) "" }}
+  maxUnavailable: {{ .Values.server.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "abfs.server.selectorLabels" . | nindent 6 }}
+---
+{{- end }}
+{{- if .Values.uploader.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "abfs.uploader.name" . }}
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.uploader.selectorLabels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if ne (toString .Values.uploader.pdb.minAvailable) "" }}
+  minAvailable: {{ .Values.uploader.pdb.minAvailable }}
+  {{- else if ne (toString .Values.uploader.pdb.maxUnavailable) "" }}
+  maxUnavailable: {{ .Values.uploader.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "abfs.uploader.selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.ui.enabled .Values.ui.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "abfs.ui.name" . }}
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.ui.selectorLabels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if ne (toString .Values.ui.pdb.minAvailable) "" }}
+  minAvailable: {{ .Values.ui.pdb.minAvailable }}
+  {{- else if ne (toString .Values.ui.pdb.maxUnavailable) "" }}
+  maxUnavailable: {{ .Values.ui.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "abfs.ui.selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- end }}

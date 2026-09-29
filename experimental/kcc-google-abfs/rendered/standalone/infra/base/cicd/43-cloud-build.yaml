@@ -1,0 +1,167 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Cloud Build: a private worker pool (optionally peered to the VPC for VPC-SC) plus
+# ONE trigger PER custom Workstations image. Each trigger rebuilds its image from
+# the Skaffold-driven cloudbuild config committed in the SSM repo and pushes
+# :latest to Artifact Registry.
+#
+# CAVEATS (see docs/06-cicd-foundation.md):
+#  * SSM has no dedicated CloudBuildTrigger repoType enum. We point each trigger at
+#    the SSM repo by URI (sourceToBuild.uri / gitFileSource.uri) with
+#    repoType: UNKNOWN. The grounded repoType enum is
+#    [UNKNOWN, CLOUD_SOURCE_REPOSITORIES, GITHUB, BITBUCKET_SERVER].
+#  * Triggers fire via a WEBHOOK that SSM calls on push. The shared secret lives in
+#    the SecretManagerSecret below; webhookConfig.secretRef points at a
+#    SecretManagerSecretVersion of that secret (populate the version out-of-band).
+#  * gitFileSource.path is each image's Skaffold cloudbuild config in the repo;
+#    revision pins the trigger branch (default "main").
+---
+apiVersion: cloudbuild.cnrm.cloud.google.com/v1beta1
+kind: CloudBuildWorkerPool
+metadata:
+  name: abfs-cicd-pool
+  namespace: abfs
+spec:
+  projectRef:
+    external: "projects/YOUR_PROJECT_ID"
+  # e.g. europe-west4
+  location: europe-west3
+  displayName: "ABFS CI/CD private build pool"
+  privatePoolV1Config:
+    workerConfig:
+      machineType: e2-standard-4
+      diskSizeGb: 100
+    # --- VPC-SC / private egress (peer the pool to your VPC) ---
+    # networkConfig:
+    #   peeredNetworkRef:
+    #     external: "projects/YOUR_PROJECT_ID/global/networks/vpc-abfs"
+    #   egressOption: NO_PUBLIC_EGRESS
+    #   peeredNetworkIPRange: /29
+---
+# Shared secret backing the SSM->Cloud Build webhook. KCC manages only the secret
+# CONTAINER; the actual webhook token is a SECRET VERSION that you populate
+# out-of-band (e.g. `gcloud secrets versions add abfs-cicd-webhook --data-file=-`).
+# Each CloudBuildTrigger.webhookConfig.secretRef below references a VERSION of this
+# secret (".../versions/latest" by convention).
+apiVersion: secretmanager.cnrm.cloud.google.com/v1beta1
+kind: SecretManagerSecret
+metadata:
+  name: abfs-cicd-webhook
+  namespace: abfs
+spec:
+  projectRef:
+    external: projects/YOUR_PROJECT_ID
+  replication:
+    automatic: true
+---
+# --- Trigger 1/3: android-studio -----------------------------------------------
+# Skaffold/cloudbuild path for the android-studio image (see _SKAFFOLD_PATH below).
+apiVersion: cloudbuild.cnrm.cloud.google.com/v1beta1
+kind: CloudBuildTrigger
+metadata:
+  name: abfs-build-android-studio
+  namespace: abfs
+spec:
+  # e.g. europe-west4
+  location: europe-west3
+  description: "Rebuild the android-studio workstation image on push to the SSM repo"
+  disabled: false
+  # abfs-cloudbuild GSA (see 46-cicd-iam.yaml). external = full SA resource name.
+  serviceAccountRef:
+    external: "projects/YOUR_PROJECT_ID/serviceAccounts/abfs-cloudbuild@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+  # Webhook fired by Secure Source Manager on push. secretRef -> a VERSION of the
+  # abfs-cicd-webhook SecretManagerSecret above.
+  webhookConfig:
+    secretRef:
+      external: "projects/YOUR_PROJECT_ID/secrets/abfs-cicd-webhook/versions/latest"
+  # The repo + branch to build (SSM repo via URI; SSM has no repoType -> UNKNOWN).
+  sourceToBuild:
+    uri: "REPLACE_SSM_REPO_URL"
+    ref: "refs/heads/main"            # trigger branch
+    repoType: "UNKNOWN"
+  # The Skaffold cloudbuild config committed in the SSM repo for this image.
+  gitFileSource:
+    uri: "REPLACE_SSM_REPO_URL"
+    path: "workloads/cloud-workstations/pipelines/workstation-images/horizon-android-studio/cloudbuild.yaml"
+    revision: "refs/heads/main"       # trigger branch
+    repoType: "UNKNOWN"
+  substitutions:
+    _IMAGE_NAME: "android-studio"
+    _SKAFFOLD_PATH: "workloads/cloud-workstations/pipelines/workstation-images/horizon-android-studio"
+  # Only fire when this image's source tree changes.
+  includedFiles:
+    - "workloads/cloud-workstations/pipelines/workstation-images/horizon-android-studio/**"
+---
+# --- Trigger 2/3: android-studio-for-platform ----------------------------------
+# Skaffold/cloudbuild path for the android-studio-for-platform image.
+apiVersion: cloudbuild.cnrm.cloud.google.com/v1beta1
+kind: CloudBuildTrigger
+metadata:
+  name: abfs-build-android-studio-for-platform
+  namespace: abfs
+spec:
+  location: europe-west3
+  description: "Rebuild the android-studio-for-platform workstation image on push to the SSM repo"
+  disabled: false
+  serviceAccountRef:
+    external: "projects/YOUR_PROJECT_ID/serviceAccounts/abfs-cloudbuild@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+  webhookConfig:
+    secretRef:
+      external: "projects/YOUR_PROJECT_ID/secrets/abfs-cicd-webhook/versions/latest"
+  sourceToBuild:
+    uri: "REPLACE_SSM_REPO_URL"
+    ref: "refs/heads/main"
+    repoType: "UNKNOWN"
+  gitFileSource:
+    uri: "REPLACE_SSM_REPO_URL"
+    path: "workloads/cloud-workstations/pipelines/workstation-images/horizon-asfp/cloudbuild.yaml"
+    revision: "refs/heads/main"
+    repoType: "UNKNOWN"
+  substitutions:
+    _IMAGE_NAME: "android-studio-for-platform"
+    _SKAFFOLD_PATH: "workloads/cloud-workstations/pipelines/workstation-images/horizon-asfp"
+  includedFiles:
+    - "workloads/cloud-workstations/pipelines/workstation-images/horizon-asfp/**"
+---
+# --- Trigger 3/3: code-oss ------------------------------------------------------
+# Skaffold/cloudbuild path for the code-oss image.
+apiVersion: cloudbuild.cnrm.cloud.google.com/v1beta1
+kind: CloudBuildTrigger
+metadata:
+  name: abfs-build-code-oss
+  namespace: abfs
+spec:
+  location: europe-west3
+  description: "Rebuild the code-oss workstation image on push to the SSM repo"
+  disabled: false
+  serviceAccountRef:
+    external: "projects/YOUR_PROJECT_ID/serviceAccounts/abfs-cloudbuild@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+  webhookConfig:
+    secretRef:
+      external: "projects/YOUR_PROJECT_ID/secrets/abfs-cicd-webhook/versions/latest"
+  sourceToBuild:
+    uri: "REPLACE_SSM_REPO_URL"
+    ref: "refs/heads/main"
+    repoType: "UNKNOWN"
+  gitFileSource:
+    uri: "REPLACE_SSM_REPO_URL"
+    path: "workloads/cloud-workstations/pipelines/workstation-images/horizon-code-oss/cloudbuild.yaml"
+    revision: "refs/heads/main"
+    repoType: "UNKNOWN"
+  substitutions:
+    _IMAGE_NAME: "code-oss"
+    _SKAFFOLD_PATH: "workloads/cloud-workstations/pipelines/workstation-images/horizon-code-oss"
+  includedFiles:
+    - "workloads/cloud-workstations/pipelines/workstation-images/horizon-code-oss/**"

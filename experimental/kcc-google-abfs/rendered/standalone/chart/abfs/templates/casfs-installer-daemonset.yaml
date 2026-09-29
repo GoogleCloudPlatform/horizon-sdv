@@ -1,0 +1,112 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if eq .Values.casfs.provider "daemonset" }}
+{{- if not .Values.casfs.daemonset.sourceUrl }}
+{{- fail "casfs.provider=daemonset requires casfs.daemonset.sourceUrl (the casfs kernel-module source tarball)" }}
+{{- end }}
+# casfs loader DaemonSet for Ubuntu nodes (casfs.provider=daemonset). A DaemonSet so the
+# module is rebuilt + reloaded on every node across autoscaling and upgrades. It builds
+# casfs from source against the node's running kernel headers and modprobes it — no
+# dependency on a prebuilt per-kernel artifact (which lags GKE kernels). For COS nodes that
+# ship casfs in the image, use casfs.provider=image instead.
+#
+# REQUIRES the abfs-data pool to be **Ubuntu** (--image-type UBUNTU_CONTAINERD) with
+# Secure Boot OFF (--no-shielded-secure-boot) so the self-built module loads; see
+# docs/02 §1b. The loader uses the node service account (GCE-metadata mode) to fetch the
+# source, and the host's native toolchain (built-essential) to match the kernel's gcc.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: abfs-casfs-installer
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    app.kubernetes.io/name: abfs
+    app.kubernetes.io/component: casfs-installer
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: abfs
+      app.kubernetes.io/component: casfs-installer
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "abfs.labels" . | nindent 8 }}
+        app.kubernetes.io/name: abfs
+        app.kubernetes.io/component: casfs-installer
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/script: {{ include (print $.Template.BasePath "/casfs-installer-configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # hostPID + hostNetwork: load into the host kernel and use the node's apt mirrors
+      # (to install build-essential) and metadata (node SA) for the source download.
+      hostPID: true
+      hostNetwork: true
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      # Run on every ABFS node. Defaults to the global placement; to cover separate server
+      # and uploader pools, set casfs.daemonset.nodeSelector to a label both pools share and
+      # casfs.daemonset.tolerations to tolerate both pool taints.
+      {{- with (.Values.casfs.daemonset.nodeSelector | default .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (.Values.casfs.daemonset.tolerations | default .Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: casfs-installer
+          image: {{ .Values.casfs.daemonset.image | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Privileged + chroot to the host: builds and inserts a kernel module.
+          securityContext:
+            privileged: true
+          command: ["/bin/bash", "/scripts/install.sh"]
+          env:
+            - name: CASFS_SOURCE_URL
+              value: {{ .Values.casfs.daemonset.sourceUrl | quote }}
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+            - name: host
+              mountPath: /host
+          resources:
+            {{- toYaml .Values.casfs.daemonset.resources | nindent 12 }}
+      volumes:
+        - name: script
+          configMap:
+            name: abfs-casfs-installer
+            defaultMode: 0555
+        - name: host
+          hostPath:
+            path: /
+{{- end }}

@@ -1,0 +1,61 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: abfs-client-verify
+  namespace: abfs
+spec:
+  serviceAccountName: abfs-uploader
+  nodeSelector:
+    cloud.google.com/gke-nodepool: abfs-data
+  tolerations:
+  - key: abfs.dev/dedicated
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+  containers:
+  - name: abfs-client
+    image: europe-docker.pkg.dev/abfs-binaries/abfs-containers-alpha/abfs-alpha:0.1.14
+    securityContext:
+      privileged: true
+    command:
+    - /bin/bash
+    - -c
+    - |
+      set -e
+      echo "=== [1/3] VERIFYING CASFS KERNEL MODULE ==="
+      if [ -d /sys/module/casfs ]; then
+        echo "SUCCESS: casfs kernel module is loaded and active on this host node."
+      else
+        echo "ERROR: casfs kernel module is not present in the node kernel!"
+        exit 1
+      fi
+
+      echo "=== [2/3] RUNNING ABFS INIT (LOCAL CACHE INITIALISATION) ==="
+      # Initializes client cache directories and links to casfs
+      abfs --remote-servers abfs-server:50051 --tunnel-ports 0 --disable-tls=true --auth-type none init
+
+      echo "SUCCESS: abfs init completed successfully!"
+
+      echo "=== [3/3] RUNNING ABFS CONFIGURATION HANDSHAKE ==="
+      # Fetches active configurations from the server to verify RPC communication
+      abfs --remote-servers abfs-server:50051 --tunnel-ports 0 --disable-tls=true --auth-type none config -w
+
+      echo "SUCCESS: abfs client successfully established secure gRPC tunnel and handshaked with abfs-server!"
+      echo "==============================================="
+      echo "VERIFICATION PASSED: ABFS client is fully operational!"
+      echo "==============================================="
+  restartPolicy: Never

@@ -1,0 +1,57 @@
+{{/*
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+*/}}
+ABFS ({{ include "abfs.chart" . }}) installed into namespace {{ .Release.Namespace }}.
+
+{{ if not (include "abfs.licensed" .) -}}
+==> PHASE A (not yet licensed)
+    Only the service accounts and pusher ConfigMap were rendered. The server,
+    uploaders, and bootstrap Job stay gated off until licensed=true.
+
+    1. Submit this runtime service account in the ABFS EAP form — it is the node SA
+       of the dedicated ABFS node pool (see docs/02 §1b):
+         {{ include "abfs.runtimeServiceAccount" . | default (printf "%s@%s.iam.gserviceaccount.com" (.Values.runtimeServiceAccountName | default "RUNTIME_SA") .Values.projectId) }}
+    2. When the license arrives, base64 it into the `abfs-data` node pool's instance
+       metadata (key abfs-license; see docs/02 §1b), then start ABFS (PHASE B):
+         helm upgrade {{ .Release.Name }} <chart> -n {{ .Release.Namespace }} \
+           -f values.yaml --set licensed=true
+{{- else -}}
+==> PHASE B (licensed) — ABFS is starting.
+
+    Image:                         {{ include "abfs.image" . }}
+    Server endpoint (in-cluster):  {{ include "abfs.server.name" . }}:{{ .Values.server.service.port }}
+    {{ if .Values.server.service.internalLoadBalancer -}}
+    Internal LB IP for clients:    kubectl get svc -n {{ .Release.Namespace }} {{ include "abfs.server.name" . }} -o wide
+    {{- end }}
+
+    Watch rollout:
+      kubectl get pods -n {{ .Release.Namespace }}
+      kubectl logs -n {{ .Release.Namespace }} job/abfs-pusher-config    # bootstrap result
+      kubectl get statefulset -n {{ .Release.Namespace }} {{ include "abfs.uploader.name" . }}
+    {{ if .Values.tests.enabled }}
+    Smoke-test server connectivity:
+      helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+    {{- end }}
+    {{ if .Values.vpa.enabled }}
+    VPA right-sizing recommendations (updateMode={{ .Values.vpa.updateMode }}):
+      kubectl describe vpa -n {{ .Release.Namespace }} {{ include "abfs.server.name" . }}
+    {{- end }}
+
+    Reminder: the ABFS server does NOT create the Spanner schema — the deploy applies it
+    declaratively via infra/20-spanner.yaml (SpannerDatabase.spec.ddl), gated by the
+    CREATE_TABLES toggle. See docs/03-spanner-schema-ownership.md.
+    The ABFS data-plane pods run privileged + hostPID for the casfs mount — the
+    namespace must permit it (Pod Security Admission = privileged).
+{{- end }}

@@ -1,0 +1,117 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# SSM seed Job — the "first push" that bootstraps the SSM repo and fires the first
+# Cloud Build. This is a plain Kubernetes Job (NOT a KCC resource): KCC's
+# SecureSourceManagerRepository.initialConfig only seeds defaultBranch/readme/etc,
+# it CANNOT clone a URL. This Job performs that clone+push out-of-band: it clones
+# the upstream repo and pushes it into the freshly-created SSM repo.
+#
+# AUTH: via Workload Identity. The KSA below is annotated to impersonate the
+# abfs-cloudbuild GSA (see 46-cicd-iam.yaml), which must hold
+# roles/securesourcemanager.repoWriter on the repo (or be granted write here). The
+# `git-credential-gcloud` helper turns the WI token into HTTPS git credentials for
+# the sourcemanager.dev host.
+#
+# RUNTIME TOKEN: REPLACE_SSM_REPO_URL is the repo's HTTPS git clone URL. At runtime
+# this comes from the SecureSourceManagerRepository STATUS
+# (status.observedState.uris.gitHTTPS, e.g.
+# https://<instance>-<proj>-git.<region>.sourcemanager.dev/<project>/<repo>.git).
+# It is parameterized as a REPLACE_ token; fill it from the repo status after
+# 41-secure-source-manager.yaml reconciles. Best-effort: validate the host/flow
+# against your project before relying on it.
+---
+# Workload-Identity KSA for the seed Job, mapped to the abfs-cloudbuild GSA.
+# The matching iam.workloadIdentityUser binding is defined in 46-cicd-iam.yaml
+# (IAMPolicyMember abfs-cloudbuild-wi).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: abfs-cloudbuild
+  namespace: abfs
+  annotations:
+    iam.gke.io/gcp-service-account: abfs-cloudbuild@YOUR_PROJECT_ID.iam.gserviceaccount.com
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: abfs-ssm-seed
+  namespace: abfs
+  labels:
+    app.kubernetes.io/part-of: abfs-cicd
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: abfs-cicd
+        app.kubernetes.io/component: ssm-seed
+    spec:
+      restartPolicy: Never
+      # Impersonates abfs-cloudbuild via Workload Identity (annotation above).
+      serviceAccountName: abfs-cloudbuild
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ssm-seed
+          # Cloud SDK image ships gcloud + git + the git-credential-gcloud helper.
+          image: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+          # Hardened, non-privileged client. runAsNonRoot is omitted: the cloud-sdk
+          # image + `git config --global` / gcloud need a writable root-owned HOME.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          command: ["/bin/bash", "-c"]
+          env:
+            # Upstream repo to clone (e.g. the public horizon-sdv github repo).
+            - name: CLONE_URL
+              value: "REPLACE_SSM_CLONE_URL"
+            # Destination SSM repo HTTPS git URL (see header — repo status URL).
+            - name: SSM_REPO_URL
+              value: "REPLACE_SSM_REPO_URL"
+            # Trigger branch (default "main").
+            - name: BRANCH
+              value: "main"
+          args:
+            - |
+              set -euo pipefail
+
+              # Use the gcloud (Workload Identity) credential helper for the SSM
+              # sourcemanager.dev host so `git push` authenticates as the GSA.
+              git config --global credential.https://sourcemanager.dev.helper gcloud.sh
+              git config --global credential."${SSM_REPO_URL%/*}".helper gcloud.sh
+              git config --global user.email "abfs-cloudbuild@$(gcloud config get-value project -q 2>/dev/null).iam.gserviceaccount.com"
+              git config --global user.name "ABFS SSM Seed Job"
+
+              # Mirror-clone the upstream and push it into the empty SSM repo. The
+              # first push to the trigger branch is what fires the Cloud Build.
+              workdir="$(mktemp -d)"
+              git clone --bare "${CLONE_URL}" "${workdir}/upstream.git"
+              cd "${workdir}/upstream.git"
+              git push --mirror "${SSM_REPO_URL}" || {
+                # Fall back to pushing just the trigger branch if --mirror is
+                # rejected by the SSM repo's branch protection / ref rules.
+                git push "${SSM_REPO_URL}" "refs/heads/${BRANCH}:refs/heads/${BRANCH}"
+              }
+              echo "Seeded ${SSM_REPO_URL} from ${CLONE_URL} (branch ${BRANCH})."

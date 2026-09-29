@@ -1,0 +1,58 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Secure Source Manager (SSM) instance + repository that hosts the source for the
+# custom Cloud Workstations images.
+#
+# CAVEATS (see docs/06-cicd-foundation.md):
+#  * SSM is seeded by CLONING an upstream git repo (e.g. the public horizon-sdv
+#    repo) into the new SSM repo, but KCC's SecureSourceManagerRepository
+#    .initialConfig only seeds defaultBranch/readme/license/gitignores — it does
+#    NOT clone a URL. Perform the initial clone+push out-of-band (a one-off Job or
+#    `git push`) after the repo exists; that first push is what triggers the first
+#    Cloud Build.
+#  * For a PUBLIC instance, omit kmsKeyRef/privateConfig. For a PRIVATE instance,
+#    apply 42-privateca.yaml first and wire the CA pool here.
+---
+apiVersion: securesourcemanager.cnrm.cloud.google.com/v1beta1
+kind: SecureSourceManagerInstance
+metadata:
+  name: cicd-foundation
+  namespace: abfs
+spec:
+  projectRef:
+    external: projects/YOUR_PROJECT_ID
+  # e.g. europe-west4
+  location: europe-west3
+  # --- PRIVATE instance options (uncomment + apply 42-privateca.yaml first) ---
+  # privateConfig:
+  #   isPrivate: true
+  #   caPoolRef:
+  #     name: ssm-ca-pool
+---
+apiVersion: securesourcemanager.cnrm.cloud.google.com/v1beta1
+kind: SecureSourceManagerRepository
+metadata:
+  name: horizon-sdv
+  namespace: abfs
+spec:
+  projectRef:
+    external: projects/YOUR_PROJECT_ID
+  location: europe-west3
+  instanceRef:
+    name: cicd-foundation
+  initialConfig:
+    # Default trigger branch ("main").
+    defaultBranch: main
+    readme: default

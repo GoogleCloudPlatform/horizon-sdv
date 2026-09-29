@@ -1,0 +1,444 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# =============================================================================
+# ABFS data-plane Helm values.
+# Project-specific values use REPLACE_* tokens — fill per instance (see
+# instances/*.env + scripts/render.sh), or override with -f.
+#
+# Targets Helm 4. values.schema.json validates the structure/types below at
+# lint/template/install/upgrade time. Every property is documented with a leading
+# "# <name> -- ..." comment (grep-friendly), per Helm values best practice.
+# =============================================================================
+
+# -- projectId -- GCP project; MUST match infra/ and your cluster. (REPLACE token)
+projectId: YOUR_PROJECT_ID
+# -- region -- GCP region for the data plane.
+region: europe-west4
+# -- zone -- GCP zone (single-zone resources, if any).
+zone: europe-west4-a
+
+# --- ABFS container image ---
+# Structured so the tag can be overridden per-env and the image can be pinned by
+# digest. When image.digest is set it wins (repository@sha256:...); otherwise
+# repository:tag is used, with tag defaulting to Chart.appVersion when left empty.
+image:
+  # -- image.repository -- container image repository (no tag/digest).
+  repository: europe-docker.pkg.dev/abfs-binaries/abfs-containers-alpha/abfs-alpha
+  # -- image.tag -- image tag; empty falls back to Chart.appVersion.
+  tag: "0.1.14"
+  # -- image.digest -- optional immutable digest ("sha256:..."); pins the image and
+  # overrides tag. Recommended for production (supply-chain integrity).
+  digest: ""
+  # -- image.pullPolicy -- one of IfNotPresent | Always | Never.
+  pullPolicy: IfNotPresent
+# -- imagePullSecrets -- names of pre-created docker-registry Secrets. Usually empty
+# on GKE (the abfs-data node pool's service account authenticates to Artifact Registry).
+imagePullSecrets: []
+
+# --- ABFS license ---
+# The ABFS server reads its license from the GCE instance metadata of the node it runs
+# on (key abfs-license, base64 JSON) and verifies it against the node's service-account
+# identity — so the license is delivered via the dedicated ABFS node pool's metadata,
+# NOT this chart (see docs/02 §1b). This value is only the two-phase gate: while false,
+# only the bootstrap (ServiceAccounts + pusher ConfigMap) renders; flip to true (e.g.
+# --set licensed=true) once that licensed node pool exists to start ABFS.
+# -- licensed -- gate server/uploaders/bootstrap on the licensed node pool existing.
+licensed: false
+
+# --- Spanner / GCS references (MUST match infra/20-spanner.yaml & 21-storage.yaml) ---
+spanner:
+  # -- spanner.instance -- Spanner instance id.
+  instance: abfs
+  # -- spanner.database -- Spanner database id.
+  database: abfs
+# -- bucket -- GCS blob bucket name. (REPLACE token)
+bucket: YOUR_PROJECT_ID-abfs-blobs
+
+# -- gitLfsEnabled -- enable Git LFS.
+gitLfsEnabled: false
+
+# -- extraParams -- extra params appended to the abfs command on server+uploader.
+extraParams: []
+
+# --- ABFS client transport (in-cluster clients → server) ---
+# The ABFS server serves PLAINTEXT gRPC and, by default, no client auth. ABFS clients
+# default to TLS, so the in-cluster clients (uploader, pusher-config bootstrap Job) must
+# be told otherwise or the gRPC handshake fails ("first record does not look like a TLS
+# handshake"). Set client.tls=true only if you front the server with TLS.
+client:
+  # -- client.tls -- when false, pass --disable-tls=true to client commands.
+  tls: false
+  # -- client.authType -- ABFS client auth type → --auth-type: none | gcpuser | gcpsa.
+  authType: none
+
+# --- Service accounts / runtime identity ---
+# The ABFS pods take their GOOGLE identity from the dedicated node pool's service
+# account (the licensed runtime SA) via GCE metadata — NOT Workload Identity (see
+# docs/02 §1b). The KSAs below are only the pods' Kubernetes identity (RBAC); they
+# carry no WI annotation. Keep the names matching infra/.
+# -- runtimeServiceAccountName -- local part of the licensed runtime SA (= the
+# abfs-data node pool's --service-account; MUST be in the license allowed_service_accounts).
+# Informational here (printed in NOTES); the binding lives on the node pool + infra/12.
+runtimeServiceAccountName: abfs-runtime
+serviceAccounts:
+  # -- serviceAccounts.server -- KSA name for the server.
+  server: abfs-server
+  # -- serviceAccounts.uploader -- KSA name for the uploaders.
+  uploader: abfs-uploader
+  # -- serviceAccounts.ui -- KSA name for the UI.
+  ui: abfs-ui
+# -- createServiceAccounts -- render the KSAs from this chart. Set false if the KSAs
+# are managed elsewhere (e.g. by infra/ KCC) to avoid ownership conflicts.
+createServiceAccounts: true
+# -- automountServiceAccountToken -- mount the SA token (k8s API/RBAC). Not used for
+# Google auth under the GCE-metadata identity model, but harmless to keep mounted.
+automountServiceAccountToken: true
+
+# =============================== SCHEDULING ==================================
+# Shared placement defaults for all ABFS pods. They MUST land on the dedicated ABFS
+# node pool (default name `abfs-data`) whose node service account is the licensed
+# runtime SA and which runs in GCE-metadata mode — that placement is what makes the
+# license work (see docs/02 §1b). GKE labels each node with its pool name
+# (cloud.google.com/gke-nodepool); the pool is created with the matching taint.
+# -- nodeSelector -- node selector for all ABFS pods (target the abfs-data pool).
+nodeSelector:
+  cloud.google.com/gke-nodepool: abfs-data
+# -- tolerations -- tolerations for all ABFS pods (tolerate the abfs-data pool taint).
+tolerations:
+  - key: abfs.dev/dedicated
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+# -- affinity -- pod/node affinity for all ABFS pods (free-form).
+affinity: {}
+# -- topologySpreadConstraints -- spread constraints for multi-replica components.
+topologySpreadConstraints: []
+# -- priorityClassName -- optional PriorityClass for ABFS pods.
+priorityClassName: ""
+# -- hostPID -- share the host PID namespace (ABFS uses --pid=host for the casfs
+# mount). Required for casfs; only disable if your image/mount does not need it.
+hostPID: true
+
+# ========================= CASFS (kernel module) ============================
+# ABFS mounts the casfs CAS filesystem, which needs the `casfs` kernel module loaded
+# on the node. How it gets there is selected by casfs.provider:
+#   image     -- default: casfs is built into the node image (Container-Optimized OS).
+#                Nothing extra is deployed; the abfs-data pool is COS.
+#   daemonset -- the abfs-casfs-installer DaemonSet builds casfs from source against
+#                each node's running kernel and loads it. Requires the abfs-data pool to
+#                be **Ubuntu** (--image-type UBUNTU_CONTAINERD) with Secure Boot OFF —
+#                see docs/02 §1b.
+casfs:
+  # -- casfs.provider -- image | daemonset (see above).
+  provider: image
+  # -- casfs.requireReady -- inject a `wait-for-casfs` initContainer into the ABFS pods
+  # so they don't start until casfs is loaded on their node. In daemonset mode it waits
+  # for the loader (which compiles the module — allow time); in image mode it's a fast
+  # verify that fails clearly if the node image lacks casfs. (Reads /sys/module/casfs.)
+  requireReady: true
+  # -- casfs.requireReadyTimeoutSeconds -- how long that initContainer waits. The
+  # daemonset loader compiles casfs on a node's first boot (~1-2 min), so allow margin.
+  requireReadyTimeoutSeconds: 600
+  # casfs loader (Ubuntu) — only used when provider=daemonset.
+  daemonset:
+    # -- casfs.daemonset.image -- base image for the loader; needs gcloud (source
+    # download) + chroot. Default: Google Cloud SDK (Debian).
+    image: "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim"
+    # -- casfs.daemonset.sourceUrl -- casfs kernel-module source tarball; the loader
+    # builds it against the node's kernel headers. REQUIRED when provider=daemonset.
+    sourceUrl: "gs://cos-localmirror/distfiles/casfs-0.1.14.tar.gz"
+    # -- casfs.daemonset.script -- advanced: override the loader script entirely
+    # (empty = the chart default in templates/casfs-installer-configmap.yaml).
+    script: ""
+    # -- casfs.daemonset.resources -- loader resources (compiles a kernel module, then idles).
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+    # -- casfs.daemonset.nodeSelector -- where the loader runs (default: the global
+    # nodeSelector). To cover separate server/uploader pools, target a label BOTH pools
+    # share (e.g. {abfs.dev/casfs: "true"}) so casfs loads on every ABFS node.
+    nodeSelector: {}
+    # -- casfs.daemonset.tolerations -- loader tolerations (default: the global
+    # tolerations). For separate pools, tolerate EVERY ABFS pool taint.
+    tolerations: []
+
+# =============================== METADATA ====================================
+# -- commonLabels -- extra labels added to every object + pod (non-selector).
+commonLabels: {}
+# -- commonAnnotations -- annotations added to every object's metadata.
+commonAnnotations: {}
+# -- podAnnotations -- annotations added to every ABFS pod template.
+podAnnotations: {}
+# -- podLabels -- extra labels added to every ABFS pod template.
+podLabels: {}
+
+# =============================== SECURITY ====================================
+# Pod-level security context applied to all ABFS pods. seccompProfile RuntimeDefault
+# is declared for hygiene/PSA (privileged pods bypass seccomp at runtime, but the
+# declaration is harmless). NOTE: fsGroup is intentionally NOT set — the data
+# containers run as root, and an fsGroup would trigger a recursive chown of the
+# multi-TiB uploader PVCs on every start.
+# -- podSecurityContext -- pod-level securityContext for ABFS pods.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+# Container security context for the PRIVILEGED ABFS data-plane containers
+# (server/uploader/ui). ABFS REQUIRES privileged + cap-add=all to load/use the casfs
+# FUSE mount, so runAsNonRoot / readOnlyRootFilesystem / dropped capabilities CANNOT
+# be applied here. This is an inherent ABFS requirement; the namespace must allow it
+# (Pod Security Admission = privileged).
+# -- securityContext -- container securityContext for the main ABFS containers.
+securityContext:
+  privileged: true
+# Restricted container security context for helper containers that DO NOT need the
+# casfs mount (init "wait" containers and the bootstrap Job) — they are plain ABFS
+# clients, so they get hardened defaults.
+# -- restrictedSecurityContext -- securityContext for non-privileged helper containers.
+restrictedSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- revisionHistoryLimit -- old ReplicaSet/ControllerRevision history to retain.
+revisionHistoryLimit: 3
+# -- terminationGracePeriodSeconds -- graceful shutdown window for ABFS pods.
+terminationGracePeriodSeconds: 60
+
+# =============================== SERVER ======================================
+server:
+  # -- server.enabled -- render the server Deployment + Service.
+  enabled: true
+  # -- server.replicas -- server replica count (ABFS server is a singleton; keep 1).
+  replicas: 1
+  # NOTE: production should size to the ABFS node (e.g. a high-memory class such as
+  # n2-highmem-128). Conservative defaults so the chart schedules anywhere. A memory
+  # limit is set (= request) to bound node memory pressure; no CPU limit (CPU limits
+  # cause throttling — prefer requests + headroom). Tune to your workload.
+  resources:
+    requests:
+      cpu: "8"
+      memory: 32Gi
+    limits:
+      memory: 32Gi
+  service:
+    # -- server.service.internalLoadBalancer -- expose an internal L4 LB for
+    # out-of-cluster clients (Cloud Workstations / CI). In-cluster uploaders use the
+    # Service DNS name regardless.
+    internalLoadBalancer: true
+    # -- server.service.port -- gRPC port.
+    port: 50051
+    # -- server.service.annotations -- extra Service annotations.
+    annotations: {}
+  # The server attaches NO data disk by default; cache is ephemeral. Enable an
+  # optional persistent cache here if desired.
+  cache:
+    # -- server.cache.enabled -- attach a persistent cache PVC.
+    enabled: false
+    # -- server.cache.size -- cache PVC size.
+    size: 500Gi
+    # -- server.cache.storageClass -- cache PVC StorageClass.
+    storageClass: hyperdisk-balanced
+    # -- server.cache.mountPath -- cache mount path.
+    mountPath: /abfs-storage
+    # -- server.cache.retainOnDelete -- keep the cache PVC on `helm uninstall`
+    # (adds helm.sh/resource-policy: keep). Avoids silent cache loss.
+    retainOnDelete: true
+  # Health probes. startup gates the slow casfs/cache warm-up; readiness gates
+  # traffic; liveness restarts a wedged process. type: tcpSocket | grpc | httpGet | exec.
+  probes:
+    startup:
+      enabled: true
+      type: tcpSocket
+      periodSeconds: 10
+      failureThreshold: 30   # ~5 min budget for casfs + cache warm-up
+    readiness:
+      enabled: true
+      type: tcpSocket
+      initialDelaySeconds: 15
+      periodSeconds: 10
+    liveness:
+      enabled: true
+      type: tcpSocket
+      initialDelaySeconds: 60
+      periodSeconds: 20
+      failureThreshold: 3
+  # PodDisruptionBudget. Default off: the server is a singleton, so any PDB would
+  # block voluntary node drains. Enable only with replicas > 1.
+  pdb:
+    enabled: false
+    minAvailable: ""
+    maxUnavailable: ""
+
+# ============================== UPLOADERS ====================================
+uploader:
+  # -- uploader.count -- uploader replicas. MUST match the number of pusher entries
+  # (the pusher config is generated from this count).
+  count: 3
+  # -- uploader.namePrefix -- StatefulSet + headless service name. Pod hostnames
+  # become <namePrefix>-<ordinal>, which MUST equal the pusher-config pusher names.
+  namePrefix: abfs-gerrit-uploader
+  # -- uploader.nodeSelector -- placement for uploader shards (default: the global
+  # nodeSelector). Set to target a dedicated uploader pool so the uploaders scale
+  # independently of the server.
+  nodeSelector: {}
+  # -- uploader.tolerations -- uploader tolerations (default: the global tolerations).
+  tolerations: []
+  resources:
+    requests:
+      cpu: "8"
+      memory: 64Gi
+    limits:
+      memory: 64Gi
+  dataDisk:
+    # -- uploader.dataDisk.size -- per-pod data PVC size (default 4096 GB).
+    size: 4096Gi
+    # -- uploader.dataDisk.storageClass -- data PVC StorageClass.
+    storageClass: hyperdisk-balanced
+    # -- uploader.dataDisk.mountPath -- data mount path.
+    mountPath: /abfs-storage
+  # -- uploader.extraParams -- extra params appended to the uploader command.
+  extraParams: []
+  # -- uploader.preStartHooks -- optional map of filename -> script content, mounted
+  # at /etc/abfs/pre-start.d on each uploader pod.
+  preStartHooks: {}
+  # Readiness/liveness on the pusher port. No startup probe by default (the
+  # initContainer already gates on server + pusher-config readiness).
+  probes:
+    readiness:
+      enabled: true
+      type: tcpSocket
+      initialDelaySeconds: 20
+      periodSeconds: 10
+    liveness:
+      enabled: true
+      type: tcpSocket
+      initialDelaySeconds: 60
+      periodSeconds: 20
+      failureThreshold: 3
+  # PodDisruptionBudget for the uploader StatefulSet (multi-replica). maxUnavailable
+  # 1 keeps at least count-1 pushers up during voluntary disruptions.
+  pdb:
+    enabled: true
+    minAvailable: ""
+    maxUnavailable: 1
+
+# ============================ PUSHER CONFIG ==================================
+# Renders the pusher config into a ConfigMap consumed by the bootstrap Job.
+pusher:
+  # -- pusher.manifestProjectUrl -- repo manifest URL.
+  manifestProjectUrl: https://android.googlesource.com/platform/manifest
+  # -- pusher.branchFiles -- manifest branch/file pairs to track.
+  branchFiles:
+    - branch: main
+      file: default.xml
+  defaults:
+    # -- pusher.defaults.port -- uploader/pusher serving port.
+    port: 8086
+    # -- pusher.defaults.maxRemotePushes -- per-pusher remote push cap.
+    maxRemotePushes: 5000
+    # -- pusher.defaults.maxProjectsSyncs -- per-pusher project sync cap.
+    maxProjectsSyncs: 1000
+  # -- pusher.workers -- project worker count.
+  workers: 200
+  # -- pusher.concurrentUploads -- concurrent-uploads written to clients/defaults.
+  concurrentUploads: 200
+  # Bootstrap Job knobs.
+  job:
+    # -- pusher.job.backoffLimit -- Job retry budget.
+    backoffLimit: 3
+    # -- pusher.job.activeDeadlineSeconds -- overall Job timeout (0/empty = none).
+    activeDeadlineSeconds: ""
+
+# ================================= UI ========================================
+# ABFS UI: stateless front-end + reverse-proxy to the uploaders. Optional, disabled by
+# default (ui.enabled). Unlicensed; reaches the server (50051) and each uploader pod
+# (8086).
+ui:
+  # -- ui.enabled -- render the UI Deployment + Service.
+  enabled: false
+  # -- ui.replicas -- UI replica count.
+  replicas: 1
+  # -- ui.port -- UI HTTP port.
+  port: 8080
+  # -- ui.extraParams -- extra params appended to the UI command.
+  extraParams: []
+  resources:
+    requests:
+      cpu: "2"
+      memory: 8Gi
+    limits:
+      memory: 8Gi
+  service:
+    # -- ui.service.internalLoadBalancer -- internal L4 LB for browser access.
+    # ClusterIP when false.
+    internalLoadBalancer: false
+    # -- ui.service.annotations -- extra Service annotations.
+    annotations: {}
+  probes:
+    readiness:
+      enabled: true
+      type: tcpSocket
+      initialDelaySeconds: 15
+      periodSeconds: 10
+    liveness:
+      enabled: true
+      type: tcpSocket
+      initialDelaySeconds: 45
+      periodSeconds: 20
+      failureThreshold: 3
+  # PodDisruptionBudget for the UI (only meaningful with replicas > 1).
+  pdb:
+    enabled: false
+    minAvailable: ""
+    maxUnavailable: 1
+
+# ============================ OBSERVABILITY ==================================
+# Wire the workloads to the GKE Managed OpenTelemetry collector (enable the collector
+# at cluster level with --managed-otel-scope=...; see docs/02). Injects OTLP env into
+# the server/uploader/ui containers. Harmless no-op until the ABFS image emits OTLP.
+otel:
+  # -- otel.enabled -- inject OTLP exporter env into the containers.
+  enabled: true
+  # -- otel.endpoint -- OTLP HTTP endpoint.
+  endpoint: "http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4318"
+
+# =========================== VPA (right-sizing) ==============================
+# Vertical Pod Autoscaler for the workloads. Requires the cluster addon
+# (--enable-vertical-pod-autoscaling; see docs/02). updateMode "Off" = recommendations
+# only (read `kubectl describe vpa` and apply manually) — safe for the stateful server;
+# "Initial" right-sizes at pod (re)start; "Auto" also evicts to resize.
+vpa:
+  # -- vpa.enabled -- render VerticalPodAutoscaler objects.
+  enabled: true
+  # -- vpa.updateMode -- Off | Initial | Auto | Recreate.
+  updateMode: "Auto"
+
+# ============================ NETWORK POLICY =================================
+networkPolicy:
+  # -- networkPolicy.enabled -- render NetworkPolicies.
+  enabled: true
+  # -- networkPolicy.extraEgress -- additional egress rules merged into each policy
+  # (egress defaults to open: ABFS reaches Spanner/GCS/Gerrit/Artifact Registry).
+  extraEgress: []
+
+# ============================ HELM TEST ======================================
+tests:
+  # -- tests.enabled -- render `helm test` connectivity Pod(s).
+  enabled: true

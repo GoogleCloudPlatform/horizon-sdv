@@ -1,0 +1,72 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if and (include "abfs.licensed" .) .Values.tests.enabled .Values.server.enabled }}
+# `helm test abfs` connectivity check: a hardened ABFS-image pod that confirms the
+# server's gRPC port is reachable in-cluster. Run after install/upgrade:
+#   helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "abfs.server.name" . }}-test-connection
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  restartPolicy: Never
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.podSecurityContext }}
+  securityContext:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.nodeSelector }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.tolerations }}
+  tolerations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  containers:
+    - name: test-connection
+      image: {{ include "abfs.image" . }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      {{- with .Values.restrictedSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          set -e
+          HOST="{{ include "abfs.server.name" . }}"
+          PORT="{{ .Values.server.service.port }}"
+          echo "checking ABFS server $HOST:$PORT"
+          for i in $(seq 1 30); do
+            if (exec 3<>/dev/tcp/$HOST/$PORT) 2>/dev/null; then
+              echo "OK: server reachable"; exit 0
+            fi
+            echo "...not reachable yet ($i)"; sleep 2
+          done
+          echo "FAIL: server not reachable after 60s"; exit 1
+{{- end }}

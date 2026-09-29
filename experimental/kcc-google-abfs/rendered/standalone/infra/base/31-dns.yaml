@@ -1,0 +1,115 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Private DNS zones for Private Google Access: googleapis.com and pkg.dev private
+# zones pointing at the restricted/private VIP 199.36.153.8-11 =
+# private.googleapis.com.
+#
+# These zones attach to the pre-existing VPC via networkRef.external. The VPC is
+# not created here and is not assumed to be a Shared VPC host; resources target the
+# project set on the namespace (infra/00-namespace.yaml).
+
+# ===================== googleapis.com =====================
+---
+apiVersion: dns.cnrm.cloud.google.com/v1beta1
+kind: DNSManagedZone
+metadata:
+  name: private-google-apis
+  namespace: abfs
+spec:
+  description: "Private DNS zone for Google APIs"
+  dnsName: "googleapis.com."
+  visibility: private
+  privateVisibilityConfig:
+    networks:
+      - networkRef:
+          external: "projects/YOUR_PROJECT_ID/global/networks/vpc-abfs"
+---
+apiVersion: dns.cnrm.cloud.google.com/v1beta1
+kind: DNSRecordSet
+metadata:
+  name: googleapis-cname-wildcard
+  namespace: abfs
+spec:
+  name: "*.googleapis.com."
+  type: "CNAME"
+  ttl: 300
+  managedZoneRef:
+    name: private-google-apis
+  rrdatas:
+    - "private.googleapis.com."
+---
+apiVersion: dns.cnrm.cloud.google.com/v1beta1
+kind: DNSRecordSet
+metadata:
+  name: googleapis-a-private
+  namespace: abfs
+spec:
+  name: "private.googleapis.com."
+  type: "A"
+  ttl: 300
+  managedZoneRef:
+    name: private-google-apis
+  rrdatas:
+    - "199.36.153.8"
+    - "199.36.153.9"
+    - "199.36.153.10"
+    - "199.36.153.11"
+
+# ===================== pkg.dev (Artifact Registry) =====================
+---
+apiVersion: dns.cnrm.cloud.google.com/v1beta1
+kind: DNSManagedZone
+metadata:
+  name: private-artifact-registry
+  namespace: abfs
+spec:
+  description: "Private DNS zone for Artifact Registry"
+  dnsName: "pkg.dev."
+  visibility: private
+  privateVisibilityConfig:
+    networks:
+      - networkRef:
+          external: "projects/YOUR_PROJECT_ID/global/networks/vpc-abfs"
+---
+apiVersion: dns.cnrm.cloud.google.com/v1beta1
+kind: DNSRecordSet
+metadata:
+  name: pkgdev-cname-wildcard
+  namespace: abfs
+spec:
+  name: "*.pkg.dev."
+  type: "CNAME"
+  ttl: 300
+  managedZoneRef:
+    name: private-artifact-registry
+  rrdatas:
+    - "pkg.dev."
+---
+apiVersion: dns.cnrm.cloud.google.com/v1beta1
+kind: DNSRecordSet
+metadata:
+  name: pkgdev-a-apex
+  namespace: abfs
+spec:
+  name: "pkg.dev."
+  type: "A"
+  ttl: 300
+  managedZoneRef:
+    name: private-artifact-registry
+  rrdatas:
+    - "199.36.153.8"
+    - "199.36.153.9"
+    - "199.36.153.10"
+    - "199.36.153.11"

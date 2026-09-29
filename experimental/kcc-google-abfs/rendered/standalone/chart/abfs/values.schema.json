@@ -1,0 +1,278 @@
+{
+  "$comment": "Copyright 2026 Google LLC. Licensed under the Apache License, Version 2.0 (the \"License\"); you may not use this file except in compliance with the License. You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0 . Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ABFS chart values",
+  "description": "Validates structure/types/enums for the ABFS data-plane chart. Intentionally does NOT enforce GCP naming regexes on projectId/bucket so the REPLACE_* templated source still lints; render.sh reports unfilled tokens.",
+  "type": "object",
+  "required": ["projectId", "bucket", "image", "spanner", "serviceAccounts"],
+  "properties": {
+    "projectId": { "type": "string", "minLength": 1 },
+    "region": { "type": "string" },
+    "zone": { "type": "string" },
+
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "digest": {
+          "type": "string",
+          "pattern": "^$|^sha256:[a-f0-9]{64}$"
+        },
+        "pullPolicy": { "enum": ["IfNotPresent", "Always", "Never"] }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string" } }
+      }
+    },
+
+    "licensed": { "type": "boolean" },
+    "runtimeServiceAccountName": { "type": "string" },
+
+    "spanner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instance", "database"],
+      "properties": {
+        "instance": { "type": "string", "minLength": 1 },
+        "database": { "type": "string", "minLength": 1 }
+      }
+    },
+    "bucket": { "type": "string", "minLength": 1 },
+
+    "gitLfsEnabled": { "type": "boolean" },
+    "extraParams": { "type": "array", "items": { "type": "string" } },
+
+    "client": {
+      "type": "object",
+      "properties": {
+        "tls": { "type": "boolean" },
+        "authType": { "enum": ["none", "gcpuser", "gcpsa"] }
+      }
+    },
+
+    "serviceAccounts": {
+      "type": "object",
+      "required": ["server", "uploader", "ui"],
+      "properties": {
+        "server": { "type": "string", "minLength": 1 },
+        "uploader": { "type": "string", "minLength": 1 },
+        "ui": { "type": "string", "minLength": 1 }
+      }
+    },
+    "createServiceAccounts": { "type": "boolean" },
+    "automountServiceAccountToken": { "type": "boolean" },
+
+    "nodeSelector": { "type": "object" },
+    "tolerations": { "type": "array" },
+    "affinity": { "type": "object" },
+    "topologySpreadConstraints": { "type": "array" },
+    "priorityClassName": { "type": "string" },
+    "hostPID": { "type": "boolean" },
+
+    "casfs": {
+      "type": "object",
+      "properties": {
+        "provider": { "enum": ["image", "daemonset"] },
+        "requireReady": { "type": "boolean" },
+        "requireReadyTimeoutSeconds": { "type": "integer", "minimum": 1 },
+        "daemonset": {
+          "type": "object",
+          "properties": {
+            "image": { "type": "string" },
+            "sourceUrl": { "type": "string" },
+            "script": { "type": "string" },
+            "resources": { "type": "object" }
+          }
+        }
+      }
+    },
+
+    "commonLabels": { "type": "object" },
+    "commonAnnotations": { "type": "object" },
+    "podAnnotations": { "type": "object" },
+    "podLabels": { "type": "object" },
+
+    "podSecurityContext": { "type": "object" },
+    "securityContext": { "type": "object" },
+    "restrictedSecurityContext": { "type": "object" },
+
+    "revisionHistoryLimit": { "type": "integer", "minimum": 0 },
+    "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
+
+    "server": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 0 },
+        "resources": { "type": "object" },
+        "service": {
+          "type": "object",
+          "properties": {
+            "internalLoadBalancer": { "type": "boolean" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "annotations": { "type": "object" }
+          }
+        },
+        "cache": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "size": { "type": "string" },
+            "storageClass": { "type": "string" },
+            "mountPath": { "type": "string" },
+            "retainOnDelete": { "type": "boolean" }
+          }
+        },
+        "probes": { "$ref": "#/$defs/probes" },
+        "pdb": { "$ref": "#/$defs/pdb" }
+      }
+    },
+
+    "uploader": {
+      "type": "object",
+      "properties": {
+        "count": { "type": "integer", "minimum": 1 },
+        "namePrefix": { "type": "string", "minLength": 1 },
+        "resources": { "type": "object" },
+        "dataDisk": {
+          "type": "object",
+          "properties": {
+            "size": { "type": "string" },
+            "storageClass": { "type": "string" },
+            "mountPath": { "type": "string" }
+          }
+        },
+        "extraParams": { "type": "array", "items": { "type": "string" } },
+        "preStartHooks": { "type": "object" },
+        "probes": { "$ref": "#/$defs/probes" },
+        "pdb": { "$ref": "#/$defs/pdb" }
+      }
+    },
+
+    "pusher": {
+      "type": "object",
+      "properties": {
+        "manifestProjectUrl": { "type": "string" },
+        "branchFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["branch", "file"],
+            "properties": {
+              "branch": { "type": "string" },
+              "file": { "type": "string" }
+            }
+          }
+        },
+        "defaults": {
+          "type": "object",
+          "properties": {
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "maxRemotePushes": { "type": "integer", "minimum": 0 },
+            "maxProjectsSyncs": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "workers": { "type": "integer", "minimum": 1 },
+        "concurrentUploads": { "type": "integer", "minimum": 1 },
+        "job": {
+          "type": "object",
+          "properties": {
+            "backoffLimit": { "type": "integer", "minimum": 0 },
+            "activeDeadlineSeconds": { "type": ["integer", "string"] }
+          }
+        }
+      }
+    },
+
+    "ui": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 0 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "extraParams": { "type": "array", "items": { "type": "string" } },
+        "resources": { "type": "object" },
+        "service": {
+          "type": "object",
+          "properties": {
+            "internalLoadBalancer": { "type": "boolean" },
+            "annotations": { "type": "object" }
+          }
+        },
+        "probes": { "$ref": "#/$defs/probes" },
+        "pdb": { "$ref": "#/$defs/pdb" }
+      }
+    },
+
+    "otel": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "endpoint": { "type": "string" }
+      }
+    },
+
+    "vpa": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "updateMode": { "enum": ["Off", "Initial", "Auto", "Recreate"] }
+      }
+    },
+
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "extraEgress": { "type": "array" }
+      }
+    },
+
+    "tests": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    }
+  },
+
+  "$defs": {
+    "probe": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "type": { "enum": ["tcpSocket", "grpc", "httpGet", "exec"] },
+        "path": { "type": "string" },
+        "command": { "type": "array", "items": { "type": "string" } },
+        "initialDelaySeconds": { "type": "integer", "minimum": 0 },
+        "periodSeconds": { "type": "integer", "minimum": 1 },
+        "timeoutSeconds": { "type": "integer", "minimum": 1 },
+        "failureThreshold": { "type": "integer", "minimum": 1 },
+        "successThreshold": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "probes": {
+      "type": "object",
+      "properties": {
+        "startup": { "$ref": "#/$defs/probe" },
+        "readiness": { "$ref": "#/$defs/probe" },
+        "liveness": { "$ref": "#/$defs/probe" }
+      }
+    },
+    "pdb": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minAvailable": { "type": ["integer", "string"] },
+        "maxUnavailable": { "type": ["integer", "string"] }
+      }
+    }
+  }
+}

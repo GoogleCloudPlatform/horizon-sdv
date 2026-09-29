@@ -1,0 +1,33 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Cloud Workstations CI/CD foundation (KCC). Independent of the ABFS data plane.
+# Apply with: kubectl apply -k infra/cicd/
+# Requires the core layer (infra/) for the namespace + API enablement.
+#
+# Ordering note: if running a PRIVATE SSM instance, 42-privateca.yaml must
+# reconcile before 41-secure-source-manager.yaml. kubectl/kustomize apply is not
+# strictly ordered, so apply 42 first or re-apply until all reconcile.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 40-artifact-registry.yaml
+  - 41-secure-source-manager.yaml
+  - 42-privateca.yaml
+  - 43-cloud-build.yaml
+  - 44-cloud-scheduler.yaml
+  - 45-workstations.yaml
+  - 46-cicd-iam.yaml
+  - 47-monitoring.yaml
+  - 48-ssm-seed-job.yaml

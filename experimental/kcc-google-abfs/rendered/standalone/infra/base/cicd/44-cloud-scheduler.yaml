@@ -1,0 +1,90 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Cloud Scheduler jobs that periodically re-trigger each image build for security
+# patching. ONE job PER custom image.
+#
+# Each job POSTs to the Cloud Build "run trigger" REST API with an OAuth token
+# minted from a dedicated SA (abfs-cicd-scheduler, see 46-cicd-iam.yaml). The
+# trigger IDs are server-assigned on creation, so they are REPLACE_ tokens you
+# fill in after 43-cloud-build.yaml has reconciled.
+#
+# schedule default "0 3 * * *" (daily 03:00); set schedule/timeZone and the
+# scheduler region to suit your patching cadence.
+---
+# --- Scheduler 1/3: android-studio ---------------------------------------------
+apiVersion: cloudscheduler.cnrm.cloud.google.com/v1beta1
+kind: CloudSchedulerJob
+metadata:
+  name: rebuild-android-studio
+  namespace: abfs
+spec:
+  description: "Nightly rebuild of the android-studio workstation image"
+  # Scheduler region for the android-studio rebuild job.
+  location: europe-west3
+  # Rebuild schedule (cron) for the android-studio image.
+  schedule: "0 3 * * *"
+  timeZone: "Etc/UTC"
+  attemptDeadline: "320s"
+  retryConfig:
+    retryCount: 3
+  httpTarget:
+    httpMethod: "POST"
+    # Run the android-studio trigger created in 43-cloud-build.yaml.
+    uri: "https://cloudbuild.googleapis.com/v1/projects/YOUR_PROJECT_ID/triggers/REPLACE_ANDROID_STUDIO_TRIGGER_ID:run"
+    oauthToken:
+      serviceAccountRef:
+        name: abfs-cicd-scheduler
+---
+# --- Scheduler 2/3: android-studio-for-platform --------------------------------
+apiVersion: cloudscheduler.cnrm.cloud.google.com/v1beta1
+kind: CloudSchedulerJob
+metadata:
+  name: rebuild-android-studio-for-platform
+  namespace: abfs
+spec:
+  description: "Nightly rebuild of the android-studio-for-platform workstation image"
+  location: europe-west3
+  schedule: "0 3 * * *"
+  timeZone: "Etc/UTC"
+  attemptDeadline: "320s"
+  retryConfig:
+    retryCount: 3
+  httpTarget:
+    httpMethod: "POST"
+    uri: "https://cloudbuild.googleapis.com/v1/projects/YOUR_PROJECT_ID/triggers/REPLACE_ASFP_TRIGGER_ID:run"
+    oauthToken:
+      serviceAccountRef:
+        name: abfs-cicd-scheduler
+---
+# --- Scheduler 3/3: code-oss ----------------------------------------------------
+apiVersion: cloudscheduler.cnrm.cloud.google.com/v1beta1
+kind: CloudSchedulerJob
+metadata:
+  name: rebuild-code-oss
+  namespace: abfs
+spec:
+  description: "Nightly rebuild of the code-oss workstation image"
+  location: europe-west3
+  schedule: "0 3 * * *"
+  timeZone: "Etc/UTC"
+  attemptDeadline: "320s"
+  retryConfig:
+    retryCount: 3
+  httpTarget:
+    httpMethod: "POST"
+    uri: "https://cloudbuild.googleapis.com/v1/projects/YOUR_PROJECT_ID/triggers/REPLACE_CODE_OSS_TRIGGER_ID:run"
+    oauthToken:
+      serviceAccountRef:
+        name: abfs-cicd-scheduler

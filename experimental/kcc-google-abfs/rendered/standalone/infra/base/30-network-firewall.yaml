@@ -1,0 +1,61 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Firewall rules on the EXISTING VPC. The VPC, subnets, Cloud Router and NAT are
+# NOT created here (you provide them) — KCC only adds firewall rules. networkRef
+# uses an external link to the pre-existing network; this solution does not create
+# the VPC and does not assume a Shared VPC host project (resources target the
+# project set on the namespace, infra/00-namespace.yaml).
+#
+# GKE NOTE: for Service type=LoadBalancer (the internal gRPC LB in the chart), GKE
+# auto-creates the necessary load-balancer + health-check firewall rules. The rule
+# below lets ABFS clients (in-cluster nodes / CI) reach the ABFS server LB on 50051.
+# Adjust source ranges to your client subnets.
+---
+apiVersion: compute.cnrm.cloud.google.com/v1beta1
+kind: ComputeFirewall
+metadata:
+  name: abfs-server-allow-ingress
+  namespace: abfs
+spec:
+  description: "Allow ingress from ABFS clients/uploaders to the ABFS server (gRPC 50051)"
+  direction: INGRESS
+  priority: 1000
+  networkRef:
+    # Reference to the pre-existing VPC (not created by KCC).
+    external: "projects/YOUR_PROJECT_ID/global/networks/vpc-abfs"
+  sourceRanges:
+    - "10.0.0.0/24"   # abfs-west4 subnet
+  allow:
+    - protocol: tcp
+      ports:
+        - "50051"
+---
+apiVersion: compute.cnrm.cloud.google.com/v1beta1
+kind: ComputeFirewall
+metadata:
+  name: abfs-uploader-allow-ingress
+  namespace: abfs
+spec:
+  description: "Allow ingress to the ABFS uploaders (8086) from within the ABFS subnet"
+  direction: INGRESS
+  priority: 1000
+  networkRef:
+    external: "projects/YOUR_PROJECT_ID/global/networks/vpc-abfs"
+  sourceRanges:
+    - "10.0.0.0/24"
+  allow:
+    - protocol: tcp
+      ports:
+        - "8086"

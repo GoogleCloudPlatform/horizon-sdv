@@ -1,0 +1,46 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if and (include "abfs.licensed" .) .Values.ui.enabled }}
+# ABFS UI Service. Defaults to ClusterIP; set ui.service.internalLoadBalancer=true
+# for an internal L4 IP for browsers (like the server Service's internal-LB option).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "abfs.ui.name" . }}
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.ui.selectorLabels" . | nindent 4 }}
+  {{- if or .Values.ui.service.internalLoadBalancer .Values.ui.service.annotations .Values.commonAnnotations }}
+  annotations:
+    {{- if .Values.ui.service.internalLoadBalancer }}
+    networking.gke.io/load-balancer-type: "Internal"
+    {{- end }}
+    {{- with .Values.ui.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  type: {{ if .Values.ui.service.internalLoadBalancer }}LoadBalancer{{ else }}ClusterIP{{ end }}
+  selector:
+    {{- include "abfs.ui.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.ui.port }}
+      targetPort: {{ .Values.ui.port }}
+      protocol: TCP
+{{- end }}

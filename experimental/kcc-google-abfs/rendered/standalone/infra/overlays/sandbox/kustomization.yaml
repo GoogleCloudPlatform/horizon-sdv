@@ -1,0 +1,93 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# In the KCC standard, the Namespace annotation 'cnrm.cloud.google.com/project-id'
+# defines the default project for all resources in that namespace. 
+# However, globally unique resources (like StorageBucket names) and external references
+# (like IAM Project roles) still require explicit project IDs.
+#
+# Kustomize dynamically searches and replaces the base 'YOUR_PROJECT_ID' placeholder
+# at runtime before the YAML hits the cluster, keeping the base files clean.
+replacements:
+  - source:
+      kind: ConfigMap
+      name: project-config
+      fieldPath: data.PROJECT_ID
+    targets:
+      # Inject Project ID into the Namespace annotation (which cascades to all KCC resources)
+      - select:
+          kind: Namespace
+          name: abfs
+        fieldPaths:
+          - metadata.annotations.[cnrm.cloud.google.com/project-id]
+      # Inject Project ID into the GCS Bucket name
+      - select:
+          kind: StorageBucket
+          name: YOUR_PROJECT_ID-abfs-blobs
+        fieldPaths:
+          - metadata.name
+        options:
+          delimiter: '-'
+          index: 0
+      # Inject Project ID into ALL IAM Policy Project references
+      - select:
+          kind: IAMPolicyMember
+        reject:
+          - name: pusher-config-accessor
+          - name: abfs-cloudbuild-wi
+          - name: abfs-cloudbuild-webhook-secret-accessor
+        fieldPaths:
+          - spec.resourceRef.external
+        options:
+          delimiter: '/'
+          index: 1
+      # Inject Project ID into ComputeFirewall networkRef
+      - select:
+          kind: ComputeFirewall
+        fieldPaths:
+          - spec.networkRef.external
+        options:
+          delimiter: '/'
+          index: 1
+      # Inject Project ID into DNSManagedZone networkRef
+      - select:
+          kind: DNSManagedZone
+        fieldPaths:
+          - spec.privateVisibilityConfig.networks.*.networkRef.external
+        options:
+          delimiter: '/'
+          index: 1
+  - source:
+      kind: ConfigMap
+      name: project-config
+      fieldPath: data.CLOUDBUILD_WI
+    targets:
+      # Inject exact fully-formed Workload Identity string into the CICD IAM Policy
+      - select:
+          kind: IAMPolicyMember
+          name: abfs-cloudbuild-wi
+        fieldPaths:
+          - spec.member
+
+configMapGenerator:
+  - name: project-config
+    behavior: create
+    envs:
+      - setup/project.env

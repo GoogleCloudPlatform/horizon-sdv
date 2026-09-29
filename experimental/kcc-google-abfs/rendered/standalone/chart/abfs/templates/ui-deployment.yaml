@@ -1,0 +1,148 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if and (include "abfs.licensed" .) .Values.ui.enabled }}
+# ABFS UI Deployment. A stateless, unlicensed front-end that reverse-proxies to each
+# uploader and talks to the server. Optional, disabled by default (ui.enabled). Runs
+# privileged + hostPID like the other modes (--privileged --cap-add=all --pid=host).
+# No license/data disk (UI is unlicensed).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "abfs.ui.name" . }}
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.ui.selectorLabels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.ui.replicas }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "abfs.ui.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "abfs.labels" . | nindent 8 }}
+        {{- include "abfs.ui.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccounts.ui }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.casfs.requireReady }}
+      initContainers:
+        {{- include "abfs.waitForCasfsInit" . | nindent 8 }}
+      {{- end }}
+      hostPID: {{ .Values.hostPID }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: abfs-ui
+          image: {{ include "abfs.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # UI command: `ui-server` + one --proxy per uploader pod.
+          # Uploader pods are reachable at <prefix>-<ordinal>.<prefix> (headless svc).
+          args:
+            - ui-server
+            - --port
+            - "{{ .Values.ui.port }}"
+            - -s
+            - /abfsui/browser
+            {{- $prefix := .Values.uploader.namePrefix }}
+            {{- $port := .Values.pusher.defaults.port }}
+            {{- range $i := until (int .Values.uploader.count) }}
+            - --proxy
+            - "pusher{{ $i }}:{{ $prefix }}-{{ $i }}.{{ $prefix }}:{{ $port }}"
+            {{- end }}
+            {{- range .Values.ui.extraParams }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            {{- include "abfs.gomaxprocsEnv" . | nindent 12 }}
+            - name: RUN_MODE
+              value: "ui"
+            - name: NEEDS_GIT
+              value: "false"
+            - name: REMOTE_SERVER
+              value: "{{ include "abfs.server.name" . }}:{{ .Values.server.service.port }}"
+            - name: HOME
+              value: "/home/abfs-server"
+            {{- if .Values.otel.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.endpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_SERVICE_NAME
+              value: "abfs-ui"
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ui.port }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.ui.resources | nindent 12 }}
+          {{- if .Values.ui.probes.readiness.enabled }}
+          readinessProbe:
+            {{- include "abfs.probe" (dict "cfg" .Values.ui.probes.readiness "port" .Values.ui.port) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.ui.probes.liveness.enabled }}
+          livenessProbe:
+            {{- include "abfs.probe" (dict "cfg" .Values.ui.probes.liveness "port" .Values.ui.port) | nindent 12 }}
+          {{- end }}
+          # Writable HOME ($HOME=/home/abfs-server) for do_ui (cacheman/config).
+          volumeMounts:
+            - name: home
+              mountPath: /home/abfs-server
+      volumes:
+        - name: home
+          emptyDir: {}
+{{- end }}

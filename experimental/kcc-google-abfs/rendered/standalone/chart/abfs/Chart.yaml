@@ -1,0 +1,35 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Helm chart for the Android Build File System (ABFS) data plane on GKE Standard: the
+# ABFS server, Gerrit uploaders, and an optional UI. Chart apiVersion v2; targets Helm 4.
+#
+# The data plane has node-level prerequisites the chart assumes are in place (see docs/):
+# a dedicated node pool with the casfs kernel module loaded, running as the licensed
+# runtime service account in GCE-metadata identity mode with the license in node metadata.
+# Workloads render only once `licensed` is true.
+apiVersion: v2
+name: abfs
+description: Android Build File System (ABFS) server + Gerrit uploaders for GKE Standard
+type: application
+version: 0.7.0
+# appVersion is the default ABFS image tag: image.tag falls back to this when left empty.
+appVersion: "0.1.14"
+kubeVersion: ">=1.27.0-0"
+keywords:
+  - abfs
+  - android
+  - build
+maintainers:
+  - name: ABFS on GKE/KCC
