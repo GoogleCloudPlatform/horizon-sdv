@@ -1,4 +1,4 @@
 {
-  "name": "AAOS Platform Tools",
+  "name": "AAOS_Platform_Tools",
   "description": "Plugin for Android Platform Development (AOSP, AAOS). Provides expert skills and MCP tools for resolving build errors (Soong/Blueprint) and automated CTS/VTS test analysis."
 }
