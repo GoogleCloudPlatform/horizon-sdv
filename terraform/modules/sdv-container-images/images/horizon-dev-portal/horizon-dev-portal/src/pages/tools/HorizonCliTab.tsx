@@ -391,13 +391,20 @@ function HorizonCliTab() {
                     <TableCell>{formatBytes(art.sizeBytes)}</TableCell>
                     <TableCell>
                       <Stack direction="row" alignItems="center" spacing={0.5}>
-                        <Typography
-                          variant="caption"
-                          component="code"
-                          sx={{ wordBreak: 'break-all' }}
-                        >
-                          {art.sha256}
-                        </Typography>
+                        <Tooltip title={art.sha256}>
+                          <Typography
+                            variant="caption"
+                            component="code"
+                            sx={{
+                              maxWidth: { xs: '120px', sm: '150px', md: 'none' },
+                              overflow: { xs: 'hidden', md: 'visible' },
+                              textOverflow: { xs: 'ellipsis', md: 'clip' },
+                              whiteSpace: { xs: 'nowrap', md: 'normal' },
+                            }}
+                          >
+                            {art.sha256}
+                          </Typography>
+                        </Tooltip>
                         <Tooltip title={copied === art.sha256 ? 'Copied' : 'Copy checksum'}>
                           <IconButton
                             size="small"
