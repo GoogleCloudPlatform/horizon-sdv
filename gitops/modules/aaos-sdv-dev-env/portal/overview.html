@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AAOS SDV Development Environment Module</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #333; padding: 20px; }
+    h1 { color: #1a73e8; }
+    h2 { color: #202124; margin-top: 24px; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #e8f0fe; color: #1a73e8; }
+    pre { background: #f8f9fa; padding: 12px; border-radius: 6px; overflow-x: auto; border: 1px solid #dadce0; }
+    .card { border: 1px solid #dadce0; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #fff; }
+  </style>
+</head>
+<body>
+  <h1>AAOS SDV Development Environment Module <span class="badge">Standalone</span></h1>
+  <p>This module provides automated build and validation pipelines for creating the <strong>AAOS SDV Development Environment</strong>.</p>
+  <p>The Dockerfile and all image assets are cloned at run time from the public
+     <a href="https://github.com/google/aaos-sdv-demos" target="_blank"><code>aaos-sdv-demos</code></a>
+     repository; nothing is vendored in this repository.</p>
+
+  <div class="card">
+    <h2>Pipeline: <code>aaos-sdv-dev-env-init</code></h2>
+    <p>Fast preflight, run this first. Verifies that
+       <code>aaos-sdv-demos</code> is reachable and that the configured revision exists. Fails in
+       seconds instead of after a multi-gigabyte build.</p>
+  </div>
+
+  <div class="card">
+    <h2>Pipeline: <code>aaos-sdv-dev-env-execute</code></h2>
+    <p>Automates end-to-end artifact creation and validation:</p>
+    <ul>
+      <li><strong>Step 1: Container Build</strong> — Clones <code>aaos-sdv-demos</code> and builds the ASfP + CARLA 0.9.15 + SOME/IP image via the shared <code>common-docker-image-build</code> template, pushing to Artifact Registry as <code>aaos-sdv-dev-env</code>.</li>
+      <li><strong>Step 2: Workspace &amp; Candidate Snapshot</strong> — Provisions a high-CPU builder workstation, installs CARLA 0.9.15, applies patches and builds AAOS 26Q2, then captures a candidate GCE persistent disk snapshot.</li>
+      <li><strong>Step 3: Automated Test Suite</strong> — Launches a GPU-accelerated test workstation from the candidate snapshot and runs a BATS acceptance suite on it, covering CARLA RPC (port 2000) and dual-VM vehicle simulation (<code>launch_2vm</code> plus <code>cvd fleet</code>).</li>
+      <li><strong>Step 4: Atomic Promotion</strong> — On test success, labels the validated snapshot <code>is-latest=true</code> and publishes a ready-to-use <code>aaos-sdv-dev-env-latest</code> workstation configuration built from it.</li>
+    </ul>
+  </div>
+
+  <h2>How to Run</h2>
+  <p>Submit from the <a href="/workflows" target="_blank">Argo Workflows UI</a>, the Developer Portal, or via CLI:</p>
+  <pre>horizon workflow submit --module aaos-sdv-dev-env --template aaos-sdv-dev-env-init
+
+horizon workflow submit --module aaos-sdv-dev-env --template aaos-sdv-dev-env-execute</pre>
+</body>
+</html>
