@@ -33,7 +33,7 @@ The _Seed Workloads_ job uses the groovy definitions to initialise the jobs requ
 ### Role Based Strategy<a name="rolebasedstrategy"></a>
 To run pipeline jobs, users must have access to Jenkins and be granted permissions to access jobs in the workloads.
 
-- Users given appropriate Keycloak Group access as per the instructions detailed in [Jenkins Access via Keycloak Groups](../../deployment_guide.md#section-5d---jenkins-access-via-keycloak-groups), i.e. `docs/deployment_guide.md`.
+- Users given appropriate Keycloak Group access as per the instructions detailed in [Jenkins Access via Keycloak Groups](../../deployment_guide.md#section-3e---jenkins-access-via-keycloak-groups), i.e. `docs/deployment_guide.md`.
 - Jenkins must be updated to provide the users permissions to seed jobs:
   - In `Jenkins` → `Manage Jenkins` → `Manage and Assign Roles` → `Assign Roles`.
     - Those roles are:
@@ -92,7 +92,7 @@ There are also Groovy files that define the folder structure within Jenkins, e.g
 
 ### Initial Jenkins Configuration
 
-Upon initial launch, Jenkins contains a single job called _"Seed Workloads"_, defined in `gitops/templates/jenkins.yaml` (CasC).
+Upon initial launch, Jenkins contains a single job called _"Seed Workloads"_, defined in `workloads/seed/Jenkinsfile`.
 
 ### Seed Workloads Job Functionality
 
