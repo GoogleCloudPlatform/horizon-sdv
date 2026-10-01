@@ -1,0 +1,4 @@
+name: projects/horizon-sdv-deploy-1/policies/iam.disableServiceAccountKeyCreation
+spec:
+  rules:
+  - enforce: false
