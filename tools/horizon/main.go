@@ -428,6 +428,7 @@ func runWorkflow(args []string) (int, error) {
 		genURL := fs.Bool("generate-signed-url", false, "print signed-url: <URL> on stdout (or --output json); do not download bytes")
 		dur := fs.Int("duration", 0, "optional signed URL lifetime in seconds (maps to durationSeconds query; server clamps)")
 		templateName := fs.String("template-name", "", "disambiguate artifact (maps to templateName query; see workflow show outputArtifacts)")
+		nodeID := fs.String("node-id", "", "disambiguate artifact by node ID from 409 candidates list (maps to nodeId query; see workflow show outputArtifacts)")
 		outPath := fs.String("o", "", "write downloaded bytes to this path")
 		toStdout := fs.Bool("stdout", false, "write downloaded bytes to stdout")
 		quiet := fs.Bool("q", false, "when downloading: no progress on stderr")
@@ -451,7 +452,7 @@ func runWorkflow(args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		err = cmdWorkflowDownloadArtifact(ctx, c, rem[0], rem[1], *genURL, *dur, *templateName, *outPath, *toStdout, *outFmt, *quiet)
+		err = cmdWorkflowDownloadArtifact(ctx, c, rem[0], rem[1], *genURL, *dur, *templateName, *nodeID, *outPath, *toStdout, *outFmt, *quiet)
 		if err != nil {
 			return 1, err
 		}

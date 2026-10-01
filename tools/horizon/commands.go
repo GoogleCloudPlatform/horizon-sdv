@@ -1104,7 +1104,7 @@ func copyDownloadWithProgress(r io.Reader, w io.Writer, total int64, destPath st
 	return nn, err
 }
 
-func cmdWorkflowDownloadArtifact(ctx context.Context, c *Client, wfName, artName string, genURL bool, durationSec int, templateName, outFile string, toStdout bool, outFormat string, quiet bool) error {
+func cmdWorkflowDownloadArtifact(ctx context.Context, c *Client, wfName, artName string, genURL bool, durationSec int, templateName, nodeID, outFile string, toStdout bool, outFormat string, quiet bool) error {
 	if genURL && (toStdout || outFile != "") {
 		return fmt.Errorf("--generate-signed-url cannot be combined with -o or -stdout")
 	}
@@ -1117,6 +1117,9 @@ func cmdWorkflowDownloadArtifact(ctx context.Context, c *Client, wfName, artName
 	if templateName != "" {
 		q.Set("templateName", templateName)
 	}
+	if nodeID != "" {
+		q.Set("nodeId", nodeID)
+	}
 	if durationSec > 0 {
 		q.Set("durationSeconds", strconv.Itoa(durationSec))
 	}
@@ -1124,9 +1127,33 @@ func cmdWorkflowDownloadArtifact(ctx context.Context, c *Client, wfName, artName
 		apiPath += "?" + enc
 	}
 
-	raw, err := c.GetJSON(ctx, apiPath)
+	raw, code, err := c.GetJSONRaw(ctx, apiPath)
 	if err != nil {
 		return err
+	}
+	if code == http.StatusConflict && nodeID == "" {
+		// Multiple nodes produced an artifact with this name. Auto-select the last
+		// candidate (execution order) and retry. Use --node-id to override.
+		var conflict struct {
+			Candidates []struct {
+				NodeID      string `json:"nodeId"`
+				DisplayName string `json:"displayName"`
+			} `json:"candidates"`
+		}
+		if jsonErr := json.Unmarshal(raw, &conflict); jsonErr == nil && len(conflict.Candidates) > 0 {
+			last := conflict.Candidates[len(conflict.Candidates)-1]
+			fmt.Fprintf(os.Stderr, "note: ambiguous artifact %q — auto-selected node %s (%s); use --node-id to override\n",
+				artName, last.NodeID, last.DisplayName)
+			q.Set("nodeId", last.NodeID)
+			apiPath = "/v1/workflows/" + url.PathEscape(wfName) + "/downloadArtifact/" + url.PathEscape(artName) + "?" + q.Encode()
+			raw, code, err = c.GetJSONRaw(ctx, apiPath)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if code < 200 || code > 299 {
+		return fmt.Errorf("workflow: GET %s: HTTP %d %s", apiPath, code, truncate(string(raw), 400))
 	}
 	var meta struct {
 		URL       string `json:"url"`
