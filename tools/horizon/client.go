@@ -292,6 +292,28 @@ func (c *Client) GetJSON(ctx context.Context, path string) ([]byte, error) {
 	return b, nil
 }
 
+// GetJSONRaw GETs a JSON resource and returns the raw status code alongside the
+// body, allowing callers to handle specific non-2xx responses (e.g. 409) themselves.
+// A 401 is still retried once after token refresh before returning.
+func (c *Client) GetJSONRaw(ctx context.Context, path string) ([]byte, int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	b, code, err := c.doOnce(ctx, http.MethodGet, path, nil, "")
+	if err != nil {
+		return nil, 0, err
+	}
+	if code == http.StatusUnauthorized && !c.envToken {
+		if err := c.refreshBearer(ctx); err != nil {
+			return nil, code, err
+		}
+		b, code, err = c.doOnce(ctx, http.MethodGet, path, nil, "")
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	return b, code, nil
+}
+
 // StreamGET opens a GET response for streaming (caller must close body).
 func (c *Client) StreamGET(ctx context.Context, rawURL string) (*http.Response, error) {
 	c.mu.Lock()
