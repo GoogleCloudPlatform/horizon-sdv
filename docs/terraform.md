@@ -65,12 +65,12 @@ Main list of resources created by terraform scripts in the GCP Cloud is mentione
 Terraform implementation in the Horizon SDV poject repository is organized into following subdirectories:
 
 - modules - implementation of the terraform modules
-- env - stores all environmetn specific configuration options (most of them are needed to be provided up front with either `local-env.sh` script or with GitHub Workflows execution pipeline)
+- env - stores all environmetn specific configuration options (most of them are needed to be provided up front with either `terraform.tfvars` or with GitHub Workflows execution pipeline)
 
 
 ## Modules Overview
 
-Main entry point for terraform execution is `env/main.tf` file. This file contains all input configuration parameters that are needed to be provided before execution. List of input configuration parameters is provided in the `local-env.sh` file which can be modified and sourced if there is a need of running terraform manually. If GitHub Workflows are used - all these input variables are provided automatically.
+Main entry point for terraform execution is `env/main.tf` file. This file contains all input configuration parameters that are needed to be provided before execution. Input configuration parameters are defined in `terraform/env/variables.tf` and can be set by copying `terraform/env/terraform.tfvars.sample` to `terraform/env/terraform.tfvars` and filling in the required values. If GitHub Workflows are used - all these input variables are provided automatically.
 
 - scm_type (SCM type: 'github' or 'git')
 - scm_auth_method (Authentication method: 'app', 'userpass', or 'none')
@@ -81,12 +81,8 @@ Main entry point for terraform execution is `env/main.tf` file. This file contai
 - sdv_github_app_id (GitHub App ID, for app authentication)
 - sdv_github_app_install_id (GitHub App Installation ID, for app authentication)
 - sdv_github_app_private_key (GitHub App Private Key, for app authentication)
-- sdv_jenkins_admin_password (Jenkins initial admin account password)
 - sdv_keycloak_admin_password (Keycloak initial admin account password)
-- sdv_gerrit_admin_password (Gerrit initial admin accont password)
-- sdv_gerrit_ssh_private_key (Gerrit initial admin SSH private key)
 - sdv_keycloak_horizon_admin_password (Keycloak initial horizon realm admin account password)
-- sdv_cuttlefish_ssh_private_key (GCE SSH access to Cuttlefish VMs private key)
 - sdv_env_name (Environment and SubDomain name)
 - sdv_root_domain (Top level Domain Name)
 - sdv_gcp_project_id (GCP Project ID)

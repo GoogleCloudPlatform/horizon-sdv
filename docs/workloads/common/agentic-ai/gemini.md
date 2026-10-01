@@ -28,7 +28,7 @@ Scripts and environment for running the [Gemini CLI](https://geminicli.com/docs/
 |------|--------|
 | Prepare staging (CVD/CTS) | **`workloads/android/pipelines/tests/gemini_argo_prepare_staging.sh`** — **`prepare-gemini-cvd`** / **`prepare-gemini-cts`** in each chart’s **`_gemini.tpl`** |
 | **`gemini-review`** pod | Inline in **`aaos_builder/helm/templates/workflow/_gemini-review.tpl`**, **`cvd_launcher/helm/.../_gemini.tpl`**, **`cts_execution/helm/.../_gemini.tpl`** — all call **`run_ai_review.sh`** |
-| Cluster **`ai-review`** + **`templateRef`** | Not used (AAOS, CVD, and CTS inline only on this controller) — see **[AI review reuse options](../../../guides/ai_review_reuse_options.md)** |
+| Cluster **`ai-review`** + **`templateRef`** | Not used (AAOS, CVD, and CTS inline only on this controller) — see **[AI Review](../../guides/workload_usage.md#ai-review)** |
 
 ## Scripts
 

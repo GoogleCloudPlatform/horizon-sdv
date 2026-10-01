@@ -48,6 +48,8 @@ Specifies which workload(s) to seed
 - `all` seed all workloads.
 - `android` seed the Android workload.
 - `openbsw` seed the OpenBSW workload.
+- `sample` seed the Sample pipelines (Horizon API demo).
+- `utilities` seed the Utilities jobs.
 - `cloud-workstations` seed the Cloud Workstations workload.
 
 ### `BUILDKIT_RELEASE_TAG`

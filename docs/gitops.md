@@ -33,7 +33,6 @@ limitations under the License. -->
     - [Zookeeper](#zookeeper)
     - [MongoDB](#mongodb)
     - [Gerrit Operator](#gerrit-operator)
-    - [Gerrit MCP Server](#gerrit-mcp-server)
     - [External Secrets](#external-secrets)
     - [External DNS](#external-dns)
     - [OAuth2 Proxy](#oauth-proxy)
@@ -264,9 +263,9 @@ MCP Gateway Registry is a centralized application for managing, monitoring and a
 MCP Gateway Registry is deployed using official prebuilt [container images](https://hub.docker.com/u/mcpgateway), with a custom helm chart config `gitops/templates/mcp-gateway-registry.yaml` and `gitops/apps/mcp-gateway-registry`, created for Horizon SDV project.
 
 It uses the folowing container images:
-- mcpgateway/registry:v1.6.0
-- mcpgateway/auth-server:v1.6.0
-- mcpgateway/mcpgw-server:v1.6.0
+- mcpgateway/registry:v1.0.6
+- mcpgateway/auth-server:v1.0.6
+- mcpgateway/mcpgw-server:v1.0.6
 
 During installation, an initial configuration is applied to setup required resources using `gitops/templates/mcp-gateway-registry-init.yaml`.
 

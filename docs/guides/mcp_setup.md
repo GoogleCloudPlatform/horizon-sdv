@@ -43,8 +43,8 @@ The following prerequisites must be met before proceeding with the setup:
 
 - Access to MCP Gateway Registry with appropriate permissions.
   - User must be added to either of Keycloak groups:
-    - `horizon-mcp-gateway-registry-admins`: Admins can register new or edit existing MCP servers and agents. They have full access to all MCP servers, agents and this app’s API.
-    - `horizon-mcp-gateway-registry-users`: Users can only view existing registered MCP servers and agents but have full use access to all MCP servers and agents; and read-only access to this app’s API.
+    - `administrators`: Admins can register new or edit existing MCP servers and agents. They have full access to all MCP servers, agents and this app’s API.
+    - `viewers`: Users can only view existing registered MCP servers and agents but have full use access to all MCP servers and agents; and read-only access to this app’s API.
 - Workstation Images with Gemini-CLI and Gemini Code Assist installed (for Gemini clients).
 - For Antigravity MCP: a workstation image that includes Antigravity (Agent and/or `agy`) and `antigravity-mcp-agent` (see [antigravity.md](../workloads/common/agentic-ai/antigravity.md)).
 

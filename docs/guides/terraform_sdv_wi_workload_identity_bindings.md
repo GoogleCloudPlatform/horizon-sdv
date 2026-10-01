@@ -16,7 +16,7 @@ limitations under the License. -->
 
 This guide explains how the **`sdv-wi`** module (`terraform/modules/sdv-wi`) wires **GKE Workload Identity (WI)** and why **IAM bindings must be attached to each Google service account (GSA)**, not to the **project**.
 
-For Argo Workflows–specific KSA/GSA naming and pod behavior, see **[Argo Workflows and Google Cloud Workload Identity](argo_workflows_workload_identity.md)**.
+For Argo Workflows–specific KSA/GSA naming and pod behavior, see the [Argo Workflows Service Accounts](https://argo-workflows.readthedocs.io/en/latest/service-accounts/) documentation.
 
 ---
 
