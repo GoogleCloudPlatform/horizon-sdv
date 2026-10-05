@@ -79,7 +79,7 @@ config:
   workloads:
     android:
       helm:
-        version: '5.9.18'
+        version: '5.9.63'
       # Set by Terraform on live clusters (MODULE_CONFIG for Module Manager module workloads-android).
       url: ""
       branch: ""
