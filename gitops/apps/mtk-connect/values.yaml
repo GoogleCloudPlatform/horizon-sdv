@@ -16,19 +16,19 @@ config:
   # Parent horizon-sdv chart passes chart versions from root config.chartVersions (required for deploy).
   chartVersions:
     mtkconnect:
-      version: "v1.12.1"
+      version: "v1.13.0"
   gitops:
     mtkconnect:
-      router: harbor.scpmtk.com/mtk-connect/mtk-connect-router:v2.5.1
-      authenticator: harbor.scpmtk.com/mtk-connect/mtk-connect-authenticator:v5.2.0
-      wamprouter: harbor.scpmtk.com/mtk-connect/mtk-connect-wamprouter:v3.0.33
-      devices: harbor.scpmtk.com/mtk-connect/mtk-connect-devices:v9.1.0
-      portal: harbor.scpmtk.com/mtk-connect/mtk-connect-portal:v7.1.1
-      docs: harbor.scpmtk.com/mtk-connect/mtk-connect-docs:v2.0.18
-      installers: harbor.scpmtk.com/mtk-connect/mtk-connect-installers:v1.12.0
+      router: harbor.scpmtk.com/mtk-connect/mtk-connect-router:v2.6.0
+      authenticator: harbor.scpmtk.com/mtk-connect/mtk-connect-authenticator:v5.2.1
+      wamprouter: harbor.scpmtk.com/mtk-connect/mtk-connect-wamprouter:v3.0.34
+      devices: harbor.scpmtk.com/mtk-connect/mtk-connect-devices:v9.3.1
+      portal: harbor.scpmtk.com/mtk-connect/mtk-connect-portal:v7.2.0
+      docs: harbor.scpmtk.com/mtk-connect/mtk-connect-docs:v2.0.19
+      installers: harbor.scpmtk.com/mtk-connect/mtk-connect-installers:v1.13.0
     mongodb:
       updater: harbor.scpmtk.com/mtk-connect/mtk-connect-mongodb-updater:v1.0.0
-      version: mongo:8.2.9-noble
+      version: mongo:8.2.12-noble
       subpath: data/mongodb-v8.2
 spec:
   destination:
