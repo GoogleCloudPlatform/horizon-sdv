@@ -1,0 +1,27 @@
+# Copyright (C) 2026 The Qt Company Ltd.
+# All rights reserved.
+#
+# This file is provided AS IS with NO WARRANTY OF ANY KIND, INCLUDING THE
+# WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: squish
+requires:
+  - path: ../gnome/skaffold.yaml
+build:
+  artifacts:
+    - image: squish
+      context: .
+      docker:
+        network: cloudbuild
+        buildArgs:
+          CWS_BASE_IMAGE_TAG: '{{.CWS_BASE_IMAGE_TAG | default "latest"}}'
+          GCP_REGION: '{{.GCP_REGION | default "us-central1"}}'
+          PREFLIGHT_WEB_REPO: '{{.PREFLIGHT_WEB_REPO | default ""}}'
+          PREFLIGHT_WEB_DIR: '{{.PREFLIGHT_WEB_DIR | default ""}}'
+          SQUISH_GCP_LICENSE_SECRET: '{{.SQUISH_GCP_LICENSE_SECRET | default "squish-license-key"}}'
+      requires:
+        - image: gnome
+          alias: BASE_IMAGE
