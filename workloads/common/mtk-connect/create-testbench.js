@@ -31,7 +31,7 @@
  #      - If not, creates a new agent and sets its permissions.
  #    - configureDevices:
  #      - Creates or updates devices associated with the agent.
- #      - Configures device interfaces (e.g., ADB, button, file system,
+ #      - Configures device interfaces (e.g., ADB, button, exec, file system,
  #        MJPEG, terminal, touch, and tunnel).
  #
  #############################################################################
@@ -240,6 +240,15 @@ async function configureDevice(i) {
         'button': {
           'driver': 'adb',
           'skin': 'Default Android'
+        },
+        'exec': {
+          'types': [
+            {
+              'name': 'device',
+              'driver': 'adb',
+              'cwd': '/'
+            }
+          ]
         },
         'fs': {
           'types': [
