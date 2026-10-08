@@ -14,7 +14,7 @@ limitations under the License. -->
 
 # Horizon
 
-Welcome! 
+Welcome Horizon! 
 
 This page provides an introduction to Horizon, the Agentic Innovation Platform for SDV.
 
