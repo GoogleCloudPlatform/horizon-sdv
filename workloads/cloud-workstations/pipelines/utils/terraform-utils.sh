@@ -374,9 +374,9 @@ get_existing_ws_configs_with_ws_admins() {
             host_machine_type: ($config.host[0]?.gce_instance[0]?.machine_type // null),
             host_quickstart_pool_size: ($config.host[0]?.gce_instance[0]?.pool_size // null),
             host_boot_disk_size_gb: ($config.host[0]?.gce_instance[0]?.boot_disk_size_gb // null),
-            host_disable_public_ip_addresses: ($config.host[0]?.gce_instance[0]?.disable_public_ip_addresses // null),
-            host_disable_ssh: ($config.host[0]?.gce_instance[0]?.disable_ssh // null),
-            host_enable_nested_virtualization: ($config.host[0]?.gce_instance[0]?.enable_nested_virtualization // null),
+            host_disable_public_ip_addresses: ($config.host[0]?.gce_instance[0]?.disable_public_ip_addresses),
+            host_disable_ssh: ($config.host[0]?.gce_instance[0]?.disable_ssh),
+            host_enable_nested_virtualization: ($config.host[0]?.gce_instance[0]?.enable_nested_virtualization),
             pd_required: ((($config.persistent_directories // []) | length) > 0),
             pd_mount_path: (($config.persistent_directories // [])[0]?.mount_path // null),
             pd_fs_type: (($config.persistent_directories // [])[0]?.gce_pd[0]?.fs_type // null),
@@ -398,7 +398,7 @@ get_existing_ws_configs_with_ws_admins() {
               (($config.ephemeral_directories // [])[0]?.gce_pd[0]?.source_image) as $eimg
               | if $eimg and $eimg != "" then $eimg else null end
             ),
-            ed_read_only: (($config.ephemeral_directories // [])[0]?.gce_pd[0]?.read_only // null),
+            ed_read_only: (($config.ephemeral_directories // [])[0]?.gce_pd[0]?.read_only),
             container_image: ($config.container[0]?.image // null),
             container_entrypoint_commands: ($config.container[0]?.command // []),
             container_entrypoint_args: ($config.container[0]?.args // []),
