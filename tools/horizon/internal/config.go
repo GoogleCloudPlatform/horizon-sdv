@@ -11,12 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package horizon
 
 import (
 	"os"
 	"strconv"
 	"strings"
+)
+
+var (
+	debugMode    bool
+	jsonMode     bool
+	bannerMode   bool
+	insecureMode bool
 )
 
 // Config holds merged CLI defaults: optional file, then environment, then flags.
@@ -37,7 +44,7 @@ type Config struct {
 	LogStreamFormat      string
 }
 
-func envOr(key, def string) string {
+func EnvOr(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
 	}
@@ -55,3 +62,19 @@ func envInt(key string, def int) int {
 	}
 	return n
 }
+
+func TargetDebug() *bool { return &debugMode }
+
+func TargetJSON() *bool { return &jsonMode }
+
+func TargetNoBanner() *bool { return &bannerMode }
+
+func TargetInsecure() *bool { return &insecureMode }
+
+func IsDebug() bool { return debugMode }
+
+func IsJSON() bool { return jsonMode }
+
+func IsNoBanner() bool { return bannerMode }
+
+func IsInsecure() bool { return insecureMode }

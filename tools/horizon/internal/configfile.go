@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package horizon
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ import (
 )
 
 // horizonConfigDir returns ~/.config/horizon (or XDG_CONFIG_HOME/horizon).
-func horizonConfigDir() (string, error) {
+func HorizonConfigDir() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
 		home, e := os.UserHomeDir()
@@ -38,7 +38,7 @@ func horizonConfigDir() (string, error) {
 
 // HorizonConfigFilePath is the default path for optional CLI defaults.
 func HorizonConfigFilePath() (string, error) {
-	dir, err := horizonConfigDir()
+	dir, err := HorizonConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -171,7 +171,7 @@ func finalizeConfigRelaxed(cfg *Config) (*Config, error) {
 		}
 	}
 	if cfg.KeycloakBase == "" {
-		return nil, fmt.Errorf("Keycloak URL unknown: set KEYCLOAK_BASE or HORIZON_DOMAIN, or domain in ~/.config/horizon/config.yaml, or pass --domain (e.g. %s auth login --device --domain horizon.example.com)", progName())
+		return nil, fmt.Errorf("Keycloak URL unknown: set KEYCLOAK_BASE or HORIZON_DOMAIN, or domain in ~/.config/horizon/config.yaml, or pass --domain (e.g. %s auth login --device --domain horizon.example.com)", ProgName())
 	}
 	return cfg, nil
 }
@@ -261,6 +261,12 @@ type FlagOverrides struct {
 	Template   string
 }
 
+// RevalidateConfig re-derives API/Keycloak URLs after CLI flag overrides.
+func RevalidateConfig(cfg *Config) error {
+	_, err := finalizeConfig(cfg)
+	return err
+}
+
 func ApplyFlagOverrides(cfg *Config, fo *FlagOverrides) {
 	if fo == nil {
 		return
@@ -279,4 +285,38 @@ func ApplyFlagOverrides(cfg *Config, fo *FlagOverrides) {
 	if s := strings.TrimSpace(fo.Template); s != "" {
 		cfg.Template = s
 	}
+}
+
+// MergeLoginIntoConfigFile writes domain/keycloak fields into config.yaml (for auth login --write-config).
+func MergeLoginIntoConfigFile(domain, apiBase, keycloakBase, realm string) error {
+	dir, err := HorizonConfigDir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "config.yaml")
+
+	var fc fileConfig
+	if b, err := os.ReadFile(path); err == nil {
+		_ = yaml.Unmarshal(b, &fc)
+	}
+	if d := strings.TrimSpace(domain); d != "" {
+		fc.Domain = d
+	}
+	if s := strings.TrimSpace(apiBase); s != "" {
+		fc.APIBaseURL = strings.TrimSuffix(s, "/")
+	}
+	if s := strings.TrimSpace(keycloakBase); s != "" {
+		fc.KeycloakBase = strings.TrimSuffix(s, "/")
+	}
+	if s := strings.TrimSpace(realm); s != "" {
+		fc.KeycloakRealm = s
+	}
+	out, err := yaml.Marshal(&fc)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
 }

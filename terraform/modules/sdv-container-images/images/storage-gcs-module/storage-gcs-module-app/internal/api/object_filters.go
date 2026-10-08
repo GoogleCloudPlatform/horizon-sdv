@@ -82,6 +82,8 @@ type metadataExpectation struct {
 type filteredObject struct {
 	ObjectPath      string            `json:"objectPath"`
 	GSURI           string            `json:"gsUri"`
+	Size            int64             `json:"size,omitempty"`
+	ContentType     string            `json:"contentType,omitempty"`
 	Metadata        map[string]string `json:"metadata,omitempty"`
 	MatchedMetadata map[string]string `json:"matchedMetadata,omitempty"`
 	StorageClass    string            `json:"storageClass,omitempty"`
@@ -359,9 +361,11 @@ func (s *Server) queryFilteredObjects(ctx context.Context, bucket string, req ob
 			continue
 		}
 		item := filteredObject{
-			ObjectPath: attrs.Name,
-			GSURI:      fmt.Sprintf("gs://%s/%s", bucket, attrs.Name),
-			Updated:    attrs.Updated.Format(time.RFC3339),
+			ObjectPath:  attrs.Name,
+			GSURI:       fmt.Sprintf("gs://%s/%s", bucket, attrs.Name),
+			Size:        attrs.Size,
+			ContentType: attrs.ContentType,
+			Updated:     attrs.Updated.Format(time.RFC3339),
 		}
 		if includeMetadata {
 			item.Metadata = cloneMetadata(attrs.Metadata)

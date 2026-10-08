@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 package catalog
 
 import (
@@ -93,6 +92,54 @@ func TestOpenAPIWorkflowLogPath(t *testing.T) {
 	op := lg["get"].(map[string]interface{})
 	if op["operationId"] != "streamWorkflowLogs" {
 		t.Fatalf("log operationId: %v", op["operationId"])
+	}
+}
+
+func TestOpenAPIArtifactsPaths(t *testing.T) {
+	t.Parallel()
+	b, err := OpenAPISpec(nil, RetentionOpenAPI{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Paths map[string]struct {
+			Get *struct {
+				OperationID string                   `json:"operationId"`
+				Parameters  []map[string]interface{} `json:"parameters"`
+				Responses   map[string]interface{}   `json:"responses"`
+			} `json:"get"`
+		} `json:"paths"`
+		Components struct {
+			Schemas map[string]interface{} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	buckets := doc.Paths["/v1/artifacts/buckets"].Get
+	if buckets == nil || buckets.OperationID != "listArtifactsBuckets" {
+		t.Fatalf("list buckets: %+v", doc.Paths["/v1/artifacts/buckets"].Get)
+	}
+	if _, ok := buckets.Responses["200"]; !ok {
+		t.Fatal("list buckets missing 200")
+	}
+	objects := doc.Paths["/v1/artifacts/buckets/{bucket}/objects"].Get
+	if objects == nil || objects.OperationID != "listArtifactsObjects" {
+		t.Fatalf("list objects: %+v", doc.Paths["/v1/artifacts/buckets/{bucket}/objects"].Get)
+	}
+	want := []string{"bucket", "prefix", "pageToken", "limit"}
+	if len(objects.Parameters) != len(want) {
+		t.Fatalf("object parameters: got %d want %d", len(objects.Parameters), len(want))
+	}
+	for i, name := range want {
+		if objects.Parameters[i]["name"] != name {
+			t.Fatalf("param %d name: got %v want %q", i, objects.Parameters[i]["name"], name)
+		}
+	}
+	for _, schema := range []string{"BucketInfo", "ListBucketsResponse", "ObjectInfo", "ListObjectsResponse"} {
+		if _, ok := doc.Components.Schemas[schema]; !ok {
+			t.Fatalf("missing schema %s", schema)
+		}
 	}
 }
 

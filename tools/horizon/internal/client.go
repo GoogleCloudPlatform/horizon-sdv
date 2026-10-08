@@ -11,11 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package horizon
 
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,8 +24,35 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+var (
+	debugEnabled atomic.Bool
+)
+
+func SetDebugEnabled(enabled bool) {
+	debugEnabled.Store(enabled)
+}
+
+type debugTransport struct {
+	base http.RoundTripper
+}
+
+func (t *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if debugEnabled.Load() {
+		fmt.Fprintf(os.Stderr, "DEBUG: %s %s\n", req.Method, req.URL.String())
+	}
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+	if debugEnabled.Load() {
+		fmt.Fprintf(os.Stderr, "DEBUG: %s %s -> %d\n", req.Method, req.URL.String(), resp.StatusCode)
+	}
+	return resp, err
+}
 
 // Client calls Horizon API with bearer token refresh on 401.
 type Client struct {
@@ -37,16 +65,29 @@ type Client struct {
 	envToken   bool // HORIZON_ACCESS_TOKEN set; never refresh from Keycloak in-process for 401
 }
 
-func defaultHTTPClient() *http.Client {
+func DefaultHTTPClient() *http.Client {
 	// Use DefaultTransport clone with HTTP/2 enabled (ALPN h2). An empty TLSNextProto map
 	// disables h2 and breaks Keycloak/API calls behind modern ingress that speaks HTTP/2.
 	return &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()}
 }
 
-func newClient(cfg *Config) (*Client, error) {
+func DefaultHTTPClientWithInsecure(insecure bool) *http.Client {
+	base := http.DefaultTransport.(*http.Transport).Clone()
+	if insecure {
+		base.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		fmt.Fprintln(os.Stderr, "WARNING: --insecure flag is set (TLS certificate verification disabled). This should only be used for development.")
+	}
+	var transport http.RoundTripper = base
+	if debugEnabled.Load() {
+		transport = &debugTransport{base: base}
+	}
+	return &http.Client{Transport: transport}
+}
+
+func NewClient(cfg *Config) (*Client, error) {
 	c := &Client{
 		cfg:        cfg,
-		httpClient: defaultHTTPClient(),
+		httpClient: DefaultHTTPClientWithInsecure(IsInsecure()),
 	}
 
 	if t := strings.TrimSpace(os.Getenv("HORIZON_ACCESS_TOKEN")); t != "" {
@@ -55,7 +96,7 @@ func newClient(cfg *Config) (*Client, error) {
 		return c, nil
 	}
 
-	tc, err := loadTokenCache()
+	tc, err := LoadTokenCache()
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +112,7 @@ func newClient(cfg *Config) (*Client, error) {
 			if err == nil {
 				c.bearer = nt.AccessToken
 				c.tokenCache = nt
-				_ = saveTokenCache(nt)
+				_ = SaveTokenCache(nt)
 				return c, nil
 			}
 		}
@@ -81,7 +122,7 @@ func newClient(cfg *Config) (*Client, error) {
 		if cfg.KeycloakBase == "" {
 			return nil, fmt.Errorf("KEYCLOAK_CLIENT_SECRET set but KEYCLOAK_BASE or HORIZON_DOMAIN is required")
 		}
-		clientID := envOr("KEYCLOAK_CLIENT_ID", "horizon-api-ci")
+		clientID := EnvOr("KEYCLOAK_CLIENT_ID", "horizon-api-ci")
 		oauth := &OAuthClient{HTTP: c.httpClient}
 		nt, err := oauth.ClientCredentials(context.Background(), cfg.KeycloakBase, cfg.KeycloakRealm, clientID, sec)
 		if err != nil {
@@ -98,7 +139,7 @@ func newClient(cfg *Config) (*Client, error) {
 		return c, nil
 	}
 
-	return nil, fmt.Errorf("not authenticated: set HORIZON_ACCESS_TOKEN, KEYCLOAK_CLIENT_SECRET, or run `%s auth login`", progName())
+	return nil, fmt.Errorf("not authenticated: set HORIZON_ACCESS_TOKEN, KEYCLOAK_CLIENT_SECRET, or run `%s auth login`", ProgName())
 }
 
 func (c *Client) refreshBearer(ctx context.Context) error {
@@ -111,13 +152,13 @@ func (c *Client) refreshBearer(ctx context.Context) error {
 		if err == nil {
 			c.bearer = nt.AccessToken
 			c.tokenCache = nt
-			_ = saveTokenCache(nt)
+			_ = SaveTokenCache(nt)
 			_ = os.Setenv("HORIZON_ACCESS_TOKEN", nt.AccessToken)
 			return nil
 		}
 	}
 	if sec := strings.TrimSpace(os.Getenv("KEYCLOAK_CLIENT_SECRET")); sec != "" && c.cfg.KeycloakBase != "" {
-		clientID := envOr("KEYCLOAK_CLIENT_ID", "horizon-api-ci")
+		clientID := EnvOr("KEYCLOAK_CLIENT_ID", "horizon-api-ci")
 		oauth := &OAuthClient{HTTP: c.httpClient}
 		nt, err := oauth.ClientCredentials(ctx, c.cfg.KeycloakBase, c.cfg.KeycloakRealm, clientID, sec)
 		if err != nil {
@@ -127,7 +168,7 @@ func (c *Client) refreshBearer(ctx context.Context) error {
 		_ = os.Setenv("HORIZON_ACCESS_TOKEN", nt.AccessToken)
 		return nil
 	}
-	return fmt.Errorf("cannot refresh token: run `%s auth login` or set KEYCLOAK_CLIENT_SECRET", progName())
+	return fmt.Errorf("cannot refresh token: run `%s auth login` or set KEYCLOAK_CLIENT_SECRET", ProgName())
 }
 
 func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader, contentType string) ([]byte, int, error) {
@@ -359,5 +400,5 @@ func GetURLPlain(ctx context.Context, rawURL string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	return defaultHTTPClient().Do(req)
+	return DefaultHTTPClient().Do(req)
 }

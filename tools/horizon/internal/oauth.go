@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package horizon
 
 import (
 	"context"
@@ -55,11 +55,20 @@ func (o *OAuthClient) postForm(ctx context.Context, u string, data url.Values) (
 		return nil, 0, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := o.HTTP.Do(req)
+
+	var client *http.Client
+	if o.HTTP != nil {
+		client = o.HTTP
+	} else {
+		client = DefaultHTTPClient()
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer resp.Body.Close()
+
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, err
