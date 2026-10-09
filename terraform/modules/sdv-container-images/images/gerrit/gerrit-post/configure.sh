@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -328,15 +328,21 @@ function gerrit-craft-all-users() {
     retVal="RETVAL_NOK"
     return
   else
-    local httpPassword
-    # HTTP password logic: add debug with date/time here (no masking)
-    httpPassword=$(cat /root/.ssh/privatekey | head -2 | tail -1 | cut -c1-30)
-
-    if [ "$httpPassword" != "$HTTP_PASSWORD" ]; then
-      HTTP_PASSWORD=$httpPassword
-      echo "WARNING: HTTP passwords differ or 1st time setup."
+    # Releases before this fix derived the password from the fixed OpenSSH key header,
+    # giving every deployment the same value. Treat that value as unset so it is replaced.
+    local legacyHttpPassword
+    legacyHttpPassword=$(head -2 /root/.ssh/privatekey | tail -1 | cut -c1-30)
+    if [ -n "${HTTP_PASSWORD}" ] && [ "${HTTP_PASSWORD}" == "${legacyHttpPassword}" ]; then
+      echo "WARNING: Stored gerrit-admin HTTP password is the insecure legacy value, replacing it."
+      HTTP_PASSWORD=""
     fi
-    
+
+    # First run has no stored password. Later runs keep jenkins-gerrit-http-password.
+    if [ -z "${HTTP_PASSWORD}" ]; then
+      HTTP_PASSWORD=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
+      echo "Generated a new gerrit-admin HTTP password."
+    fi
+
     # Debug: show contents of HTTP_PASSWORD
     if [[ "${DEBUG:-0}" == "1" ]]; then
       echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') [DEBUG] Extracted HTTP_PASSWORD: ${HTTP_PASSWORD}"
@@ -366,7 +372,7 @@ function gerrit-craft-all-users() {
       done
 
       cd /root
-      HTTP_PASSWORD_BASE64=$(echo -n $HTTP_PASSWORD | base64 -w0)
+      HTTP_PASSWORD_BASE64=$(printf '%s' "$HTTP_PASSWORD" | base64 -w0)
 
       # Debug: show contents of HTTP_PASSWORD_BASE64
       if [[ "${DEBUG:-0}" == "1" ]]; then
