@@ -43,6 +43,7 @@ STAGE4_COMPLETED=false
 STAGE5_COMPLETED=false
 
 HTTP_PASSWORD=""
+HTTP_PASSWORD_ROTATED=false
 retVal=""
 
 function initialize() {
@@ -341,6 +342,7 @@ function gerrit-craft-all-users() {
     if [ -z "${HTTP_PASSWORD}" ]; then
       HTTP_PASSWORD=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
       echo "Generated a new gerrit-admin HTTP password."
+      HTTP_PASSWORD_ROTATED=true
     fi
 
     # Debug: show contents of HTTP_PASSWORD
@@ -433,6 +435,26 @@ function gerrit-craft-all-users() {
       fi
 
       echo "HTTP PASSWORD saved into secrets"
+
+      # When the admin HTTP password changed, restart gerrit-mcp-server so it
+      # reloads the new value from the gerrit-http-password secret. This mirrors
+      # the standalone rotation remediation, so an upgrade that rotates the
+      # password leaves the cluster in the same state as running that script.
+      # Jenkins needs no restart: it reads jenkins-gerrit-http-password through
+      # the Kubernetes credentials provider.
+      if [ "${HTTP_PASSWORD_ROTATED}" = true ]; then
+        MCP_DEPLOYMENT="${NAMESPACE_PREFIX}gerrit-mcp-server"
+        if kubectl -n "${NAMESPACE_PREFIX}gerrit" get deployment "${MCP_DEPLOYMENT}" >/dev/null 2>&1; then
+          echo "Restarting ${MCP_DEPLOYMENT} to load the new HTTP password"
+          kubectl -n "${NAMESPACE_PREFIX}gerrit" rollout restart deployment "${MCP_DEPLOYMENT}" \
+            || echo "WARNING: failed to restart ${MCP_DEPLOYMENT}; it will keep the old password until restarted"
+          kubectl -n "${NAMESPACE_PREFIX}gerrit" rollout status deployment "${MCP_DEPLOYMENT}" --timeout=180s \
+            || echo "WARNING: ${MCP_DEPLOYMENT} did not become ready within 180s"
+        else
+          echo "No ${MCP_DEPLOYMENT} deployment present, skipping restart"
+        fi
+      fi
+
       retVal="RETVAL_OK"
       return
     fi
