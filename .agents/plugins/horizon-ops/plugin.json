@@ -1,4 +1,4 @@
 {
   "name": "horizon-ops",
-  "description": "Horizon SDV operations and deployment plugin for provisioning GKE infrastructure, configuring Terraform, and automating post-deployment setup."
+  "description": "Horizon SDV operations, CLI, and deployment plugin for building and using the Horizon CLI (horizon-cli), installing and configuring the MTK Connect CLI and MCP server (mtkc-cli), and provisioning GKE infrastructure (horizon-deploy)."
 }

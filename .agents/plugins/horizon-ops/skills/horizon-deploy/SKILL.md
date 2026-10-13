@@ -239,6 +239,7 @@ When triggering the deployment:
 
 7. Configure Keycloak Google Identity Provider, `broker link existing user` flow, and human admin user in the `horizon` realm.
 8. Enable Developer Portal modules (`workloads-common`, `workloads-android`) and run Jenkins seed job.
+9. Configure the developer workstation CLIs (`horizon` and `mtkc`) and MCP servers using the [horizon-cli](../horizon-cli/SKILL.md) and [mtkc-cli](../mtkc-cli/SKILL.md) skills.
 
 ---
 

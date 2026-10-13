@@ -20,6 +20,16 @@ agy plugin install https://github.com/googlecloudplatform/horizon-sdv/tree/main/
 
 This will automatically clone and register the plugin, apply its global guardrails (`rules/AGENTS.md`), load all its skills, and start any bundled FastMCP Python tools in the background.
 
+### Core Platform & CLI Skills (`.agents/plugins/`)
+
+In addition to `agent-plugins/`, the repository root includes `.agents/plugins/` which Antigravity discovers automatically when working inside the cloned repository (and which can be registered globally in `~/.gemini/config/plugins.json`; see the root [`AGENTS.md`](../AGENTS.md)):
+- **`horizon-ops`** ([`.agents/plugins/horizon-ops`](../.agents/plugins/horizon-ops)):
+  - [`horizon-cli`](../.agents/plugins/horizon-ops/skills/horizon-cli/SKILL.md): Build and authenticate the `horizon` CLI from `./tools/horizon` and run catalog, workflow, and artifact commands.
+  - [`mtkc-cli`](../.agents/plugins/horizon-ops/skills/mtkc-cli/SKILL.md): Download and authenticate the MTK Connect CLI (`mtkc`) using a user API key, register `mtkc mcp serve` in Antigravity, and manage testbenches and devices.
+  - [`horizon-deploy`](../.agents/plugins/horizon-ops/skills/horizon-deploy/SKILL.md): Deploy and verify Horizon SDV on GKE.
+- **`horizon-dev`** ([`.agents/plugins/horizon-dev`](../.agents/plugins/horizon-dev)):
+  - [`horizon-create-module`](../.agents/plugins/horizon-dev/skills/horizon-create-module/SKILL.md): Scaffold and contribute new modular workloads under `gitops/modules/`.
+
 ---
 
 ## 💻 Python SDK Usage (For CI/CD & Headless Execution)
