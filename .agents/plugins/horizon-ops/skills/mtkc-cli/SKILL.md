@@ -2,14 +2,14 @@
 name: mtkc-cli
 description: >-
   Download, install, authenticate, and use the MediaTek Connect CLI (mtkc) and its built-in MCP server on Cloud Workstations.
-  Follows the secured installer flow by prompting the user to sign in to MTK Connect and create an API key upfront,
-  downloads mtkc using HTTP Basic Auth, configures mtkc auth, registers mtkc mcp serve in Antigravity MCP config,
-  and runs testbench and device commands.
+  Prompts the user to sign in to MTK Connect and obtain an API key (or the get-cli install command),
+  runs the official /mtk-connect/get-cli?platform=linux installer script with Basic Auth,
+  registers mtkc mcp serve in Antigravity MCP config, and runs testbench and device commands.
 ---
 
 # MTK Connect CLI (`mtkc`) & MCP Skill
 
-This skill guides AI agents and developers through installing, authenticating, configuring the built-in MCP server, and running the **MTK Connect CLI (`mtkc`)** to interact with physical and virtual testbenches and Cuttlefish / AAOS devices on Horizon SDV.
+This skill guides AI agents and developers through installing, authenticating, configuring the built-in MCP server, and running the **MTK Connect CLI (`mtkc`)** via the `/mtk-connect/get-cli` installer endpoint to interact with physical and virtual testbenches and Cuttlefish / AAOS devices on Horizon SDV.
 
 ---
 
@@ -17,17 +17,16 @@ This skill guides AI agents and developers through installing, authenticating, c
 
 ```mermaid
 flowchart LR
-    A["1. Give User MTK Connect URL"] --> B["2. User Creates API Key"]
-    B --> C["3. Download mtkc with Basic Auth"]
-    C --> D["4. Run mtkc auth login"]
-    D --> E["5. Register mtkc MCP in Antigravity"]
-    E --> F["6. Run Smoke Tests"]
+    A["1. Give User MTK Connect URL"] --> B["2. User Creates API Key / AUTH"]
+    B --> C["3. Run /mtk-connect/get-cli Installer"]
+    C --> D["4. Register mtkc MCP in Antigravity"]
+    D --> E["5. Run Smoke Tests"]
 ```
 
 > [!IMPORTANT]
-> **Secured Installer Download Flow (API Key Required Upfront)**:
-> On Horizon SDV, the MTK Connect CLI installer endpoint (`/mtk-connect/api/v1/installer`) is a secured route protected by authentication.
-> Therefore, the agent **must first provide the MTK Connect Portal URL** to the user and ask them to sign in, generate an API key in their profile, and paste their **MTK Connect Username** and **API Key** into the chat before downloading the `mtkc` binary.
+> **Secured Installer Flow via `/mtk-connect/get-cli` (API Key Required Upfront)**:
+> The `/mtk-connect/get-cli?platform=linux` endpoint serves the bootstrap installer script, which requires an authenticated `AUTH` token (`base64("<username>:<api-key>")`) to download the `mtkc` binary, unpack it to `/usr/local/bin` or `~/.local/bin`, log in (`mtkc auth login` + `mtkc auth rotate`), and configure MCP servers.
+> Therefore, the agent **must first provide the MTK Connect Portal URL** to the user and ask them to sign in, create an API key in their profile, and paste their **MTK Connect Username & API Key** (or the `AUTH` install snippet from the UI) into the chat before running `/mtk-connect/get-cli`.
 
 ---
 
@@ -40,63 +39,44 @@ flowchart LR
    HORIZON_DOMAIN="${HORIZON_DOMAIN:-$(python3 -c 'import sys; sys.path.insert(0, "/usr/local/lib/horizon-mcp"); import mcp_registry_client as m; print(m.HORIZON_DOMAIN)' 2>/dev/null)}"
    ```
 2. Present the clickable MTK Connect URL to the user and pause for their credentials:
-   > **To download and configure the MTK Connect CLI (`mtkc`) and its MCP server:**
+   > **To install and configure the MTK Connect CLI (`mtkc`) and its MCP server:**
    > 1. Open **MTK Connect** in your browser and sign in with your Horizon account:
    >    `https://<HORIZON_DOMAIN>/mtk-connect`
-   > 2. Click your user profile icon (top right) -> **Profile / API Keys** -> **Create API Key**.
-   > 3. Paste your **MTK Connect Username** (your email/username shown in MTK Connect) and the generated **API Key** back into this chat.
+   > 2. Click your user profile icon (top right) -> **Profile / API Keys** -> **Create API Key** (or copy the CLI install command).
+   > 3. Paste your **MTK Connect Username** and **API Key** (or the `AUTH=...` install command) back into this chat.
 
-### Step 2: Download and Install `mtkc` Using Basic Auth
+### Step 2: Install & Authenticate `mtkc` via `/mtk-connect/get-cli`
 
-Once the user provides `MTKC_USERNAME` and `MTKC_API_KEY`, download the CLI tarball from the secured `/mtk-connect/api/v1/installer` endpoint and install the `mtkc` binary:
+Once the user provides either:
+- Their `MTKC_USERNAME` and `MTKC_API_KEY`, **or**
+- A pre-encoded `AUTH` token / `get-cli` snippet from the MTK Connect UI,
+
+run the `/mtk-connect/get-cli?platform=linux` installer script, which automatically detects the architecture, downloads the right binary using Basic Auth, installs `mtkc` into `/usr/local/bin` or `~/.local/bin`, updates `PATH`, runs `mtkc auth login` + `mtkc auth rotate`, and runs `mtkc mcp install --silent`:
 
 ```bash
-# 1. Detect CPU architecture
-ARCH="$(uname -m)"
-case "${ARCH}" in
-  x86_64|amd64) MTKC_ARCH="amd64" ;;
-  aarch64|arm64) MTKC_ARCH="arm64" ;;
-  *) echo "Unsupported architecture: ${ARCH}" >&2; exit 1 ;;
-esac
+# 1. Compute base64 AUTH token if username + API key were provided separately
+if [ -z "${AUTH:-}" ]; then
+  AUTH="$(printf '%s:%s' "${MTKC_USERNAME}" "${MTKC_API_KEY}" | base64 -w0)"
+fi
+export AUTH
 
-# 2. Download and extract mtkc using HTTP Basic Auth
-mkdir -p "$HOME/.local/bin"
-curl -fsSL -u "${MTKC_USERNAME}:${MTKC_API_KEY}" \
-  "https://${HORIZON_DOMAIN}/mtk-connect/api/v1/installer?component=cli&platform=linux&arch=${MTKC_ARCH}&ext=tgz" \
-  | tar -xz -C "$HOME/.local/bin" mtkc
-chmod +x "$HOME/.local/bin/mtkc"
+# 2. Run the official MTK Connect get-cli installer script
+curl -fsSL "https://${HORIZON_DOMAIN}/mtk-connect/get-cli?platform=linux" | AUTH="${AUTH}" bash
 
-# 3. Also install to /usr/local/bin if passwordless sudo is available
-sudo install -m 0755 "$HOME/.local/bin/mtkc" /usr/local/bin/mtkc 2>/dev/null || true
-export PATH="$HOME/.local/bin:$PATH"
+# 3. Ensure ~/.local/bin is on PATH in the current shell session
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 
-# 4. Verify binary installation
-mtkc version
+# 4. Also copy to /usr/local/bin if installed to ~/.local/bin and passwordless sudo is available
+if [ -x "$HOME/.local/bin/mtkc" ] && [ ! -x /usr/local/bin/mtkc ]; then
+  sudo install -m 0755 "$HOME/.local/bin/mtkc" /usr/local/bin/mtkc 2>/dev/null || true
+fi
 ```
 
-### Step 3: Authenticate `mtkc` and Bootstrap Server Context
+### Step 3: Register the `mtkc` MCP Server in Antigravity
 
-Configure the persistent `mtkc` context for `https://${HORIZON_DOMAIN}/mtk-connect`:
-
-```bash
-mtkc auth login \
-  --server "https://${HORIZON_DOMAIN}/mtk-connect" \
-  --username "${MTKC_USERNAME}" \
-  --api-key "${MTKC_API_KEY}"
-
-# Verify authentication status
-mtkc auth status
-```
-
-### Step 4: Register the `mtkc` MCP Server in Antigravity
-
-`mtkc` includes a built-in stdio MCP server (`mtkc mcp serve`). Because `mtkc mcp install` only writes to Cursor, VS Code, Copilot, and Claude config locations by default, register `mtkc mcp serve` directly into Antigravity's MCP configuration files (`~/.gemini/config/mcp_config.json` and `~/.gemini/antigravity/mcp_config.json`) in addition to running `mtkc mcp install --silent`:
+The `get-cli` script runs `mtkc mcp install --silent` (which configures Cursor, VS Code, Copilot, and Claude Desktop). To ensure Antigravity also loads the `mtkc` MCP server (`mtkc mcp serve`), register it in `~/.gemini/config/mcp_config.json` and `~/.gemini/antigravity/mcp_config.json`:
 
 ```bash
-# 1. Run standard IDE MCP installer
-mtkc mcp install --silent || true
-
-# 2. Register mtkc MCP server in Antigravity mcp_config.json files
 MTKC_BIN="$(command -v mtkc)"
 python3 - "$MTKC_BIN" <<'PY'
 import json
@@ -129,9 +109,9 @@ for cfg_path in target_files:
 PY
 ```
 
-### Step 5: Run First Verification & Smoke Tests
+### Step 4: Run First Verification & Smoke Tests
 
-After authenticating and registering the MCP server, run these read-only verification commands and report the output to the user:
+After `get-cli` completes and the MCP server is registered, run these read-only verification commands and report the output to the user:
 
 ```bash
 # 1. Check mtkc CLI & server version
@@ -154,7 +134,8 @@ mtkc device list
 ### 1. Authentication & Context Management
 
 ```bash
-# Log in non-interactively and create/update context
+# Log in non-interactively and create/update context (handled automatically by get-cli)
+mtkc auth login --server "https://<HORIZON_DOMAIN>/mtk-connect" --basic-auth "<BASE64_USER_KEY>"
 mtkc auth login --server "https://<HORIZON_DOMAIN>/mtk-connect" --username "<USER>" --api-key "<KEY>"
 
 # Check authentication status for current context
