@@ -38,8 +38,8 @@ locals {
     }
     "gerrit-post" = {
       directory      = "gerrit"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "mtk-connect-post" = {
       directory      = "mtk-connect"
