@@ -35,6 +35,7 @@
   },
   "overrides": {
     "postcss": "^8.5.26",
-    "nanoid": "^6.0.1"
+    "nanoid": "^6.0.1",
+    "source-map-js": "^1.2.2"
   }
 }
