@@ -9,7 +9,7 @@ This repository includes built-in AI agent plugins and skills for **Antigravity*
 | Plugin Path | Skill Name | Skill File | Purpose |
 | :--- | :--- | :--- | :--- |
 | `.agents/plugins/horizon-ops` | **`horizon-cli`** | [`.agents/plugins/horizon-ops/skills/horizon-cli/SKILL.md`](./.agents/plugins/horizon-ops/skills/horizon-cli/SKILL.md) | Build `horizon` CLI from `./tools/horizon`, authenticate via Keycloak OAuth 2.0 Device Flow, and run catalog/workflow/artifact commands. |
-| `.agents/plugins/horizon-ops` | **`mtkc-cli`** | [`.agents/plugins/horizon-ops/skills/mtkc-cli/SKILL.md`](./.agents/plugins/horizon-ops/skills/mtkc-cli/SKILL.md) | Prompt user for MTK Connect API key, install and authenticate `mtkc` via `/mtk-connect/get-cli?platform=linux`, register `mtkc mcp serve` in Antigravity, and run testbench/device commands. |
+| `.agents/plugins/horizon-ops` | **`mtkc-cli`** | [`.agents/plugins/horizon-ops/skills/mtkc-cli/SKILL.md`](./.agents/plugins/horizon-ops/skills/mtkc-cli/SKILL.md) | Give the user the `/mtk-connect/docs/installation/cli-linux/` link to copy their `AUTH` install command, run the unauthenticated `/mtk-connect/get-cli?platform=linux` installer script with `AUTH` env var, register `mtkc mcp serve` in Antigravity, and run testbench/device commands. |
 | `.agents/plugins/horizon-ops` | **`horizon-deploy`** | [`.agents/plugins/horizon-ops/skills/horizon-deploy/SKILL.md`](./.agents/plugins/horizon-ops/skills/horizon-deploy/SKILL.md) | Deploy, configure, and verify Horizon SDV infrastructure on GKE with Terraform and Argo CD. |
 | `.agents/plugins/horizon-dev` | **`horizon-create-module`** | [`.agents/plugins/horizon-dev/skills/horizon-create-module/SKILL.md`](./.agents/plugins/horizon-dev/skills/horizon-create-module/SKILL.md) | Scaffold, implement, and register modular workloads under `gitops/modules/`. |
 | `agent-plugins/aaos-platform` | **`aaos-build-debugger`** | [`agent-plugins/aaos-platform/skills/aaos-build-debugger/SKILL.md`](./agent-plugins/aaos-platform/skills/aaos-build-debugger/SKILL.md) | Diagnose and fix AAOS Soong/Ninja compilation and build failures. |
@@ -71,12 +71,12 @@ When asked by a user to onboard or configure their Cloud Workstation with the Ho
 3. **Build `horizon` CLI from `./tools/horizon` & Start Device Login**:
    - Follow **`horizon-cli`**: detect `HORIZON_DOMAIN` (from environment or `/usr/local/lib/horizon-mcp/mcp_registry_client.py`), build `horizon` from `./tools/horizon`, and launch `horizon auth login --device --no-browser --domain "$HORIZON_DOMAIN" --write-config` in the background to capture the Keycloak device verification URL.
 
-4. **Prompt User Once for Browser Sign-In & MTK Connect API Key**:
-   - Follow **`mtkc-cli`** (Option B - secured download): in the same message where you share the clickable `horizon` Keycloak device verification URL, also share the clickable MTK Connect URL (`https://<HORIZON_DOMAIN>/mtk-connect`) and instruct the user to sign in, create an API key under their profile, and paste their **MTK Connect Username** and **API Key** into the chat.
+4. **Prompt User Once for Browser Sign-In & MTK Connect `get-cli` Command (`AUTH` Env Var)**:
+   - Follow **`mtkc-cli`**: in the same message where you share the clickable `horizon` Keycloak device verification URL, also share the clickable MTK Connect Linux CLI docs URL (`https://<HORIZON_DOMAIN>/mtk-connect/docs/installation/cli-linux/`). When the user opens that page, MTK Connect automatically injects a 5-minute bootstrap `AUTH` token into the `curl -sSL "https://<HORIZON_DOMAIN>/mtk-connect/get-cli?platform=linux" | AUTH=<token> bash` command block so they can simply copy and paste it into the chat.
 
 5. **Complete `mtkc` Installation via `get-cli`, MCP Registration & Smoke Tests**:
-   - Once the user completes the browser sign-in and replies with their MTK Connect username and API key (or `AUTH` token):
+   - Once the user completes the browser sign-in and replies with the `get-cli` command (or `AUTH` token):
      - Verify `horizon` CLI (`horizon version`, `horizon auth whoami`, `horizon catalog get`, `horizon workflow list`).
-     - Run the official installer script `curl -fsSL "https://${HORIZON_DOMAIN}/mtk-connect/get-cli?platform=linux" | AUTH="${AUTH}" bash` (which downloads the right platform binary using Basic Auth, unpacks `mtkc`, logs in via `mtkc auth login` + `mtkc auth rotate`, and runs `mtkc mcp install --silent`).
+     - Run the unauthenticated installer script endpoint with the user's `AUTH` environment variable (`curl -sSL "https://${HORIZON_DOMAIN}/mtk-connect/get-cli?platform=linux" | AUTH="${AUTH}" bash`), which downloads the right platform binary using Basic Auth, unpacks `mtkc`, logs in via `mtkc auth login` + `mtkc auth rotate`, and runs `mtkc mcp install --silent`.
      - Register `mtkc mcp serve` in `~/.gemini/config/mcp_config.json` and `~/.gemini/antigravity/mcp_config.json`.
      - Verify `mtkc` CLI (`mtkc version`, `mtkc auth status`, `mtkc testbench list`, `mtkc device list`).

@@ -2,8 +2,8 @@
 name: mtkc-cli
 description: >-
   Download, install, authenticate, and use the MediaTek Connect CLI (mtkc) and its built-in MCP server on Cloud Workstations.
-  Prompts the user to sign in to MTK Connect and obtain an API key (or the get-cli install command),
-  runs the official /mtk-connect/get-cli?platform=linux installer script with Basic Auth,
+  Uses the unauthenticated /mtk-connect/get-cli?platform=linux endpoint while passing the user's AUTH credential token
+  via environment variable (auto-generated on /mtk-connect/docs/installation/cli-linux/ or from a user API key),
   registers mtkc mcp serve in Antigravity MCP config, and runs testbench and device commands.
 ---
 
@@ -17,53 +17,52 @@ This skill guides AI agents and developers through installing, authenticating, c
 
 ```mermaid
 flowchart LR
-    A["1. Give User MTK Connect URL"] --> B["2. User Creates API Key / AUTH"]
-    B --> C["3. Run /mtk-connect/get-cli Installer"]
+    A["1. Give User Linux CLI Docs URL"] --> B["2. User Copies Command / AUTH"]
+    B --> C["3. Run /mtk-connect/get-cli with AUTH"]
     C --> D["4. Register mtkc MCP in Antigravity"]
     D --> E["5. Run Smoke Tests"]
 ```
 
 > [!IMPORTANT]
-> **Secured Installer Flow via `/mtk-connect/get-cli` (API Key Required Upfront)**:
-> The `/mtk-connect/get-cli?platform=linux` endpoint serves the bootstrap installer script, which requires an authenticated `AUTH` token (`base64("<username>:<api-key>")`) to download the `mtkc` binary, unpack it to `/usr/local/bin` or `~/.local/bin`, log in (`mtkc auth login` + `mtkc auth rotate`), and configure MCP servers.
-> Therefore, the agent **must first provide the MTK Connect Portal URL** to the user and ask them to sign in, create an API key in their profile, and paste their **MTK Connect Username & API Key** (or the `AUTH` install snippet from the UI) into the chat before running `/mtk-connect/get-cli`.
+> **How `/mtk-connect/get-cli` Works (Unauthenticated Script Route + `AUTH` Env Var)**:
+> - Just like `/get-agent`, `/get-tunnel`, and `/get-guacd`, the **`/mtk-connect/get-cli?platform=linux`** route is **unauthenticated** (`"authenticated": false` in `mtk-connect.yaml`), so anyone can fetch the installer shell script.
+> - However, executing the script requires credentials passed via the **`AUTH` environment variable** (`curl -sSL "https://<HORIZON_DOMAIN>/mtk-connect/get-cli?platform=linux" | AUTH=<token> bash`) so the script can authenticate against `/api/v1/installer` to download the `mtkc` binary, log in (`mtkc auth login`), and rotate the bootstrap token into a persistent key (`mtkc auth rotate`).
+> - **Fastest Way for the User to Get `AUTH`**: When the user opens **`https://<HORIZON_DOMAIN>/mtk-connect/docs/installation/cli-linux/`** in their browser, the page automatically generates a 5-minute bootstrap API key (`replace-auth.js`) and injects the ready-to-copy `AUTH=<base64_token>` directly into the `curl ... | AUTH=<token> bash` command block on the page.
 
 ---
 
 ## Step-by-Step Installation, Auth & MCP Setup
 
-### Step 1: Discover `HORIZON_DOMAIN` & Prompt User for MTK Connect API Key
+### Step 1: Discover `HORIZON_DOMAIN` & Prompt User for the `get-cli` Command / `AUTH` Token
 
 1. Detect `HORIZON_DOMAIN` from the environment, `~/.config/horizon/config.yaml`, or `/usr/local/lib/horizon-mcp/mcp_registry_client.py`:
    ```bash
    HORIZON_DOMAIN="${HORIZON_DOMAIN:-$(python3 -c 'import sys; sys.path.insert(0, "/usr/local/lib/horizon-mcp"); import mcp_registry_client as m; print(m.HORIZON_DOMAIN)' 2>/dev/null)}"
    ```
-2. Present the clickable MTK Connect URL to the user and pause for their credentials:
+2. Present the clickable MTK Connect Linux CLI installation docs URL to the user and pause for them to paste the command (or `AUTH` token):
    > **To install and configure the MTK Connect CLI (`mtkc`) and its MCP server:**
-   > 1. Open **MTK Connect** in your browser and sign in with your Horizon account:
-   >    `https://<HORIZON_DOMAIN>/mtk-connect`
-   > 2. Click your user profile icon (top right) -> **Profile / API Keys** -> **Create API Key** (or copy the CLI install command).
-   > 3. Paste your **MTK Connect Username** and **API Key** (or the `AUTH=...` install command) back into this chat.
+   > 1. Open the **MTK Connect Linux CLI Installation page** in your browser (sign in via Keycloak SSO if prompted):
+   >    `https://<HORIZON_DOMAIN>/mtk-connect/docs/installation/cli-linux/`
+   > 2. Copy the pre-filled install command from Step 1 on that page (which automatically includes your temporary `AUTH=...` token):
+   >    ```bash
+   >    curl -sSL "https://<HORIZON_DOMAIN>/mtk-connect/get-cli?platform=linux" | AUTH=<token> bash
+   >    ```
+   > 3. Paste that command (or just the `AUTH=<token>` value, or your MTK Connect username + API key) back into this chat.
 
-### Step 2: Install & Authenticate `mtkc` via `/mtk-connect/get-cli`
+### Step 2: Run `/mtk-connect/get-cli` with the `AUTH` Environment Variable
 
-Once the user provides either:
-- Their `MTKC_USERNAME` and `MTKC_API_KEY`, **or**
-- A pre-encoded `AUTH` token / `get-cli` snippet from the MTK Connect UI,
-
-run the `/mtk-connect/get-cli?platform=linux` installer script, which automatically detects the architecture, downloads the right binary using Basic Auth, installs `mtkc` into `/usr/local/bin` or `~/.local/bin`, updates `PATH`, runs `mtkc auth login` + `mtkc auth rotate`, and runs `mtkc mcp install --silent`:
+Once the user replies with the copied command, `AUTH` token, or username + API key, execute `/mtk-connect/get-cli?platform=linux` with `AUTH` set in the environment. The script automatically detects the CPU architecture, downloads the binary from `/api/v1/installer`, installs `mtkc` to `/usr/local/bin` or `~/.local/bin`, updates `PATH`, runs `mtkc auth login` + `mtkc auth rotate`, and runs `mtkc mcp install --silent`:
 
 ```bash
-# 1. Compute base64 AUTH token if username + API key were provided separately
-if [ -z "${AUTH:-}" ]; then
+# 1. If the user provided username + API key instead of a base64 AUTH token, encode it:
+if [ -z "${AUTH:-}" ] && [ -n "${MTKC_USERNAME:-}" ] && [ -n "${MTKC_API_KEY:-}" ]; then
   AUTH="$(printf '%s:%s' "${MTKC_USERNAME}" "${MTKC_API_KEY}" | base64 -w0)"
 fi
-export AUTH
 
-# 2. Run the official MTK Connect get-cli installer script
-curl -fsSL "https://${HORIZON_DOMAIN}/mtk-connect/get-cli?platform=linux" | AUTH="${AUTH}" bash
+# 2. Fetch the unauthenticated get-cli script and pass AUTH via environment variable to bash
+curl -sSL "https://${HORIZON_DOMAIN}/mtk-connect/get-cli?platform=linux" | AUTH="${AUTH}" bash
 
-# 3. Ensure ~/.local/bin is on PATH in the current shell session
+# 3. Ensure ~/.local/bin and /usr/local/bin are on PATH in the current shell session
 export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 
 # 4. Also copy to /usr/local/bin if installed to ~/.local/bin and passwordless sudo is available
