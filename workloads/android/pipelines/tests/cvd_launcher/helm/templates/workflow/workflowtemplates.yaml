@@ -128,6 +128,12 @@ spec:
       - name: geminiAnalyseOnSuccess
         value: {{ $root.Values.spec.geminiAnalyseOnSuccess | default "false" | quote }}
         description: "When true with enableGeminiAiAssistant, run Gemini AI review after successful CVD (default from Helm spec.geminiAnalyseOnSuccess)."
+      - name: aiReviewRuntime
+        value: {{ $root.Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+        enum:
+          - gemini-cli
+          - agy
+        description: "AI review runtime: Gemini CLI or Antigravity SDK (agy)."
       - name: ctsArtifactStorageSolution
         value: "GCS_BUCKET"
         description: "Artifact backend for storage scripts (typically GCS_BUCKET; same env as CTS_ARTIFACT_STORAGE_SOLUTION)."

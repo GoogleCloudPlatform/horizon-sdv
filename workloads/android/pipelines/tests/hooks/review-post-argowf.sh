@@ -40,9 +40,29 @@ if [[ -n "${GEMINI_ARTIFACT_ROOT_NAME:-}" ]]; then
     export BUILD_NUMBER="${GEMINI_STORAGE_BUILD_NUMBER}"
   fi
   if [[ -n "${_have_bucket}" ]] || [[ -n "${_have_jenkins_job}" ]]; then
-    # shellcheck disable=SC1091
-    source "${REPO_ROOT}/workloads/common/agentic-ai/gemini/gemini_environment.sh"
-    "${REPO_ROOT}/workloads/common/agentic-ai/gemini/gemini_storage.sh" || true
+  # Review writes gemini-assist/ and traces/ into the test-results PVC.
+  # Move them out before upload so storage keeps one copy beside test-results.
+  _results="${GEMINI_ANALYSIS_PATH:-/workspace/test-results}"
+  _results="${_results%/}"
+  _stage="$(mktemp -d "${TMPDIR:-/tmp}/gemini-artifacts.XXXXXX")"
+
+  for _name in "${GEMINI_ARTIFACT_PATH:-gemini-assist}" traces; do
+    if [[ -e "${_results}/${_name}" ]]; then
+      mv "${_results}/${_name}" "${_stage}/"
+    fi
+  done
+
+  shopt -s nullglob
+  for _json in "${_results}"/headless_output*.json "${_results}"/gemini-client-error.zip; do
+    mv "${_json}" "${_stage}/"
+  done
+  shopt -u nullglob
+
+  export GEMINI_ARTIFACT_WRITE_ROOT="${_stage}"
+
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/workloads/common/agentic-ai/gemini/gemini_environment.sh"
+  "${REPO_ROOT}/workloads/common/agentic-ai/gemini/gemini_storage.sh" || true
   else
     echo "WARN: GEMINI_ARTIFACT_ROOT_NAME set but no GEMINI_STORAGE_BUCKET_DESTINATION or Jenkins job/build; skipping gemini_storage.sh" >&2
   fi
