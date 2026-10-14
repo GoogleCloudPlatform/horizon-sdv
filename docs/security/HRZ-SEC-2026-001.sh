@@ -153,16 +153,27 @@ kubectl -n "$GERRIT_NS" patch secret "$GERRIT_SECRET" --type merge -p "$patch" >
 [ "$(read_secret_password "$GERRIT_NS" "$GERRIT_SECRET")" = "$NEW_PASSWORD" ] \
   || die "$GERRIT_SECRET does not hold the new password; new password saved in $RECOVERY_FILE"
 
-rm -f "$RECOVERY_FILE"
-
+# The rotation is already durable at this point (Gerrit updated and both
+# secrets verified), so the MCP restart is best-effort: a failure here does not
+# lose the new password, it only means the MCP pod must be restarted manually.
+# Keep it non-fatal (and out of 'set -e') and warn with accurate guidance.
+# The recovery file is kept until the final old-password check passes.
 if kubectl -n "$GERRIT_NS" get deployment "$MCP_DEPLOYMENT" >/dev/null 2>&1; then
   info "Restarting $GERRIT_NS/$MCP_DEPLOYMENT to load the new password"
-  kubectl -n "$GERRIT_NS" rollout restart deployment "$MCP_DEPLOYMENT" >/dev/null
-  kubectl -n "$GERRIT_NS" rollout status deployment "$MCP_DEPLOYMENT" --timeout=180s
+  if ! kubectl -n "$GERRIT_NS" rollout restart deployment "$MCP_DEPLOYMENT" >/dev/null; then
+    echo "WARNING: could not restart $GERRIT_NS/$MCP_DEPLOYMENT. The password is already rotated and stored; restart it manually so it reloads the new password." >&2
+  elif ! kubectl -n "$GERRIT_NS" rollout status deployment "$MCP_DEPLOYMENT" --timeout=180s; then
+    echo "WARNING: $GERRIT_NS/$MCP_DEPLOYMENT did not become ready within 180s. The password is already rotated and stored; check 'kubectl -n $GERRIT_NS rollout status deployment $MCP_DEPLOYMENT'." >&2
+  fi
 else
   info "No $MCP_DEPLOYMENT deployment in $GERRIT_NS, skipping restart"
 fi
 
 old_status="$(gerrit_auth_status "$CURRENT_PASSWORD")"
-info "Done. Old password now returns HTTP $old_status (expected 401)."
+[ "$old_status" = "401" ] \
+  || die "old password still accepted (HTTP $old_status); new password saved in $RECOVERY_FILE"
+
+rm -f "$RECOVERY_FILE"
+
+info "Done. Old password now returns HTTP 401 as expected."
 info "Jenkins reads $JENKINS_SECRET through the Kubernetes credentials provider; no restart needed."
