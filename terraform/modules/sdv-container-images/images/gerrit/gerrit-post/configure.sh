@@ -355,9 +355,12 @@ function gerrit-craft-all-users() {
       retVal="RETVAL_NOK"
       return
     else
-      # Update gerrit-admin HTTP password. If SSH fails, retry. Don't exit on error, we'll manually override the HTTP
-      # password if this fails.
+      # Update gerrit-admin HTTP password on Gerrit, retrying if SSH is briefly
+      # unavailable. We must not write the secrets unless this succeeds: doing so
+      # would leave Gerrit on the old password while the secrets (and the MCP
+      # server) move to the new one, breaking authentication.
       local n=1
+      local httpPasswordSet=false
       until [ "$n" -gt 20 ]; do
         if (( n % 5 == 0 )); then
           # Try restart on every 10th to see if it alleviates ssh unavailable issue.
@@ -369,9 +372,19 @@ function gerrit-craft-all-users() {
           n=$((n + 1))
         else
           echo "Gerrit Admin http-password updated"
+          httpPasswordSet=true
           break
         fi
       done
+
+      # Abort before touching the secrets if Gerrit never accepted the new
+      # password, so Gerrit, the Kubernetes secrets and gerrit-mcp-server stay
+      # consistent. The job fails and is retried on the next reconcile.
+      if [ "${httpPasswordSet}" != true ]; then
+        echo "ERROR: failed to set gerrit-admin HTTP password on Gerrit after ${n} attempts; secrets left unchanged."
+        retVal="RETVAL_NOK"
+        return
+      fi
 
       cd /root
       HTTP_PASSWORD_BASE64=$(printf '%s' "$HTTP_PASSWORD" | base64 -w0)
