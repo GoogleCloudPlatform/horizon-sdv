@@ -73,19 +73,19 @@ controller:
     - branch-api:2.1280.v0d4e5b_b_460ef
     - caffeine-api:3.2.3-194.v31a_b_f7a_b_5a_81
     - checks-api:402.vca_263b_f200e3
-    - cloudbees-folder:6.1100.ve9eed61d16c4
+    - cloudbees-folder:6.1106.v3a_d9a_6d2465e
     - command-launcher:134.v025a_5fcf9dea_
     - commons-lang3-api:3.20.0-109.ve43756e2d2b_4
     - commons-text-api:1.15.0-218.va_61573470393
-    - configuration-as-code:2077.v41f1011a_5110
+    - configuration-as-code:2121.v86fe99d4b_b_a_b_
     - credentials:1502.v5c95e620ddfe
-    - credentials-binding:720.v3f6decef43ea_
+    - credentials-binding:728.v902a_273b_8947
     - display-url-api:2.217.va_6b_de84cc74b_
     - durable-task:664.v2b_e7a_dfff66c
     - echarts-api:6.0.0-1287.vfd24c22a_3d00
     - eddsa-api:0.3.0.1-29.v67e9a_1c969b_b_
     - font-awesome-api:7.2.0-990.vf220b_2a_496f9
-    - git-client:6.6.0
+    - git-client:6.6.1
     - git:5.10.1
     - github-api:1.330-492.v3941a_032db_2a_
     - github:1.46.0.1
@@ -93,10 +93,10 @@ controller:
     - gson-api:2.14.0-201.v8eefe5515533
     - instance-identity:203.v15e81a_1b_7a_38
     - ionicons-api:94.vcc3065403257
-    - jackson2-api:2.21.2-436.v29efdb_7418ff
+    - jackson2-api:2.22.2-445.vdc613f1d8012
     - jakarta-activation-api:2.1.4-1
     - jakarta-mail-api:2.1.5-1
-    - jakarta-xml-bind-api:4.0.6-12.vb_1833c1231d3
+    - jakarta-xml-bind-api:4.0.9-19.v2b_a_5b_44d9a_1c
     - javax-activation-api:1.2.0-8
     - javax-mail-api:1.6.2-11
     - jaxb:2.3.9-143.v5979df3304e6
@@ -117,9 +117,9 @@ controller:
     - mina-sshd-api-core:2.16.0-167.va_269f38cc024
     - oauth-credentials:0.660.vce7c108f1f3a_
     - okhttp-api:5.3.2-200.vedb_720a_cf1f8
-    - pipeline-build-step:584.vdb_a_2cc3a_d07a_
+    - pipeline-build-step:601.v6d4c6d1a_9dc7
     - pipeline-graph-analysis:254.v0f63a_a_447dca_
-    - pipeline-groovy-lib:797.v90ea_a_9b_e45a_0
+    - pipeline-groovy-lib:806.v408277b_33d1d
     - pipeline-input-step:551.vdff487c5998c
     - pipeline-milestone-step:152.v6e22b_8cfc66c
     - pipeline-model-api:2.2277.v00573e73ddf1
@@ -132,7 +132,7 @@ controller:
     - plugin-util-api:7.1341.v039f146993d9
     - prism-api:1.30.0-727.vc475481f034d
     - scm-api:728.vc30dcf7a_0df5
-    - script-security:1402.v94c9ce464861
+    - script-security:1429.v0810f1b_530f5
     - snakeyaml-api:2.5-149.v72471e9c6371
     - ssh-credentials:372.va_250881b_08cd
     - sshd:3.384.vc89b_5e138cf9
@@ -143,10 +143,10 @@ controller:
     - workflow-aggregator:608.v67378e9d3db_1
     - workflow-api:1413.v2ff1a_5e720fa_
     - workflow-basic-steps:1098.v808b_fd7f8cf4
-    - workflow-cps:4315.va_e456c4e7f4f
+    - workflow-cps:4383.v04fa_a_3d67b_d9
     - workflow-durable-task-step:1475.ved562f6ec8b_3
     - workflow-job:1571.1580.v18e46842c125
-    - workflow-multibranch:821.vc3b_4ea_780798
+    - workflow-multibranch:842.v3a_b_59b_57b_e6e
     - workflow-scm-step:466.va_d69e602552b_
     - workflow-step-api:724.v538c2362b_dfb_
     - workflow-support:1015.v785e5a_b_b_8b_22
@@ -159,17 +159,17 @@ controller:
     - copyartifact:795.ve8e151429b_27
     - envinject-api:1.241.vdd714803b_403
     - envinject:2.941.v351a_20c0a_3ca_
-    - file-parameters:425.v3fa_801681b_5e
+    - file-parameters:433.va_0b_80359d54d
     - gerrit-code-review:0.5.0
     - gerrit-trigger:3.1971.v217d381e3a_5a_
-    - github-branch-source:1967.1969.v205fd594c821
+    - github-branch-source:1983.vfa_27ed961853
     - google-compute-engine:4.782.v56d37cb_c391c
     - google-kubernetes-engine:0.456.vb_ea_ee7d94048
     - htmlpublisher:427.1
     - job-dsl:3654.vdf58f53e2d15
-    - keycloak:2.3.2
+    - keycloak:2.4.3
     - kubernetes-credentials-provider:1.303.vdfcf47fb_b_fef
-    - kubernetes:4423.vb_59f230b_ce53
+    - kubernetes:4557.ve746270f672f
     - mask-passwords:220.v95819055b_265
     - parameter-separator:334.v1fc0e534c71d
     - pipeline-stage-view:2.41
