@@ -83,7 +83,7 @@ Dependencies: uses shared ClusterWorkflowTemplate (build template).
                 KUBECTL_VERSION={{ "{{" }}workflow.parameters.kubectlVersion{{ "}}" }}
                 ENABLE_GEMINI_AI_ASSISTANT={{ "{{" }}workflow.parameters.enableGeminiAiAssistant{{ "}}" }}
                 GEMINI_CLI_VERSION={{ "{{" }}workflow.parameters.geminiCliVersion{{ "}}" }}
-                GOOGLE_ADK_VERSION={{ "{{" }}workflow.parameters.googleAdkVersion{{ "}}" }}
+                ANTIGRAVITY_SDK_VERSION={{ "{{" }}workflow.parameters.antigravitySdkVersion{{ "}}" }}
             - name: platform
               value: linux/amd64
 {{- end }}
@@ -152,7 +152,7 @@ Dependencies: uses shared ClusterWorkflowTemplate (build template).
                 KUBECTL_VERSION={{ .Values.spec.kubectlVersion }}
                 ENABLE_GEMINI_AI_ASSISTANT={{ .Values.spec.enableGeminiAiAssistant }}
                 GEMINI_CLI_VERSION={{ .Values.spec.geminiCliVersion }}
-                GOOGLE_ADK_VERSION={{ .Values.spec.googleAdkVersion }}
+                ANTIGRAVITY_SDK_VERSION={{ .Values.spec.antigravitySdkVersion }}
             - name: platform
               value: linux/amd64
 {{- end }}

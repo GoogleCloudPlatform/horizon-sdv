@@ -289,6 +289,7 @@ pipeline {
                 sh '''
                   set +ex
                   export PIPELINE_REPO_ROOT="${WORKSPACE}"
+                  export AI_REVIEW_RUNTIME="${AI_REVIEW_RUNTIME:-gemini-cli}"
                   export GEMINI_ANALYSIS_PATH="/aaos-cache/aaos_builds"
                   export GEMINI_HOOK_PROFILE="aaos"
                   export GEMINI_HOOK_DIR="workloads/android/pipelines/builds/aaos_builder/hooks"
@@ -305,7 +306,12 @@ pipeline {
                   '''
               }
               archiveArtifacts artifacts: 'gemini-assist/*', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
-              archiveArtifacts artifacts: 'headless_output*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: false
+              archiveArtifacts artifacts: 'traces/*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+              script {
+                if (params.AI_REVIEW_RUNTIME != 'agy') {
+                  archiveArtifacts artifacts: 'headless_output*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: false
+                }
+              }
               script {
                 if (fileExists('gemini-client-error.zip')) {
                   archiveArtifacts artifacts: 'gemini-client-error.zip', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true

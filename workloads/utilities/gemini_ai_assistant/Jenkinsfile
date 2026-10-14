@@ -68,7 +68,9 @@ pipeline {
       when {
         allOf {
           expression { env.GEMINI_ARTIFACTS_COMMAND }
-          expression { env.GEMINI_PROMPT_FILE }
+          expression {
+            return params.AI_REVIEW_RUNTIME == 'agy' || (params.GEMINI_PROMPT_FILE?.trim() ? true : false)
+          }
         }
       }
       steps {
@@ -80,6 +82,7 @@ pipeline {
             sh '''
               set +x
               export PIPELINE_REPO_ROOT="${WORKSPACE}"
+              export AI_REVIEW_RUNTIME="${AI_REVIEW_RUNTIME:-gemini-cli}"
               export GEMINI_ANALYSIS_PATH="${WORKSPACE}"
               export GEMINI_SKIP_MOVE_ARTIFACTS="1"
               export GEMINI_AI_EXECUTION_TIMEOUT_HOURS="2"
@@ -95,7 +98,13 @@ pipeline {
               '''
             }
             archiveArtifacts artifacts: 'gemini-assist/*', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
-            archiveArtifacts artifacts: 'headless_output*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: false
+            archiveArtifacts artifacts: 'traces/*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+            script {
+              def runtime = (params.AI_REVIEW_RUNTIME ?: env.AI_REVIEW_RUNTIME ?: '').toString().trim()
+              if (runtime != 'agy') {
+                archiveArtifacts artifacts: 'headless_output*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: false
+              }
+            }
             script {
               if (fileExists('gemini-client-error.zip')) {
                 archiveArtifacts artifacts: 'gemini-client-error.zip', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true

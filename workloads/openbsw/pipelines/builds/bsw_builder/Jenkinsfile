@@ -386,6 +386,7 @@ pipeline {
                   set +x
                   export PIPELINE_REPO_ROOT="${WORKSPACE}"
                   export GEMINI_ANALYSIS_PATH="${WORKSPACE}"
+                  export AI_REVIEW_RUNTIME="${AI_REVIEW_RUNTIME:-gemini-cli}"
                   export GEMINI_AI_EXECUTION_TIMEOUT_HOURS="2"
                   export GEMINI_PREVIEW_FEATURES="${GEMINI_PREVIEW_FEATURES}"
                   [ "$GEMINI_LOCATION_GLOBAL" = "true" ] && export GOOGLE_CLOUD_LOCATION="global" || export GOOGLE_CLOUD_LOCATION="${CLOUD_REGION}"
@@ -400,7 +401,12 @@ pipeline {
                   '''
                 }
                 archiveArtifacts artifacts: 'gemini-assist/*', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
-                archiveArtifacts artifacts: 'headless_output*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: false
+                archiveArtifacts artifacts: 'traces/*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+                script {
+                  if (params.AI_REVIEW_RUNTIME != 'agy') {
+                    archiveArtifacts artifacts: 'headless_output*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: false
+                  }
+                }
                 script {
                   if (fileExists('gemini-client-error.zip')) {
                     archiveArtifacts artifacts: 'gemini-client-error.zip', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true

@@ -33,7 +33,7 @@
 #   GEMINI_PROMPT_FILE_2   Step 2 prompt (required for sequenced). Path or base64.
 #   GEMINI_PROMPT_FILE_3   Step 3 prompt (optional). Path or base64.
 #   GEMINI_COMMAND_LINE    Full CLI invocation (default: gemini --yolo --output-format json).
-#                          To pin model: add --model <name> (e.g. --model gemini-2.5-pro).
+#                          To pin model: add --model <name> (e.g. --model gemini-3.8-flash).
 #   GEMINI_CLI_VERSION     If set, gemini_initialise.sh installs/upgrades to this version.
 #   GEMINI_OUTPUT_FILE_NAME  JSON output file (default: headless_output_<timestamp>.json).
 #   GEMINI_ARTIFACT_PATH   Dir for analysis output (default: gemini-assist).
@@ -152,6 +152,7 @@ JOB_NAME=${JOB_NAME:-aaos}
 declare -a GEMINI_ARTIFACT_LIST=()
 GEMINI_ARTIFACT_LIST+=(
   "${GEMINI_ARTIFACT_WRITE_ROOT}/${GEMINI_ARTIFACT_PATH}/"
+  "${GEMINI_ARTIFACT_WRITE_ROOT}/traces/"
   "${GEMINI_ARTIFACT_WRITE_ROOT}/*.json"
 )
 
@@ -171,6 +172,13 @@ function move_gemini_artifacts() {
     if [[ -z "$src_dir" || -z "$target_dir" ]]; then
         echo -e "${RED}ERROR: Usage: move_gemini_artifacts <src_dir> <target_dir>${NC}"
         return 1
+    fi
+
+    # Move Antigravity traces.
+    if [[ -d "${src_dir}/traces" && "${src_dir%/}" != "${target_dir%/}" ]]; then
+        mkdir -p "${target_dir}/traces"
+        mv "${src_dir}/traces"/* "${target_dir}/traces/" >/dev/null 2>&1 || true
+        rmdir "${src_dir}/traces" >/dev/null 2>&1 || true
     fi
 
     echo -e "${GREEN}Transferring artifacts from ${src_dir} to ${target_dir}${NC}"

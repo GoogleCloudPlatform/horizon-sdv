@@ -115,11 +115,11 @@ pipelineJob('Android/Environment/ABFS/Docker Image Template') {
       trim(true)
     }
     stringParam {
-      name('GOOGLE_ADK_VERSION')
-      defaultValue("${GOOGLE_ADK_VERSION}")
-      description('''<p>The version of google-adk to be installed.<br/>
-        <b>Default</b>: 2.6.3.<br/>
-        <b>Reference</b>: Run <code>pip index versions google-adk</code> for a full list of valid versions.</p>''')
+      name('ANTIGRAVITY_SDK_VERSION')
+      defaultValue("${ANTIGRAVITY_SDK_VERSION}")
+      description('''<p>The version of google-antigravity SDK to be installed.<br/>
+        <b>Default</b>: 0.1.16.<br/>
+        <b>Reference</b>: Run <code>pip index versions google-antigravity</code> for a full list of valid versions.</p>''')
       trim(true)
     }
   }

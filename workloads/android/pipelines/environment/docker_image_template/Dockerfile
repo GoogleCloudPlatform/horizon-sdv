@@ -32,7 +32,7 @@ ARG PACKER_VERSION="1.15.0"
 # Install gemini-cli if enabled.
 ARG ENABLE_GEMINI_AI_ASSISTANT="false"
 ARG GEMINI_CLI_VERSION="latest"
-ARG GOOGLE_ADK_VERSION="2.6.3"
+ARG ANTIGRAVITY_SDK_VERSION="0.1.16"
 
 # Install packages required for building AAOSP targets.
 # libsecret-1-0: Secret Service API (libsecret-1.so.0) for gemini-cli / credential helpers in-container.
@@ -123,7 +123,8 @@ RUN sudo npm cache clean -f && \
     if [ "$ENABLE_GEMINI_AI_ASSISTANT" = "true" ]; then \
       echo "\033[1;32mInstalling gemini-cli@${GEMINI_CLI_VERSION}\033[0m" && \
       sudo npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && \
-      echo "\033[1;32mInstalling google-adk@${GOOGLE_ADK_VERSION}\033[0m" && \
       sudo rm -f /usr/lib/python3*/EXTERNALLY-MANAGED && \
-      sudo pip3 install "google-adk==${GOOGLE_ADK_VERSION}" "google-genai"; \
+      echo "\033[1;32mInstalling google-antigravity@${ANTIGRAVITY_SDK_VERSION}\033[0m" && \
+      sudo pip3 install "google-antigravity==${ANTIGRAVITY_SDK_VERSION}" && \
+      sudo pip install "google-cloud-logging"; \
     fi

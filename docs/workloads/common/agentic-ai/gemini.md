@@ -55,7 +55,7 @@ Scripts and environment for running the [Gemini CLI](https://geminicli.com/docs/
 - **GEMINI_PROMPT_FILE** – Step 1 prompt file path or base64-encoded content.
 - **GEMINI_PROMPT_FILE_2** – Optional step 2 prompt; required only for sequenced (two or three steps).
 - **GEMINI_PROMPT_FILE_3** – Optional step 3 prompt (do not reorder).
-- **GEMINI_COMMAND_LINE** – Full CLI invocation (e.g. `gemini --yolo --output-format json`). To pin the model and avoid auto-routing to preview-only models, add `--model <model name>` (e.g. `--model gemini-2.5-pro`).
+- **GEMINI_COMMAND_LINE** – Full CLI invocation (e.g. `gemini --yolo --output-format json`). To pin the model and avoid auto-routing to preview-only models, add `--model <model name>` (e.g. `--model gemini-3.8-flash`).
 - **GEMINI_PREVIEW_FEATURES**, **GEMINI_LOCATION_GLOBAL** – Passed into `.gemini/settings.json` and location.
 - **GEMINI_SKILLS_YAML** – Optional path to `skills.yaml`. When set, `gemini_initialise.sh` converts it to `.gemini/skills/*/SKILL.md` (requires Python PyYAML). The skills file is always named `skills.yaml`.
 - **GEMINI_ARTIFACT_PATH** – Directory for analysis output (default `gemini-assist`).
@@ -158,7 +158,7 @@ Policy TOML files live under **`workloads/common/agentic-ai/gemini/policies/`** 
 - **What you configure:** You pin a model (via the `GEMINI_MODEL` environment variable or `--model <model name>` in the CLI) and set `GEMINI_PREVIEW_FEATURES=FALSE`, expecting only the pinned model to be used.
 - **What happens:** The main analysis uses your pinned model. Follow-up or sub-agent calls may still *attempt* to use a preview model. The Gemini CLI's model-routing allows this (Pro for planning, Flash for implementation), and built-in sub-agents are enabled by default. Because preview is disabled, those calls fall back to your pinned model instead.
 - **Bottom line:** The console logs may show that there were attempts made to access the preview models. In practice, only the pinned model is used; the "attempt to use preview model and then fallback" is internal behaviour and does not change the models actually used.
-- **Recommended settings:** Enable preview and pin a model. Preview models are available only through the global endpoint, so set `GEMINI_LOCATION_GLOBAL=TRUE` with `GEMINI_PREVIEW_FEATURES=TRUE`, and pin via `GEMINI_MODEL` or `--model <name>` (e.g. `GEMINI_MODEL=gemini-2.5-pro`).
+- **Recommended settings:** Enable preview and pin a model. Preview models are available only through the global endpoint, so set `GEMINI_LOCATION_GLOBAL=TRUE` with `GEMINI_PREVIEW_FEATURES=TRUE`, and pin via `GEMINI_MODEL` or `--model <name>` (e.g. `GEMINI_MODEL=gemini-3.8-flash`).
 - **Related bug:** [google-gemini/gemini-cli#13475](https://github.com/google-gemini/gemini-cli/issues/13475) (closed; fix was reverted in [PR #13483](https://github.com/google-gemini/gemini-cli/pull/13483)).
 - **Further reading:** [Sub Agents](https://geminicli.com/docs/core/subagents/), [model routing](https://github.com/google-gemini/gemini-cli/blob/3d4956aa57539977f64c9fc83de9334b0e6c8106/docs/reference/configuration.md).
 
