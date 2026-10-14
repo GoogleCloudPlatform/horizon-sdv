@@ -63,6 +63,51 @@ controller:
   numExecutors: 1
   executorMode: "EXCLUSIVE"
   customJenkinsLabels: ["seed-node"]
+  # simple-theme-plugin accepts inline CSS but only a URL for JavaScript, so the
+  # breadcrumb script is written into userContent and served from there.
+  initScripts:
+    breadcrumb-last-link: |-
+      import jenkins.model.Jenkins
+
+      // Core renders the breadcrumb segment matching the current request URI as
+      // a plain <span> rather than an <a> (upstream 82e2830be, JENKINS-75851),
+      // so the last entry in a folder path cannot be clicked to reload. Put the
+      // link back client side. No-ops if upstream ever restores the anchor.
+      def script = '''
+      (function () {
+        function restoreLastBreadcrumbLink() {
+          var list = document.getElementById("breadcrumbs");
+          if (!list) return;
+          var items = list.querySelectorAll('li[data-type="breadcrumb-item"]');
+          if (!items.length) return;
+          var last = items[items.length - 1];
+          if (last.querySelector("a")) return;
+          var span = last.querySelector("span");
+          if (!span) return;
+          var link = document.createElement("a");
+          link.href = window.location.pathname;
+          link.textContent = span.textContent.trim();
+          var tooltip = span.getAttribute("tooltip");
+          if (tooltip) link.setAttribute("tooltip", tooltip);
+          span.replaceWith(link);
+        }
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", restoreLastBreadcrumbLink);
+        } else {
+          restoreLastBreadcrumbLink();
+        }
+      })();
+      '''.stripIndent()
+
+      try {
+        def target = new File(Jenkins.get().rootDir, "userContent/horizon-breadcrumb-last-link.js")
+        target.parentFile.mkdirs()
+        if (!target.exists() || target.text != script) {
+          target.text = script
+        }
+      } catch (Throwable t) {
+        println("Could not write breadcrumb script, breadcrumbs stay as upstream: " + t)
+      }
   installPlugins:
     - antisamy-markup-formatter:173.v680e3a_b_69ff3
     - apache-httpcomponents-client-4-api:4.5.14-269.vfa_2321039a_83
@@ -174,6 +219,7 @@ controller:
     - parameter-separator:334.v1fc0e534c71d
     - pipeline-stage-view:2.41
     - role-strategy:848.va_a_ea_673cf0b_c
+    - simple-theme-plugin:230.v8b_fd91b_b_800c
     - ssh-slaves:3.1097.v868116049892
     - startup-trigger-plugin:2.9.4
     - timestamper:1.30
@@ -195,6 +241,12 @@ controller:
                 - "org.jenkinsci.plugins.authorizeproject.strategy.TriggeringUsersAuthorizationStrategy"
     defaultConfig: true
     configScripts:
+      breadcrumb-theme: |
+        appearance:
+          simpleTheme:
+            elements:
+              - jsUrl:
+                  url: "{{ .Values.controller.jenkinsUriPrefix }}/userContent/horizon-breadcrumb-last-link.js"
       welcome-message: |
         credentials:
           system:
