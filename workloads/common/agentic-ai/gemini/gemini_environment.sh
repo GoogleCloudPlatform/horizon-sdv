@@ -33,7 +33,7 @@
 #   GEMINI_PROMPT_FILE_2   Step 2 prompt (required for sequenced). Path or base64.
 #   GEMINI_PROMPT_FILE_3   Step 3 prompt (optional). Path or base64.
 #   GEMINI_COMMAND_LINE    Full CLI invocation (default: gemini --yolo --output-format json).
-#                          To pin model: add --model <name> (e.g. --model gemini-2.5-pro).
+#                          To pin model: add --model <name> (e.g. --model gemini-3.8-flash).
 #   GEMINI_CLI_VERSION     If set, gemini_initialise.sh installs/upgrades to this version.
 #   GEMINI_OUTPUT_FILE_NAME  JSON output file (default: headless_output_<timestamp>.json).
 #   GEMINI_ARTIFACT_PATH   Dir for analysis output (default: gemini-assist).

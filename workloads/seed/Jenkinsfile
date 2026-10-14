@@ -233,7 +233,7 @@ pipeline {
                  description: '''<p>When enabled, use the global endpoint. When disabled, the project-specific <code>GOOGLE_CLOUD_LOCATION</code> is used.</p''')
 
     string(name: 'GEMINI_MODEL',
-           defaultValue: 'gemini-2.5-pro',
+           defaultValue: 'gemini-3.8-flash',
            description: '''<p>For available models see <a href="https://ai.google.dev/gemini-api/docs/models" target="_blank">Gemini models</a>. Leave blank to use the default.<br/>
              <b>Note:</b> For preview models, ensure <code>GEMINI_PREVIEW_FEATURES</code> and <code>GEMINI_LOCATION_GLOBAL</code> are set correctly to access the model.</p>''',
            trim: true)

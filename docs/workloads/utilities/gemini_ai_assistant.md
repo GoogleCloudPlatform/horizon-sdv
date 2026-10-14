@@ -22,7 +22,7 @@ Jenkins job that runs the Gemini AI assistant CLI against user-provided artifact
 - **GEMINI_PROMPT_FILE** (required) – Step 1 prompt file (upload only).
 - **GEMINI_PROMPT_FILE_2** (optional) – Step 2 prompt file (upload). Required only for sequenced analysis; when set with step 1, runs two or three steps with context chaining (order matters). We do not ship single-prompt files.
 - **GEMINI_PROMPT_FILE_3** (optional) – Step 3 prompt file (upload). For three-step sequenced analysis.
-- **GEMINI_COMMAND_LINE** – Full Gemini CLI invocation (e.g. `gemini --yolo --output-format json`). To pin the model and avoid auto-routing to preview-only models, add `--model <model name>` (e.g. `--model gemini-2.5-pro`).
+- **GEMINI_COMMAND_LINE** – Full Gemini CLI invocation (e.g. `gemini --yolo --output-format json`). To pin the model and avoid auto-routing to preview-only models, add `--model <model name>` (e.g. `--model gemini-3.8-flash`).
 - **GEMINI_SKILLS_YAML** (optional) – Upload `skills.yaml` (file parameter, like prompts). When provided, the job decodes it and converts to `.gemini/skills/*/SKILL.md` before analysis. Use when prompts are uploaded so the job cannot auto-detect the prompt dir.
 
 Prompts are provided only via upload; there are no workspace path parameters.

@@ -162,7 +162,7 @@ See examples of CTS skills and prompts [here](../../../workloads/android/pipelin
 The AI Review stage is controlled by a small set of parameters/environment variables. They are exposed on the individual build/test job pages in the **`Agentic AI: Configuration (Experimental)`** section of the parameters forms. 
 
 > [!TIP]
-> The recommended model configuration when targeting preview functionality is `GEMINI_LOCATION_GLOBAL=true`, `GEMINI_PREVIEW_FEATURES=true` and a pinned model (`GEMINI_MODEL=gemini-2.5-pro` or via `--model` in `GEMINI_COMMAND_LINE`). See [Gemini CLI integration / Known issues](../common/agentic-ai/gemini.md#known-issues) for further detail.
+> The recommended model configuration when targeting preview functionality is `GEMINI_LOCATION_GLOBAL=true`, `GEMINI_PREVIEW_FEATURES=true` and a pinned model (`GEMINI_MODEL=gemini-3.8-flash` or via `--model` in `GEMINI_COMMAND_LINE`). See [Gemini CLI integration / Known issues](../common/agentic-ai/gemini.md#known-issues) for further detail.
 
 The prompt files themselves are **not** exposed as Jenkins parameters in any of the four pipelines - they are taken directly from the repository at `workloads/<area>/pipelines/.../prompt/sequenced/`. To experiment with different prompts or skills without changing the repo, use the [Gemini AI Assistant](../utilities/gemini_ai_assistant.md) utility job, which accepts uploaded prompt and `skills.yaml` files.
 
