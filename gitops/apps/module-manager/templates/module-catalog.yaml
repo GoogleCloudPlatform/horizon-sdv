@@ -84,3 +84,11 @@ spec:
       overviewServiceNamespace: {{ .Values.namespace | quote }}
       hardDependencies:
         - workloads-common
+    - name: squish-workstation
+      path: gitops/modules/squish-workstation
+      overviewPath: portal/overview.html
+      overviewService: mod-squish-workstation-overview
+      overviewServiceNamespace: squish-workstation-app
+      # common-docker-image-build / prepare-pipeline-git-creds ClusterWorkflowTemplates for the Squish image build.
+      hardDependencies:
+        - workloads-common

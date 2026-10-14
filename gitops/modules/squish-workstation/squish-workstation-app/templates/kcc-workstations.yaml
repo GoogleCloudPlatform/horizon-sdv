@@ -1,0 +1,76 @@
+# Copyright (c) 2026 The Qt Company Ltd., All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Cloud Workstations cluster and Squish configuration on the Horizon platform VPC.
+# The WorkstationConfig references the Squish image by tag; Argo CD cannot wait for the image build, so the
+# config is created before squish-workstation-init has pushed the image. Workstations can only be started once
+# squish-workstation-init has completed (squish-workstation-execute verifies this).
+# deletion-policy (default abandon) keeps the cluster, config and users' workstations/disks on module disable.
+apiVersion: workstations.cnrm.cloud.google.com/v1beta1
+kind: WorkstationCluster
+metadata:
+  name: {{ .Values.squish.clusterName }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+    cnrm.cloud.google.com/deletion-policy: {{ .Values.squish.deletionPolicy | quote }}
+  labels:
+    {{- include "squish-workstation-app.labels" . | nindent 4 }}
+spec:
+  projectRef:
+    external: projects/{{ .Values.gcpProjectId }}
+  location: {{ .Values.squish.region | quote }}
+  displayName: "Squish Cloud Workstations"
+  networkRef:
+    external: projects/{{ .Values.gcpProjectId }}/global/networks/{{ .Values.squish.network }}
+  subnetworkRef:
+    external: projects/{{ .Values.gcpProjectId }}/regions/{{ .Values.squish.region }}/subnetworks/{{ .Values.squish.subnetwork }}
+---
+apiVersion: workstations.cnrm.cloud.google.com/v1beta1
+kind: WorkstationConfig
+metadata:
+  name: {{ .Values.squish.configName }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+    cnrm.cloud.google.com/deletion-policy: {{ .Values.squish.deletionPolicy | quote }}
+  labels:
+    {{- include "squish-workstation-app.labels" . | nindent 4 }}
+spec:
+  parentRef:
+    name: {{ .Values.squish.clusterName }}
+  displayName: "Squish"
+  idleTimeout: {{ .Values.squish.workstation.idleTimeout | quote }}
+  runningTimeout: {{ .Values.squish.workstation.runningTimeout | quote }}
+  host:
+    gceInstance:
+      machineType: {{ .Values.squish.workstation.machineType | quote }}
+      poolSize: {{ .Values.squish.workstation.poolSize }}
+      bootDiskSizeGB: {{ .Values.squish.workstation.bootDiskSizeGB }}
+      enableNestedVirtualization: {{ .Values.squish.workstation.enableNestedVirtualization }}
+      disablePublicIPAddresses: {{ .Values.squish.workstation.disablePublicIPAddresses }}
+      serviceAccountRef:
+        name: {{ .Values.squish.serviceAccountId }}
+      serviceAccountScopes:
+        - https://www.googleapis.com/auth/cloud-platform
+  persistentDirectories:
+    - mountPath: {{ .Values.squish.workstation.persistentDisk.mountPath | quote }}
+      gcePD:
+        sizeGB: {{ .Values.squish.workstation.persistentDisk.sizeGB }}
+        diskType: {{ .Values.squish.workstation.persistentDisk.diskType | quote }}
+        reclaimPolicy: {{ .Values.squish.workstation.persistentDisk.reclaimPolicy | quote }}
+  container:
+    image: {{ include "squish-workstation-app.image" . | quote }}
