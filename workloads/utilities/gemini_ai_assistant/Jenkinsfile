@@ -100,6 +100,15 @@ pipeline {
             archiveArtifacts artifacts: 'gemini-assist/*', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
             archiveArtifacts artifacts: 'traces/*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
             script {
+              def aiSummaryHtml = sh(
+                script: 'python3 "${WORKSPACE}/workloads/common/agentic-ai/gemini/render_summary_html.py" "${WORKSPACE}/gemini-assist" || true',
+                returnStdout: true
+              ).trim()
+              if (aiSummaryHtml) {
+                currentBuild.description = (currentBuild.description ?: '') + aiSummaryHtml
+              }
+            }
+            script {
               def runtime = (params.AI_REVIEW_RUNTIME ?: env.AI_REVIEW_RUNTIME ?: '').toString().trim()
               if (runtime != 'agy') {
                 archiveArtifacts artifacts: 'headless_output*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: false
