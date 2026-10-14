@@ -61,7 +61,7 @@ spec:
   kubectlVersion: "1:545.0.0-0"
   enableGeminiAiAssistant: "true"
   geminiCliVersion: "latest"
-  googleAdkVersion: "2.6.3"
+  antigravitySdkVersion: "0.1.16"
   # Non-local: align with gitops config.workloads.android.url / .branch.
   # Platform GitOps: workloads-android Application (gitops/modules/workloads-android via Module Manager); CWT common-docker-image-build from module workloads-common.
   pipelineRepoUrl: ""

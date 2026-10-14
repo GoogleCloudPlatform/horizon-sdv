@@ -73,7 +73,9 @@ spec:
   # Gemini (aaos-builder parity): enableGeminiAiAssistant and geminiAnalyseOnSuccess are workflow/webhook parameters (defaults here).
   # Non-empty geminiModel builds gemini --model <name> --yolo --output-format json; else geminiCommandLine as-is.
   enableGeminiAiAssistant: "true"
-  geminiModel: "gemini-2.5-pro"
+  # AI review execution runtime: gemini-cli (default) or agy.
+  aiReviewRuntime: "gemini-cli"
+  geminiModel: "gemini-3.8-flash"
   geminiAnalyseOnSuccess: "false"
   geminiCommandLine: "gemini --yolo --output-format json"
   geminiPreviewFeatures: "true"

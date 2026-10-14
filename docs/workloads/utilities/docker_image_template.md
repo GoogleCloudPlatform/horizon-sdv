@@ -68,10 +68,10 @@ Define `latest` if wishing to use the latest available version.
 Version of `kubectl` to install. The version is typically `1:${GCLOUD_CLI_VERSION}`.
 Define `latest` if wishing to use the latest available version.
 
-### `GOOGLE_ADK_VERSION`
+### `ANTIGRAVITY_SDK_VERSION`
 
-The version of google-adk to be installed.
-Run `pip index versions google-adk` for a full list of valid versions.
+The version of antigravity SDK to be installed.
+Run `pip index versions google-antigravity` for a full list of valid versions.
 
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 

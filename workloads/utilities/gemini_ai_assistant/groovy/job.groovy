@@ -55,7 +55,7 @@ pipelineJob('Utilities/Gemini AI Assistant') {
 
     base64File {
       name('GEMINI_PROMPT_FILE')
-      description('''<p>Mandatory: Select a prompt file for the Gemini AI assistant (step 1). Prompts are provided only via upload.</p>''')
+      description('''<p>Required for gemini-cli: Select a prompt file for the Gemini AI assistant (step 1). Prompts are provided only via upload.</p>''')
     }
 
     base64File {
@@ -80,6 +80,12 @@ pipelineJob('Utilities/Gemini AI Assistant') {
         <ul><li><code>gcloud storage cp -r gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Tests/CTS_Execution/&lt;BUILD_NUMBER&gt;/test-results/ .</code></li>
             <li><code>gcloud storage cp gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;/aaos* .</code></li></ul></p>""")
       trim(true)
+    }
+
+    choiceParam {
+      name('AI_REVIEW_RUNTIME')
+      description('''<p>AI Review runtime: <code>gemini-cli</code> (CLI, default) or <code>agy</code> (Antigravity SDK).</p>''')
+      choices(['gemini-cli', 'agy'])
     }
 
     stringParam {

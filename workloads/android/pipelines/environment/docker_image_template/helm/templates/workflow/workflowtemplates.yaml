@@ -78,8 +78,8 @@ spec:
       - name: geminiCliVersion
         value: {{ .Values.spec.geminiCliVersion | quote }}
         description: "Gemini CLI version to install."
-      - name: googleAdkVersion
-        value: {{ .Values.spec.googleAdkVersion | quote }}
-        description: "Google ADK version to install."
+      - name: antigravitySdkVersion
+        value: {{ .Values.spec.antigravitySdkVersion | quote }}
+        description: "Google Antigravity SDK version to install."
   templates:
 {{- include "aaos-builder-runtime-image.templates" . | nindent 2 }}

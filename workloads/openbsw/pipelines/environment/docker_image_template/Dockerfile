@@ -38,7 +38,7 @@ ARG TREEFMT_URL
 # Install gemini-cli if enabled.
 ARG ENABLE_GEMINI_AI_ASSISTANT="false"
 ARG GEMINI_CLI_VERSION="latest"
-ARG GOOGLE_ADK_VERSION="2.6.3"
+ARG ANTIGRAVITY_SDK_VERSION="0.1.16"
 
 # Rust (posix-rust, s32k148-rust-gcc): defaults align with eclipse-openbsw/openbsw docker/development/Dockerfile
 ARG RUST_DEFAULT_TOOLCHAIN=1.90.0
@@ -172,7 +172,8 @@ RUN echo "\033[1;32mInstall nodejs ${NODEJS_VERSION}\033[0m" && \
     if [ "$ENABLE_GEMINI_AI_ASSISTANT" = "true" ]; then \
       echo "\033[1;32mInstalling gemini-cli@${GEMINI_CLI_VERSION}\033[0m" && \
       sudo npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && \
-      echo "\033[1;32mInstalling google-adk@${GOOGLE_ADK_VERSION}\033[0m" && \
       sudo rm -f /usr/lib/python3*/EXTERNALLY-MANAGED && \
-      sudo pip3 install "google-adk==${GOOGLE_ADK_VERSION}" "google-genai"; \
+      echo "\033[1;32mInstalling google-antigravity@${ANTIGRAVITY_SDK_VERSION}\033[0m" && \
+      sudo pip3 install "google-antigravity==${ANTIGRAVITY_SDK_VERSION}" && \
+      sudo pip install "google-cloud-logging"; \
     fi

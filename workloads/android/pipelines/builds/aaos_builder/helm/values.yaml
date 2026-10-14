@@ -90,6 +90,8 @@ spec:
   useElevatedWorkflowIam: true
   serviceAccountName: workflow-executor
   enableGeminiAiAssistant: "true"
+  # AI review execution runtime: gemini-cli (default) or agy.
+  aiReviewRuntime: "gemini-cli"
   # Sequenced prompts (triage -> RCA -> fixes); paths under this chart's prompt/sequenced/.
   geminiPromptFile: /workspace/workloads/android/pipelines/builds/aaos_builder/prompt/sequenced/step1_triage.txt
   geminiPromptFile2: /workspace/workloads/android/pipelines/builds/aaos_builder/prompt/sequenced/step2_rca.txt
@@ -153,5 +155,5 @@ spec:
     kubectlVersion: "1:545.0.0-0"
     enableGeminiAiAssistant: "true"
     geminiCliVersion: "latest"
-    googleAdkVersion: "2.6.3"
+    antigravitySdkVersion: "0.1.16"
     dryRun: "false"

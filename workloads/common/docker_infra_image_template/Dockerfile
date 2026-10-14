@@ -31,7 +31,7 @@ ARG NODEJS_VERSION
 # Install gemini-cli if enabled.
 ARG ENABLE_GEMINI_AI_ASSISTANT="false"
 ARG GEMINI_CLI_VERSION="latest"
-ARG GOOGLE_ADK_VERSION="2.6.3"
+ARG ANTIGRAVITY_SDK_VERSION="0.1.16"
 
 # Install common packages. python3, python3-yaml (PyYAML) for Gemini skills conversion at runtime;
 # python3-numpy for SSH IAP tunnelling. libsecret-1-0 for clients that use the Secret Service API
@@ -94,7 +94,8 @@ RUN if [ "$ENABLE_GEMINI_AI_ASSISTANT" = "true" ]; then \
       sudo n "${NODEJS_VERSION}" && \
       sudo ln -sf /usr/local/bin/node /usr/local/bin/nodejs || true && \
       sudo npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && \
-      echo "\033[1;32mInstalling google-adk@${GOOGLE_ADK_VERSION}\033[0m" && \
       sudo rm -f /usr/lib/python3*/EXTERNALLY-MANAGED && \
-      sudo pip3 install "google-adk==${GOOGLE_ADK_VERSION}" "google-genai"; \
+      echo "\033[1;32mInstalling google-antigravity@${ANTIGRAVITY_SDK_VERSION}\033[0m" && \
+      sudo pip3 install "google-antigravity==${ANTIGRAVITY_SDK_VERSION}" && \
+      sudo pip install "google-cloud-logging"; \
     fi

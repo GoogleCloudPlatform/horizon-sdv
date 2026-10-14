@@ -414,6 +414,7 @@ def runCvdGeminiAiReview(Map cfg = [:]) {
     export GEMINI_ARTIFACTS_COMMAND='unzip -q -o "\${WORKSPACE}/test-results/cuttlefish_logs-\${BUILD_NUMBER}.zip" -d "\${WORKSPACE}/test-results/cvd" 2>/dev/null || true'
     export PIPELINE_REPO_ROOT="\${WORKSPACE}"
     export GEMINI_ANALYSIS_PATH="\${WORKSPACE}"
+    export AI_REVIEW_RUNTIME="\${AI_REVIEW_RUNTIME:-gemini-cli}"
     export GEMINI_SKIP_MOVE_ARTIFACTS=1
     export GEMINI_AI_EXECUTION_TIMEOUT_HOURS=2
     export GEMINI_PREVIEW_FEATURES="\${GEMINI_PREVIEW_FEATURES}"
@@ -430,7 +431,13 @@ def runCvdGeminiAiReview(Map cfg = [:]) {
   """.stripIndent()
   }
   archiveArtifacts artifacts: 'gemini-assist/*', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
-  archiveArtifacts artifacts: 'headless_output*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: false
+  archiveArtifacts artifacts: 'traces/*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
+  script {
+    def runtime = (params.AI_REVIEW_RUNTIME ?: env.AI_REVIEW_RUNTIME ?: '').toString().trim()
+    if (runtime != 'agy') {
+      archiveArtifacts artifacts: 'headless_output*.json', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: false
+    }
+  }
   archiveArtifacts artifacts: '*artifacts*.txt', followSymlinks: false, onlyIfSuccessful: false, allowEmptyArchive: true
   script {
     if (fileExists('gemini-client-error.zip')) {
