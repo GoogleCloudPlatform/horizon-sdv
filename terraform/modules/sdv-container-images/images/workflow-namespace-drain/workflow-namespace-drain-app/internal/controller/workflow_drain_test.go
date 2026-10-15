@@ -106,13 +106,16 @@ func TestWorkflowDrainerOldDeletingWorkflowClearsFinalizer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Drain returned error: %v", err)
 	}
-	if done {
-		t.Fatal("expected Workflow removal to require another reconcile after finalizers are cleared")
+	// Like the API server, the fake client removes a deleting object once its last finalizer is cleared.
+	if !done {
+		t.Fatal("expected drain to be done once the old Workflow's finalizers are cleared")
 	}
 
-	got := getWorkflow(t, c, "sample")
-	if len(got.GetFinalizers()) != 0 {
-		t.Fatalf("expected Workflow finalizers to be cleared, got %#v", got.GetFinalizers())
+	got := &unstructured.Unstructured{}
+	got.SetGroupVersionKind(workflowGVK)
+	err = c.Get(context.Background(), types.NamespacedName{Namespace: "workflows", Name: "sample"}, got)
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("expected Workflow to be removed after its finalizers were cleared, got err=%v finalizers=%#v", err, got.GetFinalizers())
 	}
 }
 

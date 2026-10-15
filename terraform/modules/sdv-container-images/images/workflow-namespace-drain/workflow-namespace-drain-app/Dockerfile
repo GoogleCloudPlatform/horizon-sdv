@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # Build the Workflow Namespace Drain controller binary.
-FROM --platform=linux/amd64 golang:1.26-alpine AS builder
+FROM --platform=linux/amd64 golang:1.27.2-alpine AS builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
