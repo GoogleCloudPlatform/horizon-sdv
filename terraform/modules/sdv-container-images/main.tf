@@ -25,10 +25,17 @@ locals {
   ])
   portal_image_key = "horizon-dev-portal"
 
+  # The portal's cli/ is written during apply by local_file.horizon_cli_docker_src, so it must never be listed:
+  # Terraform fails when fileset() returns a different result at apply than at plan.
+  # Add any new top-level portal source directory here, or changes to it will not trigger a rebuild.
+  portal_context_patterns = ["*", "proxy/**", "public/**", "src/**"]
+
   # When context_path is set, skip hashing paths that match local npm/build artifacts (like .dockerignore).
   docker_context_files = {
     for name, img in var.images : name => sort([
-      for f in fileset(local.docker_context[name], "**") : f
+      for f in setunion([
+        for p in(name == local.portal_image_key ? local.portal_context_patterns : ["**"]) : fileset(local.docker_context[name], p)
+      ]...) : f
       if try(img.context_path, null) == null ? true : !(
         startswith(f, "node_modules/") || startswith(f, "dist/") || startswith(f, ".git/") || startswith(f, "cli/")
       )
