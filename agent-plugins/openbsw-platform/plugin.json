@@ -1,0 +1,4 @@
+{
+  "name": "OpenBSW_Platform_Tools",
+  "description": "Plugin for Eclipse OpenBSW Development. Provides expert skills for resolving CMake/GCC build errors and POSIX pyTest pipeline failures in OpenBSW."
+}
