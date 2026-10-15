@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ STAGE4_COMPLETED=false
 STAGE5_COMPLETED=false
 
 HTTP_PASSWORD=""
+HTTP_PASSWORD_ROTATED=false
 retVal=""
 
 function initialize() {
@@ -328,15 +329,22 @@ function gerrit-craft-all-users() {
     retVal="RETVAL_NOK"
     return
   else
-    local httpPassword
-    # HTTP password logic: add debug with date/time here (no masking)
-    httpPassword=$(cat /root/.ssh/privatekey | head -2 | tail -1 | cut -c1-30)
-
-    if [ "$httpPassword" != "$HTTP_PASSWORD" ]; then
-      HTTP_PASSWORD=$httpPassword
-      echo "WARNING: HTTP passwords differ or 1st time setup."
+    # Releases before this fix derived the password from the fixed OpenSSH key header,
+    # giving every deployment the same value. Treat that value as unset so it is replaced.
+    local legacyHttpPassword
+    legacyHttpPassword=$(head -2 /root/.ssh/privatekey | tail -1 | cut -c1-30)
+    if [ -n "${HTTP_PASSWORD}" ] && [ "${HTTP_PASSWORD}" == "${legacyHttpPassword}" ]; then
+      echo "WARNING: Stored gerrit-admin HTTP password is the insecure legacy value, replacing it."
+      HTTP_PASSWORD=""
     fi
-    
+
+    # First run has no stored password. Later runs keep jenkins-gerrit-http-password.
+    if [ -z "${HTTP_PASSWORD}" ]; then
+      HTTP_PASSWORD=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
+      echo "Generated a new gerrit-admin HTTP password."
+      HTTP_PASSWORD_ROTATED=true
+    fi
+
     # Debug: show contents of HTTP_PASSWORD
     if [[ "${DEBUG:-0}" == "1" ]]; then
       echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') [DEBUG] Extracted HTTP_PASSWORD: ${HTTP_PASSWORD}"
@@ -347,9 +355,12 @@ function gerrit-craft-all-users() {
       retVal="RETVAL_NOK"
       return
     else
-      # Update gerrit-admin HTTP password. If SSH fails, retry. Don't exit on error, we'll manually override the HTTP
-      # password if this fails.
+      # Update gerrit-admin HTTP password on Gerrit, retrying if SSH is briefly
+      # unavailable. We must not write the secrets unless this succeeds: doing so
+      # would leave Gerrit on the old password while the secrets (and the MCP
+      # server) move to the new one, breaking authentication.
       local n=1
+      local httpPasswordSet=false
       until [ "$n" -gt 20 ]; do
         if (( n % 5 == 0 )); then
           # Try restart on every 10th to see if it alleviates ssh unavailable issue.
@@ -361,12 +372,22 @@ function gerrit-craft-all-users() {
           n=$((n + 1))
         else
           echo "Gerrit Admin http-password updated"
+          httpPasswordSet=true
           break
         fi
       done
 
+      # Abort before touching the secrets if Gerrit never accepted the new
+      # password, so Gerrit, the Kubernetes secrets and gerrit-mcp-server stay
+      # consistent. The job fails and is retried on the next reconcile.
+      if [ "${httpPasswordSet}" != true ]; then
+        echo "ERROR: failed to set gerrit-admin HTTP password on Gerrit after ${n} attempts; secrets left unchanged."
+        retVal="RETVAL_NOK"
+        return
+      fi
+
       cd /root
-      HTTP_PASSWORD_BASE64=$(echo -n $HTTP_PASSWORD | base64 -w0)
+      HTTP_PASSWORD_BASE64=$(printf '%s' "$HTTP_PASSWORD" | base64 -w0)
 
       # Debug: show contents of HTTP_PASSWORD_BASE64
       if [[ "${DEBUG:-0}" == "1" ]]; then
@@ -427,6 +448,26 @@ function gerrit-craft-all-users() {
       fi
 
       echo "HTTP PASSWORD saved into secrets"
+
+      # When the admin HTTP password changed, restart gerrit-mcp-server so it
+      # reloads the new value from the gerrit-http-password secret. This mirrors
+      # the standalone rotation remediation, so an upgrade that rotates the
+      # password leaves the cluster in the same state as running that script.
+      # Jenkins needs no restart: it reads jenkins-gerrit-http-password through
+      # the Kubernetes credentials provider.
+      if [ "${HTTP_PASSWORD_ROTATED}" = true ]; then
+        MCP_DEPLOYMENT="${NAMESPACE_PREFIX}gerrit-mcp-server"
+        if kubectl -n "${NAMESPACE_PREFIX}gerrit" get deployment "${MCP_DEPLOYMENT}" >/dev/null 2>&1; then
+          echo "Restarting ${MCP_DEPLOYMENT} to load the new HTTP password"
+          kubectl -n "${NAMESPACE_PREFIX}gerrit" rollout restart deployment "${MCP_DEPLOYMENT}" \
+            || echo "WARNING: failed to restart ${MCP_DEPLOYMENT}; it will keep the old password until restarted"
+          kubectl -n "${NAMESPACE_PREFIX}gerrit" rollout status deployment "${MCP_DEPLOYMENT}" --timeout=180s \
+            || echo "WARNING: ${MCP_DEPLOYMENT} did not become ready within 180s"
+        else
+          echo "No ${MCP_DEPLOYMENT} deployment present, skipping restart"
+        fi
+      fi
+
       retVal="RETVAL_OK"
       return
     fi
