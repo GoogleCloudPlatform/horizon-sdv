@@ -174,7 +174,22 @@ export function LandingPage() {
       action: 'Open',
       href: '/grafana',
     },
-  ];
+    {
+      // as icon is the same as Argo CD, we use the same logo
+      icon: (
+        <Avatar
+          alt="Argo Workflows logo"
+          variant="square"
+          src={ARGOCD_LOGO_SRC}
+          sx={{ width: 54, height: 54 }}
+        />
+      ),
+      title: 'Argo Workflows',
+      description: 'Open source container-native workflow engine',
+      action: 'Open',
+      href: '/workflows/workflows/argo-workflows',
+    },
+];
 
   return (
     <Box>

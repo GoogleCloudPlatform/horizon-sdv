@@ -27,7 +27,7 @@ podAnnotations: {}
 
 image:
   repository: horizon-dev-portal
-  tag: "4.3.0"
+  tag: "4.3.1"
   pullPolicy: IfNotPresent
 
 resources:
