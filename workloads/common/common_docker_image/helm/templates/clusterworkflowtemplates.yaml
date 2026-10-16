@@ -188,16 +188,22 @@ spec:
               export IMAGE="${DESTINATION}:${IMAGE_TAG}"
               export GCP_REGION="${CLOUD_REGION}"
               export BUILDX_BAKE_ENTITLEMENTS_FS=0
+              docker buildx create --name bk --driver remote "${BUILDKIT_HOST}" --use >/dev/null
+              set -- -f "${BAKE_FILE}" --set "*.platform=${PLATFORM}"
               while IFS= read -r line; do
                 trimmed=$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                if [ -n "${trimmed}" ]; then
-                  export "${trimmed?}"
-                fi
+                case "${trimmed}" in
+                  "") ;;
+                  --set=*)
+                    set -- "$@" --set "${trimmed#--set=}"
+                    ;;
+                  *)
+                    export "${trimmed?}"
+                    ;;
+                esac
               done <<EOF
             $(printf '%b' "${BUILD_ARGS}")
             EOF
-              docker buildx create --name bk --driver remote "${BUILDKIT_HOST}" --use >/dev/null
-              set -- -f "${BAKE_FILE}" --set "*.platform=${PLATFORM}"
               if [ "${PUSH}" = "true" ]; then
                 set -- "$@" --push
               fi

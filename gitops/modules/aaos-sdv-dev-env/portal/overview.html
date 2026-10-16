@@ -30,10 +30,11 @@
     <h2>Pipeline: <code>aaos-sdv-dev-env-execute</code></h2>
     <p>Automates end-to-end artifact creation and validation:</p>
     <ul>
-      <li><strong>Step 1: Container Build</strong> — Clones <code>aaos-sdv-demos</code> and builds the ASfP + CARLA 0.9.15 + SOME/IP image via the shared <code>common-docker-image-build</code> template, pushing to Artifact Registry as <code>aaos-sdv-dev-env</code>.</li>
-      <li><strong>Step 2: Workspace &amp; Candidate Snapshot</strong> — Provisions a high-CPU builder workstation, installs CARLA 0.9.15, applies patches and builds AAOS 26Q2, then captures a candidate GCE persistent disk snapshot.</li>
-      <li><strong>Step 3: Automated Test Suite</strong> — Launches a GPU-accelerated test workstation from the candidate snapshot and runs a BATS acceptance suite on it, covering CARLA RPC (port 2000) and dual-VM vehicle simulation (<code>launch_2vm</code> plus <code>cvd fleet</code>).</li>
-      <li><strong>Step 4: Atomic Promotion</strong> — On test success, labels the validated snapshot <code>is-latest=true</code> and publishes a ready-to-use <code>aaos-sdv-dev-env-latest</code> workstation configuration built from it.</li>
+      <li><strong>Step 1: Container Build</strong> - Clones <code>aaos-sdv-demos</code> and builds the ASfP + CARLA 0.9.15 + SOME/IP + Antigravity 2.0 image via the shared <code>common-docker-image-build</code> template, pushing to Artifact Registry as <code>aaos-sdv-dev-env</code>.</li>
+      <li><strong>Step 1b: Clean Persistent Disk Configs</strong> - Immediately publishes <code>aaos-sdv-dev-env-clean</code> (<code>europe-west3</code>) and <code>aaos-sdv-dev-env-clean-usw4</code> (<code>us-west4</code>) with fresh 1000 GB <code>pd-ssd</code> disks and T4 GPU acceleration.</li>
+      <li><strong>Step 2: Workspace &amp; Candidate Snapshot</strong> - Provisions a high-CPU builder workstation (or slots in <code>existingSnapshotName</code>), installs CARLA 0.9.15, applies patches and builds AAOS 26Q2, then captures a candidate GCE persistent disk snapshot.</li>
+      <li><strong>Step 3: Automated Test Suite</strong> - Launches a GPU-accelerated test workstation from the candidate snapshot and runs a BATS acceptance suite on it, covering CARLA RPC (port 2000) and dual-VM vehicle simulation (<code>launch_2vm</code> plus <code>cvd fleet</code>).</li>
+      <li><strong>Step 4: Atomic Promotion</strong> - On test success, labels the validated snapshot <code>is-latest=true</code> and publishes ready-to-use workstation configurations across both regions (<code>aaos-sdv-dev-env-latest</code>, <code>aaos-sdv-dev-env-euw3</code>, and <code>aaos-sdv-dev-env-usw4</code>).</li>
     </ul>
   </div>
 

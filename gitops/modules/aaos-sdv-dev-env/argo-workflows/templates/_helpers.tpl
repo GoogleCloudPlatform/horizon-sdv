@@ -44,3 +44,10 @@ its destination: <region>-docker.pkg.dev/<project>/<dockerArtifactPathName>:<ima
 {{- define "aaos-sdv-dev-env.outputImage" -}}
 {{- printf "%s/%s/%s:%s" (include "aaos-sdv-dev-env.registry" .) .Values.gcpProjectId .Values.spec.dockerArtifactPathName .Values.spec.imageTag -}}
 {{- end -}}
+
+{{/*
+Host VM service account email attached to Cloud Workstation configurations.
+*/}}
+{{- define "aaos-sdv-dev-env.hostServiceAccountEmail" -}}
+{{- printf "%s@%s.iam.gserviceaccount.com" .Values.spec.hostServiceAccountName .Values.gcpProjectId -}}
+{{- end -}}

@@ -20,19 +20,18 @@
 # Both the temporary config and the temporary workstation are removed on exit,
 # success or failure.
 #
-# Why gcloud and not Config Connector (KCC): see build-snapshot.sh.
-#
 # Inputs (environment):
 #   PROJECT           GCP project id
 #   REGION            GCP region
 #   CLUSTER           Cloud Workstations cluster name
-#   CONFIG            Name to use for the *temporary* tester config
+#   CONFIG            Name to use for the temporary tester config
 #   WORKFLOW_UID      Argo workflow UID, used to name per-run resources
 #   CANDIDATE_SNAP    Snapshot to boot the tester from
 #   CONTAINER_IMAGE   Workstation container image to test
 #   MACHINE_TYPE      Tester machine type
 #   ACCELERATOR_TYPE  Tester GPU type
 #   ACCELERATOR_COUNT Tester GPU count
+#   HOST_SA_EMAIL     Host VM service account email
 #   BATS_FILE         Path to the BATS suite to execute (mounted from ConfigMap)
 
 set -eu
@@ -47,6 +46,7 @@ set -eu
 : "${MACHINE_TYPE:?MACHINE_TYPE is required}"
 : "${ACCELERATOR_TYPE:?ACCELERATOR_TYPE is required}"
 : "${ACCELERATOR_COUNT:?ACCELERATOR_COUNT is required}"
+: "${HOST_SA_EMAIL:?HOST_SA_EMAIL is required}"
 : "${BATS_FILE:?BATS_FILE is required}"
 
 TEST_WS="aaos-sdv-tester-${WORKFLOW_UID}"
@@ -65,6 +65,8 @@ ws_ssh() {
   OUT=$(gcloud workstations ssh "${TEST_WS}" \
       --project="${PROJECT}" --region="${REGION}" --cluster="${CLUSTER}" \
       --config="${CONFIG}" --user=user --quiet \
+      --ssh-flag="-o ServerAliveInterval=30" \
+      --ssh-flag="-o ServerAliveCountMax=20" \
       --command="( $1 ); printf '\n__WS_SSH_RC__:%d\n' \$?")
   printf '%s\n' "${OUT}" | sed '/^__WS_SSH_RC__:[0-9]*$/d'
   RC=$(printf '%s\n' "${OUT}" | sed -n 's/^__WS_SSH_RC__:\([0-9]*\)$/\1/p' | tail -n 1)
@@ -88,8 +90,12 @@ gcloud workstations configs create "${CONFIG}" \
     --enable-nested-virtualization \
     --accelerator-type="${ACCELERATOR_TYPE}" \
     --accelerator-count="${ACCELERATOR_COUNT}" \
+    --service-account="${HOST_SA_EMAIL}" \
+    --disable-public-ip-addresses \
+    --pool-size=0 \
     --container-custom-image="${CONTAINER_IMAGE}" \
     --pd-disk-type="pd-ssd" \
+    --pd-reclaim-policy="delete" \
     --pd-source-snapshot="projects/${PROJECT}/global/snapshots/${CANDIDATE_SNAP}"
 
 # Only arm the trap once the config exists, so a failure to create it does not
@@ -135,10 +141,6 @@ if [ "${SSH_OK}" != "true" ]; then
   exit 1
 fi
 
-# Copy the suite over as a real file rather than inlining it into the ssh
-# command. base64 is used because its alphabet contains no shell metacharacters,
-# so the payload survives the ssh command string untouched regardless of what
-# the test content looks like.
 echo "Uploading BATS suite to ${TEST_WS}:${REMOTE_BATS}..."
 SUITE_B64=$(base64 < "${BATS_FILE}" | tr -d '\n')
 ws_ssh "printf '%s' '${SUITE_B64}' | base64 -d > '${REMOTE_BATS}' && chmod 0644 '${REMOTE_BATS}'"

@@ -53,6 +53,9 @@ spec:
         tasks:
           - name: preflight-aaos-sdv-demos
             template: preflight-aaos-sdv-demos
+          - name: ensure-secondary-region-infra
+            depends: preflight-aaos-sdv-demos.Succeeded
+            template: run-ensure-infra
 
     # Cheap preflight. Catches an unreachable repository or a missing revision in
     # seconds, rather than after a multi-GB image build.
@@ -87,6 +90,43 @@ spec:
             memory: "256Mi"
           limits:
             memory: "512Mi"
+
+    - name: run-ensure-infra
+      container:
+        image: {{ .Values.spec.cloudSdkImage }}
+        command: [sh, /scripts/ensure-infra.sh]
+        env:
+          - name: PROJECT
+            value: {{ .Values.gcpProjectId | quote }}
+          - name: VPC_NETWORK
+            value: {{ .Values.spec.vpcNetwork | quote }}
+          - name: SECONDARY_REGION
+            value: {{ .Values.spec.secondaryRegion | quote }}
+          - name: SECONDARY_CLUSTER
+            value: {{ .Values.spec.secondaryWorkstationCluster | quote }}
+          - name: SECONDARY_SUBNET
+            value: {{ .Values.spec.secondarySubnet | quote }}
+          - name: SECONDARY_SUBNET_CIDR
+            value: {{ .Values.spec.secondarySubnetCidr | quote }}
+          - name: SECONDARY_ROUTER
+            value: {{ .Values.spec.secondaryRouter | quote }}
+          - name: SECONDARY_NAT
+            value: {{ .Values.spec.secondaryNat | quote }}
+        volumeMounts:
+          - name: scripts
+            mountPath: /scripts
+            readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ .Values.parentModuleName }}-scripts
+            defaultMode: 0555
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
@@ -114,6 +154,12 @@ spec:
       - name: horizonSubmittedFrom
         value: ""
         description: Populated by the Developer Portal / Horizon CLI. Leave empty.
+      - name: existingSnapshotName
+        value: ""
+        description: Optional pre-existing GCE persistent disk snapshot name to slot in directly, skipping the multi-hour CARLA + AAOS 26Q2 build.
+      - name: skipImageBuild
+        value: "false"
+        description: Set to "true" to reuse the existing container image in Artifact Registry when slotting in a snapshot.
   templates:
     - name: run-execute
       dag:
@@ -122,6 +168,7 @@ spec:
           # workloads-common, executing aaos-sdv-demos/docker/docker-bake.hcl via
           # `docker buildx bake` against its buildkitd sidecar.
           - name: build-image
+            when: '{{ "{{" }}workflow.parameters.skipImageBuild{{ "}}" }} != true'
             templateRef:
               name: {{ .Values.clusterWorkflowTemplateName | quote }}
               template: build
@@ -153,9 +200,17 @@ spec:
                   value: |
                     CICD_FOUNDATION_REF={{ .Values.spec.cicdFoundationRef }}
                     CACHE_REPO={{ include "aaos-sdv-dev-env.cacheRepo" . }}
+                    --set=sdv-demos.args.ANTIGRAVITY_URL={{ .Values.spec.antigravityUrl }}
+
+          # Publishes clean persistent-disk configs immediately after the image
+          # build so partners can launch a Selkies + Openbox + T4 GPU workstation
+          # right away while the multi-hour snapshot build runs in parallel.
+          - name: publish-clean-config
+            depends: build-image.Succeeded || build-image.Skipped
+            template: run-publish-clean-config
 
           - name: build-snapshot
-            depends: build-image.Succeeded
+            depends: build-image.Succeeded || build-image.Skipped
             template: run-build-snapshot
             arguments:
               parameters:
@@ -163,6 +218,8 @@ spec:
                   value: {{ .Values.spec.workstationCluster | quote }}
                 - name: builderConfig
                   value: {{ .Values.spec.builderConfig | quote }}
+                - name: existingSnapshotName
+                  value: '{{ "{{" }}workflow.parameters.existingSnapshotName{{ "}}" }}'
 
           - name: test-artifacts
             depends: build-snapshot.Succeeded
@@ -189,24 +246,64 @@ spec:
     # ------------------------------------------------------------------------
     # Cloud Workstations / Compute Engine steps.
     #
-    # These drive gcloud rather than Config Connector (KCC). The cluster runs
-    # the GKE Config Connector add-on at v1.126.0, which ships WorkstationCluster
-    # but neither WorkstationConfig nor Workstation, so for most of this there is
-    # no CRD to use at all. Availability aside, the builder/tester lifecycle is
-    # one-shot and imperative and hinges on a persistent disk name that only
-    # exists at runtime, which a reconciling controller models poorly. The one
-    # resource that would suit KCC is the long-lived promoted config; see
-    # README.md for the full rationale and the conditions for revisiting it.
-    #
     # Each step's body lives under files/ and is mounted at /scripts by
     # configmap-scripts.yaml, so the shell code can be read, diffed, linted and
     # executed outside the cluster instead of being embedded in this YAML.
     # ------------------------------------------------------------------------
+    - name: run-publish-clean-config
+      container:
+        image: {{ .Values.spec.cloudSdkImage }}
+        command: [sh, /scripts/publish-clean-config.sh]
+        env:
+          - name: PROJECT
+            value: {{ .Values.gcpProjectId | quote }}
+          - name: REGION
+            value: {{ .Values.gcpRegion | quote }}
+          - name: CLUSTER
+            value: {{ .Values.spec.workstationCluster | quote }}
+          - name: CLEAN_CONFIG
+            value: {{ .Values.spec.cleanConfig | quote }}
+          - name: CLEAN_PD_SIZE_GB
+            value: {{ .Values.spec.cleanPdSizeGb | quote }}
+          - name: SECONDARY_REGION
+            value: {{ .Values.spec.secondaryRegion | quote }}
+          - name: SECONDARY_CLUSTER
+            value: {{ .Values.spec.secondaryWorkstationCluster | quote }}
+          - name: SECONDARY_CLEAN_CONFIG
+            value: {{ .Values.spec.secondaryCleanConfig | quote }}
+          - name: CONTAINER_IMAGE
+            value: {{ include "aaos-sdv-dev-env.outputImage" . | quote }}
+          - name: MACHINE_TYPE
+            value: {{ .Values.spec.testerMachineType | quote }}
+          - name: ACCELERATOR_TYPE
+            value: {{ .Values.spec.acceleratorType | quote }}
+          - name: ACCELERATOR_COUNT
+            value: {{ .Values.spec.acceleratorCount | quote }}
+          - name: HOST_SA_EMAIL
+            value: {{ include "aaos-sdv-dev-env.hostServiceAccountEmail" . | quote }}
+        volumeMounts:
+          - name: scripts
+            mountPath: /scripts
+            readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ .Values.parentModuleName }}-scripts
+            defaultMode: 0555
+
     - name: run-build-snapshot
       inputs:
         parameters:
           - name: workstationCluster
           - name: builderConfig
+          - name: existingSnapshotName
+            value: ""
       outputs:
         parameters:
           - name: candidateSnapshotName
@@ -224,10 +321,18 @@ spec:
             value: '{{ "{{" }}inputs.parameters.workstationCluster{{ "}}" }}'
           - name: CONFIG
             value: '{{ "{{" }}inputs.parameters.builderConfig{{ "}}" }}'
+          - name: EXISTING_SNAPSHOT_NAME
+            value: '{{ "{{" }}inputs.parameters.existingSnapshotName{{ "}}" }}'
           - name: WORKFLOW_UID
             value: '{{ "{{" }}workflow.uid{{ "}}" }}'
           - name: CONTAINER_IMAGE
             value: {{ include "aaos-sdv-dev-env.outputImage" . | quote }}
+          - name: BUILDER_MACHINE_TYPE
+            value: {{ .Values.spec.builderMachineType | quote }}
+          - name: BUILDER_PD_SIZE_GB
+            value: {{ .Values.spec.builderPdSizeGb | quote }}
+          - name: HOST_SA_EMAIL
+            value: {{ include "aaos-sdv-dev-env.hostServiceAccountEmail" . | quote }}
         volumeMounts:
           - name: scripts
             mountPath: /scripts
@@ -274,6 +379,8 @@ spec:
             value: {{ .Values.spec.acceleratorType | quote }}
           - name: ACCELERATOR_COUNT
             value: {{ .Values.spec.acceleratorCount | quote }}
+          - name: HOST_SA_EMAIL
+            value: {{ include "aaos-sdv-dev-env.hostServiceAccountEmail" . | quote }}
           - name: BATS_FILE
             value: /scripts/test_artifacts.bats
         volumeMounts:
@@ -311,6 +418,14 @@ spec:
             value: '{{ "{{" }}inputs.parameters.candidateSnapshotName{{ "}}" }}'
           - name: PROMOTED_CONFIG
             value: {{ .Values.spec.promotedConfig | quote }}
+          - name: PRIMARY_REGIONAL_CONFIG
+            value: {{ .Values.spec.primaryRegionalConfig | quote }}
+          - name: SECONDARY_REGION
+            value: {{ .Values.spec.secondaryRegion | quote }}
+          - name: SECONDARY_CLUSTER
+            value: {{ .Values.spec.secondaryWorkstationCluster | quote }}
+          - name: SECONDARY_REGIONAL_CONFIG
+            value: {{ .Values.spec.secondaryRegionalConfig | quote }}
           - name: CONTAINER_IMAGE
             value: {{ include "aaos-sdv-dev-env.outputImage" . | quote }}
           - name: MACHINE_TYPE
@@ -319,6 +434,8 @@ spec:
             value: {{ .Values.spec.acceleratorType | quote }}
           - name: ACCELERATOR_COUNT
             value: {{ .Values.spec.acceleratorCount | quote }}
+          - name: HOST_SA_EMAIL
+            value: {{ include "aaos-sdv-dev-env.hostServiceAccountEmail" . | quote }}
         volumeMounts:
           - name: scripts
             mountPath: /scripts

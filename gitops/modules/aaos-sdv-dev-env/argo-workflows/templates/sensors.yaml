@@ -18,6 +18,8 @@
 # so the ordering below must stay in lock-step with the parameter list declared in
 # workflowtemplates.yaml:
 #   0 = horizonSubmittedFrom
+#   1 = existingSnapshotName (execute only)
+#   2 = skipImageBuild (execute only)
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Sensor
@@ -121,6 +123,8 @@ spec:
                 arguments:
                   parameters:
                     - name: horizonSubmittedFrom
+                    - name: existingSnapshotName
+                    - name: skipImageBuild
           parameters:
             - src:
                 dependencyName: webhook-dep
@@ -134,3 +138,13 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedFrom
               dest: spec.arguments.parameters.0.value
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.existingSnapshotName
+                value: ""
+              dest: spec.arguments.parameters.1.value
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.skipImageBuild
+                value: "false"
+              dest: spec.arguments.parameters.2.value

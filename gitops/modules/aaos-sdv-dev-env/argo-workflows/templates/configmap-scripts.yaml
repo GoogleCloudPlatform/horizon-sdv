@@ -30,6 +30,10 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ .Values.parentModuleName }}
 data:
+  ensure-infra.sh: |
+{{ .Files.Get "files/ensure-infra.sh" | indent 4 }}
+  publish-clean-config.sh: |
+{{ .Files.Get "files/publish-clean-config.sh" | indent 4 }}
   build-snapshot.sh: |
 {{ .Files.Get "files/build-snapshot.sh" | indent 4 }}
   test-artifacts.sh: |

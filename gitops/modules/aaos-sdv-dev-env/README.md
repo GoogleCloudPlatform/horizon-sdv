@@ -66,10 +66,11 @@ after tens of minutes.
 
 | # | Task | What it does |
 |---|------|--------------|
-| 1 | `build-image` | Builds and pushes the workstation image via `docker/docker-bake.hcl` in `aaos-sdv-demos`, using the shared `common-docker-image-build` ClusterWorkflowTemplate (`docker buildx bake` against its `buildkitd` sidecar). |
-| 2 | `build-snapshot` | Provisions a builder workstation, then snapshots its persistent disk. |
+| 1 | `build-image` | Builds and pushes the workstation image (including Antigravity IDE 2.0) via `docker/docker-bake.hcl` in `aaos-sdv-demos`, using the shared `common-docker-image-build` ClusterWorkflowTemplate (`docker buildx bake` against its `buildkitd` sidecar). |
+| 1b | `publish-clean-config` | Immediately publishes `aaos-sdv-dev-env-clean` (`europe-west3`) and `aaos-sdv-dev-env-clean-usw4` (`us-west4`) with a fresh 1000 GB `pd-ssd` persistent disk and T4 GPU acceleration. |
+| 2 | `build-snapshot` | Provisions a builder workstation (or slots in `existingSnapshotName`), then snapshots its persistent disk. |
 | 3 | `test-artifacts` | Boots a GPU test workstation from the snapshot and runs `files/test_artifacts.bats` on it. |
-| 4 | `promote-snapshot` | Moves the `is-latest=true` label onto the validated snapshot **and** publishes the `aaos-sdv-dev-env-latest` workstation config built from it. |
+| 4 | `promote-snapshot` | Moves the `is-latest=true` label onto the validated snapshot **and** publishes the `aaos-sdv-dev-env-latest`, `aaos-sdv-dev-env-euw3`, and `aaos-sdv-dev-env-usw4` workstation configs built from it. |
 
 The acceptance suite is uploaded to the test workstation as a file and executed
 with `bats`, rather than being inlined into a `gcloud workstations ssh --command`
@@ -80,32 +81,32 @@ string. `bats` is expected to be present in the image; it is installed by the
 
 The pipeline's deliverable is the **workstation config** `aaos-sdv-dev-env-latest`, not a
 running workstation. Creating workstations from it is deliberately left to the
-developer — there is no launch pipeline, because a workstation is a long-lived,
+developer - there is no launch pipeline, because a workstation is a long-lived,
 per-person, billable resource whose lifecycle should not be tied to a CI run.
 
-Launch one from the Cloud Console (**Cloud Workstations → Workstations → Create**,
+Launch one from the Cloud Console (**Cloud Workstations -> Workstations -> Create**,
 choosing the `aaos-sdv-dev-env-latest` config), or from the CLI:
 
 ```bash
 gcloud workstations create "${USER}-aaos-sdv-dev-env" \
     --project="${PROJECT}" --region="${REGION}" \
-    --cluster=sdv-cluster --config=aaos-sdv-dev-env-latest
+    --cluster=sdv-cloud-ws-cluster --config=aaos-sdv-dev-env-latest
 
 gcloud workstations start "${USER}-aaos-sdv-dev-env" \
     --project="${PROJECT}" --region="${REGION}" \
-    --cluster=sdv-cluster --config=aaos-sdv-dev-env-latest
+    --cluster=sdv-cloud-ws-cluster --config=aaos-sdv-dev-env-latest
 ```
 
 The remote desktop is served on port 80, i.e. at the workstation's own hostname.
 It is a headless X server captured by Selkies and encoded on the T4's NVENC, not
-the GNOME/Guacamole session inherited from the base image — the demo layer masks
+the GNOME/Guacamole session inherited from the base image - the demo layer masks
 that stack deliberately, since compositing a GNOME session on this hardware falls
 back to llvmpipe. See `docker/README.md` in `aaos-sdv-demos` for the full rationale.
 
 ```bash
 gcloud workstations describe "${USER}-aaos-sdv-dev-env" \
     --project="${PROJECT}" --region="${REGION}" \
-    --cluster=sdv-cluster --config=aaos-sdv-dev-env-latest \
+    --cluster=sdv-cloud-ws-cluster --config=aaos-sdv-dev-env-latest \
     --format='value(host)'
 # -> https://<host>
 ```
@@ -115,7 +116,7 @@ and a fully built `~/Workspace/aaos-26q2` are present on first boot. See
 `/google/sdv-bashrc-hook/README` on the workstation for the demo quickstart
 (`launch_2vm`, then `launch_carla`).
 
-Remember to stop workstations when idle — the config requests an `n1-standard-32`
+Remember to stop workstations when idle - the config requests an `n1-standard-32`
 with an attached NVIDIA T4.
 
 ## Why `gcloud` and not Config Connector (KCC)
@@ -147,8 +148,8 @@ Config Connector ≥ 1.132.
 
 The pipeline runs as `workflows/workflow-executor-elevated`, bound by Workload
 Identity to `gke-argo-workflows-elevated-sa` (selected by
-`spec.useElevatedWorkflowIam: true`). Beyond what every pipeline uses —
-`roles/artifactregistry.writer` to push the image — it needs:
+`spec.useElevatedWorkflowIam: true`). Beyond what every pipeline uses -
+`roles/artifactregistry.writer` to push the image - it needs:
 
 | Role | Used for |
 |------|----------|
@@ -156,7 +157,7 @@ Identity to `gke-argo-workflows-elevated-sa` (selected by
 | `roles/compute.instanceAdmin.v1` | list the workstation persistent disk, create the snapshot, label it |
 
 **This module adds no IAM of its own, because it does not have to.** The platform
-Terraform already grants both roles to that service account — see the
+Terraform already grants both roles to that service account - see the
 `gke-argo-workflows-elevated-sa` entry in `terraform/env/main.tf`, and the
 `argo_workflows_elevated` service-account template in `terraform/env/locals.tf`
 that sub-environments are generated from. A stock deployment therefore needs no
@@ -169,13 +170,13 @@ IAM changes to run this module.
 An earlier revision of this module shipped the grants as Config Connector
 `IAMPolicyMember` CRs. That was removed, and is not worth reinstating:
 
-* It is redundant — the roles are already present, as above.
+* It is redundant - the roles are already present, as above.
 * It cannot work by default. Config Connector acts as `gke-config-connector-sa`,
   which the platform grants `roles/editor`; basic Editor does **not** include
   `resourcemanager.projects.setIamPolicy`, so the CRs fail to reconcile with
   `Error 403: The caller does not have permission`.
 * That failure is worse than a no-op. The CRs sit in **sync-wave 1**, and Argo CD
-  will not advance to later waves while a wave is unhealthy — so a failing grant
+  will not advance to later waves while a wave is unhealthy - so a failing grant
   silently prevents the WorkflowTemplates (wave 7) and Sensors (wave 8) from
   being created at all. The module would appear to deploy, and then not exist.
 
@@ -184,10 +185,12 @@ An earlier revision of this module shipped the grants as Config Connector
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `horizonSubmittedFrom` | no | Populated by the Developer Portal / Horizon CLI. Leave empty. |
+| `existingSnapshotName` | no | Optional pre-existing GCE snapshot name to slot in directly, skipping the CARLA + AAOS 26Q2 build. |
+| `skipImageBuild` | no | Set to `"true"` to reuse the existing container image in Artifact Registry when slotting in a snapshot. |
 
 There are no credential parameters: the source repository is public. Everything
-else — repository URL and revision, image names, workstation cluster and builder
-config — is deploy-time configuration in
+else - repository URL and revision, image names, workstation cluster and builder
+config - is deploy-time configuration in
 [`argo-workflows/values.yaml`](argo-workflows/values.yaml), not a submit-time
 parameter.
 

@@ -17,8 +17,8 @@
 # disk snapshot. These run ON a temporary Cloud Workstation booted from the
 # candidate snapshot, before that snapshot is promoted to "latest".
 #
-# They deliberately exercise the workstation the way a developer would — via an
-# interactive shell that sources ~/.bashrc — because the aliases and helper
+# They deliberately exercise the workstation the way a developer would - via an
+# interactive shell that sources ~/.bashrc - because the aliases and helper
 # functions under test (launch_2vm, clear_2vm) are only defined there.
 #
 # Ported from sdv-setup/pipelines/tests/test_artifacts.bats.

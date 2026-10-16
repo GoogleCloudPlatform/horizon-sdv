@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 # Builds a candidate persistent-disk snapshot for the aaos-sdv-dev-env workstation
-# image.
+# image, or slots in an existing snapshot when EXISTING_SNAPSHOT_NAME is set.
 #
 # A workstation is created from the builder config and started once, which is
 # what materialises and populates its regional persistent disk (the CARLA
@@ -22,24 +22,20 @@
 # image). The workstation is then stopped so the disk is quiesced, snapshotted,
 # and the workstation torn down again.
 #
-# Why gcloud and not Config Connector (KCC): the cluster runs the GKE
-# Config Connector add-on at v1.126.0, which ships WorkstationCluster but
-# neither WorkstationConfig nor Workstation, so there is no CRD to express any
-# of this. Even where a CRD does exist (ComputeSnapshot), the source disk name
-# is only discoverable at runtime and the create/start/stop/snapshot/delete
-# sequence is one-shot and imperative, which a reconciling controller models
-# poorly. See the module README for the full rationale.
-#
 # Inputs (environment):
-#   PROJECT          GCP project id
-#   REGION           GCP region
-#   CLUSTER          Cloud Workstations cluster name
-#   CONFIG           Cloud Workstations *builder* config name
-#   WORKFLOW_UID     Argo workflow UID, used to name per-run resources
-#   CONTAINER_IMAGE  Freshly built workstation container image
+#   PROJECT                 GCP project id
+#   REGION                  GCP region
+#   CLUSTER                 Cloud Workstations cluster name
+#   CONFIG                  Cloud Workstations builder config name
+#   WORKFLOW_UID            Argo workflow UID, used to name per-run resources
+#   CONTAINER_IMAGE         Freshly built workstation container image
+#   BUILDER_MACHINE_TYPE    Machine type for the builder config (default: n2-standard-64)
+#   BUILDER_PD_SIZE_GB      Persistent disk size in GB for builder (default: 1000)
+#   HOST_SA_EMAIL           Host VM service account email
+#   EXISTING_SNAPSHOT_NAME  Optional pre-existing snapshot name to slot in directly
 #
 # Output:
-#   Writes the created snapshot name to /tmp/candidate_snapshot_name.
+#   Writes the candidate snapshot name to /tmp/candidate_snapshot_name.
 
 set -eu
 
@@ -49,6 +45,21 @@ set -eu
 : "${CONFIG:?CONFIG is required}"
 : "${WORKFLOW_UID:?WORKFLOW_UID is required}"
 : "${CONTAINER_IMAGE:?CONTAINER_IMAGE is required}"
+: "${HOST_SA_EMAIL:?HOST_SA_EMAIL is required}"
+
+BUILDER_MACHINE_TYPE="${BUILDER_MACHINE_TYPE:-n2-standard-64}"
+BUILDER_PD_SIZE_GB="${BUILDER_PD_SIZE_GB:-1000}"
+EXISTING_SNAPSHOT_NAME="${EXISTING_SNAPSHOT_NAME:-}"
+
+if [ -n "${EXISTING_SNAPSHOT_NAME}" ]; then
+  echo "Existing snapshot parameter provided: ${EXISTING_SNAPSHOT_NAME}"
+  echo "Verifying snapshot ${EXISTING_SNAPSHOT_NAME} exists in project ${PROJECT}..."
+  gcloud compute snapshots describe "${EXISTING_SNAPSHOT_NAME}" \
+      --project="${PROJECT}" >/dev/null
+  printf '%s' "${EXISTING_SNAPSHOT_NAME}" > /tmp/candidate_snapshot_name
+  echo "Using existing snapshot as candidate: ${EXISTING_SNAPSHOT_NAME}"
+  exit 0
+fi
 
 BUILD_WS="aaos-sdv-builder-${WORKFLOW_UID}"
 CANDIDATE_SNAP="aaos-sdv-dev-env-pd-snap-${WORKFLOW_UID}"
@@ -63,6 +74,8 @@ ws_ssh() {
   gcloud workstations ssh "${BUILD_WS}" \
       --project="${PROJECT}" --region="${REGION}" --cluster="${CLUSTER}" \
       --config="${CONFIG}" --user=user --quiet \
+      --ssh-flag="-o ServerAliveInterval=30" \
+      --ssh-flag="-o ServerAliveCountMax=20" \
       --command="( $1 ); printf '\n__WS_SSH_RC__:%d\n' \$?" | while IFS= read -r line; do
     case "${line}" in
       __WS_SSH_RC__:*)
@@ -94,6 +107,38 @@ wait_for_ssh_ready() {
   return 1
 }
 
+ensure_builder_config() {
+  if gcloud workstations configs describe "${CONFIG}" \
+      --project="${PROJECT}" --region="${REGION}" --cluster="${CLUSTER}" \
+      >/dev/null 2>&1; then
+    echo "Updating existing builder config ${CONFIG} to use image ${CONTAINER_IMAGE}..."
+    gcloud workstations configs update "${CONFIG}" \
+        --project="${PROJECT}" --region="${REGION}" --cluster="${CLUSTER}" \
+        --enable-nested-virtualization \
+        --idle-timeout=43200s \
+        --running-timeout=43200s \
+        --container-custom-image="${CONTAINER_IMAGE}" \
+        --quiet
+    return 0
+  fi
+
+  echo "Creating builder config ${CONFIG} (${BUILDER_MACHINE_TYPE}, ${BUILDER_PD_SIZE_GB} GB pd-ssd)..."
+  gcloud workstations configs create "${CONFIG}" \
+      --project="${PROJECT}" --region="${REGION}" --cluster="${CLUSTER}" \
+      --machine-type="${BUILDER_MACHINE_TYPE}" \
+      --enable-nested-virtualization \
+      --service-account="${HOST_SA_EMAIL}" \
+      --disable-public-ip-addresses \
+      --pool-size=0 \
+      --idle-timeout=43200s \
+      --running-timeout=43200s \
+      --container-custom-image="${CONTAINER_IMAGE}" \
+      --pd-disk-type="pd-ssd" \
+      --pd-disk-size="${BUILDER_PD_SIZE_GB}" \
+      --pd-reclaim-policy="delete" \
+      --quiet
+}
+
 # Always try to remove the temporary builder workstation, including on failure,
 # so a failed run does not leave a billable workstation behind.
 cleanup() {
@@ -102,13 +147,9 @@ cleanup() {
       --project="${PROJECT}" --region="${REGION}" --cluster="${CLUSTER}" \
       --config="${CONFIG}" --quiet || true
 }
-trap cleanup EXIT
 
-echo "Updating builder config ${CONFIG} to use freshly built image ${CONTAINER_IMAGE}..."
-gcloud workstations configs update "${CONFIG}" \
-    --project="${PROJECT}" --region="${REGION}" --cluster="${CLUSTER}" \
-    --container-custom-image="${CONTAINER_IMAGE}" \
-    --quiet
+ensure_builder_config
+trap cleanup EXIT
 
 echo "Creating temporary builder workstation: ${BUILD_WS}..."
 gcloud workstations create "${BUILD_WS}" \
@@ -135,10 +176,10 @@ fi
 wait_for_ssh_ready
 
 echo "Step 1/2: Installing CARLA 0.9.15 and extra maps (Town15) onto persistent disk..."
-ws_ssh "bash /google/carla915-utils/setup_carla.sh -y"
+ws_ssh "cd \"\${HOME}\" && . /google/recipe/base.sh && bash /google/carla915-utils/setup_carla.sh -y"
 
 echo "Step 2/2: Checking out, patching, and building AAOS 26Q2 onto persistent disk..."
-ws_ssh "bash -eo pipefail /google/aaos-utils/deploy_aaos_26q2_entry_point.sh"
+ws_ssh "cd \"\${HOME}\" && . /google/recipe/base.sh && bash -eo pipefail /google/aaos-utils/deploy_aaos_26q2_entry_point.sh"
 
 echo "Stopping builder to quiesce its persistent disk before snapshotting..."
 gcloud workstations stop "${BUILD_WS}" \
