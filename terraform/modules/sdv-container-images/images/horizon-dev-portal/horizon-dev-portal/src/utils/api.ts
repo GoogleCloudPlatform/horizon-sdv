@@ -66,6 +66,17 @@ export async function apiCli(path: string, init: RequestInit = {}): Promise<Resp
   return fetchWithAuth(url, init);
 }
 
+/** Control Room aggregated GCP & cluster telemetry via proxy (user JWT required). */
+export async function apiControlRoom(
+  forceFresh = false,
+  init: RequestInit = {}
+): Promise<Response> {
+  const originBase = getAppOriginBase();
+  const suffix = forceFresh ? '?fresh=1' : '';
+  const url = `${originBase}/api/control-room${suffix}`;
+  return fetchWithAuth(url, init);
+}
+
 /**
  * Parse a CLI API JSON body. Vite's SPA fallback can return HTML with HTTP 200 when
  * `/api/cli` is not handled; that used to surface as `Unexpected token '<'`.

@@ -33,6 +33,7 @@ import { Link } from 'react-router-dom';
 import { HORIZON_LOGO_SRC } from '../constants';
 import { authService } from '../utils/auth';
 import BuildIcon from '@mui/icons-material/Build';
+import RadarIcon from '@mui/icons-material/Radar';
 
 const HORIZON_SDV_REPO = 'https://github.com/GoogleCloudPlatform/horizon-sdv';
 const DEPLOYMENT_GUIDE_URL =
@@ -129,8 +130,17 @@ export function WelcomePage() {
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
         <Button
           component={Link}
-          to="/admin/modules"
+          to="/control-room"
           variant="contained"
+          size="large"
+          startIcon={<RadarIcon />}
+        >
+          Open Control Room
+        </Button>
+        <Button
+          component={Link}
+          to="/admin/modules"
+          variant="outlined"
           size="large"
           startIcon={<AdminPanelSettingsIcon />}
         >

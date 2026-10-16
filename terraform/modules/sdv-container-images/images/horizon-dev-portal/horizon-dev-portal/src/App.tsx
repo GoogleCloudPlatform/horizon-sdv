@@ -39,6 +39,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import BusinessIcon from '@mui/icons-material/Business';
 import BuildIcon from '@mui/icons-material/Build';
+import RadarIcon from '@mui/icons-material/Radar';
 import {
   BrowserRouter,
   Routes,
@@ -64,6 +65,7 @@ import { HORIZON_LOGO_SRC, READY_MODULES_REFRESH_EVENT } from './constants';
 import { getRouterBasename } from './utils/publicPath';
 import * as React from 'react';
 import { ToolsPage } from './pages/ToolsPage.tsx';
+import { ControlRoomPage } from './pages/ControlRoomPage.tsx';
 
 const drawerWidth = 260;
 
@@ -174,6 +176,17 @@ function ShellLayout() {
             <BusinessIcon />
           </ListItemIcon>
           <ListItemText primary="Landing page" />
+        </ListItemButton>
+        <ListItemButton
+          component={Link}
+          to="/control-room"
+          selected={location.pathname === '/control-room'}
+          onClick={() => isMobile && setMobileOpen(false)}
+        >
+          <ListItemIcon>
+            <RadarIcon />
+          </ListItemIcon>
+          <ListItemText primary="Control Room" />
         </ListItemButton>
         <ListItemButton
           component={Link}
@@ -342,6 +355,7 @@ export default function App() {
           >
             <Route path="/" element={<LandingPage />} />
             <Route path="/welcome" element={<WelcomePage />} />
+            <Route path="/control-room" element={<ControlRoomPage />} />
             <Route path="/tools" element={<ToolsPage />} />
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="modules" replace />} />

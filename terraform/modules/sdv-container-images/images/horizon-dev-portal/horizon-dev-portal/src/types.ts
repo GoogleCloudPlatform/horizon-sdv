@@ -188,3 +188,163 @@ export interface WorkflowDetail {
   outputArtifacts?: OutputArtifact[];
   archivedLogs?: WorkflowSummary['archivedLogs'];
 }
+
+export interface WorkstationClusterItem {
+  name: string;
+  region: string;
+  controlPlaneIp?: string;
+  subnetwork?: string;
+  createTime?: string;
+}
+
+export interface WorkstationConfigItem {
+  name: string;
+  region: string;
+  cluster: string;
+  machineType: string;
+  gpuType?: string;
+  gpuCount?: number;
+  bootDiskSizeGb?: number;
+  persistentDiskSizeGb?: number;
+  persistentDiskType?: string;
+  sourceSnapshot?: string;
+  containerImage: string;
+  idleTimeout: string;
+  runningTimeout: string;
+  replicaZones?: string[];
+  degraded?: boolean;
+  createTime?: string;
+}
+
+export interface WorkstationInstanceItem {
+  name: string;
+  displayName?: string;
+  region: string;
+  cluster: string;
+  config: string;
+  state: string;
+  host?: string;
+  launchUrl?: string;
+  runtimeHostVm?: string;
+  runtimeZone?: string;
+  machineType?: string;
+  gpuType?: string;
+  containerImage?: string;
+  sourceSnapshot?: string;
+  persistentDiskSizeGb?: number;
+  createTime?: string;
+  startTime?: string;
+  updateTime?: string;
+}
+
+export interface ComputeInstanceItem {
+  name: string;
+  role: string;
+  status: string;
+  zone: string;
+  region: string;
+  machineType: string;
+  architecture: string;
+  diskSizeGb?: number;
+  internalIp?: string;
+  gpuType?: string;
+  gpuCount?: number;
+  creationTimestamp?: string;
+  labels?: Record<string, string>;
+}
+
+export interface DiskSnapshotItem {
+  name: string;
+  status: string;
+  diskSizeGb: number;
+  storageBytes: number;
+  creationTimestamp: string;
+  storageLocations?: string[];
+  labels?: Record<string, string>;
+  isLatest: boolean;
+}
+
+export interface InstanceTemplateItem {
+  name: string;
+  category: string;
+  machineType: string;
+  diskSizeGb?: number;
+  creationTimestamp?: string;
+}
+
+export interface ContainerImageSummary {
+  packageName: string;
+  fullUri: string;
+  tags: string[];
+  digest: string;
+  sizeBytes: number;
+  uploadTime?: string;
+  updateTime?: string;
+}
+
+export interface BuildArtifactBundle {
+  id: string;
+  bucket: string;
+  prefix: string;
+  category: string;
+  pipelineName: string;
+  buildNumber: string;
+  targetArch?: string;
+  fileCount: number;
+  totalSizeBytes: number;
+  updatedAt: string;
+  keyFiles: string[];
+  hasGeminiAssist: boolean;
+  gcsUri: string;
+  consoleUrl: string;
+}
+
+export interface ArchivedWorkflowItem {
+  workflowName: string;
+  workflowTemplate: string;
+  module: string;
+  startedAt: string;
+  finishedAt: string;
+  artifactCount: number;
+  totalSizeBytes: number;
+  gcsUri: string;
+  consoleUrl: string;
+}
+
+export interface JenkinsBuildItem {
+  id: string;
+  jobPath: string;
+  category: string;
+  buildNumber: number;
+  result: string;
+  timestampMs: number;
+  startedAt: string;
+  durationMs: number;
+  node?: string;
+  webPath: string;
+  parameters?: Record<string, string>;
+}
+
+export interface ControlRoomResponse {
+  generatedAt: string;
+  projectId: string;
+  primaryRegion: string;
+  workstations: {
+    clusters: WorkstationClusterItem[];
+    configs: WorkstationConfigItem[];
+    workstations: WorkstationInstanceItem[];
+  };
+  compute: {
+    virtualDevices: ComputeInstanceItem[];
+    workstationVMs: ComputeInstanceItem[];
+    buildInfraVMs: ComputeInstanceItem[];
+    clusterNodes: ComputeInstanceItem[];
+    snapshots: DiskSnapshotItem[];
+    instanceTemplates: InstanceTemplateItem[];
+  };
+  artifactImages: ContainerImageSummary[];
+  buildBundles: BuildArtifactBundle[];
+  archivedWorkflows: ArchivedWorkflowItem[];
+  jenkinsBuilds: JenkinsBuildItem[];
+  warnings?: string[];
+}

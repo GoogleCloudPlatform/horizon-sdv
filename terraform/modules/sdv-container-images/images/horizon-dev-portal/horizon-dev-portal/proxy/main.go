@@ -74,6 +74,11 @@ func parseJWTExpiry(accessToken string) (time.Time, bool) {
 }
 
 func main() {
+	if exporterAddr := env("JENKINS_EXPORTER_LISTEN_ADDR", ""); exporterAddr != "" {
+		runJenkinsExporterServer(exporterAddr, env("JENKINS_JOBS_DIR", "/var/jenkins_home/jobs"))
+		return
+	}
+
 	addr := env("LISTEN_ADDR", ":8080")
 	issuer := mustEnv("OIDC_ISSUER_URL")
 	tokenURL := env("KEYCLOAK_TOKEN_URL", "")
@@ -108,6 +113,7 @@ func main() {
 	mux.Handle("/api/horizon/", newHorizonProxy(haURL, ci))
 	var cliVer bearerVerifier = oidcBearerVerifier{inner: verifier}
 	registerCLIRoutes(mux, env("CLI_DIST_DIR", "/cli-dist"), cliVer)
+	registerControlRoomRoutes(mux, cliVer)
 	mux.Handle("/", spaHandler(htmlBaseTagHref(normalizePublicPath(env("PUBLIC_PATH", "")))))
 
 	log.Printf("listening on %s", addr)
