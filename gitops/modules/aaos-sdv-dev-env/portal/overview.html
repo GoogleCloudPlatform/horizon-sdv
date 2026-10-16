@@ -1,47 +1,376 @@
-<!DOCTYPE html>
+<!-- Copyright (c) 2026 Accenture, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
+
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>AAOS SDV Development Environment Module</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #333; padding: 20px; }
-    h1 { color: #1a73e8; }
-    h2 { color: #202124; margin-top: 24px; }
-    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #e8f0fe; color: #1a73e8; }
-    pre { background: #f8f9fa; padding: 12px; border-radius: 6px; overflow-x: auto; border: 1px solid #dadce0; }
-    .card { border: 1px solid #dadce0; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #fff; }
-  </style>
-</head>
-<body>
-  <h1>AAOS SDV Development Environment Module <span class="badge">Standalone</span></h1>
-  <p>This module provides automated build and validation pipelines for creating the <strong>AAOS SDV Development Environment</strong>.</p>
-  <p>The Dockerfile and all image assets are cloned at run time from the public
-     <a href="https://github.com/google/aaos-sdv-demos" target="_blank"><code>aaos-sdv-demos</code></a>
-     repository; nothing is vendored in this repository.</p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>aaos-sdv-dev-env</title>
+    <style>
+      :root {
+        --bg: #f8f9fa;
+        --paper: #ffffff;
+        --text: #202124;
+        --muted: #5f6368;
+        --primary: #1a73e8;
+        --border: #e8eaed;
+        --hero-end: rgba(26, 115, 232, 0.08);
+        --hero-start: rgba(66, 133, 244, 0.22);
+        --chip-bg: #e8f0fe;
+        --chip-text: #1967d2;
+        --callout-bg: #e8f0fe;
+        --callout-border: #d2e3fc;
+        --warn-bg: #fef7e0;
+        --warn-border: #fde293;
+        --warn-text: #b06000;
+        --code-bg: #f1f3f4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #202124;
+          --paper: #292a2d;
+          --text: #e8eaed;
+          --muted: #9aa0a6;
+          --primary: #8ab4f8;
+          --border: #3c4043;
+          --hero-end: rgba(26, 115, 232, 0.12);
+          --hero-start: rgba(66, 133, 244, 0.28);
+          --chip-bg: rgba(138, 180, 248, 0.18);
+          --chip-text: #8ab4f8;
+          --callout-bg: rgba(26, 115, 232, 0.14);
+          --callout-border: rgba(138, 180, 248, 0.28);
+          --warn-bg: rgba(251, 188, 4, 0.12);
+          --warn-border: rgba(251, 188, 4, 0.28);
+          --warn-text: #fdd663;
+          --code-bg: #3c4043;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+      body {
+        font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+        padding: 1.1rem clamp(0.9rem, 2.4vw, 1.5rem) 1.4rem;
+        overflow-wrap: anywhere;
+      }
+      .wrap {
+        width: 100%;
+        margin: 0 auto;
+      }
+      .hero {
+        margin: 0 0 1.1rem;
+        padding: 1rem 1.15rem;
+        border-radius: 8px;
+        background: linear-gradient(
+          135deg,
+          var(--hero-start) 0%,
+          var(--hero-end) 45%,
+          var(--paper) 100%
+        );
+      }
+      .overline {
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 0.35rem;
+      }
+      h1 {
+        font-size: clamp(1.35rem, 2.5vw, 1.7rem);
+        font-weight: 700;
+        margin: 0 0 0.45rem;
+        line-height: 1.2;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin: 0 0 0.6rem;
+      }
+      .chip {
+        display: inline-block;
+        padding: 0.18rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        background: var(--chip-bg);
+        color: var(--chip-text);
+      }
+      .lead {
+        color: var(--muted);
+        margin: 0;
+        max-width: fit-content;
+        font-size: 0.95rem;
+      }
+      .grid {
+        display: grid;
+        gap: 0.85rem;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+      }
+      .card {
+        background: var(--paper);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.1rem 1.05rem;
+        box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+      }
+      .card h2 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--primary);
+      }
+      .card p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+      .card p + p,
+      .card p + ul,
+      .card p + ol,
+      .card ul + p,
+      .card .callout,
+      .card .warn {
+        margin-top: 0.7rem;
+      }
+      ul,
+      ol {
+        margin: 0.35rem 0 0;
+        padding-left: 1.15rem;
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      li {
+        margin-bottom: 0.4rem;
+      }
+      li:last-child {
+        margin-bottom: 0;
+      }
+      .callout,
+      .warn {
+        padding: 0.65rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.8125rem;
+        color: var(--text);
+      }
+      .callout {
+        background: var(--callout-bg);
+        border: 1px solid var(--callout-border);
+      }
+      .warn {
+        background: var(--warn-bg);
+        border: 1px solid var(--warn-border);
+        color: var(--warn-text);
+      }
+      .callout strong,
+      .warn strong {
+        display: block;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 0.2rem;
+      }
+      .callout strong {
+        color: var(--primary);
+      }
+      .warn strong {
+        color: var(--warn-text);
+      }
+      code {
+        font-size: 0.84em;
+        color: var(--text);
+        background: var(--code-bg);
+        padding: 0.08em 0.32em;
+        border-radius: 4px;
+      }
+      a {
+        color: var(--primary);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <p class="overline">Horizon module</p>
+        <h1>aaos-sdv-dev-env</h1>
+        <div class="chips">
+          <span class="chip">AAOS 26Q2 (Android 16)</span>
+          <span class="chip">CARLA 0.9.15</span>
+          <span class="chip">COVESA vSOME/IP</span>
+          <span class="chip">Antigravity IDE 2.24</span>
+          <span class="chip">Android Studio for Platform</span>
+          <span class="chip">NVIDIA T4 WebRTC Desktop</span>
+        </div>
+        <p class="lead">
+          Browser-accessible, GPU-accelerated Cloud Workstations environment for
+          building, simulating, and debugging Software-Defined Vehicle (SDV)
+          applications across Android Automotive OS (AAOS), SOME/IP vehicle
+          services, and the CARLA 3D autonomous driving simulator.
+        </p>
+      </header>
+      <div class="grid">
+        <article class="card">
+          <h2>What Is Inside the Workstation</h2>
+          <ul>
+            <li>
+              <strong>WebRTC Desktop (Selkies + Openbox)</strong>: Low-latency
+              HTML5 desktop streamed over port <code>80</code> with hardware
+              NVIDIA T4 NVENC video encoding and Vulkan/OpenGL rendering.
+            </li>
+            <li>
+              <strong>Dual-VM Cuttlefish Vehicle Stack (<code>launch_2vm</code>)</strong>:
+              Orchestrated by <code>cvd</code>, booting <strong>VM 1</strong>
+              (AAOS 26Q2 IVI + Cluster display + VHAL) alongside
+              <strong>VM 2</strong> (DebOS Linux running COVESA
+              <code>vsomeip</code>, <code>vhal_someip_bridge</code>, and
+              <code>carla_someip_bridge</code>).
+            </li>
+            <li>
+              <strong>CARLA 0.9.15 3D Simulator</strong>: Unreal Engine 4
+              driving simulator listening on RPC port <code>2000</code> and
+              feeding live vehicle telemetry into AAOS CarPropertyManager.
+            </li>
+            <li>
+              <strong>AI-Assisted IDEs</strong>: Pre-installed
+              <strong>Google Antigravity IDE (2.24.0)</strong> and
+              <strong>Android Studio for Platform (ASfP)</strong> with the AOSP
+              and SDV demo sources pre-populated in <code>/home/user</code>.
+            </li>
+          </ul>
+        </article>
 
-  <div class="card">
-    <h2>Pipeline: <code>aaos-sdv-dev-env-init</code></h2>
-    <p>Fast preflight, run this first. Verifies that
-       <code>aaos-sdv-demos</code> is reachable and that the configured revision exists. Fails in
-       seconds instead of after a multi-gigabyte build.</p>
-  </div>
+        <article class="card">
+          <h2>Cloud Workstation Configurations</h2>
+          <p>
+            Workstations run on <code>n1-standard-32</code> (32 vCPUs, 120 GB
+            RAM, nested virtualization) with <code>1x nvidia-tesla-t4</code> GPU
+            and a 1000 GB <code>pd-ssd</code> persistent <code>/home</code> disk:
+          </p>
+          <ul>
+            <li>
+              <code>aaos-sdv-dev-env-euw3</code> &amp;
+              <code>aaos-sdv-dev-env-latest</code>
+              (<code>europe-west3</code>): Pre-populated from the latest
+              verified AAOS 26Q2 + CARLA snapshot.
+            </li>
+            <li>
+              <code>aaos-sdv-dev-env-usw4</code> (<code>us-west4</code>):
+              Secondary regional configuration backed by the same verified
+              snapshot across multi-zone T4 capacity.
+            </li>
+            <li>
+              <code>aaos-sdv-dev-env-clean</code> &amp;
+              <code>aaos-sdv-dev-env-clean-usw4</code>: Clean 1000 GB
+              <code>pd-ssd</code> configs for fresh workspace builds.
+            </li>
+          </ul>
+          <div class="callout">
+            <strong>Always-On Workshop Readiness</strong>
+            Automatic idle and running timeouts are set to <code>0s</code>
+            (disabled) so pre-started attendee workstations remain running
+            throughout the event.
+          </div>
+        </article>
 
-  <div class="card">
-    <h2>Pipeline: <code>aaos-sdv-dev-env-execute</code></h2>
-    <p>Automates end-to-end artifact creation and validation:</p>
-    <ul>
-      <li><strong>Step 1: Container Build</strong> - Clones <code>aaos-sdv-demos</code> and builds the ASfP + CARLA 0.9.15 + SOME/IP + Antigravity 2.0 image via the shared <code>common-docker-image-build</code> template, pushing to Artifact Registry as <code>aaos-sdv-dev-env</code>.</li>
-      <li><strong>Step 1b: Clean Persistent Disk Configs</strong> - Immediately publishes <code>aaos-sdv-dev-env-clean</code> (<code>europe-west3</code>) and <code>aaos-sdv-dev-env-clean-usw4</code> (<code>us-west4</code>) with fresh 1000 GB <code>pd-ssd</code> disks and T4 GPU acceleration.</li>
-      <li><strong>Step 2: Workspace &amp; Candidate Snapshot</strong> - Provisions a high-CPU builder workstation (or slots in <code>existingSnapshotName</code>), installs CARLA 0.9.15, applies patches and builds AAOS 26Q2, then captures a candidate GCE persistent disk snapshot.</li>
-      <li><strong>Step 3: Automated Test Suite</strong> - Launches a GPU-accelerated test workstation from the candidate snapshot and runs a BATS acceptance suite on it, covering CARLA RPC (port 2000) and dual-VM vehicle simulation (<code>launch_2vm</code> plus <code>cvd fleet</code>).</li>
-      <li><strong>Step 4: Atomic Promotion</strong> - On test success, labels the validated snapshot <code>is-latest=true</code> and publishes ready-to-use workstation configurations across both regions (<code>aaos-sdv-dev-env-latest</code>, <code>aaos-sdv-dev-env-euw3</code>, and <code>aaos-sdv-dev-env-usw4</code>).</li>
-    </ul>
-  </div>
+        <article class="card">
+          <h2>Argo Workflow Templates</h2>
+          <ul>
+            <li>
+              <code>aaos-sdv-dev-env-init</code>: Fast preflight check that
+              verifies Git connectivity to
+              <a href="https://github.com/google/aaos-sdv-demos" target="_blank" rel="noopener"><code>google/aaos-sdv-demos</code></a>
+              and confirms the configured commit/branch exists.
+            </li>
+            <li>
+              <code>aaos-sdv-dev-env-execute</code>: End-to-end build, test, and
+              promotion pipeline:
+              <ol>
+                <li>
+                  <strong>Build Container Image</strong> (or reuse existing image
+                  via <code>skipImageBuild=true</code>).
+                </li>
+                <li>
+                  <strong>Publish Clean Configs</strong> in
+                  <code>europe-west3</code> and <code>us-west4</code>.
+                </li>
+                <li>
+                  <strong>Build or Import Disk Snapshot</strong>
+                  (<code>build-snapshot</code> or
+                  <code>existingSnapshotName</code>).
+                </li>
+                <li>
+                  <strong>Automated BATS Verification</strong>: Boots an
+                  ephemeral GPU test workstation and validates CARLA RPC port
+                  <code>2000</code> plus <code>launch_2vm</code> Cuttlefish
+                  fleet health.
+                </li>
+                <li>
+                  <strong>Atomic Promotion</strong>: Labels the verified
+                  snapshot <code>is-latest=true,env=production</code> and
+                  updates regional workstation configs.
+                </li>
+              </ol>
+            </li>
+          </ul>
+        </article>
 
-  <h2>How to Run</h2>
-  <p>Submit from the <a href="/workflows" target="_blank">Argo Workflows UI</a>, the Developer Portal, or via CLI:</p>
-  <pre>horizon workflow submit --module aaos-sdv-dev-env --template aaos-sdv-dev-env-init
-
-horizon workflow submit --module aaos-sdv-dev-env --template aaos-sdv-dev-env-execute</pre>
-</body>
+        <article class="card">
+          <h2>Developer Quick Start</h2>
+          <p>
+            Once connected to a running workstation via the Cloud Workstations
+            browser URL:
+          </p>
+          <ul>
+            <li>
+              <strong>Launch Dual-VM AAOS + SOME/IP Bridge</strong>: Open a
+              terminal and run <code>launch_2vm</code> (or inspect status with
+              <code>cvd fleet</code>) and open the Cuttlefish WebRTC display at
+              <code>https://localhost:8443</code>.
+            </li>
+            <li>
+              <strong>Start CARLA 0.9.15</strong>: Launch CARLA from the desktop
+              menu or terminal to stream live driving physics and vehicle
+              signals over SOME/IP into AAOS.
+            </li>
+            <li>
+              <strong>Edit &amp; Deploy Code</strong>: Launch
+              <strong>Antigravity</strong> or <strong>ASfP</strong> from the
+              application menu to modify VHAL properties, SOME/IP bridges, or
+              AAOS system apps.
+            </li>
+          </ul>
+          <div class="callout">
+            <strong>Portal Navigation</strong>
+            Use the <strong>Workflow Templates</strong>,
+            <strong>Running Workflows</strong>, and <strong>History</strong>
+            tabs above to trigger or monitor module builds.
+          </div>
+        </article>
+      </div>
+    </div>
+  </body>
 </html>

@@ -4,8 +4,8 @@ metadata:
   name: {{ .Values.overviewServiceName }}-html
   namespace: {{ .Values.moduleManagerNamespace }}
 data:
-  overview.html: |
-{{ .Files.Get "portal/overview.html" | indent 4 }}
+  index.html: |-
+{{ .Files.Get "portal/overview.html" | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -19,6 +19,8 @@ spec:
       app: {{ .Values.overviewServiceName }}
   template:
     metadata:
+      annotations:
+        checksum/html: {{ .Files.Get "portal/overview.html" | sha256sum }}
       labels:
         app: {{ .Values.overviewServiceName }}
     spec:
@@ -27,10 +29,23 @@ spec:
           image: nginx:alpine
           ports:
             - containerPort: 80
+              name: http
           volumeMounts:
             - name: html
-              mountPath: /usr/share/nginx/html/portal/overview.html
-              subPath: overview.html
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
       volumes:
         - name: html
           configMap:
