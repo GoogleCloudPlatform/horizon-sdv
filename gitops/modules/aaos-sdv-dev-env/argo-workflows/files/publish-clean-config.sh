@@ -71,8 +71,8 @@ publish_clean_config_in_cluster() {
     gcloud workstations configs update "${TARGET_CONFIG}" \
         --project="${PROJECT}" --region="${TARGET_REGION}" --cluster="${TARGET_CLUSTER}" \
         --enable-nested-virtualization \
-        --idle-timeout=43200 \
-        --running-timeout=72000 \
+        --idle-timeout=0 \
+        --running-timeout=0 \
         --container-custom-image="${CONTAINER_IMAGE}" \
         --quiet
     return 0
@@ -88,8 +88,8 @@ publish_clean_config_in_cluster() {
       --service-account="${HOST_SA_EMAIL}" \
       --disable-public-ip-addresses \
       --pool-size=0 \
-      --idle-timeout=43200 \
-      --running-timeout=72000 \
+      --idle-timeout=0 \
+      --running-timeout=0 \
       --container-custom-image="${CONTAINER_IMAGE}" \
       --pd-disk-type="pd-ssd" \
       --pd-disk-size="${CLEAN_PD_SIZE_GB}" \
