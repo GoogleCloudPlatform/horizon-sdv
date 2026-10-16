@@ -115,8 +115,8 @@ ensure_builder_config() {
     gcloud workstations configs update "${CONFIG}" \
         --project="${PROJECT}" --region="${REGION}" --cluster="${CLUSTER}" \
         --enable-nested-virtualization \
-        --idle-timeout=43200s \
-        --running-timeout=43200s \
+        --idle-timeout=43200 \
+        --running-timeout=43200 \
         --container-custom-image="${CONTAINER_IMAGE}" \
         --quiet
     return 0
@@ -130,8 +130,8 @@ ensure_builder_config() {
       --service-account="${HOST_SA_EMAIL}" \
       --disable-public-ip-addresses \
       --pool-size=0 \
-      --idle-timeout=43200s \
-      --running-timeout=43200s \
+      --idle-timeout=43200 \
+      --running-timeout=43200 \
       --container-custom-image="${CONTAINER_IMAGE}" \
       --pd-disk-type="pd-ssd" \
       --pd-disk-size="${BUILDER_PD_SIZE_GB}" \

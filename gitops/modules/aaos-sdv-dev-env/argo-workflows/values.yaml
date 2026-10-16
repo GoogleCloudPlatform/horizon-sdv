@@ -32,7 +32,7 @@ clusterWorkflowTemplateName: common-docker-image-build
 spec:
   # Source of the Dockerfile, docker/docker-bake.hcl, and all image assets.
   aaosSdvDemosRepo: "https://github.com/google/aaos-sdv-demos.git"
-  aaosSdvDemosRevision: "main"
+  aaosSdvDemosRevision: "612a0761443467ff4665665746bd7ba10a3220b1"
 
   # Image produced by this pipeline and its BuildKit registry cache repository,
   # passed as IMAGE and CACHE_REPO to aaos-sdv-demos/docker/docker-bake.hcl.
