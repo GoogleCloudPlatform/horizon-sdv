@@ -228,19 +228,29 @@ func extractInterestingParams(content []byte) map[string]string {
 	if !bytes.Contains(content, []byte("ParametersAction")) {
 		return nil
 	}
-	matches := xmlParamPairRegex.FindAllSubmatch(content, 12)
+	matches := xmlParamPairRegex.FindAllSubmatch(content, -1)
 	if len(matches) == 0 {
 		return nil
 	}
 	allowedKeys := map[string]bool{
-		"JENKINS_GCE_CLOUD_LABEL": true,
-		"CUTTLEFISH_DOWNLOAD_URL": true,
-		"AAOS_LUNCH_TARGET":       true,
-		"AAOS_REVISION":           true,
-		"AAOS_ARCH":               true,
-		"WORKSTATION_NAME":        true,
-		"WORKSTATION_CONFIG_NAME": true,
-		"CLUSTER_NAME":            true,
+		"JENKINS_GCE_CLOUD_LABEL":  true,
+		"CUTTLEFISH_DOWNLOAD_URL":  true,
+		"AAOS_LUNCH_TARGET":        true,
+		"AAOS_REVISION":            true,
+		"AAOS_ARCH":                true,
+		"AAOS_CLEAN":               true,
+		"USE_LOCAL_AOSP_MIRROR":    true,
+		"GERRIT_REPO_SYNC_JOBS":    true,
+		"ABFS_CACHED_BUILD":        true,
+		"ABFS_CLEAN_CACHE":         true,
+		"ABFS_CACHEMAN_TIMEOUT":    true,
+		"ABFS_VERSION":             true,
+		"ABFS_CASFS_VERSION":       true,
+		"ABFS_REPOSITORY":          true,
+		"UPLOADER_MANIFEST_SERVER": true,
+		"WORKSTATION_NAME":         true,
+		"WORKSTATION_CONFIG_NAME":  true,
+		"CLUSTER_NAME":             true,
 	}
 	params := make(map[string]string)
 	for _, m := range matches {

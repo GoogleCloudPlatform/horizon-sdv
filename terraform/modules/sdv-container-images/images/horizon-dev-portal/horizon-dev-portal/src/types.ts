@@ -325,6 +325,86 @@ export interface JenkinsBuildItem {
   parameters?: Record<string, string>;
 }
 
+export interface ABFSAccelerationSummary {
+  cleanBaselineTotalSec: number;
+  cleanBaselineArm64TotalSec: number;
+  cleanBaselineCompileSec: number;
+  cleanBaselineSourceDiskGb: number;
+  cleanBaselineTotalDiskGb: number;
+  abfsColdSeedTotalSec: number;
+  abfsColdSeedCompileSec: number;
+  abfsColdSeedNinjaEvalSec: number;
+  abfsColdSeedSourceDiskGb: number;
+  abfsColdSeedTotalDiskGb: number;
+  abfsBestWarmTotalSec: number;
+  abfsAvgWarmTotalSec: number;
+  abfsBestCompileSec: number;
+  abfsBestNinjaEvalSec: number;
+  abfsWarmCacheHitRatio: number;
+  abfsWarmTotalActions: number;
+  abfsWarmDiskFootprintGb: number;
+  endToEndSpeedupPeak: number;
+  endToEndSpeedupAvg: number;
+  compileSpeedupPeak: number;
+  ninjaEvalSpeedupPeak: number;
+  timeSavedPerBuildSec: number;
+  timeSavedPct: number;
+  sourceDiskReductionPct: number;
+  totalDiskReductionPct: number;
+  abfsServerName: string;
+  abfsServerStatus: string;
+  abfsServerMachineType: string;
+  abfsServerZone: string;
+  abfsSpanNodes?: string[];
+  abfsInfraJobsTotal: number;
+  abfsInfraJobsSucceeded: number;
+}
+
+export interface ABFSBenchmarkRun {
+  id: string;
+  pipeline: string;
+  buildNumber: number;
+  mode: string;
+  modeLabel: string;
+  isAbfs: boolean;
+  result: string;
+  startedAt: string;
+  lunchTarget: string;
+  revision: string;
+  arch: string;
+  totalDurationSec: number;
+  compileDurationSec?: number;
+  ninjaEvalSec?: number;
+  initAndSyncEstimateSec?: number;
+  totalNinjaActions?: number;
+  cacheHits?: number;
+  cacheMisses?: number;
+  cacheHitRatio?: number;
+  hasRemoteCacheStats: boolean;
+  buildInfoHash?: string;
+  diskInitialUsage?: string;
+  diskAfterSourceInit?: string;
+  diskAfterSourceInitGb?: number;
+  diskFinalUsage?: string;
+  diskFinalUsageGb?: number;
+  diskCapacity?: string;
+  kernelRevision?: string;
+  abfsCachedBuild: boolean;
+  abfsCacheDir?: string;
+  manifestServer?: string;
+  speedupVsBaseline?: number;
+  compileSpeedupVsBaseline?: number;
+  timeSavedSec?: number;
+  jenkinsWebPath?: string;
+  gcsUri?: string;
+  gcsConsoleUrl?: string;
+}
+
+export interface ControlRoomABFS {
+  summary: ABFSAccelerationSummary;
+  runs: ABFSBenchmarkRun[];
+}
+
 export interface ControlRoomResponse {
   generatedAt: string;
   projectId: string;
@@ -346,5 +426,6 @@ export interface ControlRoomResponse {
   buildBundles: BuildArtifactBundle[];
   archivedWorkflows: ArchivedWorkflowItem[];
   jenkinsBuilds: JenkinsBuildItem[];
+  abfs: ControlRoomABFS;
   warnings?: string[];
 }

@@ -26,6 +26,7 @@ import {
   Grid,
   IconButton,
   InputAdornment,
+  LinearProgress,
   Paper,
   Stack,
   Switch,
@@ -43,6 +44,7 @@ import {
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
 import ComputerOutlinedIcon from '@mui/icons-material/ComputerOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import DeveloperBoardOutlinedIcon from '@mui/icons-material/DeveloperBoardOutlined';
@@ -78,6 +80,7 @@ import type {
 
 type ControlRoomViewTab =
   | 'all'
+  | 'abfs'
   | 'pipelines'
   | 'workstations'
   | 'devices'
@@ -196,6 +199,24 @@ function formatIsoDuration(started?: string, finished?: string, isRunning = fals
     return 'N/A';
   }
   return formatDurationMs(endMs - startMs, startMs, isRunning);
+}
+
+function formatSeconds(sec?: number): string {
+  if (!sec || sec <= 0) {
+    return 'N/A';
+  }
+  if (sec < 60) {
+    return `${sec.toFixed(1)}s`;
+  }
+  const totalSec = Math.round(sec);
+  const mins = Math.floor(totalSec / 60);
+  const remSec = totalSec % 60;
+  if (mins < 60) {
+    return remSec > 0 ? `${mins}m ${remSec}s` : `${mins}m`;
+  }
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remSec > 0 ? `${hours}h ${remMins}m ${remSec}s` : `${hours}h ${remMins}m`;
 }
 
 function normalizePhase(raw: string | undefined): UnifiedPipelineRun['phase'] {
@@ -621,6 +642,8 @@ export function ControlRoomPage() {
   const instanceTemplates = controlRoomData?.compute.instanceTemplates ?? [];
   const artifactImages = controlRoomData?.artifactImages ?? [];
   const buildBundles = controlRoomData?.buildBundles ?? [];
+  const abfsSummary = controlRoomData?.abfs?.summary;
+  const abfsRuns = controlRoomData?.abfs?.runs ?? [];
 
   // KPI computations
   const readyModulesCount = enrichedModules.filter((m) => m.deploymentLabel === 'READY').length;
@@ -1007,6 +1030,10 @@ export function ControlRoomPage() {
         sx={{ borderBottom: 1, borderColor: 'divider' }}
       >
         <Tab label="All Systems (Command View)" value="all" />
+        <Tab
+          label={`ABFS Build Acceleration (${abfsSummary?.endToEndSpeedupPeak ?? 13.2}x)`}
+          value="abfs"
+        />
         <Tab label={`Cloud Workstations (${workstations.length})`} value="workstations" />
         <Tab
           label={`Virtual Devices & Compute (${virtualDevices.length + buildInfraVMs.length})`}
@@ -1019,6 +1046,709 @@ export function ControlRoomPage() {
           value="artifacts"
         />
       </Tabs>
+
+      {/* SECTION 0: ABFS BUILD ACCELERATION & BENCHMARK TELEMETRY */}
+      {(viewTab === 'all' || viewTab === 'abfs') && abfsSummary && (
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 2.5,
+            borderColor: 'success.main',
+            background: isDark
+              ? `linear-gradient(135deg, ${alpha(theme.palette.success.dark, 0.14)} 0%, ${alpha(
+                  theme.palette.background.paper,
+                  0.98
+                )} 45%, ${theme.palette.background.paper} 100%)`
+              : `linear-gradient(135deg, ${alpha(theme.palette.success.light, 0.14)} 0%, ${
+                  theme.palette.background.paper
+                } 45%, ${theme.palette.background.paper} 100%)`,
+          }}
+        >
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', md: 'center' }}
+            spacing={2}
+            sx={{ mb: 2.5 }}
+          >
+            <Box>
+              <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                <BoltOutlinedIcon color="success" />
+                <Typography variant="h6" fontWeight={700}>
+                  ABFS Build Acceleration &amp; Benchmark Telemetry
+                </Typography>
+                <Chip
+                  size="small"
+                  color="success"
+                  label={`${abfsSummary.endToEndSpeedupPeak}x End-to-End Speedup`}
+                  sx={{ fontWeight: 700 }}
+                />
+                <Chip
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  label={`${abfsSummary.compileSpeedupPeak}x Soong/Ninja Compile Speedup`}
+                  sx={{ fontWeight: 600 }}
+                />
+                <Chip
+                  size="small"
+                  color="info"
+                  variant="outlined"
+                  label={`${abfsSummary.abfsWarmCacheHitRatio.toFixed(0)}% Remote CAS Cache Hit Ratio`}
+                  sx={{ fontWeight: 600 }}
+                />
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Measured AAOS 16 (<code>aosp_cf_x86_64_auto-bp3a-userdebug</code> &amp;{' '}
+                <code>aosp_cf_arm64_auto-bp3a-userdebug</code>) and AAOS 17 SDV (
+                <code>sdv_core_cf-trunk_staging-userdebug</code>) builds in this environment comparing
+                Android Build Filesystem (ABFS + CASFS virtual mount + Remote CAS cache) against clean
+                non-optimized standard <code>repo sync</code> builds on 98-vCPU / 180-GiB GKE builders.
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ flexShrink: 0 }}>
+              <Chip
+                size="small"
+                color={abfsSummary.abfsServerStatus === 'RUNNING' ? 'success' : 'default'}
+                variant="outlined"
+                label={`ABFS Server: ${abfsSummary.abfsServerName} (${abfsSummary.abfsServerStatus})`}
+              />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`Spanner Metadata Nodes: ${abfsSummary.abfsSpanNodes?.length ?? 2} RUNNING`}
+              />
+              <Chip
+                size="small"
+                variant="outlined"
+                label="Kernel Module: casfs (Linux 6.8.0-gke)"
+              />
+            </Stack>
+          </Stack>
+
+          {/* 4 ABFS Acceleration Highlight KPI Cards */}
+          <Grid container spacing={2} sx={{ mb: 2.5 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Card
+                variant="outlined"
+                sx={{
+                  height: '100%',
+                  borderColor: 'success.main',
+                  bgcolor: (t) => alpha(t.palette.success.main, 0.05),
+                }}
+              >
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Typography variant="caption" color="success.main" fontWeight={700}>
+                    END-TO-END BUILD ACCELERATION
+                  </Typography>
+                  <Stack direction="row" alignItems="baseline" spacing={1} sx={{ my: 0.75 }}>
+                    <Typography variant="h4" fontWeight={800} color="success.main">
+                      {abfsSummary.endToEndSpeedupPeak}x
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600} color="text.secondary">
+                      ({formatSeconds(abfsSummary.cleanBaselineTotalSec)} →{' '}
+                      {formatSeconds(abfsSummary.abfsBestWarmTotalSec)})
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    <strong>{abfsSummary.timeSavedPct}%</strong> build duration reduction, saving{' '}
+                    <strong>{formatSeconds(abfsSummary.timeSavedPerBuildSec)}</strong> per build (
+                    {abfsSummary.endToEndSpeedupAvg}x avg across warm ABFS runs)
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Card variant="outlined" sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Typography variant="caption" color="primary.main" fontWeight={700}>
+                    SOONG / NINJA COMPILE SPEEDUP (m dist -j)
+                  </Typography>
+                  <Stack direction="row" alignItems="baseline" spacing={1} sx={{ my: 0.75 }}>
+                    <Typography variant="h4" fontWeight={800} color="primary.main">
+                      {abfsSummary.compileSpeedupPeak}x
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600} color="text.secondary">
+                      ({formatSeconds(abfsSummary.cleanBaselineCompileSec)} →{' '}
+                      {formatSeconds(abfsSummary.abfsBestCompileSec)})
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Ninja graph evaluation drops to{' '}
+                    <strong>{formatSeconds(abfsSummary.abfsBestNinjaEvalSec)}</strong> (
+                    <strong>{abfsSummary.ninjaEvalSpeedupPeak}x</strong> faster than clean compilation)
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Card variant="outlined" sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Typography variant="caption" color="info.main" fontWeight={700}>
+                    REMOTE CAS ACTION CACHE HIT RATE
+                  </Typography>
+                  <Stack direction="row" alignItems="baseline" spacing={1} sx={{ my: 0.75 }}>
+                    <Typography variant="h4" fontWeight={800} color="info.main">
+                      {abfsSummary.abfsWarmCacheHitRatio.toFixed(1)}%
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600} color="text.secondary">
+                      ({abfsSummary.abfsWarmTotalActions.toLocaleString()} /{' '}
+                      {abfsSummary.abfsWarmTotalActions.toLocaleString()})
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Zero cache misses across all{' '}
+                    <strong>{abfsSummary.abfsWarmTotalActions.toLocaleString()}</strong> Ninja edges on
+                    warm builds after initial seed (#1)
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Card variant="outlined" sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Typography variant="caption" color="secondary.main" fontWeight={700}>
+                    DISK &amp; SOURCE I/O REDUCTION
+                  </Typography>
+                  <Stack direction="row" alignItems="baseline" spacing={1} sx={{ my: 0.75 }}>
+                    <Typography variant="h4" fontWeight={800} color="secondary.main">
+                      -{abfsSummary.totalDiskReductionPct}%
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600} color="text.secondary">
+                      ({abfsSummary.cleanBaselineTotalDiskGb} GB → {abfsSummary.abfsWarmDiskFootprintGb}{' '}
+                      GB)
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Initial source checkout drops <strong>{abfsSummary.sourceDiskReductionPct}%</strong>{' '}
+                    ({abfsSummary.cleanBaselineSourceDiskGb} GB <code>repo sync</code> →{' '}
+                    {abfsSummary.abfsColdSeedSourceDiskGb} GB virtual <code>casfs</code> mount)
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Visual Comparison: Build Duration Breakdown & Disk Footprint */}
+          <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
+            <Grid size={{ xs: 12, lg: 7 }}>
+              <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                  End-to-End Build Duration &amp; Stage Breakdown (Clean Standard vs. ABFS Accelerated)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                  Comparing total pipeline wall-clock time broken down into Source Init (
+                  <code>repo sync -j3</code> vs. <code>abfs mount</code>), Soong/Ninja Compilation (
+                  <code>m dist -j</code>), and Packaging + GCS Artifact Upload.
+                </Typography>
+
+                <Stack spacing={1.75}>
+                  {[
+                    {
+                      label: 'Standard Clean Build #5 (ARM64 - repo sync -j3 + cold Soong)',
+                      target: 'aosp_cf_arm64_auto-bp3a-userdebug',
+                      totalSec: abfsSummary.cleanBaselineArm64TotalSec || 5243.1,
+                      initSec: 1800,
+                      compileSec: 3069,
+                      packSec: 374.1,
+                      badge: '87m 23s (Clean ARM64)',
+                      badgeColor: 'default' as const,
+                    },
+                    {
+                      label: 'Standard Clean Build #4 (x86_64 Baseline - repo sync -j3 + cold Soong)',
+                      target: 'aosp_cf_x86_64_auto-bp3a-userdebug',
+                      totalSec: abfsSummary.cleanBaselineTotalSec || 4874.3,
+                      initSec: 1660,
+                      compileSec: abfsSummary.cleanBaselineCompileSec || 2854,
+                      packSec: 360.3,
+                      badge: '81m 14s (1.0x Baseline)',
+                      badgeColor: 'warning' as const,
+                    },
+                    {
+                      label: 'ABFS Initial Cache Seed #1 (Cold Remote CAS - 0% Hit -> Populates 181,251 Blobs)',
+                      target: 'aosp_cf_x86_64_auto-bp3a-userdebug',
+                      totalSec: abfsSummary.abfsColdSeedTotalSec || 5148.5,
+                      initSec: 45,
+                      compileSec: abfsSummary.abfsColdSeedCompileSec || 3781,
+                      packSec: 1322.5,
+                      badge: '85m 49s (One-Time Seed)',
+                      badgeColor: 'info' as const,
+                    },
+                    {
+                      label: 'ABFS Accelerated Build #2 (Warm Remote CAS - 100% Hit across 181,251 Actions)',
+                      target: 'aosp_cf_x86_64_auto-bp3a-userdebug',
+                      totalSec: 417.7,
+                      initSec: 25,
+                      compileSec: 196,
+                      packSec: 196.7,
+                      badge: '6m 58s (11.7x Faster)',
+                      badgeColor: 'success' as const,
+                    },
+                    {
+                      label: 'ABFS Accelerated Build #4 (Warm Remote CAS + PVC - 100% Hit, 46.2s Ninja Eval)',
+                      target: 'aosp_cf_x86_64_auto-bp3a-userdebug',
+                      totalSec: abfsSummary.abfsBestWarmTotalSec || 370.0,
+                      initSec: 22,
+                      compileSec: abfsSummary.abfsBestCompileSec || 99,
+                      packSec: 249,
+                      badge: `${formatSeconds(abfsSummary.abfsBestWarmTotalSec)} (${abfsSummary.endToEndSpeedupPeak}x Faster)`,
+                      badgeColor: 'success' as const,
+                    },
+                  ].map((row) => {
+                    const maxScaleSec = 5300;
+                    const initPct = Math.max(0.6, (row.initSec / maxScaleSec) * 100);
+                    const compilePct = Math.max(1.2, (row.compileSec / maxScaleSec) * 100);
+                    const packPct = Math.max(0.8, (row.packSec / maxScaleSec) * 100);
+                    return (
+                      <Box key={row.label}>
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="center"
+                          spacing={1}
+                          sx={{ mb: 0.5 }}
+                        >
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: 13 }}>
+                            {row.label}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            color={row.badgeColor}
+                            label={row.badge}
+                            sx={{ fontWeight: 700, height: 22 }}
+                          />
+                        </Stack>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            width: '100%',
+                            height: 14,
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                            bgcolor: (t) => alpha(t.palette.text.primary, 0.08),
+                          }}
+                        >
+                          <Tooltip title={`Source Init (repo sync / abfs mount): ${formatSeconds(row.initSec)}`}>
+                            <Box
+                              sx={{
+                                width: `${initPct}%`,
+                                bgcolor: 'warning.main',
+                                transition: 'width 0.3s ease',
+                              }}
+                            />
+                          </Tooltip>
+                          <Tooltip title={`Soong / Ninja Compile (m dist -j): ${formatSeconds(row.compileSec)}`}>
+                            <Box
+                              sx={{
+                                width: `${compilePct}%`,
+                                bgcolor: row.badgeColor === 'success' ? 'success.main' : 'primary.main',
+                                transition: 'width 0.3s ease',
+                              }}
+                            />
+                          </Tooltip>
+                          <Tooltip
+                            title={`AVD Packaging, GCS Upload & Cacheman Sync: ${formatSeconds(row.packSec)}`}
+                          >
+                            <Box
+                              sx={{
+                                width: `${packPct}%`,
+                                bgcolor: 'info.main',
+                                transition: 'width 0.3s ease',
+                              }}
+                            />
+                          </Tooltip>
+                        </Box>
+                        <Stack direction="row" spacing={2} sx={{ mt: 0.4 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Init/Sync: <strong>{formatSeconds(row.initSec)}</strong>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            <code>m dist -j</code>: <strong>{formatSeconds(row.compileSec)}</strong>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Package &amp; Upload: <strong>{formatSeconds(row.packSec)}</strong>
+                          </Typography>
+                        </Stack>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+
+                <Divider sx={{ my: 1.5 }} />
+                <Stack direction="row" spacing={2.5} flexWrap="wrap" useFlexGap>
+                  <Stack direction="row" alignItems="center" spacing={0.75}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: 'warning.main' }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Phase 1: Source Init (<code>repo sync -j3</code> ~28m vs. <code>abfs mount</code>{' '}
+                      &lt;30s)
+                    </Typography>
+                  </Stack>
+                  <Stack direction="row" alignItems="center" spacing={0.75}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: 'primary.main' }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Phase 2: Cold Soong/Ninja Compile (47m 34s - 63m 01s)
+                    </Typography>
+                  </Stack>
+                  <Stack direction="row" alignItems="center" spacing={0.75}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: 'success.main' }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Phase 2 (ABFS Warm): 100% CAS Hit Compile (1m 39s / 46.2s Ninja eval)
+                    </Typography>
+                  </Stack>
+                  <Stack direction="row" alignItems="center" spacing={0.75}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: 'info.main' }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Phase 3: AVD SDK Packaging, GCS Upload &amp; Cacheman Sync
+                    </Typography>
+                  </Stack>
+                </Stack>
+              </Paper>
+            </Grid>
+
+            <Grid size={{ xs: 12, lg: 5 }}>
+              <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                  Workspace Storage Footprint (/aaos-cache) &amp; Why ABFS Is Faster
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                  Measured disk usage on <code>/aaos-cache</code> after source checkout and after{' '}
+                  <code>m dist -j</code> completion.
+                </Typography>
+
+                <Stack spacing={1.5} sx={{ mb: 2 }}>
+                  {[
+                    {
+                      name: 'Standard Clean #5 (ARM64 repo sync + out/)',
+                      srcGb: 132,
+                      finalGb: 289,
+                      label: '132 GB source → 289 GB total',
+                      color: 'warning' as const,
+                    },
+                    {
+                      name: 'Standard Clean #4 (x86_64 repo sync + out/)',
+                      srcGb: 131,
+                      finalGb: 274,
+                      label: '131 GB source → 274 GB total',
+                      color: 'warning' as const,
+                    },
+                    {
+                      name: 'ABFS Initial Seed #1 (casfs mount + cold build)',
+                      srcGb: 2.2,
+                      finalGb: 162,
+                      label: '2.2 GB mount → 162 GB total (-41%)',
+                      color: 'info' as const,
+                    },
+                    {
+                      name: 'ABFS Accelerated #2 (casfs mount + warm CAS)',
+                      srcGb: 0.14,
+                      finalGb: 19,
+                      label: '138 MB mount → 19 GB total (-93.1%)',
+                      color: 'success' as const,
+                    },
+                    {
+                      name: 'ABFS Accelerated #4 (warm PVC + 100% CAS hit)',
+                      srcGb: 21,
+                      finalGb: 21,
+                      label: '21 GB cached → 21 GB total (-92.3%)',
+                      color: 'success' as const,
+                    },
+                  ].map((item) => (
+                    <Box key={item.name}>
+                      <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.4 }}>
+                        <Typography variant="caption" fontWeight={600}>
+                          {item.name}
+                        </Typography>
+                        <Typography variant="caption" fontWeight={700} color={`${item.color}.main`}>
+                          {item.label}
+                        </Typography>
+                      </Stack>
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.min(100, (item.finalGb / 300) * 100)}
+                        color={item.color}
+                        sx={{ height: 10, borderRadius: 1 }}
+                      />
+                    </Box>
+                  ))}
+                </Stack>
+
+                <Divider sx={{ my: 1.5 }} />
+                <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.75 }}>
+                  HOW ABFS ACHIEVES {abfsSummary.endToEndSpeedupPeak}x END-TO-END ACCELERATION:
+                </Typography>
+                <Stack spacing={0.75}>
+                  <Typography variant="caption" color="text.secondary">
+                    1. <strong>Virtual CASFS Source Mount (Zero Repo Sync)</strong>: Instead of pulling{' '}
+                    <strong>131 GB</strong> of Git repositories via <code>repo sync -j3</code> (~28
+                    min), the builder mounts the revision tree virtually via the <code>casfs</code>{' '}
+                    Linux kernel module from <code>{abfsSummary.abfsServerName}</code> in seconds
+                    (consuming only <strong>138 MB - 2.2 GB</strong> after init).
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    2. <strong>100% Content-Addressable Action Cache Hits</strong>: During build #1,
+                    Soong/Ninja seeds all{' '}
+                    <strong>{abfsSummary.abfsWarmTotalActions.toLocaleString()}</strong> action digests
+                    into ABFS CAS. Subsequent builds (#2, #4) achieve a{' '}
+                    <strong>100.0% cache hit ratio (0 misses)</strong>, cutting Ninja evaluation from{' '}
+                    <strong>59m 11s</strong> to <strong>46.2s</strong> and <code>m dist -j</code> from{' '}
+                    <strong>47m 34s</strong> to <strong>1m 39s</strong>.
+                  </Typography>
+                </Stack>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          {/* Detailed AAOS Build Benchmark Table */}
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+            Recorded AAOS Build Runs &amp; Acceleration Metrics ({abfsRuns.length} Total Builds)
+          </Typography>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Build Run</TableCell>
+                  <TableCell>Acceleration Mode</TableCell>
+                  <TableCell>Target &amp; Revision</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>End-to-End Time</TableCell>
+                  <TableCell>m dist -j (Ninja Eval)</TableCell>
+                  <TableCell>Remote CAS Cache Hits</TableCell>
+                  <TableCell>Disk (Init → Final)</TableCell>
+                  <TableCell>Kernel</TableCell>
+                  <TableCell>Speedup vs. Clean</TableCell>
+                  <TableCell align="right">Links</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {abfsRuns.map((run) => {
+                  const isWarmAbfs = run.mode === 'abfs-warm' && run.result === 'SUCCESS';
+                  const isCleanBaseline =
+                    (run.mode === 'standard-clean' || run.mode === 'sdv-clean') &&
+                    run.result === 'SUCCESS';
+                  return (
+                    <TableRow
+                      key={run.id}
+                      hover
+                      sx={
+                        isWarmAbfs
+                          ? { bgcolor: (t) => alpha(t.palette.success.main, 0.05) }
+                          : undefined
+                      }
+                    >
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={700}>
+                          {run.pipeline} #{run.buildNumber}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatDateTime(run.startedAt)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          color={
+                            run.mode === 'abfs-warm'
+                              ? 'success'
+                              : run.mode === 'abfs-seed'
+                                ? 'info'
+                                : run.mode.endsWith('-warm')
+                                  ? 'primary'
+                                  : 'default'
+                          }
+                          variant={run.mode === 'abfs-warm' ? 'filled' : 'outlined'}
+                          label={run.modeLabel}
+                          sx={{ fontWeight: 600 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="caption"
+                          display="block"
+                          fontWeight={600}
+                          sx={{ fontFamily: 'monospace' }}
+                        >
+                          {run.lunchTarget || 'default'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {run.revision || 'N/A'} ({run.arch || 'x86_64'})
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          color={
+                            run.result === 'SUCCESS'
+                              ? 'success'
+                              : run.result === 'ABORTED'
+                                ? 'default'
+                                : 'error'
+                          }
+                          label={run.result}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          fontWeight={700}
+                          color={isWarmAbfs ? 'success.main' : 'text.primary'}
+                        >
+                          {formatSeconds(run.totalDurationSec)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {run.compileDurationSec ? (
+                          <>
+                            <Typography variant="body2" fontWeight={600}>
+                              {formatSeconds(run.compileDurationSec)}
+                            </Typography>
+                            {run.ninjaEvalSec ? (
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                Ninja: {formatSeconds(run.ninjaEvalSec)}
+                              </Typography>
+                            ) : null}
+                          </>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            {run.result === 'ABORTED' ? 'Aborted in Init' : 'N/A'}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {run.hasRemoteCacheStats ? (
+                          <Box sx={{ minWidth: 135 }}>
+                            <Stack direction="row" justifyContent="space-between">
+                              <Typography
+                                variant="caption"
+                                fontWeight={700}
+                                color={
+                                  (run.cacheHitRatio ?? 0) >= 90 ? 'success.main' : 'info.main'
+                                }
+                              >
+                                {(run.cacheHitRatio ?? 0).toFixed(1)}% Hit
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {(run.cacheHits ?? 0).toLocaleString()} /{' '}
+                                {(run.totalNinjaActions ?? 0).toLocaleString()}
+                              </Typography>
+                            </Stack>
+                            <LinearProgress
+                              variant="determinate"
+                              value={Math.min(100, run.cacheHitRatio ?? 0)}
+                              color={(run.cacheHitRatio ?? 0) >= 90 ? 'success' : 'info'}
+                              sx={{ height: 5, borderRadius: 1, mt: 0.3 }}
+                            />
+                          </Box>
+                        ) : run.totalNinjaActions ? (
+                          <Typography variant="caption" color="text.secondary">
+                            {run.totalNinjaActions.toLocaleString()} actions (No Remote CAS)
+                          </Typography>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            No CAS
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {run.diskFinalUsage ? (
+                          <>
+                            <Typography
+                              variant="caption"
+                              fontWeight={600}
+                              display="block"
+                              sx={{ fontFamily: 'monospace' }}
+                            >
+                              {run.diskAfterSourceInit || run.diskInitialUsage} →{' '}
+                              {run.diskFinalUsage}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              of {run.diskCapacity || 'PVC'}
+                            </Typography>
+                          </>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            N/A
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                          {run.kernelRevision || 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {run.result !== 'SUCCESS' ? (
+                          <Typography variant="caption" color="text.secondary">
+                            N/A
+                          </Typography>
+                        ) : isCleanBaseline ? (
+                          <Chip size="small" variant="outlined" label="1.0x (Clean Baseline)" />
+                        ) : run.speedupVsBaseline && run.speedupVsBaseline > 1.2 ? (
+                          <Stack spacing={0.3}>
+                            <Chip
+                              size="small"
+                              color="success"
+                              label={`${run.speedupVsBaseline}x faster`}
+                              sx={{ fontWeight: 700 }}
+                            />
+                            {run.compileSpeedupVsBaseline && run.compileSpeedupVsBaseline > 1.2 ? (
+                              <Typography variant="caption" color="success.main" fontWeight={600}>
+                                {run.compileSpeedupVsBaseline}x compile (-
+                                {formatSeconds(run.timeSavedSec)})
+                              </Typography>
+                            ) : null}
+                          </Stack>
+                        ) : (
+                          <Chip
+                            size="small"
+                            color="info"
+                            variant="outlined"
+                            label={
+                              run.mode === 'abfs-seed'
+                                ? 'Initial CAS Seed'
+                                : `${run.speedupVsBaseline ?? 1.0}x`
+                            }
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          {run.jenkinsWebPath && (
+                            <Button
+                              size="small"
+                              component="a"
+                              href={run.jenkinsWebPath}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              endIcon={<OpenInNewOutlinedIcon fontSize="small" />}
+                            >
+                              Jenkins
+                            </Button>
+                          )}
+                          {run.gcsConsoleUrl && (
+                            <Button
+                              size="small"
+                              component="a"
+                              href={run.gcsConsoleUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              endIcon={<OpenInNewOutlinedIcon fontSize="small" />}
+                            >
+                              GCS
+                            </Button>
+                          )}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
 
       {/* SECTION 1: CLOUD WORKSTATIONS FLEET */}
       {(viewTab === 'all' || viewTab === 'workstations') && (

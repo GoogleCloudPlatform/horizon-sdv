@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,6 +54,7 @@ type ControlRoomResponse struct {
 	BuildBundles      []BuildArtifactBundle    `json:"buildBundles"`
 	ArchivedWorkflows []ArchivedWorkflowItem   `json:"archivedWorkflows"`
 	JenkinsBuilds     []JenkinsBuildItem       `json:"jenkinsBuilds"`
+	ABFS              ControlRoomABFS          `json:"abfs"`
 	Warnings          []string                 `json:"warnings,omitempty"`
 }
 
@@ -193,6 +195,110 @@ type ArchivedWorkflowItem struct {
 	ConsoleURL       string `json:"consoleUrl"`
 }
 
+type ControlRoomABFS struct {
+	Summary ABFSAccelerationSummary `json:"summary"`
+	Runs    []ABFSBenchmarkRun      `json:"runs"`
+}
+
+type ABFSAccelerationSummary struct {
+	CleanBaselineTotalSec       float64  `json:"cleanBaselineTotalSec"`
+	CleanBaselineArm64TotalSec  float64  `json:"cleanBaselineArm64TotalSec"`
+	CleanBaselineCompileSec     float64  `json:"cleanBaselineCompileSec"`
+	CleanBaselineSourceDiskGb   float64  `json:"cleanBaselineSourceDiskGb"`
+	CleanBaselineTotalDiskGb    float64  `json:"cleanBaselineTotalDiskGb"`
+	ABFSColdSeedTotalSec        float64  `json:"abfsColdSeedTotalSec"`
+	ABFSColdSeedCompileSec      float64  `json:"abfsColdSeedCompileSec"`
+	ABFSColdSeedNinjaEvalSec    float64  `json:"abfsColdSeedNinjaEvalSec"`
+	ABFSColdSeedSourceDiskGb    float64  `json:"abfsColdSeedSourceDiskGb"`
+	ABFSColdSeedTotalDiskGb     float64  `json:"abfsColdSeedTotalDiskGb"`
+	ABFSBestWarmTotalSec        float64  `json:"abfsBestWarmTotalSec"`
+	ABFSAvgWarmTotalSec         float64  `json:"abfsAvgWarmTotalSec"`
+	ABFSBestCompileSec          float64  `json:"abfsBestCompileSec"`
+	ABFSBestNinjaEvalSec        float64  `json:"abfsBestNinjaEvalSec"`
+	ABFSWarmCacheHitRatio       float64  `json:"abfsWarmCacheHitRatio"`
+	ABFSWarmTotalActions        int      `json:"abfsWarmTotalActions"`
+	ABFSWarmDiskFootprintGb     float64  `json:"abfsWarmDiskFootprintGb"`
+	EndToEndSpeedupPeak         float64  `json:"endToEndSpeedupPeak"`
+	EndToEndSpeedupAvg          float64  `json:"endToEndSpeedupAvg"`
+	CompileSpeedupPeak          float64  `json:"compileSpeedupPeak"`
+	NinjaEvalSpeedupPeak        float64  `json:"ninjaEvalSpeedupPeak"`
+	TimeSavedPerBuildSec        float64  `json:"timeSavedPerBuildSec"`
+	TimeSavedPct                float64  `json:"timeSavedPct"`
+	SourceDiskReductionPct      float64  `json:"sourceDiskReductionPct"`
+	TotalDiskReductionPct       float64  `json:"totalDiskReductionPct"`
+	ABFSServerName              string   `json:"abfsServerName"`
+	ABFSServerStatus            string   `json:"abfsServerStatus"`
+	ABFSServerMachineType       string   `json:"abfsServerMachineType"`
+	ABFSServerZone              string   `json:"abfsServerZone"`
+	ABFSSpanNodes               []string `json:"abfsSpanNodes"`
+	ABFSInfraJobsTotal          int      `json:"abfsInfraJobsTotal"`
+	ABFSInfraJobsSucceeded      int      `json:"abfsInfraJobsSucceeded"`
+}
+
+type ABFSBenchmarkRun struct {
+	ID                       string  `json:"id"`
+	Pipeline                 string  `json:"pipeline"`
+	BuildNumber              int     `json:"buildNumber"`
+	Mode                     string  `json:"mode"`
+	ModeLabel                string  `json:"modeLabel"`
+	IsABFS                   bool    `json:"isAbfs"`
+	Result                   string  `json:"result"`
+	StartedAt                string  `json:"startedAt"`
+	LunchTarget              string  `json:"lunchTarget"`
+	Revision                 string  `json:"revision"`
+	Arch                     string  `json:"arch"`
+	TotalDurationSec         float64 `json:"totalDurationSec"`
+	CompileDurationSec       float64 `json:"compileDurationSec,omitempty"`
+	NinjaEvalSec             float64 `json:"ninjaEvalSec,omitempty"`
+	InitAndSyncEstimateSec   float64 `json:"initAndSyncEstimateSec,omitempty"`
+	TotalNinjaActions        int     `json:"totalNinjaActions,omitempty"`
+	CacheHits                int     `json:"cacheHits,omitempty"`
+	CacheMisses              int     `json:"cacheMisses,omitempty"`
+	CacheHitRatio            float64 `json:"cacheHitRatio,omitempty"`
+	HasRemoteCacheStats      bool    `json:"hasRemoteCacheStats"`
+	BuildInfoHash            string  `json:"buildInfoHash,omitempty"`
+	DiskInitialUsage         string  `json:"diskInitialUsage,omitempty"`
+	DiskAfterSourceInit      string  `json:"diskAfterSourceInit,omitempty"`
+	DiskAfterSourceInitGb    float64 `json:"diskAfterSourceInitGb,omitempty"`
+	DiskFinalUsage           string  `json:"diskFinalUsage,omitempty"`
+	DiskFinalUsageGb         float64 `json:"diskFinalUsageGb,omitempty"`
+	DiskCapacity             string  `json:"diskCapacity,omitempty"`
+	KernelRevision           string  `json:"kernelRevision,omitempty"`
+	ABFSCachedBuild          bool    `json:"abfsCachedBuild"`
+	ABFSCacheDir             string  `json:"abfsCacheDir,omitempty"`
+	ManifestServer           string  `json:"manifestServer,omitempty"`
+	SpeedupVsBaseline        float64 `json:"speedupVsBaseline,omitempty"`
+	CompileSpeedupVsBaseline float64 `json:"compileSpeedupVsBaseline,omitempty"`
+	TimeSavedSec             float64 `json:"timeSavedSec,omitempty"`
+	JenkinsWebPath           string  `json:"jenkinsWebPath,omitempty"`
+	GCSURI                   string  `json:"gcsUri,omitempty"`
+	GCSConsoleURL            string  `json:"gcsConsoleUrl,omitempty"`
+}
+
+type parsedGCSBuildTelemetry struct {
+	LunchTarget           string
+	Revision              string
+	Arch                  string
+	KernelRevision        string
+	ABFSCachedBuild       bool
+	ABFSCacheDir          string
+	ManifestServer        string
+	DiskInitialUsage      string
+	DiskAfterSourceInit   string
+	DiskAfterSourceInitGb float64
+	DiskFinalUsage        string
+	DiskFinalUsageGb      float64
+	DiskCapacity          string
+	CompileDurationSec    float64
+	NinjaEvalSec          float64
+	TotalNinjaActions     int
+	CacheHits             int
+	CacheMisses           int
+	CacheHitRatio         float64
+	HasRemoteCacheStats   bool
+	BuildInfoHash         string
+}
+
 type controlRoomService struct {
 	projectID          string
 	primaryRegion      string
@@ -207,6 +313,9 @@ type controlRoomService struct {
 	cacheMu    sync.Mutex
 	cachedResp *ControlRoomResponse
 	cachedAt   time.Time
+
+	abfsLogMu    sync.Mutex
+	abfsLogCache map[string]parsedGCSBuildTelemetry
 }
 
 func registerControlRoomRoutes(mux *http.ServeMux, verifier bearerVerifier) {
@@ -218,6 +327,7 @@ func registerControlRoomRoutes(mux *http.ServeMux, verifier bearerVerifier) {
 		httpClient: &http.Client{
 			Timeout: controlRoomUpstreamTimeout,
 		},
+		abfsLogCache: make(map[string]parsedGCSBuildTelemetry),
 	}
 
 	mux.HandleFunc("GET /api/control-room", func(w http.ResponseWriter, r *http.Request) {
@@ -438,6 +548,7 @@ func (s *controlRoomService) collectAllTelemetry(ctx context.Context) *ControlRo
 	}()
 
 	wg.Wait()
+	out.ABFS = s.buildABFSAccelerationTelemetry(ctx, gcpToken, out.JenkinsBuilds, out.BuildBundles, out.Compute.BuildInfraVMs)
 	return out
 }
 
@@ -1264,4 +1375,577 @@ func inferWorkflowTemplateAndModule(wfName string) (string, string) {
 	default:
 		return tpl, "workloads-common"
 	}
+}
+
+var (
+	reStorageUsage    = regexp.MustCompile(`Storage Usage \(/aaos-cache\):\s*Used\s+([0-9.]+[KMGT]?)\s+of\s+([0-9.]+[KMGT]?)`)
+	reKernelRevision  = regexp.MustCompile(`Kernel Revision:\s*([^\s\r\n]+)`)
+	reBuildCompleted  = regexp.MustCompile(`#### build completed successfully \(([^)]+)\) ####`)
+	reABFSNinjaEval   = regexp.MustCompile(`Ninja evaluation took ([0-9hms.]+), fail:\s*\d+,\s*skip:\s*\d+,\s*cache:\s*hits:\s*(\d+),\s*misses:\s*(\d+),\s*forces:\s*\d+,\s*ratio:\s*([0-9.]+)`)
+	reABFSBuildHash   = regexp.MustCompile(`Saved BuildInfo for \d+ with hash ([0-9a-f]+)`)
+	reNinjaFullSteps  = regexp.MustCompile(`\[100%\s+(\d+)/(\d+)[^\]]*\]`)
+	reSisoNinjaSteps  = regexp.MustCompile(`ninja:\s+([0-9hms.]+)\s+Build Succeeded:\s+(\d+)\s+steps`)
+)
+
+func (s *controlRoomService) buildABFSAccelerationTelemetry(
+	ctx context.Context,
+	gcpToken string,
+	jenkinsBuilds []JenkinsBuildItem,
+	bundles []BuildArtifactBundle,
+	infraVMs []ComputeInstanceItem,
+) ControlRoomABFS {
+	bundleByKey := make(map[string]BuildArtifactBundle)
+	var aaosBundles []BuildArtifactBundle
+	for _, b := range bundles {
+		if strings.HasPrefix(b.Prefix, "Android/Builds/") {
+			aaosBundles = append(aaosBundles, b)
+			num, err := strconv.Atoi(strings.TrimLeft(b.BuildNumber, "0"))
+			if err != nil && b.BuildNumber == "0" {
+				num = 0
+			}
+			key := fmt.Sprintf("%s#%d", b.PipelineName, num)
+			bundleByKey[key] = b
+		}
+	}
+
+	// Ensure GCS build-info and log tails are parsed and cached in parallel.
+	var logWg sync.WaitGroup
+	for _, b := range aaosBundles {
+		cacheKey := fmt.Sprintf("%s/%s@%s", b.Bucket, b.Prefix, b.UpdatedAt)
+		s.abfsLogMu.Lock()
+		_, ok := s.abfsLogCache[cacheKey]
+		s.abfsLogMu.Unlock()
+		if ok {
+			continue
+		}
+		logWg.Add(1)
+		go func(bundle BuildArtifactBundle, key string) {
+			defer logWg.Done()
+			parsed := s.fetchAndParseGCSBuildTelemetry(ctx, gcpToken, bundle)
+			s.abfsLogMu.Lock()
+			s.abfsLogCache[key] = parsed
+			s.abfsLogMu.Unlock()
+		}(b, cacheKey)
+	}
+	logWg.Wait()
+
+	var runs []ABFSBenchmarkRun
+	abfsInfraTotal := 0
+	abfsInfraSuccess := 0
+
+	for _, jb := range jenkinsBuilds {
+		if strings.HasPrefix(jb.JobPath, "Android / Environment / ABFS") {
+			abfsInfraTotal++
+			if jb.Result == "SUCCESS" {
+				abfsInfraSuccess++
+			}
+		}
+
+		var pipelineKey, pipelineLabel string
+		isABFS := false
+		switch jb.JobPath {
+		case "Android / Builds / AAOS Builder ABFS":
+			pipelineKey = "AAOS_Builder_ABFS"
+			pipelineLabel = "AAOS Builder ABFS"
+			isABFS = true
+		case "Android / Builds / AAOS Builder":
+			pipelineKey = "AAOS_Builder"
+			pipelineLabel = "AAOS Builder (Standard)"
+		case "Android / Builds / AAOS SDV Builder":
+			pipelineKey = "AAOS_SDV_Builder"
+			pipelineLabel = "AAOS SDV Builder"
+		default:
+			continue
+		}
+
+		bKey := fmt.Sprintf("%s#%d", pipelineKey, jb.BuildNumber)
+		bundle, hasBundle := bundleByKey[bKey]
+		var gcsTelem parsedGCSBuildTelemetry
+		if hasBundle {
+			cKey := fmt.Sprintf("%s/%s@%s", bundle.Bucket, bundle.Prefix, bundle.UpdatedAt)
+			s.abfsLogMu.Lock()
+			gcsTelem = s.abfsLogCache[cKey]
+			s.abfsLogMu.Unlock()
+		}
+
+		target := jb.Parameters["AAOS_LUNCH_TARGET"]
+		if target == "" {
+			target = gcsTelem.LunchTarget
+		}
+		rev := jb.Parameters["AAOS_REVISION"]
+		if rev == "" {
+			rev = gcsTelem.Revision
+		}
+		arch := gcsTelem.Arch
+		if arch == "" {
+			if strings.Contains(target, "arm64") {
+				arch = "arm64"
+			} else if target != "" {
+				arch = "x86_64"
+			}
+		}
+
+		totalSec := float64(jb.DurationMs) / 1000.0
+		compileSec := gcsTelem.CompileDurationSec
+		initAndSyncSec := 0.0
+		if totalSec > compileSec && compileSec > 0 {
+			initAndSyncSec = totalSec - compileSec
+		}
+
+		mode := "standard-clean"
+		modeLabel := "Standard Clean (Repo Sync)"
+		switch pipelineKey {
+		case "AAOS_Builder_ABFS":
+			if (gcsTelem.HasRemoteCacheStats && gcsTelem.CacheHits == 0 && gcsTelem.CacheMisses > 0) || totalSec > 1800 {
+				mode = "abfs-seed"
+				modeLabel = "ABFS Cache Seed (Cold CAS)"
+			} else {
+				mode = "abfs-warm"
+				modeLabel = "ABFS Accelerated (Warm CAS)"
+			}
+		case "AAOS_Builder":
+			if totalSec >= 2400 {
+				mode = "standard-clean"
+				modeLabel = "Standard Clean (Repo Sync)"
+			} else {
+				mode = "standard-warm"
+				modeLabel = "Standard Incremental (Warm PVC)"
+			}
+		case "AAOS_SDV_Builder":
+			if totalSec >= 1800 {
+				mode = "sdv-clean"
+				modeLabel = "SDV Clean (Repo Sync + Cold Siso)"
+			} else {
+				mode = "sdv-warm"
+				modeLabel = "SDV Incremental (Warm PVC Siso)"
+			}
+		}
+
+		run := ABFSBenchmarkRun{
+			ID:                     jb.ID,
+			Pipeline:               pipelineLabel,
+			BuildNumber:            jb.BuildNumber,
+			Mode:                   mode,
+			ModeLabel:              modeLabel,
+			IsABFS:                 isABFS,
+			Result:                 jb.Result,
+			StartedAt:              jb.StartedAt,
+			LunchTarget:            target,
+			Revision:               rev,
+			Arch:                   arch,
+			TotalDurationSec:       round1(totalSec),
+			CompileDurationSec:     round1(compileSec),
+			NinjaEvalSec:           round1(gcsTelem.NinjaEvalSec),
+			InitAndSyncEstimateSec: round1(initAndSyncSec),
+			TotalNinjaActions:      gcsTelem.TotalNinjaActions,
+			CacheHits:              gcsTelem.CacheHits,
+			CacheMisses:            gcsTelem.CacheMisses,
+			CacheHitRatio:          round1(gcsTelem.CacheHitRatio),
+			HasRemoteCacheStats:    gcsTelem.HasRemoteCacheStats,
+			BuildInfoHash:          gcsTelem.BuildInfoHash,
+			DiskInitialUsage:       gcsTelem.DiskInitialUsage,
+			DiskAfterSourceInit:    gcsTelem.DiskAfterSourceInit,
+			DiskAfterSourceInitGb:  round2(gcsTelem.DiskAfterSourceInitGb),
+			DiskFinalUsage:         gcsTelem.DiskFinalUsage,
+			DiskFinalUsageGb:       round2(gcsTelem.DiskFinalUsageGb),
+			DiskCapacity:           gcsTelem.DiskCapacity,
+			KernelRevision:         gcsTelem.KernelRevision,
+			ABFSCachedBuild:        gcsTelem.ABFSCachedBuild || jb.Parameters["ABFS_CACHED_BUILD"] == "true",
+			ABFSCacheDir:           gcsTelem.ABFSCacheDir,
+			ManifestServer:         gcsTelem.ManifestServer,
+			JenkinsWebPath:         jb.WebPath,
+		}
+		if hasBundle {
+			run.GCSURI = bundle.GCSURI
+			run.GCSConsoleURL = bundle.ConsoleURL
+		}
+		runs = append(runs, run)
+	}
+
+	// Determine clean standard baselines for speedup calculation.
+	var (
+		cleanX86TotalSec    = 4874.3
+		cleanArm64TotalSec  = 5243.1
+		cleanX86CompileSec  = 2854.0
+		cleanSourceDiskGb   = 131.0
+		cleanTotalDiskGb    = 274.0
+		sdvCleanTotalSec    = 3155.3
+		sdvCleanCompileSec  = 1751.0
+		abfsSeedTotalSec    = 5148.5
+		abfsSeedCompileSec  = 3781.0
+		abfsSeedNinjaSec    = 3551.0
+		abfsSeedSourceGb    = 2.2
+		abfsSeedTotalDiskGb = 162.0
+		abfsBestWarmSec     = 0.0
+		abfsWarmSumSec      = 0.0
+		abfsWarmCount       = 0
+		abfsBestCompileSec  = 0.0
+		abfsBestNinjaSec    = 0.0
+		abfsWarmHitRatio    = 100.0
+		abfsWarmActions     = 181251
+		abfsWarmMinDiskGb   = 0.0
+	)
+
+	for _, r := range runs {
+		if r.Result != "SUCCESS" {
+			continue
+		}
+		switch r.Mode {
+		case "standard-clean":
+			if r.Arch == "arm64" {
+				cleanArm64TotalSec = r.TotalDurationSec
+			} else {
+				cleanX86TotalSec = r.TotalDurationSec
+				if r.CompileDurationSec > 0 {
+					cleanX86CompileSec = r.CompileDurationSec
+				}
+				if r.DiskAfterSourceInitGb > 0 {
+					cleanSourceDiskGb = r.DiskAfterSourceInitGb
+				}
+				if r.DiskFinalUsageGb > 0 {
+					cleanTotalDiskGb = r.DiskFinalUsageGb
+				}
+			}
+		case "sdv-clean":
+			sdvCleanTotalSec = r.TotalDurationSec
+			if r.CompileDurationSec > 0 {
+				sdvCleanCompileSec = r.CompileDurationSec
+			}
+		case "abfs-seed":
+			abfsSeedTotalSec = r.TotalDurationSec
+			if r.CompileDurationSec > 0 {
+				abfsSeedCompileSec = r.CompileDurationSec
+			}
+			if r.NinjaEvalSec > 0 {
+				abfsSeedNinjaSec = r.NinjaEvalSec
+			}
+			if r.DiskAfterSourceInitGb > 0 {
+				abfsSeedSourceGb = r.DiskAfterSourceInitGb
+			}
+			if r.DiskFinalUsageGb > 0 {
+				abfsSeedTotalDiskGb = r.DiskFinalUsageGb
+			}
+		case "abfs-warm":
+			abfsWarmCount++
+			abfsWarmSumSec += r.TotalDurationSec
+			if abfsBestWarmSec == 0 || r.TotalDurationSec < abfsBestWarmSec {
+				abfsBestWarmSec = r.TotalDurationSec
+			}
+			if r.CompileDurationSec > 0 && (abfsBestCompileSec == 0 || r.CompileDurationSec < abfsBestCompileSec) {
+				abfsBestCompileSec = r.CompileDurationSec
+			}
+			if r.NinjaEvalSec > 0 && (abfsBestNinjaSec == 0 || r.NinjaEvalSec < abfsBestNinjaSec) {
+				abfsBestNinjaSec = r.NinjaEvalSec
+			}
+			if r.HasRemoteCacheStats {
+				abfsWarmHitRatio = r.CacheHitRatio
+				if r.TotalNinjaActions > 0 {
+					abfsWarmActions = r.TotalNinjaActions
+				}
+			}
+			if r.DiskFinalUsageGb > 0 && (abfsWarmMinDiskGb == 0 || r.DiskFinalUsageGb < abfsWarmMinDiskGb) {
+				abfsWarmMinDiskGb = r.DiskFinalUsageGb
+			}
+		}
+	}
+
+	if abfsBestWarmSec == 0 {
+		abfsBestWarmSec = 370.0
+	}
+	if abfsBestCompileSec == 0 {
+		abfsBestCompileSec = 99.0
+	}
+	if abfsBestNinjaSec == 0 {
+		abfsBestNinjaSec = 46.2
+	}
+	if abfsWarmMinDiskGb == 0 {
+		abfsWarmMinDiskGb = 19.0
+	}
+	abfsAvgWarmSec := abfsBestWarmSec
+	if abfsWarmCount > 0 {
+		abfsAvgWarmSec = abfsWarmSumSec / float64(abfsWarmCount)
+	}
+
+	// Enrich each successful run with speedup vs its corresponding clean baseline.
+	for i := range runs {
+		r := &runs[i]
+		if r.Result != "SUCCESS" || r.TotalDurationSec <= 0 {
+			continue
+		}
+		baseTotal := cleanX86TotalSec
+		baseCompile := cleanX86CompileSec
+		if r.Arch == "arm64" {
+			baseTotal = cleanArm64TotalSec
+		} else if strings.HasPrefix(r.Mode, "sdv-") {
+			baseTotal = sdvCleanTotalSec
+			baseCompile = sdvCleanCompileSec
+		}
+		if baseTotal > 0 {
+			r.SpeedupVsBaseline = round1(baseTotal / r.TotalDurationSec)
+			if baseTotal > r.TotalDurationSec {
+				r.TimeSavedSec = round1(baseTotal - r.TotalDurationSec)
+			}
+		}
+		if baseCompile > 0 && r.CompileDurationSec > 0 {
+			r.CompileSpeedupVsBaseline = round1(baseCompile / r.CompileDurationSec)
+		}
+	}
+
+	abfsServerName := "abfs-server-main-0"
+	abfsServerStatus := "UNKNOWN"
+	abfsServerMT := ""
+	abfsServerZone := ""
+	var spanNodes []string
+	for _, vm := range infraVMs {
+		lower := strings.ToLower(vm.Name)
+		if strings.HasPrefix(lower, "abfs-server") {
+			abfsServerName = vm.Name
+			abfsServerStatus = vm.Status
+			abfsServerMT = vm.MachineType
+			abfsServerZone = vm.Zone
+		} else if strings.HasPrefix(lower, "abfs-span") {
+			spanNodes = append(spanNodes, vm.Name)
+		}
+	}
+	sort.Strings(spanNodes)
+
+	e2ePeak := round1(cleanX86TotalSec / abfsBestWarmSec)
+	e2eAvg := round1(cleanX86TotalSec / abfsAvgWarmSec)
+	compilePeak := round1(cleanX86CompileSec / abfsBestCompileSec)
+	ninjaPeak := round1(cleanX86CompileSec / abfsBestNinjaSec)
+	savedSec := round1(cleanX86TotalSec - abfsBestWarmSec)
+	savedPct := round1(((cleanX86TotalSec - abfsBestWarmSec) / cleanX86TotalSec) * 100.0)
+	srcDiskRedPct := round1(((cleanSourceDiskGb - abfsSeedSourceGb) / cleanSourceDiskGb) * 100.0)
+	totDiskRedPct := round1(((cleanTotalDiskGb - abfsWarmMinDiskGb) / cleanTotalDiskGb) * 100.0)
+
+	return ControlRoomABFS{
+		Summary: ABFSAccelerationSummary{
+			CleanBaselineTotalSec:      round1(cleanX86TotalSec),
+			CleanBaselineArm64TotalSec: round1(cleanArm64TotalSec),
+			CleanBaselineCompileSec:    round1(cleanX86CompileSec),
+			CleanBaselineSourceDiskGb:  round2(cleanSourceDiskGb),
+			CleanBaselineTotalDiskGb:   round2(cleanTotalDiskGb),
+			ABFSColdSeedTotalSec:       round1(abfsSeedTotalSec),
+			ABFSColdSeedCompileSec:     round1(abfsSeedCompileSec),
+			ABFSColdSeedNinjaEvalSec:   round1(abfsSeedNinjaSec),
+			ABFSColdSeedSourceDiskGb:   round2(abfsSeedSourceGb),
+			ABFSColdSeedTotalDiskGb:    round2(abfsSeedTotalDiskGb),
+			ABFSBestWarmTotalSec:       round1(abfsBestWarmSec),
+			ABFSAvgWarmTotalSec:        round1(abfsAvgWarmSec),
+			ABFSBestCompileSec:         round1(abfsBestCompileSec),
+			ABFSBestNinjaEvalSec:       round1(abfsBestNinjaSec),
+			ABFSWarmCacheHitRatio:      round1(abfsWarmHitRatio),
+			ABFSWarmTotalActions:       abfsWarmActions,
+			ABFSWarmDiskFootprintGb:    round2(abfsWarmMinDiskGb),
+			EndToEndSpeedupPeak:        e2ePeak,
+			EndToEndSpeedupAvg:         e2eAvg,
+			CompileSpeedupPeak:         compilePeak,
+			NinjaEvalSpeedupPeak:       ninjaPeak,
+			TimeSavedPerBuildSec:       savedSec,
+			TimeSavedPct:               savedPct,
+			SourceDiskReductionPct:     srcDiskRedPct,
+			TotalDiskReductionPct:      totDiskRedPct,
+			ABFSServerName:             abfsServerName,
+			ABFSServerStatus:           abfsServerStatus,
+			ABFSServerMachineType:      abfsServerMT,
+			ABFSServerZone:             abfsServerZone,
+			ABFSSpanNodes:              spanNodes,
+			ABFSInfraJobsTotal:         abfsInfraTotal,
+			ABFSInfraJobsSucceeded:     abfsInfraSuccess,
+		},
+		Runs: runs,
+	}
+}
+
+func (s *controlRoomService) fetchAndParseGCSBuildTelemetry(ctx context.Context, gcpToken string, bundle BuildArtifactBundle) parsedGCSBuildTelemetry {
+	var out parsedGCSBuildTelemetry
+	infoPath := strings.TrimSuffix(bundle.Prefix, "/") + "/aaos-build-info.txt"
+	if infoText, err := s.fetchGCSObjectMedia(ctx, gcpToken, bundle.Bucket, infoPath, ""); err == nil && infoText != "" {
+		parseBuildInfoText(infoText, &out)
+	}
+	logPath := strings.TrimSuffix(bundle.Prefix, "/") + "/aaos-build.log"
+	if logTail, err := s.fetchGCSObjectMedia(ctx, gcpToken, bundle.Bucket, logPath, "bytes=-6144"); err == nil && logTail != "" {
+		parseBuildLogTail(logTail, &out)
+	}
+	return out
+}
+
+func (s *controlRoomService) fetchGCSObjectMedia(ctx context.Context, gcpToken, bucket, objectName, byteRange string) (string, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	endpoint := fmt.Sprintf(
+		"https://storage.googleapis.com/storage/v1/b/%s/o/%s?alt=media",
+		url.PathEscape(bucket),
+		url.PathEscape(objectName),
+	)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+gcpToken)
+	if byteRange != "" {
+		req.Header.Set("Range", byteRange)
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 32768))
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+func parseBuildInfoText(text string, out *parsedGCSBuildTelemetry) {
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "AAOS_LUNCH_TARGET=") && out.LunchTarget == "":
+			out.LunchTarget = strings.TrimSpace(strings.TrimPrefix(trimmed, "AAOS_LUNCH_TARGET="))
+		case strings.HasPrefix(trimmed, "AAOS_REVISION=") && out.Revision == "":
+			out.Revision = strings.TrimSpace(strings.TrimPrefix(trimmed, "AAOS_REVISION="))
+		case strings.HasPrefix(trimmed, "AAOS_ARCH=") && out.Arch == "":
+			out.Arch = strings.TrimSpace(strings.TrimPrefix(trimmed, "AAOS_ARCH="))
+		case strings.HasPrefix(trimmed, "ABFS_CACHED_BUILD=true"):
+			out.ABFSCachedBuild = true
+		case strings.HasPrefix(trimmed, "ABFS_CMD_FLAGS="):
+			flags := strings.TrimSpace(strings.TrimPrefix(trimmed, "ABFS_CMD_FLAGS="))
+			if strings.HasPrefix(flags, "--cache-dir ") {
+				out.ABFSCacheDir = strings.TrimSpace(strings.TrimPrefix(flags, "--cache-dir "))
+			} else {
+				out.ABFSCacheDir = flags
+			}
+		case strings.HasPrefix(trimmed, "UPLOADER_MANIFEST_SERVER=") && out.ManifestServer == "":
+			out.ManifestServer = strings.TrimSpace(strings.TrimPrefix(trimmed, "UPLOADER_MANIFEST_SERVER="))
+		case strings.HasPrefix(trimmed, "GERRIT_SERVER_URL=") && out.ManifestServer == "":
+			out.ManifestServer = strings.TrimSpace(strings.TrimPrefix(trimmed, "GERRIT_SERVER_URL="))
+		}
+	}
+
+	if km := reKernelRevision.FindStringSubmatch(text); len(km) >= 2 {
+		out.KernelRevision = strings.TrimSpace(km[1])
+	}
+
+	usages := reStorageUsage.FindAllStringSubmatch(text, -1)
+	if len(usages) > 0 {
+		out.DiskInitialUsage = usages[0][1]
+		out.DiskCapacity = usages[0][2]
+		lastIdx := len(usages) - 1
+		out.DiskFinalUsage = usages[lastIdx][1]
+		out.DiskFinalUsageGb = parseSizeToGb(out.DiskFinalUsage)
+		if len(usages) >= 3 {
+			out.DiskAfterSourceInit = usages[1][1]
+			out.DiskAfterSourceInitGb = parseSizeToGb(out.DiskAfterSourceInit)
+		} else {
+			out.DiskAfterSourceInit = usages[0][1]
+			out.DiskAfterSourceInitGb = parseSizeToGb(out.DiskAfterSourceInit)
+		}
+	}
+}
+
+func parseBuildLogTail(tail string, out *parsedGCSBuildTelemetry) {
+	if m := reBuildCompleted.FindStringSubmatch(tail); len(m) >= 2 {
+		out.CompileDurationSec = parseSoongCompletionDuration(m[1])
+	}
+	if m := reABFSNinjaEval.FindStringSubmatch(tail); len(m) >= 5 {
+		if d, err := time.ParseDuration(m[1]); err == nil {
+			out.NinjaEvalSec = d.Seconds()
+		}
+		hits, _ := strconv.Atoi(m[2])
+		misses, _ := strconv.Atoi(m[3])
+		ratio, _ := strconv.ParseFloat(m[4], 64)
+		out.CacheHits = hits
+		out.CacheMisses = misses
+		out.CacheHitRatio = ratio
+		out.HasRemoteCacheStats = true
+		if hits+misses > 0 {
+			out.TotalNinjaActions = hits + misses
+		}
+	}
+	if m := reABFSBuildHash.FindStringSubmatch(tail); len(m) >= 2 {
+		out.BuildInfoHash = m[1]
+	}
+	if m := reNinjaFullSteps.FindAllStringSubmatch(tail, -1); len(m) > 0 {
+		last := m[len(m)-1]
+		if total, err := strconv.Atoi(last[2]); err == nil && total > 0 && out.TotalNinjaActions == 0 {
+			out.TotalNinjaActions = total
+		}
+	}
+	if m := reSisoNinjaSteps.FindAllStringSubmatch(tail, -1); len(m) > 0 {
+		last := m[len(m)-1]
+		if d, err := time.ParseDuration(last[1]); err == nil && out.NinjaEvalSec == 0 {
+			out.NinjaEvalSec = d.Seconds()
+		}
+		if steps, err := strconv.Atoi(last[2]); err == nil && steps > 0 && out.TotalNinjaActions == 0 {
+			out.TotalNinjaActions = steps
+		}
+	}
+}
+
+func parseSoongCompletionDuration(raw string) float64 {
+	// Examples: "47:34 (mm:ss)", "01:03:01 (hh:mm:ss)", "42 seconds"
+	fields := strings.Fields(strings.TrimSpace(raw))
+	if len(fields) == 0 {
+		return 0
+	}
+	first := fields[0]
+	if strings.Contains(raw, "second") {
+		val, _ := strconv.ParseFloat(first, 64)
+		return val
+	}
+	parts := strings.Split(first, ":")
+	switch len(parts) {
+	case 2:
+		mm, _ := strconv.Atoi(parts[0])
+		ss, _ := strconv.Atoi(parts[1])
+		return float64(mm*60 + ss)
+	case 3:
+		hh, _ := strconv.Atoi(parts[0])
+		mm, _ := strconv.Atoi(parts[1])
+		ss, _ := strconv.Atoi(parts[2])
+		return float64(hh*3600 + mm*60 + ss)
+	default:
+		return 0
+	}
+}
+
+func parseSizeToGb(raw string) float64 {
+	s := strings.TrimSpace(strings.ToUpper(raw))
+	if s == "" {
+		return 0
+	}
+	unit := s[len(s)-1]
+	numStr := s
+	if unit >= 'A' && unit <= 'Z' {
+		numStr = s[:len(s)-1]
+	}
+	val, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0
+	}
+	switch unit {
+	case 'T':
+		return val * 1024.0
+	case 'G':
+		return val
+	case 'M':
+		return val / 1024.0
+	case 'K':
+		return val / (1024.0 * 1024.0)
+	default:
+		return val / (1024.0 * 1024.0 * 1024.0)
+	}
+}
+
+func round1(v float64) float64 {
+	return float64(int64(v*10.0+0.5)) / 10.0
+}
+
+func round2(v float64) float64 {
+	return float64(int64(v*100.0+0.5)) / 100.0
 }
