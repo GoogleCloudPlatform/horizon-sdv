@@ -19,7 +19,7 @@
 
 ARG LINUX_DISTRIBUTION=alpine:3.19
 
-FROM golang:1.22-alpine AS horizon-build
+FROM golang:1.27.2-alpine AS horizon-build
 WORKDIR /src
 COPY tools/horizon /src/h
 WORKDIR /src/h
