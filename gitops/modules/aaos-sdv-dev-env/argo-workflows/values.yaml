@@ -43,7 +43,7 @@ spec:
   # Full 40-character commit SHA passed as CICD_FOUNDATION_REF to
   # aaos-sdv-demos/docker/docker-bake.hcl (BuildKit's git context loader rejects
   # abbreviated 7-character SHAs over git upload-pack).
-  cicdFoundationRef: "6e656b5cd6f9c72a7b0d19ec8eaf489437d7be99"
+  cicdFoundationRef: "36c00945db0d24426d1328f630af5101d18d6b4a"
 
   # Antigravity IDE 2.0 archive pre-baked into the sdv-demos image layer.
   antigravityUrl: "https://storage.googleapis.com/antigravity-public/antigravity-hub/2.24.0-5780333019398144/linux-x64/Antigravity.tar.gz"
