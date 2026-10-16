@@ -66,6 +66,8 @@ upsert_promoted_config() {
     if ! gcloud workstations configs update "${TARGET_CONFIG}" \
         --project="${PROJECT}" --region="${TARGET_REGION}" --cluster="${TARGET_CLUSTER}" \
         --enable-nested-virtualization \
+        --idle-timeout=43200 \
+        --running-timeout=72000 \
         --container-custom-image="${CONTAINER_IMAGE}" \
         --pd-source-snapshot="${SNAPSHOT_URI}" \
         --quiet; then
@@ -86,6 +88,8 @@ upsert_promoted_config() {
       --service-account="${HOST_SA_EMAIL}" \
       --disable-public-ip-addresses \
       --pool-size=0 \
+      --idle-timeout=43200 \
+      --running-timeout=72000 \
       --container-custom-image="${CONTAINER_IMAGE}" \
       --pd-disk-type="pd-ssd" \
       --pd-reclaim-policy="retain" \
