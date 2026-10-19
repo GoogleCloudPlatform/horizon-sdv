@@ -125,4 +125,25 @@ if [ -n "${SECONDARY_REGION}" ] && [ -n "${SECONDARY_CLUSTER}" ] && [ -n "${SECO
   upsert_promoted_config "${SECONDARY_REGION}" "${SECONDARY_CLUSTER}" "${SECONDARY_REGIONAL_CONFIG}"
 fi
 
+# Also update any additional multi-region event clusters present in the project.
+ADDITIONAL_TARGETS="
+europe-west4:sdv-cloud-ws-cluster-euw4:aaos-sdv-dev-env-euw4
+europe-west1:sdv-cloud-ws-cluster-euw1:aaos-sdv-dev-env-euw1
+europe-west2:sdv-cloud-ws-cluster-euw2:aaos-sdv-dev-env-euw2
+us-east4:sdv-cloud-ws-cluster-use4:aaos-sdv-dev-env-use4
+us-east1:sdv-cloud-ws-cluster-use1:aaos-sdv-dev-env-use1
+us-central1:sdv-cloud-ws-cluster-usc1:aaos-sdv-dev-env-usc1
+us-west1:sdv-cloud-ws-cluster-usw1:aaos-sdv-dev-env-usw1
+"
+for entry in ${ADDITIONAL_TARGETS}; do
+  ADD_REGION="${entry%%:*}"
+  REST="${entry#*:}"
+  ADD_CLUSTER="${REST%%:*}"
+  ADD_CONFIG="${REST#*:}"
+  if gcloud workstations clusters describe "${ADD_CLUSTER}" \
+      --project="${PROJECT}" --region="${ADD_REGION}" >/dev/null 2>&1; then
+    upsert_promoted_config "${ADD_REGION}" "${ADD_CLUSTER}" "${ADD_CONFIG}"
+  fi
+done
+
 echo "Promoted ${CANDIDATE_SNAP} and published workstation configs."

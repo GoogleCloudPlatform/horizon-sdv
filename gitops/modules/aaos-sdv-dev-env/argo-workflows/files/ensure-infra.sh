@@ -96,4 +96,28 @@ ensure_workstation_cluster() {
 ensure_subnet
 ensure_router_and_nat
 ensure_workstation_cluster
-echo "Secondary region infrastructure check complete."
+
+# Ensure additional multi-region event subnets, Cloud Routers, Cloud NATs, and CWS clusters.
+ADDITIONAL_INFRA="
+europe-west4:10.4.0.0/24:sdv-cloud-ws-cluster-euw4
+europe-west1:10.5.0.0/24:sdv-cloud-ws-cluster-euw1
+europe-west2:10.6.0.0/24:sdv-cloud-ws-cluster-euw2
+us-east4:10.7.0.0/24:sdv-cloud-ws-cluster-use4
+us-east1:10.8.0.0/24:sdv-cloud-ws-cluster-use1
+us-central1:10.9.0.0/24:sdv-cloud-ws-cluster-usc1
+us-west1:10.11.0.0/24:sdv-cloud-ws-cluster-usw1
+"
+for entry in ${ADDITIONAL_INFRA}; do
+  SECONDARY_REGION="${entry%%:*}"
+  REST="${entry#*:}"
+  SECONDARY_SUBNET_CIDR="${REST%%:*}"
+  SECONDARY_CLUSTER="${REST#*:}"
+  SECONDARY_SUBNET="sdv-subnet-${SECONDARY_REGION}"
+  SECONDARY_ROUTER="${VPC_NETWORK}-${SECONDARY_REGION}-nat-router"
+  SECONDARY_NAT="${VPC_NETWORK}-${SECONDARY_REGION}-egress-nat"
+  ensure_subnet
+  ensure_router_and_nat
+  ensure_workstation_cluster
+done
+
+echo "Multi-region infrastructure check complete."
