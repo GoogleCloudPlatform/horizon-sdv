@@ -102,6 +102,11 @@ Use `gcloud compute images list --no-standard-images --project=cos-cloud | grep 
 ## `ABFS_REPOSITORY`
 Defines the artifact repository from where to retrieve the ABFS packages.
 
+## `ABFS_SERVER`
+Defines the ABFS server endpoint (`host:port`) the build pods connect to, default `abfs-server.abfs.svc.cluster.local:50051`.
+
+The build pods run in the `jenkins` namespace while the ABFS server Service lives in the `abfs` namespace, so the short name `abfs-server` does not resolve and the fully qualified Service name is required. 
+
 ## `UPLOADER_MANIFEST_SERVER`
 ABFS manifest source URL. Used for seeding ABFS builds, blobs/objects.
 

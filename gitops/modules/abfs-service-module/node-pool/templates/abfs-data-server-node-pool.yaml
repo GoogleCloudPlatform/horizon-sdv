@@ -1,0 +1,144 @@
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# KCC manages this dedicated pool; the GKE cluster remains Terraform-managed.
+
+{{- $project := .Values.gcpProjectId | required "gcpProjectId is required (injected from config.projectID by the parent Application)" }}
+{{- $location := .Values.location | required "location is required (injected from config.region by the parent Application)" }}
+{{- /*
+The nodes run as the LICENSED ABFS runtime service account, not Horizon's generic
+compute SA. Under GCE_METADATA the pods inherit the node's identity, and the
+licence allow-lists exactly that account — so this is the identity ABFS presents
+when its entitlement check runs. Composed from the project unless overridden.
+*/}}
+{{- $sa := .Values.nodeServiceAccountEmail | default (printf "%s@%s.iam.gserviceaccount.com" (.Values.runtimeServiceAccountName | required "runtimeServiceAccountName is required") $project) }}
+{{- /* Empty releaseChannel means autoUpgrade=true — see the note in values.yaml. */}}
+{{- $autoUpgrade := ne (.Values.releaseChannel | default "") "UNSPECIFIED" }}
+{{- /*
+Licence metadata is set at pool creation. KCC treats
+nodeConfig.metadata as immutable after create, and
+`gcloud container node-pools update` has no --metadata flag. Secret
+abfs-license (abfs-data) is source of truth; Helm lookup injects its
+data.license bytes (already base64) into this CR when non-empty — never
+committed in git. If the Secret changes after the pool exists, the
+PreSync Job deletes this CR so Argo can recreate it with the new value.
+*/}}
+{{- $licNs := .Values.license.secretNamespace | default "horizon" }}
+{{- $licName := .Values.license.secretName | default "abfs-license" }}
+{{- $licKey := .Values.license.metadataKey | default "abfs-license" }}
+{{- $licB64 := "" }}
+{{- $sec := lookup "v1" "Secret" $licNs $licName }}
+{{- if and $sec $sec.data (index $sec.data "license") }}
+{{- $cand := index $sec.data "license" }}
+{{- if $cand }}{{ $licB64 = $cand }}{{ end }}
+{{- end }}
+apiVersion: container.cnrm.cloud.google.com/v1beta1
+kind: ContainerNodePool
+metadata:
+  name: {{ .Values.serverNodePool.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.serverNodePool.name }}
+    app.kubernetes.io/component: node-pool
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+  annotations:
+    # Cluster-mode Config Connector reads the target project from this annotation.
+    cnrm.cloud.google.com/project-id: {{ $project | quote }}
+    # Foreground propagation makes Argo wait for the KCC finalizer, i.e. for GKE
+    # to finish deleting the pool, instead of reporting the prune complete while
+    # the deletion is still running or failing unnoticed. AC4 asks that resources
+    # are removed, not merely that removal was requested.
+    argocd.argoproj.io/sync-options: PrunePropagationPolicy=foreground
+spec:
+  # Explicit resourceID so the GCP-side name is stable and independent of the
+  # Kubernetes object name.
+  resourceID: {{ .Values.serverNodePool.name }}
+  location: {{ $location | quote }}
+  clusterRef:
+    # The GKE cluster is created by Terraform (terraform/modules/sdv-gke-cluster);
+    # this module only attaches a pool to it.
+    external: projects/{{ $project }}/locations/{{ $location }}/clusters/{{ .Values.clusterName }}
+  {{- /* A version pin is only meaningful with autoUpgrade false, i.e. an UNSPECIFIED
+       channel. With autoUpgrade true GKE may upgrade past this value, so emitting it
+       would state a pin the cluster does not hold — omit it instead. Same handling as
+      the ABFS client pool, so both pools behave alike. */}}
+  {{- if and (not $autoUpgrade) .Values.serverNodePool.version }}
+  version: {{ .Values.serverNodePool.version | quote }}
+  {{- end }}
+  initialNodeCount: {{ .Values.serverNodePool.initialNodeCount }}
+  {{- with .Values.nodeLocations }}
+  nodeLocations:
+{{ toYaml . | nindent 4 }}
+  {{- end }}
+  autoscaling:
+    minNodeCount: {{ .Values.serverNodePool.minNodeCount }}
+    maxNodeCount: {{ .Values.serverNodePool.maxNodeCount }}
+  management:
+    autoRepair: true
+    # A release-channel cluster requires autoUpgrade=true; GKE rejects false at
+    # apply time. Version pinning is supported only without a release channel.
+    autoUpgrade: {{ $autoUpgrade }}
+  nodeConfig:
+    preemptible: false
+    machineType: {{ .Values.serverNodePool.machineType | quote }}
+    diskSizeGb: {{ .Values.serverNodePool.diskSizeGb }}
+    imageType: {{ .Values.serverNodePool.imageType | quote }}
+    serviceAccountRef:
+      # The licensed ABFS runtime SA — see the note at the top of this file.
+      # Under GCE_METADATA this is also the identity every pod on the pool gets,
+      # so it must be the account the licence allow-lists.
+      external: {{ $sa | quote }}
+    oauthScopes:
+      - https://www.googleapis.com/auth/cloud-platform
+    labels:
+      workloadLabel: {{ .Values.serverNodePool.workloadLabel | quote }}
+    taint:
+      # Keeps every non-ABFS workload off the pool. The matching toleration and
+      # nodeSelector are in ../../abfs/values.yaml.
+      - key: workloadType
+        value: {{ .Values.serverNodePool.workloadType | quote }}
+        effect: NO_SCHEDULE
+    metadata:
+      disable-legacy-endpoints: "true"
+      {{- if $licB64 }}
+      {{ $licKey }}: {{ $licB64 | quote }}
+      {{- end }}
+      # abfs-license (when present) comes from Secret lookup above — not from git
+      # Do not hard-code a licence value here.
+      # If Argo Helm lookup cannot see the Secret, PostSync Job injects the key
+      # onto the CR at recreate time (see license-metadata-inject-job.yaml).
+    workloadMetadataConfig:
+      # GCE_METADATA, i.e. Workload Identity DISABLED on this pool. Deliberate,
+      # and the reason the pool has to be dedicated at all:
+      #
+      #  * ABFS reads its licence from the custom GCE metadata key
+      #    instance/attributes/abfs-license. GKE's Workload Identity emulates the
+      #    metadata server and exposes only generic credential endpoints, so it
+      #    does not forward custom VM metadata to pods at all.
+      #  * The entitlement check parses the VM identity token for a
+      #    google.compute_engine claim to recover the project number. Workload
+      #    Identity issues Kubernetes service account tokens, which carry no such
+      #    claim, and the check fails.
+      #
+      # GKE_METADATA does not expose the custom metadata and identity ABFS needs.
+      mode: GCE_METADATA
+    # Secure Boot remains off on this pool; integrity monitoring stays on
+    # (usual GKE default). CASFS is installed only on the uploader pool.
+    # Immutable after pool create — same as abfs-client-module-ubuntu.
+    # Sibling of workloadMetadataConfig (not nested under it). Wrong nesting
+    # caused KCC/GKE to reshape the spec and Argo to stay OutOfSync forever.
+    shieldedInstanceConfig:
+      enableSecureBoot: false
+      enableIntegrityMonitoring: true

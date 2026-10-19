@@ -1,0 +1,63 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Role/RoleBinding for the UniqueID Jobs (undelete PreSync + persist PostSync).
+#
+# Those Jobs run in the workflows namespace as workflow-executor-elevated (Workload
+# Identity + roles/iam.serviceAccountAdmin for gcloud SA undelete), but they also
+# need Kubernetes access in the horizon namespace: ConfigMaps (read/write identity)
+# and IAMServiceAccount CRs (read).
+#
+# Applied as an Argo PreSync hook at wave -5 so this RBAC exists before the
+# undelete Job (wave -2). hook-delete-policy is BeforeHookCreation only — not
+# HookSucceeded — so the Role stays for the PostSync persist Job (wave 1).
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: abfs-data-sa-jobs
+  namespace: {{ .Values.horizonNamespace }}
+  labels:
+    horizon-sdv.io/module: abfs-data
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-5"
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["iam.cnrm.cloud.google.com"]
+    resources: ["iamserviceaccounts"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: abfs-data-sa-jobs
+  namespace: {{ .Values.horizonNamespace }}
+  labels:
+    horizon-sdv.io/module: abfs-data
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-5"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: abfs-data-sa-jobs
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.jobServiceAccountName }}
+    namespace: {{ .Values.workflowsNamespace }}

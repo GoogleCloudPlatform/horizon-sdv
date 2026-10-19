@@ -1,0 +1,184 @@
+# Copyright 2026 Google LLC
+#
+# Modificaitons Copyright (c) 2026 Accenture, All Rigths Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.overviewServiceName }}-html
+  namespace: {{ .Values.overviewNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    app.kubernetes.io/component: module-overview-http
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+data:
+  index.html: |-
+{{ .Files.Get "portal/overview.html" | nindent 4 }}
+  overview-server.py: |-
+{{ .Files.Get "files/overview-server.py" | nindent 4 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.overviewServiceName }}
+  namespace: {{ .Values.overviewNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.overviewServiceName }}-status-reader
+  namespace: {{ .Values.abfsNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["abfs-license-metadata-status"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["abfs-server", "abfs-ui"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    resourceNames: ["abfs-gerrit-uploader"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets"]
+    resourceNames: ["abfs-casfs-installer"]
+    verbs: ["get"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    resourceNames: ["abfs-pusher-config"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.overviewServiceName }}-status-reader
+  namespace: {{ .Values.abfsNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Values.overviewServiceName }}-status-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.overviewServiceName }}
+    namespace: {{ .Values.overviewNamespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.overviewServiceName }}
+  namespace: {{ .Values.overviewNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: module-overview
+      horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: module-overview
+        horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+    spec:
+      serviceAccountName: {{ .Values.overviewServiceName }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: overview
+          image: {{ .Values.overview.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "/content/overview-server.py"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: ABFS_NAMESPACE
+              value: {{ .Values.abfsNamespace | quote }}
+            - name: DATA_OVERVIEW_URL
+              value: {{ printf "http://%s.%s.svc/license-status" .Values.dataOverview.serviceName .Values.dataOverview.namespace | quote }}
+            - name: UI_ENABLED
+              value: {{ .Values.ui.enabled | quote }}
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - name: content
+              mountPath: /content
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: content
+          configMap:
+            name: {{ .Values.overviewServiceName }}-html
+            defaultMode: 0555
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.overviewServiceName }}
+  namespace: {{ .Values.overviewNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

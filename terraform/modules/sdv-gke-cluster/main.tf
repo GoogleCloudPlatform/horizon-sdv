@@ -134,6 +134,13 @@ resource "google_container_cluster" "sdv_cluster" {
     }
   }
 
+  # Required by modules that render VerticalPodAutoscaler resources, including
+  # the licensed ABFS data plane of gitops/modules/abfs-service-module.
+  # Update mode remains chart-controlled.
+  vertical_pod_autoscaling {
+    enabled = true
+  }
+
   # Enable network policy enforcement for pod-to-pod traffic restriction
   # Required for GCP 327 compliance: Kubernetes pod-to-pod traffic must be restricted
   # Fix for vulnerability #6 - Using Calico provider (legacy datapath)
@@ -262,7 +269,6 @@ resource "null_resource" "enable_gke_master_subnet_flow_logs" {
     google_container_cluster.sdv_cluster,
     google_container_node_pool.sdv_main_node_pool,
     google_container_node_pool.sdv_build_node_pool,
-    google_container_node_pool.sdv_abfs_build_node_pool,
     google_container_node_pool.sdv_openbsw_build_node_pool,
     google_container_node_pool.sdv_utility_node_pool,
   ]
@@ -352,7 +358,6 @@ resource "null_resource" "enable_gke_master_subnet_private_google_access" {
     google_container_cluster.sdv_cluster,
     google_container_node_pool.sdv_main_node_pool,
     google_container_node_pool.sdv_build_node_pool,
-    google_container_node_pool.sdv_abfs_build_node_pool,
     google_container_node_pool.sdv_openbsw_build_node_pool,
     google_container_node_pool.sdv_utility_node_pool,
     null_resource.enable_gke_master_subnet_flow_logs,
@@ -434,66 +439,8 @@ resource "google_container_node_pool" "sdv_build_node_pool" {
 
 }
 
-resource "google_container_node_pool" "sdv_abfs_build_node_pool" {
-  name           = var.abfs_build_node_pool_name
-  location       = var.location
-  cluster        = google_container_cluster.sdv_cluster.name
-  version        = var.abfs_build_node_pool_version
-  node_count     = var.abfs_build_node_pool_node_count
-  node_locations = var.node_locations
-  node_config {
-    preemptible  = false
-    machine_type = var.abfs_build_node_pool_machine_type
-    disk_size_gb = 500
-    image_type   = "UBUNTU_CONTAINERD"
-
-    # Google recommends custom service accounts that have cloud-platform
-    # scope and permissions granted via IAM Roles.
-    service_account = var.service_account
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform"
-    ]
-
-    labels = {
-      workloadLabel = "android-abfs"
-    }
-
-    taint {
-      key    = "workloadType"
-      value  = "android-abfs"
-      effect = "NO_SCHEDULE"
-    }
-
-    metadata = {
-      disable-legacy-endpoints = "true"
-    }
-
-    workload_metadata_config {
-      mode = "GKE_METADATA"
-    }
-  }
-
-  autoscaling {
-    min_node_count = var.abfs_build_node_pool_min_node_count
-    max_node_count = var.abfs_build_node_pool_max_node_count
-  }
-
-  # ABFS pool management policy is coupled to the cluster release channel:
-  #
-  # - release_channel = "UNSPECIFIED": auto_upgrade = false. Pins this pool to
-  #   var.abfs_build_node_pool_version for CASFS kernel-module compatibility.
-  #   Use cluster maintenance windows / exclusions (NO_UPGRADES scope) to defer
-  #   any other cluster maintenance.
-  # - release_channel = RAPID / REGULAR / STABLE / EXTENDED: auto_upgrade = true is REQUIRED
-  #   by the GKE API on every node pool of a channel-enrolled cluster
-  #   (auto_upgrade = false is rejected at apply time). The CASFS version pin is
-  #   therefore not enforced; rely on NO_MINOR_OR_NODE_UPGRADES exclusions to
-  #   defer minor/node upgrades during CASFS-sensitive periods.
-  management {
-    auto_repair  = true
-    auto_upgrade = var.release_channel != "UNSPECIFIED"
-  }
-}
+# ABFS Ubuntu build node pool is created by abfs-client-module-ubuntu via KCC
+# (ContainerNodePool abfs-build-node-pool-ubuntu) when that module is enabled.
 
 resource "google_container_node_pool" "sdv_openbsw_build_node_pool" {
   name           = var.openbsw_build_node_pool_name

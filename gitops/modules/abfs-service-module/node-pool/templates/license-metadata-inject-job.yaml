@@ -1,0 +1,441 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Keep GCE metadata key abfs-license aligned with Secret abfs-license
+# on BOTH the server and uploader node pools (git-pusher uses the same
+# entitlement check as abfs-server).
+#
+# Constraints:
+#   * KCC: nodeConfig.metadata is immutable after create
+#   * gcloud: container node-pools update has no --metadata flag
+#   * Argo Helm lookup often cannot see Secret abfs-license → CR created
+#     without abfs-license even when the Secret is set
+#
+# Strategy:
+#   PreSync  — only clear UpdateFailed CRs or orphan GKE pools. Do NOT delete a
+#              Ready CR just because abfs-license is missing: Argo often does not
+#              recreate that CR in the same sync, so PostSync then sees
+#              "ContainerNodePool missing; cannot inject licence".
+#   Sync     — Helm creates/updates CRs (lookup best-effort for the licence key).
+#   PostSync — wait until each CR exists, then if metadata != Secret, dump the
+#              CR, stamp abfs-license, delete+apply (create-time metadata).
+#
+# Encoding: metadata value = Secret data.license (base64 payload).
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: abfs-license-metadata-presync
+  namespace: {{ .Values.license.workflowsNamespace }}
+  labels:
+    horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+    app.kubernetes.io/name: abfs-license-metadata-inject
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: abfs-license-metadata-inject
+        horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+    spec:
+      serviceAccountName: {{ .Values.license.jobServiceAccountName | quote }}
+      restartPolicy: Never
+      containers:
+        - name: reconcile
+          image: {{ .Values.license.cloudSdkImage | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PROJECT_ID
+              value: {{ .Values.gcpProjectId | quote }}
+            - name: CLUSTER_NAME
+              value: {{ .Values.clusterName | quote }}
+            - name: LOCATION
+              value: {{ .Values.location | quote }}
+            - name: ABFS_NS
+              value: {{ .Values.namespace | quote }}
+            - name: NODE_POOL_NAMES
+              value: {{ printf "%s %s" .Values.serverNodePool.name .Values.uploaderNodePool.name | quote }}
+            - name: HORIZON_NS
+              value: {{ .Values.license.secretNamespace | quote }}
+            - name: LICENSE_SECRET_NAME
+              value: {{ .Values.license.secretName | quote }}
+            - name: METADATA_KEY
+              value: {{ .Values.license.metadataKey | quote }}
+          command: [bash, -euo, pipefail, -c]
+          args:
+            - |
+              set -euo pipefail
+              if ! command -v kubectl >/dev/null 2>&1; then
+                echo "Installing kubectl (gcloud components)..."
+                gcloud components install kubectl --quiet
+              fi
+
+              delete_cr_and_gcp_pool() {
+                echo "Deleting ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME} (if present)..."
+                kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
+                  --ignore-not-found=true --wait=true --timeout=45m || true
+                if gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                    --cluster="${CLUSTER_NAME}" \
+                    --location="${LOCATION}" \
+                    --project="${PROJECT_ID}" >/dev/null 2>&1; then
+                  echo "Deleting orphan GKE node pool ${NODE_POOL_NAME}..."
+                  if ! gcloud container node-pools delete "${NODE_POOL_NAME}" \
+                    --cluster="${CLUSTER_NAME}" \
+                    --location="${LOCATION}" \
+                    --project="${PROJECT_ID}" \
+                    --quiet; then
+                    echo "ERROR: failed to delete GKE node pool ${NODE_POOL_NAME}" >&2
+                    return 1
+                  fi
+                  for i in $(seq 1 60); do
+                    if ! gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                        --cluster="${CLUSTER_NAME}" \
+                        --location="${LOCATION}" \
+                        --project="${PROJECT_ID}" >/dev/null 2>&1; then
+                      echo "GKE node pool gone."
+                      return 0
+                    fi
+                    echo "  waiting for GKE pool delete (${i})..."
+                    sleep 10
+                  done
+                  echo "ERROR: GKE node pool ${NODE_POOL_NAME} still exists after deletion wait" >&2
+                  return 1
+                fi
+                return 0
+              }
+
+              desired=""
+              if kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" >/dev/null 2>&1; then
+                desired="$(kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" \
+                  -o jsonpath='{.data.license}' 2>/dev/null || true)"
+              fi
+
+              for NODE_POOL_NAME in ${NODE_POOL_NAMES}; do
+                echo "PreSync licence check: ${NODE_POOL_NAME}"
+                if ! kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" >/dev/null 2>&1; then
+                  if gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                      --cluster="${CLUSTER_NAME}" \
+                      --location="${LOCATION}" \
+                      --project="${PROJECT_ID}" >/dev/null 2>&1; then
+                    echo "CR absent but GKE pool exists — clearing orphan before sync create."
+                    delete_cr_and_gcp_pool
+                  else
+                    echo "ContainerNodePool ${NODE_POOL_NAME} absent — sync will create it."
+                  fi
+                  continue
+                fi
+
+                live="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
+                  -o json 2>/dev/null \
+                  | python3 -c "import json,sys; m=(((json.load(sys.stdin).get('spec') or {}).get('nodeConfig') or {}).get('metadata') or {}); print(m.get('${METADATA_KEY}',''))" \
+                  2>/dev/null || true)"
+
+                ready="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
+                  -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].reason}' 2>/dev/null || true)"
+
+                if [[ "${ready}" == "UpdateFailed" ]]; then
+                  echo "CR ${NODE_POOL_NAME} is UpdateFailed — deleting so Sync can recreate."
+                  delete_cr_and_gcp_pool
+                  continue
+                fi
+
+                if [[ "${desired}" == "${live}" ]]; then
+                  echo "Licence metadata matches Secret on ${NODE_POOL_NAME} (length=${#desired}) — no PreSync delete."
+                  continue
+                fi
+
+                echo "Licence mismatch on ${NODE_POOL_NAME} (desired_len=${#desired} live_len=${#live}). Leaving CR in place; PostSync will stamp ${METADATA_KEY}."
+              done
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: abfs-license-metadata-postsync
+  namespace: {{ .Values.license.workflowsNamespace }}
+  labels:
+    horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+    app.kubernetes.io/name: abfs-license-metadata-inject
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: abfs-license-metadata-inject
+        horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+    spec:
+      serviceAccountName: {{ .Values.license.jobServiceAccountName | quote }}
+      restartPolicy: Never
+      containers:
+        - name: verify
+          image: {{ .Values.license.cloudSdkImage | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PROJECT_ID
+              value: {{ .Values.gcpProjectId | quote }}
+            - name: CLUSTER_NAME
+              value: {{ .Values.clusterName | quote }}
+            - name: LOCATION
+              value: {{ .Values.location | quote }}
+            - name: NODE_POOL_NAMES
+              value: {{ printf "%s %s" .Values.serverNodePool.name .Values.uploaderNodePool.name | quote }}
+            - name: HORIZON_NS
+              value: {{ .Values.license.secretNamespace | quote }}
+            - name: LICENSE_SECRET_NAME
+              value: {{ .Values.license.secretName | quote }}
+            - name: METADATA_KEY
+              value: {{ .Values.license.metadataKey | quote }}
+            - name: STATUS_NS
+              value: {{ .Values.namespace | quote }}
+            - name: STATUS_CM
+              value: {{ .Values.license.statusConfigMapName | quote }}
+            - name: ABFS_NS
+              value: {{ .Values.namespace | quote }}
+            - name: PARENT_MODULE
+              value: {{ .Values.parentModuleName | quote }}
+          command: [bash, -euo, pipefail, -c]
+          args:
+            - |
+              set -euo pipefail
+              if ! command -v kubectl >/dev/null 2>&1; then
+                echo "Installing kubectl (gcloud components)..."
+                gcloud components install kubectl --quiet
+              fi
+
+              write_status() {
+                local status="$1"
+                local detail="${2:-}"
+                kubectl create configmap "${STATUS_CM}" -n "${STATUS_NS}" \
+                  --from-literal=status="${status}" \
+                  --from-literal=detail="${detail}" \
+                  --from-literal=updatedAt="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                  --from-literal=nodePool="${NODE_POOL_NAMES}" \
+                  --from-literal=metadataKey="${METADATA_KEY}" \
+                  --dry-run=client -o json \
+                | PARENT_MODULE="${PARENT_MODULE}" python3 -c '
+              import json, os, sys
+              doc = json.load(sys.stdin)
+              labels = doc.setdefault("metadata", {}).setdefault("labels", {})
+              labels["horizon-sdv.io/module"] = os.environ.get("PARENT_MODULE", "")
+              labels["app.kubernetes.io/name"] = "abfs-license-metadata-status"
+              json.dump(doc, sys.stdout)
+              ' | kubectl apply -f -
+              }
+
+              wait_pool_running() {
+                echo "Waiting for GKE node pool ${NODE_POOL_NAME}..."
+                for i in $(seq 1 90); do
+                  status="$(gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                    --cluster="${CLUSTER_NAME}" \
+                    --location="${LOCATION}" \
+                    --project="${PROJECT_ID}" \
+                    --format='value(status)' 2>/dev/null || true)"
+                  if [[ "${status}" == "RUNNING" ]]; then
+                    return 0
+                  fi
+                  echo "  attempt ${i}: status=${status:-missing}"
+                  sleep 10
+                done
+                return 1
+              }
+
+              cr_metadata() {
+                if ! kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" >/dev/null 2>&1; then
+                  echo ""
+                  return 0
+                fi
+                kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" -o json 2>/dev/null \
+                  | python3 -c "import json,sys; m=(((json.load(sys.stdin).get('spec') or {}).get('nodeConfig') or {}).get('metadata') or {}); print(m.get('${METADATA_KEY}',''))" \
+                  2>/dev/null || true
+              }
+
+              delete_cr_and_gcp_pool() {
+                kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
+                  --ignore-not-found=true --wait=true --timeout=45m || true
+                if gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                    --cluster="${CLUSTER_NAME}" \
+                    --location="${LOCATION}" \
+                    --project="${PROJECT_ID}" >/dev/null 2>&1; then
+                  gcloud container node-pools delete "${NODE_POOL_NAME}" \
+                    --cluster="${CLUSTER_NAME}" \
+                    --location="${LOCATION}" \
+                    --project="${PROJECT_ID}" \
+                    --quiet || true
+                  for i in $(seq 1 60); do
+                    if ! gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                        --cluster="${CLUSTER_NAME}" \
+                        --location="${LOCATION}" \
+                        --project="${PROJECT_ID}" >/dev/null 2>&1; then
+                      return 0
+                    fi
+                    sleep 10
+                  done
+                fi
+              }
+
+              wait_for_cr() {
+                echo "Waiting for ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME}..."
+                for i in $(seq 1 90); do
+                  local out
+                  out="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" 2>&1)" || true
+                  if echo "${out}" | grep -qi 'forbidden'; then
+                    echo "ERROR: RBAC cannot get ${NODE_POOL_NAME}: ${out}" >&2
+                    return 1
+                  fi
+                  if grep -q 'NotFound' <<<"${out}"; then
+                    echo "  attempt ${i}: not found"
+                  else
+                    local ds
+                    ds="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
+                      -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null || true)"
+                    if [[ -z "${ds}" ]]; then
+                      echo "ContainerNodePool ${NODE_POOL_NAME} is present."
+                      return 0
+                    fi
+                    echo "  attempt ${i}: Terminating..."
+                  fi
+                  sleep 10
+                done
+                echo "ERROR: ContainerNodePool ${NODE_POOL_NAME} missing in ${ABFS_NS} after wait" >&2
+                kubectl get containernodepool -n "${ABFS_NS}" -o wide >&2 || true
+                return 1
+              }
+
+              # Recreate CR with Secret licence stamped into nodeConfig.metadata
+              # (create-time). Used when Helm lookup left the key off the CR.
+              recreate_cr_with_license() {
+                local desired_b64="$1"
+                if ! wait_for_cr; then
+                  echo "ERROR: ContainerNodePool missing; cannot inject licence" >&2
+                  return 1
+                fi
+                local out="/tmp/cnp-${NODE_POOL_NAME}-with-license.json"
+                kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" -o json \
+                  | DESIRED_B64="${desired_b64}" METADATA_KEY="${METADATA_KEY}" python3 -c '
+              import json, os, sys
+              doc = json.load(sys.stdin)
+              meta = doc.setdefault("spec", {}).setdefault("nodeConfig", {}).setdefault("metadata", {})
+              key = os.environ["METADATA_KEY"]
+              desired = os.environ.get("DESIRED_B64", "")
+              meta["disable-legacy-endpoints"] = meta.get("disable-legacy-endpoints") or "true"
+              if desired:
+                  meta[key] = desired
+              else:
+                  meta.pop(key, None)
+              md = doc.setdefault("metadata", {})
+              annotations = md.get("annotations") or {}
+              annotations.pop("cnrm.cloud.google.com/state-into-spec", None)
+              annotations.pop("cnrm.cloud.google.com/import-annotation", None)
+              if annotations:
+                  md["annotations"] = annotations
+              else:
+                  md.pop("annotations", None)
+              for k in ("uid", "resourceVersion", "generation", "creationTimestamp",
+                        "managedFields", "deletionTimestamp", "finalizers"):
+                  md.pop(k, None)
+              doc.pop("status", None)
+              json.dump(doc, sys.stdout)
+              ' > "${out}"
+
+                echo "Recreating ContainerNodePool with ${METADATA_KEY} from Secret..."
+                delete_cr_and_gcp_pool
+                kubectl apply -f "${out}"
+              }
+
+              desired=""
+              if kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" >/dev/null 2>&1; then
+                desired="$(kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" \
+                  -o jsonpath='{.data.license}' 2>/dev/null || true)"
+              fi
+
+              for NODE_POOL_NAME in ${NODE_POOL_NAMES}; do
+                echo "PostSync licence inject: ${NODE_POOL_NAME}"
+                if ! wait_for_cr; then
+                  write_status "error" "${NODE_POOL_NAME} CR missing after sync — sync the node-pool app so Helm creates the CR, then re-run PostSync"
+                  exit 1
+                fi
+
+                live_cr="$(cr_metadata)"
+                ready_reason="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
+                  -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || true)"
+                ready_message="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
+                  -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || true)"
+
+                if [[ "${ready_reason}" == "UpdateFailed" && "${ready_message}" == *"already exists"* ]]; then
+                  echo "${NODE_POOL_NAME} CR points at an existing GKE pool — recreating to clear the stale KCC state."
+                  recreate_cr_with_license "${desired}"
+                  live_cr="$(cr_metadata)"
+                fi
+
+                if [[ -z "${desired}" ]]; then
+                  if [[ -n "${live_cr}" ]]; then
+                    echo "Secret empty but ${NODE_POOL_NAME} still has ${METADATA_KEY} — recreating without it."
+                    recreate_cr_with_license ""
+                    if ! wait_pool_running; then
+                      write_status "error" "${NODE_POOL_NAME} not RUNNING after clear recreate"
+                      exit 1
+                    fi
+                  fi
+                  echo "Done ${NODE_POOL_NAME} (no licence)."
+                  continue
+                fi
+
+                if [[ "${desired}" != "${live_cr}" ]]; then
+                  echo "CR metadata missing/mismatch on ${NODE_POOL_NAME} after sync — injecting from Secret."
+                  recreate_cr_with_license "${desired}"
+                  live_cr="$(cr_metadata)"
+                  if [[ "${desired}" != "${live_cr}" ]]; then
+                    echo "ERROR: ${NODE_POOL_NAME} still missing ${METADATA_KEY} after inject recreate" >&2
+                    write_status "error" "${NODE_POOL_NAME} CR metadata mismatch after inject"
+                    exit 1
+                  fi
+                fi
+
+                if ! wait_pool_running; then
+                  echo "ERROR: node pool ${NODE_POOL_NAME} not RUNNING" >&2
+                  write_status "error" "${NODE_POOL_NAME} not RUNNING"
+                  exit 1
+                fi
+
+                live_gke="$(gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                  --cluster="${CLUSTER_NAME}" \
+                  --location="${LOCATION}" \
+                  --project="${PROJECT_ID}" \
+                  --format=json 2>/dev/null \
+                  | python3 -c "import json,sys; m=(json.load(sys.stdin).get('config') or {}).get('metadata') or {}; print(m.get('${METADATA_KEY}',''))" \
+                  2>/dev/null || true)"
+
+                if [[ -n "${live_gke}" && "${desired}" != "${live_gke}" ]]; then
+                  echo "WARNING: GKE describe metadata on ${NODE_POOL_NAME} differs from Secret (propagation lag?). CR matches." >&2
+                fi
+
+                echo "Licence metadata applied on pool ${NODE_POOL_NAME}."
+              done
+
+              if [[ -z "${desired}" ]]; then
+                write_status "cleared" "secret empty"
+              else
+                write_status "applied" "base64Length=${#desired}"
+              fi
+              echo "Verify from a pod on either ABFS pool:"
+              echo "  curl -s -H 'Metadata-Flavor: Google' \\"
+              echo "    http://metadata.google.internal/computeMetadata/v1/instance/attributes/${METADATA_KEY} | wc -c"

@@ -1,0 +1,71 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Description:
+# Default values for the ABFS docker image workflow Helm chart.
+# Usage:
+# 1) Apply: helm template abfs-builder-runtime-image workloads/android/pipelines/environment/abfs/docker_image_template/helm | kubectl apply -f -
+# 2) Run: argo submit --from workflowtemplate/abfs-builder-runtime-image -n workflows
+# Namespace: if `namespace` is non-empty, use it; else `namespacePrefix` + "workflows".
+
+namespacePrefix: ""
+namespace: ""
+git:
+  authMethod: ""
+workflowTemplateName: abfs-builder-runtime-image
+abfsBuilderRuntimeImageConcurrencyMutexName: abfs-builder-runtime-image
+clusterWorkflowTemplateName: common-docker-image-build
+podGcStrategy: OnWorkflowCompletion
+workflowTtlSecondsAfterCompletion:
+# When set, aligns with gitops/templates/argo-workflows-init.yaml horizon-workflow-cloud-env.
+# GitOps workloads-android sets this; use "" for local clusters without that ConfigMap.
+cloudEnvConfigMapName: "horizon-workflow-cloud-env"
+
+spec:
+  # Left empty on purpose — do not hard-code cluster identity here.
+  # Platform: workloads-android Application injects from MODULE_CONFIG
+  # (config.projectID / region / zone ← Terraform gcp_project_id / gcp_cloud_region / gcp_cloud_zone).
+  # Manual helm: pass --set spec.cloudProject=... --set spec.cloudRegion=... --set spec.cloudZone=...
+  cloudProject: ""
+  cloudRegion: ""
+  cloudZone: ""
+  # Same registry path as Jenkins ABFS Docker Image Template (CasC ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME).
+  dockerArtifactPathName: horizon-sdv/aaos-abfs-builder
+  # Same meaning as Jenkins NO_PUSH. Default true: build only, do not push.
+  noPush: "true"
+  # Avoid clobbering Jenkins :latest by default; pass imageTag=latest explicitly when desired.
+  imageTag: "argowf-latest"
+  # ubuntu | cos — Argo defaults: argowf-latest vs argowf-cos-latest (Jenkins: latest vs cos-latest).
+  # Docker FROM is still linuxDistribution (Ubuntu/Debian userspace for both pools).
+  templateFlavor: ubuntu
+  # Shared Android Dockerfile with ABFS=true build-arg (same as Jenkins ABFS image job).
+  dockerfileDir: workloads/android/pipelines/environment/docker_image_template
+  linuxDistribution: ubuntu:22.04
+  abfsRepository: abfs-apt-alpha-public
+  googleDistributionRegistry: "http://packages.cloud.google.com/apt apt-transport-artifact-registry-stable main"
+  # Empty → chart composes ar+https://us-apt.pkg.dev/projects/abfs-binaries <abfsRepository> main
+  abfsDistributionRegistry: ""
+  nodejsVersion: "25.2.1"
+  gcloudCliVersion: "545.0.0-0"
+  kubectlVersion: "1:545.0.0-0"
+  packerVersion: "1.15.0"
+  enableGeminiAiAssistant: "true"
+  geminiCliVersion: "latest"
+  googleAdkVersion: "2.6.3"
+  # Non-local: GitOps overrides from config.workloads.android.url / .branch.
+  pipelineRepoUrl: ""
+  pipelineRepoRevision: ""
+  pipelineRepoSecret: ""
+  useElevatedWorkflowIam: true
+  serviceAccountName: workflow-executor

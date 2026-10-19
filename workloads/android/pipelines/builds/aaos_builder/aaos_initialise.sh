@@ -702,8 +702,30 @@ EOL
     sudo chmod +x /usr/bin/systemctl
 }
 
+# Wait for the casfs module to load
+function abfs_wait_for_casfs() {
+    local timeout="${ABFS_CASFS_READY_TIMEOUT:-600}"
+    local waited=0
+    if [ -d /sys/module/casfs ]; then
+        echo "casfs already loaded on kernel $(uname -r)"
+        return 0
+    fi
+    echo "Waiting up to ${timeout}s for the node /sys/module/casfs to become present"
+    while [ "${waited}" -lt "${timeout}" ]; do
+        if [ -d /sys/module/casfs ]; then
+            echo "Module casfs loaded after ${waited}s"
+            return 0
+        fi
+        sleep 5
+        waited=$((waited + 5))
+    done
+    echo "Module casfs was not loaded after ${timeout}s"
+    return 1
+}
+
 # ABFS: install aptitude binaries for abfs
 function abfs_install() {
+    KVER=$(uname -r)
     echo "abfs_install."
     sudo apt update -y
     declare -r abfs_artifacts="${ORIG_WORKSPACE}"/abfs_repository_list.txt
@@ -711,21 +733,20 @@ function abfs_install() {
 
     {
         echo "Build Parameters:"
-        echo "Kernel Version: $(uname -r)"
+        echo "Kernel Version: ${KVER}"
         echo "ABFS_VERSION: ${ABFS_VERSION}"
         echo "ABFS_CASFS_VERSION: ${ABFS_CASFS_VERSION}"
     } >> "${abfs_artifacts}"
 
     ABFS_CLIENT_FILE="abfs-client_${ABFS_VERSION}"
-    ABFS_CASFS_FILE="casfs-kmod-$(uname -r)_${ABFS_CASFS_VERSION}"
-
     ABFS_FILES=(
         "${ABFS_CLIENT_FILE}"
-        "${ABFS_CASFS_FILE}"
       )
 
     gcloud artifacts files list --project=abfs-binaries --location=us --repository="${ABFS_REPOSITORY}" >> "${abfs_artifacts}" 2>&1
-    grep -e "pool/${ABFS_CLIENT_FILE}" -e "pool/${ABFS_CASFS_FILE}" "${abfs_artifacts}" | awk '{print $1}' | while read -r a; do gcloud artifacts files download --project=abfs-binaries --location=us --repository="${ABFS_REPOSITORY}" --destination=. "${a}"; done
+
+    # casfs is installed on the node by the casfs installer DaemonSet.
+    grep -F "pool/${ABFS_CLIENT_FILE}" "${abfs_artifacts}" | awk '{print $1}' | while read -r a; do gcloud artifacts files download --project=abfs-binaries --location=us --repository="${ABFS_REPOSITORY}" --destination=. "${a}"; done
     for f in "${ABFS_FILES[@]}"; do
         if ! ls ./*"${f}"* 1> /dev/null 2>&1; then
             echo -e "\033[1;31mERROR: $f does not exist. Review ${abfs_artifacts} for supported versions.\033[0m"
@@ -736,37 +757,79 @@ function abfs_install() {
     CMD="find . -maxdepth 1 -type f -name \"pool*\" -exec sudo apt install \"./{}\" \\;"
     echo "Command: ${CMD}"
     eval "${CMD}"
-    sudo depmod -a
-    sudo modprobe casfs
     CMD="find . -maxdepth 1 -type f -name \"pool*\" -exec sudo rm -rf \"./{}\" \\;"
     echo "Command: ${CMD}"
     eval "${CMD}"
+
+    if ! abfs_wait_for_casfs; then
+        echo -e "\033[1;31mERROR: Module casfs did not load on kernel ${KVER}.\033[0m"
+        exit 1
+    else
+        echo "Module casfs load successfully on kernel ${KVER}."
+    fi
+}
+
+# ABFS: start cacheman in the background and wait for it to serve its socket.
+function abfs_cacheman_start() {
+    # ninja asks cacheman for cache hits over its unix socket, thousands at a
+    # time. With the default listen backlog (net.core.somaxconn=1024 in the pod)
+    # connects fail with EAGAIN and ninja stops with "failed to check the cache
+    # ... resource temporarily unavailable". Raise it before cacheman listens;
+    # it applies to this pod's network namespace only (the pod is privileged).
+    sudo sysctl -w net.core.somaxconn=8192 || \
+        echo "WARNING: could not raise net.core.somaxconn"
+    # shellcheck disable=SC2086
+    abfs ${ABFS_CMD_FLAGS} ${ABFS_CLIENT_FLAGS} cacheman run &
+    # shellcheck disable=SC2086
+    abfs ${ABFS_CMD_FLAGS} cacheman ping -t 1m
 }
 
 # ABFS: initialise
 function abfs_initialise() {
     echo "abfs_initialise."
+    if [[ "${ABFS_CACHED_BUILD}" == "true" ]]; then
+        mkdir -p "${AAOS_CACHE_DIRECTORY}/cache"
+    fi
     # shellcheck disable=SC2086
-    if ! abfs ${ABFS_CMD_FLAGS} init -c
+    if ! abfs ${ABFS_CMD_FLAGS} init
     then
         echo -e "\033[1;31mERROR: failed on abfs init\033[0m"
         exit 1
     fi
     # shellcheck disable=SC2086
-    abfs ${ABFS_CMD_FLAGS} --remote-servers abfs-server:50051 --tunnel-ports 0 --manifest-server ${UPLOADER_MANIFEST_SERVER} config -w
-    # shellcheck disable=SC2086
-    abfs ${ABFS_CMD_FLAGS} cacheman run -l /home/builder/.abfs/logs/cacheman &
-    sleep 5
+    abfs ${ABFS_CMD_FLAGS} ${ABFS_CLIENT_FLAGS} --remote-servers "${ABFS_SERVER}" --tunnel-ports 0 --manifest-server ${UPLOADER_MANIFEST_SERVER} config -w
+    if ! abfs_cacheman_start; then
+        echo -e "\033[1;31mERROR: cacheman did not become ready\033[0m"
+        # shellcheck disable=SC2086
+        abfs ${ABFS_CMD_FLAGS} cacheman tail -a || true
+        exit 1
+    fi
 
+    cd "${ORIG_WORKSPACE}" || cd "${HOME}" || exit 1
+
+    if mountpoint -q "${WORKSPACE}"; then
+        echo -e "\033[1;31mERROR: ABFS mount target ${WORKSPACE} is already mounted\033[0m"
+        exit 1
+    fi
+    find "${WORKSPACE}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+    
     # shellcheck disable=SC2086
-    if ! abfs ${ABFS_CMD_FLAGS} mount -b "${AAOS_REVISION}" "${WORKSPACE}"
+    if ! abfs ${ABFS_CMD_FLAGS} ${ABFS_CLIENT_FLAGS} mount -b "${AAOS_REVISION}" "${WORKSPACE}"
     then
         echo -e "\033[1;31mERROR: failed on abfs mount\033[0m"
         exit 1
     fi
     cd "${WORKSPACE}" || exit 1
+
+    # Work around the abfs setup CLI bug that creates /out with mode 0644 when
+    # using a live mount. Pre-create the output tree with execute permissions so
+    # Soong and dumpvars can traverse and write under the CASFS-backed mount.
+    mkdir -p "${WORKSPACE}/out" "${WORKSPACE}/out/dist"
+    sudo chown -R builder:builder "${WORKSPACE}/out"
+    chmod 0755 "${WORKSPACE}" "${WORKSPACE}/out" "${WORKSPACE}/out/dist"
+
     # shellcheck disable=SC2086
-    if ! abfs ${ABFS_CMD_FLAGS} setup .
+    if ! abfs ${ABFS_CMD_FLAGS} ${ABFS_CLIENT_FLAGS} setup .
     then
         echo -e "\033[1;31mERROR: failed on abfs setup\033[0m"
         exit 1

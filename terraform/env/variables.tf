@@ -270,7 +270,7 @@ variable "sdv_sub_env_configs" {
   }
 }
 variable "sdv_abfs_build_node_pool_version" {
-  description = "Kubernetes version for the ABFS build node pool (GKE node version string)."
+  description = "Kubernetes version for the ABFS Ubuntu build node pool (MODULE_CONFIG / abfs-client-module-ubuntu KCC)."
   type        = string
 }
 

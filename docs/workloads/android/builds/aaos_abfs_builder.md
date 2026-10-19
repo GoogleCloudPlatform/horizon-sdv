@@ -113,6 +113,12 @@ Optional parameter that allows the user to override the default target make comm
 
 This is a single command line, so use of logical operators to execute subsequent commands is essential.
 
+### `AAOS_PARALLEL_BUILD_JOBS`
+
+Optional parameter that allows the user to override the number of parallel build jobs.
+
+Default: 16. Empty lets the build system decide. If the ABFS cacheman socket gets overloaded during the build, the value may be too high.
+
 ### `AAOS_GERRIT_MANIFEST_URL`
 
 Optional for fetching a patch set from Gerrit.
@@ -152,6 +158,20 @@ Note: this can change, so the `Seed Workloads` job supports this parameter to al
 ### `ABFS_REPOSITORY`
 
 The ABFS aptitude repository to fetch the ABFS client artifacts, e.g. abfs-apt-alpha-public.
+
+### `ABFS_SERVER`
+
+The ABFS server endpoint (`host:port`) passed to `abfs config -w` during initialisation, default `abfs-server.abfs.svc.cluster.local:50051`.
+
+Build pods run in the `jenkins` namespace, so the ABFS server Service in the `abfs` namespace must be addressed by its fully qualified name.
+
+Note: this can change, so the `Seed Workloads` job supports this parameter to allow it to be replaced across all jobs.
+
+### `ABFS_CLIENT_FLAGS`
+
+Flags passed to the ABFS client commands. Default `--disable-tls=true --auth-type none`.
+
+Change this on an ABFS build to test session encryption or authentication.
 
 ### `UPLOADER_MANIFEST_SERVER`
 

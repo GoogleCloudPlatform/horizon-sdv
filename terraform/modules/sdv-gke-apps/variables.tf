@@ -204,3 +204,24 @@ variable "common_nginx_version" {
   description = "nginx version to be used by horizon apps and workloads"
   type        = string
 }
+
+variable "gcp_compute_sa_email" {
+  description = "GCP compute service account email used by GKE node pools (MODULE_CONFIG for module KCC resources)."
+  type        = string
+}
+
+variable "cluster_node_locations" {
+  description = "GKE node locations (zones) injected into MODULE_CONFIG for module-managed node pools."
+  type        = list(string)
+}
+
+variable "cluster_release_channel" {
+  description = "GKE cluster release_channel injected into MODULE_CONFIG (drives node pool autoUpgrade)."
+  type        = string
+  default     = "UNSPECIFIED"
+}
+
+variable "abfs_build_node_pool_version" {
+  description = "CASFS-pinned GKE node version for abfs-client-module-ubuntu ContainerNodePool."
+  type        = string
+}

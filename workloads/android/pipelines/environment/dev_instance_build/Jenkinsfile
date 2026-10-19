@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+// Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,7 +174,7 @@ pipeline {
         tolerations:
         - key: workloadType
           operator: Equal
-          value: android-abfs
+          value: android-abfs-build
           effect: "NoSchedule"
         affinity:
           podAntiAffinity:
@@ -211,7 +211,7 @@ pipeline {
                   accessModes:
                     - ReadWriteOnce
         nodeSelector:
-          workloadLabel: android-abfs
+          workloadLabel: android-abfs-build
     """.stripIndent()
 
   }
