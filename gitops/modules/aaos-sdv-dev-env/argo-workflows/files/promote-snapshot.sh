@@ -127,7 +127,7 @@ fi
 
 # Also update any additional multi-region event clusters present in the project.
 ADDITIONAL_TARGETS="
-europe-west4:sdv-cloud-ws-cluster-euw4:aaos-sdv-dev-env-euw4
+southamerica-east1:sdv-cloud-ws-cluster-sae1:aaos-sdv-dev-env-sae1
 europe-west1:sdv-cloud-ws-cluster-euw1:aaos-sdv-dev-env-euw1
 europe-west2:sdv-cloud-ws-cluster-euw2:aaos-sdv-dev-env-euw2
 us-east4:sdv-cloud-ws-cluster-use4:aaos-sdv-dev-env-use4

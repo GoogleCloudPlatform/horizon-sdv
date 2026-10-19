@@ -99,7 +99,7 @@ ensure_workstation_cluster
 
 # Ensure additional multi-region event subnets, Cloud Routers, Cloud NATs, and CWS clusters.
 ADDITIONAL_INFRA="
-europe-west4:10.4.0.0/24:sdv-cloud-ws-cluster-euw4
+southamerica-east1:10.13.0.0/24:sdv-cloud-ws-cluster-sae1
 europe-west1:10.5.0.0/24:sdv-cloud-ws-cluster-euw1
 europe-west2:10.6.0.0/24:sdv-cloud-ws-cluster-euw2
 us-east4:10.7.0.0/24:sdv-cloud-ws-cluster-use4
