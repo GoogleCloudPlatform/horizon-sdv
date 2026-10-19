@@ -35,7 +35,7 @@ config:
     kubescape_operator:
       version: "1.29.11"
     mtkconnect:
-      version: "v1.13.0"
+      version: "v1.13.1"
     argoEvents:
       version: "2.3.2"
       # NATS StatefulSet size for the default EventBus. Use 1 on small/dev clusters (3 needs quorum
