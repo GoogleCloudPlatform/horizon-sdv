@@ -54,6 +54,7 @@ Horizon SDV is designed to simplify the deployment and management of Android wor
   - Section #4g - Headlamp [link](#section-4g---headlamp)
   - Section #4h - Grafana [link](#section-4h---grafana)
   - Section #4i - MCP Gateway Registry [link](#section-4i---mcp-gateway-registry)
+  - Section #4j - Argo Workflows [link](#section-4j---argo-workflows)
 - Section #5 - Optional - GitHub Setup [link](#section-5---optional---github-setup)
   - Section #5a - GitHub Prerequisites [link](#section-5a---github-prerequisites)
   - Section #5b - Create GitHub Organization [link](#section-5b---create-github-organization)
@@ -869,6 +870,12 @@ MCP Gateway Registry is a centralized platform for managing, monitoring and auth
 Below is a view of the MCP Gateway Registry homepage where you should see the pre-registered gerrit-mcp-server,   
 <img src="images/mcp_gateway_registry_home_page.png" width="750" />
 
+### Section #4j - Argo Workflows
+Argo Workflows is the workflow orchestration tool used to define and execute automated workflows, such as build and test processes, in Kubernetes. In Horizon SDV, it is alternative/replacement of Jenkins as the workflow orchestrator. Workflows can be triggered through the Developer Portal, Horizon API, or Horizon CLI. 
+
+1. To Access Argo Workflows UI, go to the Horizon Landing page here: `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>` and click on the Open button within the Argo Workflows app card as below.   
+   <img src="images/argo_workflows_open.png" width="325" />
+2. Log-in to Argo Workflows by clicking on the "Login" with SSO button. (Your user must be assigned to `administrators` on Keycloak for SSO access)   
 
 ## Section #5 - Optional - GitHub Setup
 

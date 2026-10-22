@@ -14,7 +14,8 @@
 //
 import vehicleLogoUrl from './assets/Vehicle.svg?url';
 import accentureLogoUrl from './assets/accenture-logo.png';
-import argocdLogoUrl from './assets/argocd-logo.png';
+import argocdLogoUrl from './assets/argo-cd-logo.png';
+import argoworkflowsLogoUrl from './assets/argo-workflows-logo.png';
 import gerritLogoUrl from './assets/gerrit-logo.png';
 import grafanaLogoUrl from './assets/grafana-logo.png';
 import headlampDarkLogoUrl from './assets/headlamp-icon-dark.svg?url';
@@ -24,7 +25,8 @@ import mcpGatewayRegistryLogoUrl from './assets/mcp-gateway-registry-logo.png';
 
 export const HORIZON_LOGO_SRC = vehicleLogoUrl;
 export const ACCENTURE_LOGO_SRC = accentureLogoUrl;
-export const ARGOCD_LOGO_SRC = argocdLogoUrl;
+export const ARGO_CD_LOGO_SRC = argocdLogoUrl;
+export const ARGO_WORKFLOWS_LOGO_SRC = argoworkflowsLogoUrl;
 export const GERRIT_LOGO_SRC = gerritLogoUrl;
 export const GRAFANA_LOGO_SRC = grafanaLogoUrl;
 export const HEADLAMP_DARK_LOGO_SRC = headlampDarkLogoUrl;
