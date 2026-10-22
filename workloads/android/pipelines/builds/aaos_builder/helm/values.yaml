@@ -105,7 +105,7 @@ spec:
   # gemini-review pod (inline step) uses the same spec.gemini* keys as the build step for CLI / timeout / Vertex flags.
   geminiModel: ""
   geminiCommandLine: gemini --yolo --output-format json
-  geminiAiExecutionTimeoutMinutes: "20"
+  geminiAiExecutionTimeoutMinutes: "60"
   # Pod CPU/memory for init, clean, storage, and inline gemini-review (Gemini) templates (not build).
   workflowStepResources:
     fetchPipeline:
