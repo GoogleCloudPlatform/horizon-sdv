@@ -173,9 +173,9 @@ Use this to specify settings such as the [Gemini model](https://ai.google.dev/ge
 `--debug` to include debug output.
 Note: Prompts are piped via `stdin` and output is redirected to a JSON file.
 
-### `GEMINI_AI_EXECUTION_TIMEOUT`
+### `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES`
 
-AI Execution Timeout (Hours)
+AI Execution Timeout (Minutes)
 Set the maximum duration for the Gemini AI assistant.
 
 * Prevents jobs from hanging indefinitely.

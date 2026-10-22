@@ -186,7 +186,7 @@ The prompt files themselves are **not** exposed as Jenkins parameters in any of 
 - In the `Agentic AI: Configuration (Experimental)` section:
     - Confirm `ENABLE_GEMINI_AI_ASSISTANT` is **checked** (it is not always on by default).
     - Optionally edit `GEMINI_COMMAND_LINE` (e.g. to pin a different model).
-    - For the AAOS jobs, optionally raise `GEMINI_AI_EXECUTION_TIMEOUT` for very large analyses.
+    - For the AAOS jobs, optionally raise `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES` for very large analyses.
 - Configure the rest of the job parameters as required.
 - Click `Build`.
 

@@ -74,14 +74,14 @@ spec:
   # Non-empty geminiModel builds gemini --model <name> --yolo --output-format json; else geminiCommandLine as-is.
   enableGeminiAiAssistant: "true"
   # AI review execution runtime: gemini-cli (default) or agy.
-  aiReviewRuntime: "gemini-cli"
+  aiReviewRuntime: "agy"
   geminiModel: "gemini-3.8-flash"
   geminiAnalyseOnSuccess: "false"
   geminiCommandLine: "gemini --yolo --output-format json"
   geminiPreviewFeatures: "true"
   geminiLocationGlobal: "true"
   geminiStagingStorageSize: "5Gi"
-  geminiAiExecutionTimeoutHours: "2"
+  geminiAiExecutionTimeoutMinutes: "60"
   # Final Gemini outputs bucket name (default "<cloudProject>-aaos"). storageBucketDestination parent defaults to gs://<cloudProject>-aaos/Android/Tests/<androidTestsWorkflowArtifactFolder>; timestamp + workflow.name appended by compute-test-results-staging-uri.
   geminiArtifactRootName: ""
   androidTestsWorkflowArtifactFolder: CTS_Execution_Workflows

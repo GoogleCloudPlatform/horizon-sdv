@@ -141,18 +141,19 @@ else
   export GOOGLE_CLOUD_LOCATION="${CLOUD_REGION}"
 fi
 export GOOGLE_CLOUD_PROJECT="${CLOUD_PROJECT}"
+export GEMINI_MODEL="${GEMINI_MODEL:-}"
 export GEMINI_COMMAND_LINE="${GEMINI_COMMAND_LINE}"
 
-GEMINI_AI_EXECUTION_TIMEOUT_HOURS="${GEMINI_AI_EXECUTION_TIMEOUT_HOURS:-${GEMINI_AI_EXECUTION_TIMEOUT:-2}}"
-export GEMINI_AI_EXECUTION_TIMEOUT_HOURS
+GEMINI_AI_EXECUTION_TIMEOUT_MINUTES="${GEMINI_AI_EXECUTION_TIMEOUT_MINUTES:-60}"
+export GEMINI_AI_EXECUTION_TIMEOUT_MINUTES
 
-AI_REVIEW_RUNTIME="${AI_REVIEW_RUNTIME:-gemini-cli}"
+AI_REVIEW_RUNTIME="${AI_REVIEW_RUNTIME:-agy}"
 export AI_REVIEW_RUNTIME
-echo -e "${GREEN}Analyse runtime${NC}=${AI_REVIEW_RUNTIME} (timeout ${GEMINI_AI_EXECUTION_TIMEOUT_HOURS}h)…"
+echo -e "${GREEN}Analyse runtime${NC}=${AI_REVIEW_RUNTIME} (timeout ${GEMINI_AI_EXECUTION_TIMEOUT_MINUTES}m)…"
 
 case "${AI_REVIEW_RUNTIME}" in
   agy|AGY)
-    timeout "${GEMINI_AI_EXECUTION_TIMEOUT_HOURS}"h \
+    timeout --kill-after=1m "${GEMINI_AI_EXECUTION_TIMEOUT_MINUTES}m" \
     bash "${REPO_ROOT}/workloads/common/agentic-ai/antigravity/run_agy_ai_review.sh"
     GEMINI_EXIT_CODE="$?"
     if [[ "${GEMINI_EXIT_CODE}" -eq 0 ]]; then
@@ -163,7 +164,7 @@ case "${AI_REVIEW_RUNTIME}" in
     ;;
   gemini-cli)
     "${REPO_ROOT}"/workloads/common/agentic-ai/gemini/gemini_initialise.sh
-    timeout "${GEMINI_AI_EXECUTION_TIMEOUT_HOURS}"h "${REPO_ROOT}"/workloads/common/agentic-ai/gemini/gemini_analysis.sh
+    timeout --kill-after=1m "${GEMINI_AI_EXECUTION_TIMEOUT_MINUTES}m" "${REPO_ROOT}"/workloads/common/agentic-ai/gemini/gemini_analysis.sh
     GEMINI_EXIT_CODE="$?"
     if [[ "${GEMINI_EXIT_CODE}" -eq 0 ]]; then
       echo -e "${GREEN}gemini_analysis.sh finished OK (exit 0)${NC}"

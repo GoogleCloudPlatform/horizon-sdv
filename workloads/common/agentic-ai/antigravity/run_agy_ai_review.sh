@@ -71,4 +71,13 @@ _agy_args=(
 [[ -n "${_agy_log}" ]] && _agy_args+=("--log-file=${_agy_log}")
 
 python3 "${_agy_args[@]}"
-exit "$?"
+_exit_code="$?"
+
+_cts_summary="${_agy_workspace}/test-results/cts_module_summary.txt"
+_gemini_assist="${GEMINI_ARTIFACT_PATH:-gemini-assist}"
+if [[ -f "${_cts_summary}" ]]; then
+  mkdir -p "${_gemini_assist}" 2>/dev/null || true
+  cp -f "${_cts_summary}" "${_gemini_assist}/cts_module_summary.txt" 2>/dev/null || true
+fi
+
+exit "${_exit_code}"

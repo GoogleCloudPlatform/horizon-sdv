@@ -91,7 +91,7 @@ spec:
   serviceAccountName: workflow-executor
   enableGeminiAiAssistant: "true"
   # AI review execution runtime: gemini-cli (default) or agy.
-  aiReviewRuntime: "gemini-cli"
+  aiReviewRuntime: "agy"
   # Sequenced prompts (triage -> RCA -> fixes); paths under this chart's prompt/sequenced/.
   geminiPromptFile: /workspace/workloads/android/pipelines/builds/aaos_builder/prompt/sequenced/step1_triage.txt
   geminiPromptFile2: /workspace/workloads/android/pipelines/builds/aaos_builder/prompt/sequenced/step2_rca.txt
@@ -105,7 +105,7 @@ spec:
   # gemini-review pod (inline step) uses the same spec.gemini* keys as the build step for CLI / timeout / Vertex flags.
   geminiModel: ""
   geminiCommandLine: gemini --yolo --output-format json
-  geminiAiExecutionTimeoutHours: "1"
+  geminiAiExecutionTimeoutMinutes: "20"
   # Pod CPU/memory for init, clean, storage, and inline gemini-review (Gemini) templates (not build).
   workflowStepResources:
     fetchPipeline:

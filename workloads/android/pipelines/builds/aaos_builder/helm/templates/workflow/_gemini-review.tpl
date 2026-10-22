@@ -71,8 +71,8 @@ Same pod volume wiring as build; env matches Jenkins AAOS Gemini review.
         value: {{ .Values.spec.geminiPreviewFeatures | quote }}
       - name: GEMINI_COMMAND_LINE
         value: {{ include "aaos-builder.geminiCommandLineResolved" . | quote }}
-      - name: GEMINI_AI_EXECUTION_TIMEOUT_HOURS
-        value: {{ .Values.spec.geminiAiExecutionTimeoutHours | quote }}
+      - name: GEMINI_AI_EXECUTION_TIMEOUT_MINUTES
+        value: {{ .Values.spec.geminiAiExecutionTimeoutMinutes | default "60" | quote }}
 {{- $geminiSkillsYaml := required "spec.geminiSkillsYaml is required (filesystem path to skills.yaml for Gemini)" .Values.spec.geminiSkillsYaml }}
       - name: GEMINI_SKILLS_YAML
 {{- if and (or .Values.localRepoHostPath .Values.localRepoPvcName) (hasPrefix "/workspace" $geminiSkillsYaml) }}

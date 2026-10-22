@@ -215,6 +215,14 @@ pipelineJob(cvdJobFullName) {
       choices(['gemini-cli', 'agy'])
     }
 
+    choiceParam {
+      name('GEMINI_AI_EXECUTION_TIMEOUT_MINUTES')
+      description('''
+        <p>Maximum duration in minutes allowed for the Gemini assistant to run before automatic termination.</p>
+        <p><i>Note: This safety limit prevents hung processes and optimizes resource usage.</i></p>''')
+      choices(['60', '45', '30', '20', '10', '90', '120'])
+    }
+
     booleanParam {
       name('GEMINI_ANALYSE_ON_SUCCESS')
       defaultValue(false)

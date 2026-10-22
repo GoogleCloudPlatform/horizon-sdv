@@ -50,7 +50,7 @@ Scripts and environment for running the [Gemini CLI](https://geminicli.com/docs/
 - **GEMINI_POST_REVIEW_COMMAND** – Optional snippet **`eval`**’d after move / empty JSON cleanup, before **`gemini-client-error.zip`** handling (e.g. **`gemini_storage.sh`** for CTS).
 - **GEMINI_SKIP_MOVE_ARTIFACTS** – Set to **`1`** to skip **`move_gemini_artifacts`** when outputs are already under **`WORKSPACE`** (Argo CVD/CTS set this after **`gemini_argo_prepare_staging.sh`**).
 - **GEMINI_PREPARE_MODE** – **`cvd`** or **`cts`** for **`gemini_argo_prepare_staging.sh`** only (Argo prepare step).
-- **GEMINI_AI_EXECUTION_TIMEOUT_HOURS** – Hours for **`gemini_analysis.sh`**; falls back to **`GEMINI_AI_EXECUTION_TIMEOUT`** or **`2`**.
+- **GEMINI_AI_EXECUTION_TIMEOUT_MINUTES** – Minutes for **`run_ai_review.sh`**.
 - **GEMINI_AAOS_LOG_TAIL_MODE** – **`tail`** (default) or **`fullcopy`** for **`aaos-build.log`** → **`aaos-build.log.tail`** in **`review-pre-aaos.sh`** (ABFS uses **`fullcopy`**).
 - **GEMINI_PROMPT_FILE** – Step 1 prompt file path or base64-encoded content.
 - **GEMINI_PROMPT_FILE_2** – Optional step 2 prompt; required only for sequenced (two or three steps).
