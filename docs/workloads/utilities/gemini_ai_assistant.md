@@ -14,18 +14,20 @@ limitations under the License. -->
 
 # Gemini AI Assistant utility
 
-Jenkins job that runs the Gemini AI assistant CLI against user-provided artifacts. You supply a command to fetch artifacts (e.g. from GCS) and a prompt file; the job runs the CLI in headless mode and archives the output.
+Jenkins job that runs an AI review against user-provided artifacts. You supply a command to fetch artifacts (for example from GCS). **AI Review runtime** defaults to `agy` (Antigravity). Choose `gemini-cli` to run sequenced prompts instead. When the variable is unset, `run_ai_review.sh` uses `agy`.
 
 ## Parameters
 
-- **GEMINI_ARTIFACTS_COMMAND** (required) – Command to populate the workspace with content to analyse (e.g. `gcloud storage cp -r gs://bucket/path/ .`).
-- **GEMINI_PROMPT_FILE** (required) – Step 1 prompt file (upload only).
-- **GEMINI_PROMPT_FILE_2** (optional) – Step 2 prompt file (upload). Required only for sequenced analysis; when set with step 1, runs two or three steps with context chaining (order matters). We do not ship single-prompt files.
-- **GEMINI_PROMPT_FILE_3** (optional) – Step 3 prompt file (upload). For three-step sequenced analysis.
-- **GEMINI_COMMAND_LINE** – Full Gemini CLI invocation (e.g. `gemini --yolo --output-format json`). To pin the model and avoid auto-routing to preview-only models, add `--model <model name>` (e.g. `--model gemini-3.8-flash`).
-- **GEMINI_SKILLS_YAML** (optional) – Upload `skills.yaml` (file parameter, like prompts). When provided, the job decodes it and converts to `.gemini/skills/*/SKILL.md` before analysis. Use when prompts are uploaded so the job cannot auto-detect the prompt dir.
+- **GEMINI_ARTIFACTS_COMMAND** (required) – Command to populate the workspace with content to analyse (e.g. `gcloud storage cp -r gs://bucket/path/ .`). The job also unpacks `cuttlefish*.zip` under `test-results/cvd` and other result zips under `test-results/cts`.
+- **AI_REVIEW_RUNTIME** – `agy` (default) or `gemini-cli`. Jenkins lists `agy` first.
+- **GEMINI_AI_EXECUTION_TIMEOUT_MINUTES** – Maximum duration in minutes. Choices are `60`, `45`, `30`, `20`, `10`, `90`, and `120` (first choice `60`). When unset, the runner uses 60 minutes.
+- **GEMINI_PROMPT_FILE** – Step 1 prompt file (upload only). Required for `gemini-cli`. Antigravity ignores uploaded prompts and uses `workloads/common/agentic-ai/antigravity/skills/`.
+- **GEMINI_PROMPT_FILE_2** (optional) – Step 2 prompt file (upload). Used only by `gemini-cli`. Required only for sequenced analysis; when set with step 1, runs two or three steps with context chaining (order matters). We do not ship single-prompt files.
+- **GEMINI_PROMPT_FILE_3** (optional) – Step 3 prompt file (upload). Used only by `gemini-cli`. For three-step sequenced analysis.
+- **GEMINI_COMMAND_LINE** – Full Gemini CLI invocation (e.g. `gemini --yolo --output-format json`). Used only by `gemini-cli`. To pin the model and avoid auto-routing to preview-only models, add `--model <model name>` (e.g. `--model gemini-3.8-flash`). Antigravity reads `GEMINI_MODEL` instead.
+- **GEMINI_SKILLS_YAML** (optional) – Upload `skills.yaml` (file parameter, like prompts). Used only by `gemini-cli`. When provided, the job decodes it and converts to `.gemini/skills/*/SKILL.md` before analysis.
 
-Prompts are provided only via upload; there are no workspace path parameters.
+Prompts are provided only via upload; there are no workspace path parameters. They apply only when the runtime is `gemini-cli`.
 
 ### Why `skills.yaml` and `gemini_skills_from_yaml.py` (not only `SKILL.md` files)
 
@@ -42,14 +44,15 @@ The CLI expects **one directory per skill**, not one monolithic `skills.md`. A s
 
 ## Artifacts
 
-- `gemini-assist/*` – Analysis output (e.g. proposed fixes).
-- `headless_output*.json` – Raw CLI output.
-- `step1_output.md`, `step2_output.md`, `step3_output.md` – Extracted step outputs when using sequenced prompts.
+- `gemini-assist/*` – Analysis output. Antigravity writes `agy_analysis_and_proposed_fix.md`. The CLI writes proposed-fix markdown from the skills.
+- `traces/*.json` – Antigravity session trace.
+- `headless_output*.json` – Raw CLI output (`gemini-cli` only).
+- `step1_output.md`, `step2_output.md`, `step3_output.md` – Extracted step outputs when using sequenced prompts (`gemini-cli` only).
 - `gemini-client-error.zip` – Error report if the CLI fails.
 
 ## Offline analysis & prompt/skill iteration
 
-Use this utility against archived artifacts from any pipeline — Build, CVD Launcher, CTS Execution — to analyse passes or failures without re-running the original job, and as a sandbox for prompt and `skills.yaml` development.
+Use this utility against archived artifacts from any pipeline — Build, CVD Launcher, CTS Execution — to analyse passes or failures without re-running the original job. The default runtime is `agy`: the agent sets the classification from the artifacts and reads the matching skill under `workloads/common/agentic-ai/antigravity/skills/`. Uploaded prompts and `skills.yaml` are ignored. With `gemini-cli`, the job is also a sandbox for prompt and `skills.yaml` development:
 
 - **Pick your artifacts.** Set `GEMINI_ARTIFACTS_COMMAND` to fetch the archived workspace or `test-results/` of the run you want to investigate (success or failure). Examples:
   - `gcloud storage cp -r gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Tests/CVD_Launcher/<BUILD_NUMBER>/test-results/ .`
@@ -60,7 +63,8 @@ Use this utility against archived artifacts from any pipeline — Build, CVD Lau
 
 ## See also
 
-- Scripts: `workloads/common/agentic-ai/gemini/` (e.g. `gemini_analysis.sh`).
+- Scripts: `workloads/common/agentic-ai/gemini/` (e.g. `run_ai_review.sh`, `gemini_analysis.sh`).
+- Antigravity: `workloads/common/agentic-ai/antigravity/README.md`.
 - AAOS Builder AI review: `workloads/android/pipelines/builds/aaos_builder/` (sequenced prompts for deep scan).
 - CVD Launcher AI Review: [`docs/workloads/android/tests/cvd_launcher.md`](../android/tests/cvd_launcher.md#gemini_analyse_on_success).
 - CTS Execution AI Review: [`docs/workloads/android/tests/cts_execution.md`](../android/tests/cts_execution.md#gemini_analyse_on_success).

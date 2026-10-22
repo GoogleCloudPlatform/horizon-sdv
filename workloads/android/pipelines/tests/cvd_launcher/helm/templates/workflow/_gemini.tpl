@@ -157,8 +157,8 @@ Description:
             value: {{ $root.Values.spec.geminiPreviewFeatures | default "true" | quote }}
           - name: GEMINI_COMMAND_LINE
             value: {{ include "cvd-launcher.geminiCommandLineResolved" $root | quote }}
-          - name: GEMINI_AI_EXECUTION_TIMEOUT_HOURS
-            value: {{ $root.Values.spec.geminiAiExecutionTimeoutHours | default "2" | quote }}
+          - name: GEMINI_AI_EXECUTION_TIMEOUT_MINUTES
+            value: {{ $root.Values.spec.geminiAiExecutionTimeoutMinutes | default "60" | quote }}
           - name: GEMINI_STEP2_PRIOR_CONTEXT_BYTES
             value: {{ $root.Values.spec.geminiStep2PriorContextBytes | default "131072" | quote }}
           - name: GEMINI_ADDITIONAL_ARTIFACTS

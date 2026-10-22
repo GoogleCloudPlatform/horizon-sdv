@@ -189,11 +189,11 @@ pipelineJob('Android/Builds/AAOS SDV Builder') {
     }
 
     choiceParam {
-      name('GEMINI_AI_EXECUTION_TIMEOUT')
+      name('GEMINI_AI_EXECUTION_TIMEOUT_MINUTES')
       description('''
-        <p>Maximum duration allowed for the Gemini assistant to run before automatic termination.</p>
+        <p>Maximum duration in minutes allowed for the Gemini assistant to run before automatic termination.</p>
         <p><i>Note: This safety limit prevents hung processes and optimizes resource usage.</i></p>''')
-      choices(['1', '2', '4', '8'])
+      choices(['60', '45', '30', '20', '10', '90', '120'])
     }
 
     separator {

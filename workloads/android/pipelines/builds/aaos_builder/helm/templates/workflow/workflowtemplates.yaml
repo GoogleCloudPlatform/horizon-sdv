@@ -136,11 +136,11 @@ spec:
 {{- end }}
       # Appended after the positional ABFS parameters so sensors.yaml can map it to index 11+len(abfs).
       - name: aiReviewRuntime
-        value: {{ .Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+        value: {{ .Values.spec.aiReviewRuntime | default "agy" | quote }}
         enum:
-          - gemini-cli
           - agy
-        description: "AI review runtime: Gemini CLI or Antigravity SDK (agy)."
+          - gemini-cli
+        description: "AI review runtime: agy (Antigravity SDK, default) or gemini-cli."
 {{- if $abfs }}
   templateDefaults:
     metadata:
