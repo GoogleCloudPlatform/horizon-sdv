@@ -1,4 +1,16 @@
-<!-- Copyright (c) 2026 Accenture, All Rights Reserved. -->
+<!-- Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
 
 # Testing, Verification & Troubleshooting
 
@@ -12,15 +24,14 @@ Run linting and template rendering locally to catch syntax errors, missing varia
 
 ```bash
 # 1. Lint Parent and Child Helm Charts
-helm lint gitops/modules/<module-name>
+helm lint gitops/modules/<module-name> \
+  -f .agents/plugins/horizon-dev/skills/horizon-create-module/scripts/lint-values.yaml
 helm lint gitops/modules/<module-name>/<app-name>
 helm lint gitops/modules/<module-name>/argo-workflows
 
 # 2. Dry-Run Template Rendering (Parent Chart)
 helm template test-release gitops/modules/<module-name> \
-  --set moduleName="my-test-mod" \
-  --set repo.url="https://github.com/my-org/horizon-sdv.git" \
-  --set repo.revision="HEAD"
+  -f .agents/plugins/horizon-dev/skills/horizon-create-module/scripts/lint-values.yaml
 
 # 3. Dry-Run Child Chart Template Rendering
 helm template test-app gitops/modules/<module-name>/<app-name> \
@@ -28,6 +39,8 @@ helm template test-app gitops/modules/<module-name>/<app-name> \
   --set gcpProjectId="my-gcp-project" \
   --set rootPath="/test-app"
 ```
+
+`lint-values.yaml` stands in for the values Module Manager injects into the parent chart. Keep its `config` keys in sync with `gitops/templates/module-manager.yaml`.
 
 ---
 
@@ -57,11 +70,13 @@ Check that the parent and child Argo CD applications sync cleanly:
 kubectl get applications -n argocd -o custom-columns=NAME:.metadata.name,HEALTH:.status.health.status,SYNC:.status.sync.status,MESSAGE:.status.operationState.message | grep <module-name>
 ```
 
+In a sub-environment the namespace is `<namespacePrefix>argocd`.
+
 Expected output:
 ```text
-mod-<module-name>              Healthy   Synced   Successfully synced
-mod-<module-name>-app          Healthy   Synced   Successfully synced
-mod-<module-name>-argo-workflows Healthy Synced   Successfully synced
+mod-<module-name>                      Healthy   Synced   Successfully synced
+mod-<module-name>-<module-name>-app    Healthy   Synced   Successfully synced
+mod-<module-name>-argo-workflows       Healthy   Synced   Successfully synced
 ```
 
 ### 4. Verify KCC GCP Resources
@@ -108,8 +123,8 @@ horizon workflow show "$WF_NAME" --output json | grep '"phase"'
 
 ### Scenario 1: KCC Resource Remains in `Reconciling` / `403 Forbidden`
 - **Symptom**: `kubectl get pubsubtopic` shows `Ready=False` with `PermissionDenied`.
-- **Cause**: Config Connector service account does not have IAM roles on the GCP project.
-- **Resolution**: Check IAM policy bindings for the GKE compute SA or KCC controller identity.
+- **Cause**: Config Connector acts as `gke-config-connector-sa`, which has `roles/editor` (`terraform/env/main.tf`). Editor does not cover IAM policy changes.
+- **Resolution**: See [02_kcc_resources.md](./02_kcc_resources.md) §4 Common Issues. Missing roles must be added in Terraform, not granted manually.
 
 ### Scenario 2: HTTPRoute Returns `404 Not Found` or `502 Bad Gateway`
 - **Symptom**: Accessing `https://<domain>/<rootPath>` fails.
@@ -119,5 +134,5 @@ horizon workflow show "$WF_NAME" --output json | grep '"phase"'
 
 ### Scenario 3: WorkflowTemplate Not Visible in Developer Portal
 - **Symptom**: Workflow does not show under the module's tab.
-- **Cause**: Missing `horizon-sdv.io/expose: "true"` label on the `WorkflowTemplate` metadata.
-- **Resolution**: Add the label to `argo-workflows/templates/workflowtemplates.yaml` and re-sync.
+- **Cause**: The `WorkflowTemplate` is missing `horizon-sdv.io/expose: "true"`, its `horizon-sdv.io/module` label does not match the module's `name` in the ModuleCatalog, or the module is not enabled.
+- **Resolution**: Fix both labels in `argo-workflows/templates/workflowtemplates.yaml`, re-sync, and confirm the module is enabled.
