@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package horizon
 
 import (
 	"bufio"
@@ -503,15 +503,15 @@ func pollUntilTerminal(ctx context.Context, c *Client, cfg *Config, wf string) (
 	return "", fmt.Errorf("timeout waiting for terminal phase on %s", wf)
 }
 
-type submitOutputMode string
+type OutputFormat string
 
 const (
-	submitOutText submitOutputMode = "text"
-	submitOutJSON submitOutputMode = "json"
+	OutputTextFormat OutputFormat = "text"
+	OutputJsonFormat OutputFormat = "json"
 )
 
-func printSubmitAckHuman(resp []byte, outMode submitOutputMode, quiet bool) {
-	if quiet || outMode != submitOutText {
+func printSubmitAckHuman(resp []byte, outMode OutputFormat, quiet bool) {
+	if quiet || outMode != OutputTextFormat {
 		return
 	}
 	var m map[string]any
@@ -542,7 +542,7 @@ func catalogHasParam(entry *catalogEntry, paramName string) bool {
 }
 
 // cmdSubmit posts a workflow; prints workflow name; optional --wait returns phase exit code.
-func cmdSubmit(c *Client, cfg *Config, paramsFile, paramsEnv string, wait, followLogs bool, outMode submitOutputMode, quiet bool) (int, error) {
+func CmdSubmit(c *Client, cfg *Config, paramsFile, paramsEnv string, wait, followLogs bool, outMode OutputFormat, quiet bool) (int, error) {
 	ctx := context.Background()
 	entry, err := findCatalogEntry(ctx, c, cfg.Module, cfg.Template)
 	if err != nil {
@@ -583,7 +583,7 @@ func cmdSubmit(c *Client, cfg *Config, paramsFile, paramsEnv string, wait, follo
 		return 1, err
 	}
 	if !quiet {
-		if outMode == submitOutJSON {
+		if outMode == OutputJsonFormat {
 			// Response body printed after we know workflowName (below).
 		} else {
 			printSubmitAckHuman(resp, outMode, quiet)
@@ -596,7 +596,7 @@ func cmdSubmit(c *Client, cfg *Config, paramsFile, paramsEnv string, wait, follo
 		return 1, err
 	}
 
-	if outMode == submitOutJSON {
+	if outMode == OutputJsonFormat {
 		var submitObj map[string]any
 		_ = json.Unmarshal(resp, &submitObj)
 		wrap := map[string]any{
@@ -627,7 +627,7 @@ func cmdSubmit(c *Client, cfg *Config, paramsFile, paramsEnv string, wait, follo
 }
 
 // cmdWait polls until terminal; exit code matches finalize semantics.
-func cmdWait(c *Client, cfg *Config, wf string, followLogs bool) (int, error) {
+func CmdWait(c *Client, cfg *Config, wf string, followLogs bool) (int, error) {
 	ctx := context.Background()
 	if !followLogs {
 		ph, err := pollUntilTerminal(ctx, c, cfg, wf)
@@ -640,7 +640,7 @@ func cmdWait(c *Client, cfg *Config, wf string, followLogs bool) (int, error) {
 }
 
 // cmdLogsForWorkflow streams logs for a workflow name.
-func cmdLogsForWorkflow(c *Client, cfg *Config, wf string) error {
+func CmdLogsForWorkflow(c *Client, cfg *Config, wf string) error {
 	ctx := context.Background()
 	if err := waitForPodHint(ctx, c, cfg, wf); err != nil {
 		return err
@@ -650,6 +650,24 @@ func cmdLogsForWorkflow(c *Client, cfg *Config, wf string) error {
 		fmt.Fprintf(os.Stderr, "log stream: %v\n", err)
 	}
 	return nil
+}
+
+type ExitError struct {
+	Code int
+}
+
+func (e *ExitError) Error() string {
+	return fmt.Sprintf("exit status %d", e.Code)
+}
+
+func WorkflowResult(code int, err error) error {
+	if err != nil {
+		return err
+	}
+	if code == 0 {
+		return nil
+	}
+	return &ExitError{Code: code}
 }
 
 type archivedLogLinks struct {
@@ -712,7 +730,7 @@ func printWorkflowShowText(b []byte) error {
 }
 
 // cmdWorkflowShow prints workflow detail (--output json for raw body).
-func cmdWorkflowShow(ctx context.Context, c *Client, wf, output string) error {
+func CmdWorkflowShow(ctx context.Context, c *Client, wf string, output OutputFormat) error {
 	b, err := c.GetJSON(ctx, "/v1/workflows/"+url.PathEscape(wf))
 	if err != nil {
 		return err
@@ -729,7 +747,7 @@ func cmdWorkflowShow(ctx context.Context, c *Client, wf, output string) error {
 	return printWorkflowShowText(b)
 }
 
-func cmdAbortWorkflowName(c *Client, wf string) error {
+func CmdAbortWorkflowName(c *Client, wf string) error {
 	ctx := context.Background()
 	ph, err := workflowPhase(ctx, c, wf)
 	if err != nil {
@@ -744,7 +762,7 @@ func cmdAbortWorkflowName(c *Client, wf string) error {
 	return nil
 }
 
-func cmdDeleteWorkflowName(ctx context.Context, c *Client, wf string) error {
+func CmdDeleteWorkflowName(ctx context.Context, c *Client, wf string) error {
 	fmt.Fprintf(os.Stderr, "Deleting workflow %s via Horizon API (server waits until the Workflow CR and finalizers are gone; may take several minutes)…\n", wf)
 	path := "/v1/workflows/" + url.PathEscape(wf)
 	b, err := c.DoJSON(ctx, "DELETE", path, nil)
@@ -757,15 +775,25 @@ func cmdDeleteWorkflowName(ctx context.Context, c *Client, wf string) error {
 	return nil
 }
 
-func cmdCatalogGet(ctx context.Context, c *Client, output string, raw bool) error {
+func CmdCatalogGet(ctx context.Context, c *Client, output string, raw bool) error {
 	b, err := c.GetJSON(ctx, "/v1/catalog")
 	if err != nil {
 		return err
 	}
+
+	printCatalogJson := func() {
+		var pretty bytes.Buffer
+		if err := json.Indent(&pretty, b, "", "  "); err != nil {
+			fmt.Println(string(b))
+		} else {
+			fmt.Println(pretty.String())
+		}
+	}
+
 	switch strings.ToLower(strings.TrimSpace(output)) {
 	case "text":
 		if raw {
-			return fmt.Errorf("-raw applies only to -output json")
+			return fmt.Errorf("--raw applies only to --output json")
 		}
 		return printCatalogText(b)
 	case "json":
@@ -773,15 +801,10 @@ func cmdCatalogGet(ctx context.Context, c *Client, output string, raw bool) erro
 			fmt.Println(string(b))
 			return nil
 		}
-		var pretty bytes.Buffer
-		if err := json.Indent(&pretty, b, "", "  "); err != nil {
-			fmt.Println(string(b))
-		} else {
-			fmt.Println(pretty.String())
-		}
+		printCatalogJson()
 		return nil
 	default:
-		return fmt.Errorf("catalog get: -output must be text or json")
+		return fmt.Errorf("catalog get: --output must be text or json")
 	}
 }
 
@@ -847,7 +870,7 @@ type historyListItem struct {
 	SubmittedFrom string `json:"submittedFrom,omitempty"`
 }
 
-func cmdWorkflowList(ctx context.Context, c *Client, runningOnly bool, limit int, continueToken, phaseFilter, output string) error {
+func CmdWorkflowList(ctx context.Context, c *Client, runningOnly bool, limit int, continueToken string, phaseFilter string, output OutputFormat) error {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -928,12 +951,12 @@ func cmdWorkflowList(ctx context.Context, c *Client, runningOnly bool, limit int
 }
 
 // cmdWorkflowRunning prints running workflows (compat).
-func cmdWorkflowRunning(ctx context.Context, c *Client, limit int) error {
-	return cmdWorkflowList(ctx, c, true, limit, "", "", "json")
+func CmdWorkflowRunning(ctx context.Context, c *Client, limit int) error {
+	return CmdWorkflowList(ctx, c, true, limit, "", "", "json")
 }
 
 // cmdWorkflowHistory prints history (compat).
-func cmdWorkflowHistory(ctx context.Context, c *Client, limit int, continueToken, phase string) error {
+func CmdWorkflowHistory(ctx context.Context, c *Client, limit int, continueToken, phase string) error {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -959,8 +982,8 @@ func cmdWorkflowHistory(ctx context.Context, c *Client, limit int, continueToken
 	return nil
 }
 
-func cmdWorkflowGet(ctx context.Context, c *Client, name string) error {
-	return cmdWorkflowShow(ctx, c, name, "json")
+func CmdWorkflowGet(ctx context.Context, c *Client, name string) error {
+	return CmdWorkflowShow(ctx, c, name, "json")
 }
 
 func formatIECBytes(n int64) string {
@@ -970,13 +993,16 @@ func formatIECBytes(n int64) string {
 	case n < 1024:
 		return fmt.Sprintf("%d B", n)
 	}
-	x := float64(n)
+	// n is already at least 1 KiB. Count further 1024-steps from KiB so the
+	// unit index is not one step ahead of the value.
+	units := []string{"KiB", "MiB", "GiB"}
+	x := float64(n) / 1024
 	u := 0
-	for x >= 1024 && u < 3 {
+	for x >= 1024 && u < len(units)-1 {
 		x /= 1024
 		u++
 	}
-	suf := []string{"KiB", "MiB", "GiB"}[u]
+	suf := units[u]
 	if x >= 100 {
 		return fmt.Sprintf("%.0f %s", x, suf)
 	}
@@ -1104,12 +1130,12 @@ func copyDownloadWithProgress(r io.Reader, w io.Writer, total int64, destPath st
 	return nn, err
 }
 
-func cmdWorkflowDownloadArtifact(ctx context.Context, c *Client, wfName, artName string, genURL bool, durationSec int, templateName, nodeID, outFile string, toStdout bool, outFormat string, quiet bool) error {
+func CmdWorkflowDownloadArtifact(ctx context.Context, c *Client, wfName, artName string, genURL bool, durationSec int, templateName string, nodeID string, outFile string, toStdout bool, outFormat OutputFormat, quiet bool) error {
 	if genURL && (toStdout || outFile != "") {
-		return fmt.Errorf("--generate-signed-url cannot be combined with -o or -stdout")
+		return fmt.Errorf("--generate-signed-url cannot be combined with --o or --stdout")
 	}
 	if toStdout && outFile != "" {
-		return fmt.Errorf("-stdout and -o are mutually exclusive")
+		return fmt.Errorf("--stdout and --o are mutually exclusive")
 	}
 
 	apiPath := "/v1/workflows/" + url.PathEscape(wfName) + "/downloadArtifact/" + url.PathEscape(artName)
@@ -1167,14 +1193,19 @@ func cmdWorkflowDownloadArtifact(ctx context.Context, c *Client, wfName, artName
 		return fmt.Errorf("empty url in API response")
 	}
 
+	printJson := func() error {
+		var buf bytes.Buffer
+		if err := json.Indent(&buf, raw, "", "  "); err != nil {
+			return err
+		}
+		fmt.Println(buf.String())
+		return nil
+	}
+
 	if genURL {
 		switch outFormat {
 		case "json":
-			var buf bytes.Buffer
-			if err := json.Indent(&buf, raw, "", "  "); err != nil {
-				return err
-			}
-			fmt.Println(buf.String())
+			printJson()
 		default:
 			fmt.Printf("signed-url: %s\n", meta.URL)
 		}
@@ -1226,4 +1257,77 @@ func cmdWorkflowDownloadArtifact(ctx context.Context, c *Client, wfName, artName
 	}
 	_, err = copyDownloadWithProgress(resp.Body, f, resp.ContentLength, absDest, os.Stderr)
 	return err
+}
+
+func CmdArtifactsListBuckets(ctx context.Context, c *Client, outFormat OutputFormat) error {
+	resp, err := c.ListBuckets(ctx)
+	if err != nil {
+		return err
+	}
+
+	if outFormat == "json" {
+		b, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+		return nil
+	}
+
+	if len(resp.Buckets) == 0 {
+		fmt.Println("No buckets accessible.")
+		return nil
+	}
+
+	fmt.Println("Accessible buckets:")
+	for _, bucket := range resp.Buckets {
+		fmt.Printf("  %s\n", bucket.Name)
+	}
+	return nil
+}
+
+func CmdArtifactsListObjects(ctx context.Context, c *Client, bucket, prefix, pageToken string, limit int, outFormat OutputFormat) error {
+	resp, err := c.ListObjects(ctx, bucket, prefix, pageToken, limit)
+	if err != nil {
+		return err
+	}
+
+	if outFormat == "json" {
+		b, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+		return nil
+	}
+
+	if len(resp.Objects) == 0 {
+		fmt.Printf("No objects found in bucket %s", bucket)
+		if prefix != "" {
+			fmt.Printf(" with prefix %s", prefix)
+		}
+		fmt.Println(".")
+		return nil
+	}
+
+	fmt.Printf("Objects in bucket %s", bucket)
+	if prefix != "" {
+		fmt.Printf(" (prefix: %s)", prefix)
+	}
+	fmt.Println(":")
+	for _, obj := range resp.Objects {
+		fmt.Printf("  %s", obj.Name)
+		if obj.Size > 0 {
+			fmt.Printf(" (%s)", formatIECBytes(obj.Size))
+		}
+		if obj.ContentType != "" {
+			fmt.Printf(" [%s]", obj.ContentType)
+		}
+		fmt.Println()
+	}
+
+	if resp.NextPageToken != "" {
+		fmt.Printf("\nNext page token: %s\n", resp.NextPageToken)
+	}
+	return nil
 }

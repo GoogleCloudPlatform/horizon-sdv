@@ -74,5 +74,12 @@ spec:
     ports:
     - protocol: TCP
       port: 8443
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ .Values.config.namespacePrefix }}horizon-api
+    ports:
+    - protocol: TCP
+      port: 8443
 {{- end }}
 {{- end }}

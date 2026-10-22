@@ -92,6 +92,7 @@ To revoke one caller, delete its keys from the Secret and restart; other callers
 | GET | `/api/v1/buckets/{bucket}/objects-meta/{object_path...}` | Object metadata (`object_path` may contain `/`) |
 | GET | `/api/v1/buckets/{bucket}/objects-meta-raw/{object_path...}` | Raw metadata (includes custom `metadata` map) |
 | PATCH | `/api/v1/buckets/{bucket}/objects-meta/{object_path...}` | Update raw metadata (contentType/cacheControl/custom metadata) |
+| GET | `/api/v1/buckets/{bucket}/objects-list` | List objects by name prefix (`prefix`, `pageToken`, `pageSize`). Empty `prefix` lists from the start of the bucket. A prefix without a trailing `/` is a string prefix, not an exact object name. `pageSize` defaults to 1000 and must be 1–1000. |
 | POST | `/api/v1/buckets/{bucket}/objects/filter` | Query objects by path/wildcards and metadata filters |
 | POST | `/api/v1/buckets/{bucket}/objects-meta/batch-update` | Add/update metadata on filtered objects |
 | POST | `/api/v1/buckets/{bucket}/objects-meta/batch-remove` | Remove selected or all metadata from filtered objects |

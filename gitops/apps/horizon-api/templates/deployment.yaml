@@ -37,6 +37,8 @@ spec:
           args:
             - "--namespace={{ .Values.namespace }}"
             - "--module-manager-namespace={{ .Values.moduleManagerNamespace }}"
+            {{- $gcsNs := .Values.gcsBucketsNamespace | default "horizon" }}
+            - "--gcs-buckets-namespace={{ $gcsNs }}"
             - "--module-manager-state-name={{ .Values.moduleManagerStateName }}"
             - "--module-manager-catalog-name={{ .Values.moduleManagerCatalogName }}"
             {{- $wfNs := .Values.workflowsNamespace | default "workflows" }}
@@ -66,11 +68,32 @@ spec:
             - "--http-bind-address=:8082"
             - "--metrics-bind-address=:8080"
             - "--health-probe-bind-address=:8081"
-          {{- if .Values.gceMetadataHost }}
+            {{- if .Values.artifactsModuleUrl }}
+            - "--artifacts-module-url={{ .Values.artifactsModuleUrl }}"
+            {{- end }}
+            {{- if .Values.artifactsGcsProjectId }}
+            - "--artifacts-gcs-project-id={{ .Values.artifactsGcsProjectId }}"
+            {{- end }}
+            {{- if .Values.artifactsAllowedBuckets }}
+            - "--artifacts-allowed-buckets={{ .Values.artifactsAllowedBuckets }}"
+            {{- end }}
           env:
+            - name: ARTIFACTS_MODULE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: storage-gcs-module-api-token
+                  key: token
+                  optional: true
+            - name: ARTIFACTS_MODULE_CA_FILE
+              value: /etc/storage-gcs/ca.crt
+            {{- if .Values.gceMetadataHost }}
             - name: GCE_METADATA_HOST
               value: {{ .Values.gceMetadataHost | quote }}
-          {{- end }}
+            {{- end }}
+          volumeMounts:
+            - name: storage-gcs-api-ca
+              mountPath: /etc/storage-gcs
+              readOnly: true
           ports:
             - name: metrics
               containerPort: 8080
@@ -90,3 +113,11 @@ spec:
               port: health
             initialDelaySeconds: 5
             periodSeconds: 10
+      volumes:
+        - name: storage-gcs-api-ca
+          secret:
+            secretName: storage-gcs-module-api-tls
+            optional: true
+            items:
+              - key: ca.crt
+                path: ca.crt

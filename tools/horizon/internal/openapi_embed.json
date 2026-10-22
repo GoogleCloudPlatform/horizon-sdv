@@ -1,0 +1,397 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Horizon API",
+    "version": "0.3.5",
+    "description": "Bundled snapshot of Horizon API paths. Refresh from {api}/openapi.json to include live catalog submit operations."
+  },
+  "servers": [
+    {
+      "url": "/horizon-api",
+      "description": "External gateway prefix; backend receives paths without this segment."
+    }
+  ],
+  "paths": {
+    "/v1/catalog": {
+      "get": {
+        "tags": ["Catalog"],
+        "summary": "List exposed workflow templates",
+        "operationId": "listCatalog",
+        "responses": {
+          "200": {
+            "description": "Catalog entries",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CatalogResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workflows/running": {
+      "get": {
+        "tags": ["Workflows"],
+        "summary": "List non-terminal workflows in the workflows namespace",
+        "operationId": "listWorkflowsRunning",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50, "maximum": 500 }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Workflow rows" }
+        }
+      }
+    },
+    "/v1/workflows/history": {
+      "get": {
+        "tags": ["Workflows"],
+        "summary": "List terminal workflows with optional archivedLogs per item",
+        "operationId": "listWorkflowsHistory",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50, "maximum": 500 }
+          },
+          {
+            "name": "continue",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "phase",
+            "in": "query",
+            "description": "Comma-separated display phases (case-insensitive)",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Workflow rows" }
+        }
+      }
+    },
+    "/v1/workflows/{workflowName}": {
+      "parameters": [
+        {
+          "name": "workflowName",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" }
+        }
+      ],
+      "get": {
+        "tags": ["Workflows"],
+        "summary": "Get workflow status by name",
+        "operationId": "getWorkflow",
+        "responses": {
+          "200": { "description": "Workflow detail" }
+        }
+      },
+      "delete": {
+        "tags": ["Workflows"],
+        "summary": "Delete a terminal workflow CR",
+        "operationId": "deleteWorkflow",
+        "responses": {
+          "200": { "description": "Workflow fully removed from the cluster" }
+        }
+      }
+    },
+    "/v1/workflows/{workflowName}/abort": {
+      "post": {
+        "tags": ["Workflows"],
+        "summary": "Request graceful shutdown for a running workflow",
+        "operationId": "abortWorkflow",
+        "parameters": [
+          {
+            "name": "workflowName",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "202": { "description": "Shutdown requested" }
+        }
+      }
+    },
+    "/v1/workflows/{workflowName}/log": {
+      "get": {
+        "tags": ["Workflows"],
+        "operationId": "streamWorkflowLogs",
+        "summary": "Stream live workflow logs as one NDJSON stream",
+        "parameters": [
+          {
+            "name": "workflowName",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "podName",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "container",
+            "in": "query",
+            "schema": { "type": "string", "default": "main" }
+          },
+          {
+            "name": "follow",
+            "in": "query",
+            "schema": { "type": "boolean", "default": true }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Chunked application/x-ndjson" }
+        }
+      }
+    },
+    "/v1/workflows/{workflowName}/downloadArtifact/{artifactName}": {
+      "get": {
+        "tags": ["Workflows"],
+        "operationId": "downloadWorkflowArtifact",
+        "summary": "Signed URL or inlined artifact bytes for a workflow output artifact",
+        "parameters": [
+          {
+            "name": "workflowName",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "artifactName",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "durationSeconds",
+            "in": "query",
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "templateName",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "inline",
+            "in": "query",
+            "schema": { "type": "boolean" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "JSON signed URL unless inline is set" }
+        }
+      }
+    },
+    "/v1/modules/{module}/workflowTemplates/{template}/submit": {
+      "post": {
+        "tags": ["Catalog"],
+        "summary": "Submit a workflow template (Argo Events webhook)",
+        "operationId": "submitWorkflow",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "template",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-Horizon-Submitted-From",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string", "default": "horizon-cli" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SubmitRequest" }
+            }
+          }
+        },
+        "responses": {
+          "202": { "description": "Dispatched to Argo Events" }
+        }
+      }
+    },
+    "/v1/artifacts/buckets": {
+      "get": {
+        "tags": ["Artifacts"],
+        "summary": "List allowed GCS buckets",
+        "operationId": "listArtifactsBuckets",
+        "responses": {
+          "200": {
+            "description": "List of accessible buckets",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListBucketsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Forbidden - bucket not in allowlist"
+          }
+        }
+      }
+    },
+    "/v1/artifacts/buckets/{bucket}/objects": {
+      "get": {
+        "tags": ["Artifacts"],
+        "summary": "List objects in a GCS bucket",
+        "operationId": "listArtifactsObjects",
+        "parameters": [
+          {
+            "name": "bucket",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter objects by prefix"
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Pagination token for next page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer" },
+            "description": "Maximum number of objects to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of objects in the bucket",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListObjectsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Forbidden - bucket not in allowlist"
+          },
+          "404": {
+            "description": "Not found - bucket does not exist or is not accessible"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CatalogParameter": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "default": { "type": "string" },
+          "description": { "type": "string" }
+        },
+        "required": ["name"]
+      },
+      "CatalogEntry": {
+        "type": "object",
+        "properties": {
+          "module": { "type": "string" },
+          "templateName": { "type": "string" },
+          "namespace": { "type": "string" },
+          "parameters": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CatalogParameter" }
+          }
+        }
+      },
+      "CatalogResponse": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CatalogEntry" }
+          }
+        },
+        "required": ["entries"]
+      },
+      "SubmitRequest": {
+        "type": "object",
+        "required": ["parameters"],
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "properties": {
+              "sampleEnv": { "type": "string", "example": "cli-test" },
+              "sampleBuildId": { "type": "string", "example": "build-001" }
+            }
+          }
+        }
+      },
+      "BucketInfo": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }
+        },
+        "required": ["name"]
+      },
+      "ListBucketsResponse": {
+        "type": "object",
+        "properties": {
+          "buckets": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BucketInfo" }
+          }
+        },
+        "required": ["buckets"]
+      },
+      "ObjectInfo": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "size": { "type": "integer", "format": "int64" },
+          "contentType": { "type": "string" },
+          "updated": { "type": "string", "format": "date-time" },
+          "generation": { "type": "integer", "format": "int64" },
+          "md5Hash": { "type": "string" }
+        },
+        "required": ["name", "size"]
+      },
+      "ListObjectsResponse": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ObjectInfo" }
+          },
+          "nextPageToken": { "type": "string" }
+        },
+        "required": ["objects"]
+      }
+    }
+  }
+}

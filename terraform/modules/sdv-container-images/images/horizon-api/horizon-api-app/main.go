@@ -48,33 +48,38 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr        string
-		probeAddr          string
-		httpAddr           string
-		horizonNamespace   string
-		moduleManagerNS    string
-		workflowsNS        string
-		stateCRName        string
-		catalogCRName      string
-		oidcIssuerURL      string
-		oidcClientID       string
-		skipClientIDCheck  bool
-		eventsWebhookURL   string
-		argoBaseURL        string
-		logReadIdle        time.Duration
-		logMaxReconnect    int
-		gcsArtifactBucket  string
-		ttlAfterSuccess    int
-		ttlAfterFailure    int
-		ttlAfterCompletion int
-		gcsSigningSA       string
-		workflowDeleteWait time.Duration
+		metricsAddr             string
+		probeAddr               string
+		httpAddr                string
+		horizonNamespace        string
+		moduleManagerNS         string
+		gcsBucketsNS            string
+		workflowsNS             string
+		stateCRName             string
+		catalogCRName           string
+		oidcIssuerURL           string
+		oidcClientID            string
+		skipClientIDCheck       bool
+		eventsWebhookURL        string
+		argoBaseURL             string
+		logReadIdle             time.Duration
+		logMaxReconnect         int
+		gcsArtifactBucket       string
+		ttlAfterSuccess         int
+		ttlAfterFailure         int
+		ttlAfterCompletion      int
+		gcsSigningSA            string
+		workflowDeleteWait      time.Duration
+		artifactsModuleURL      string
+		artifactsGCSProjectID   string
+		artifactsAllowedBuckets string
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Prometheus metrics")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Health probes")
 	flag.StringVar(&httpAddr, "http-bind-address", ":8082", "HTTP API")
 	flag.StringVar(&horizonNamespace, "namespace", "horizon-api", "Namespace for this deployment")
 	flag.StringVar(&moduleManagerNS, "module-manager-namespace", "module-manager", "Namespace for Module Manager CRs")
+	flag.StringVar(&gcsBucketsNS, "gcs-buckets-namespace", "horizon", "Namespace for GCSBucket CRs (storage-gcs-module MANAGER_NAMESPACE)")
 	flag.StringVar(&workflowsNS, "workflows-namespace", "", "Namespace for WorkflowTemplate / Workflow (defaults to {prefix}workflows from WORKFLOWS_NAMESPACE env)")
 	flag.StringVar(&stateCRName, "module-manager-state-name", "cluster", "ModuleManagerState resource name")
 	flag.StringVar(&catalogCRName, "module-manager-catalog-name", "cluster", "ModuleCatalog resource name in module-manager namespace")
@@ -91,6 +96,9 @@ func main() {
 	flag.IntVar(&ttlAfterCompletion, "workflow-ttl-seconds-after-completion", 86400, "Echoed on workflow list APIs; mirror Argo ttlStrategy")
 	flag.StringVar(&gcsSigningSA, "gcs-signing-service-account", "", "Service account email for V4 signed GET URLs (artifact download); GCS_SIGNING_SERVICE_ACCOUNT")
 	flag.DurationVar(&workflowDeleteWait, "workflow-delete-wait-timeout", 10*time.Minute, "max time DELETE /v1/workflows/{name} waits for the Workflow CR to disappear (finalizers); WORKFLOW_DELETE_WAIT_TIMEOUT env overrides")
+	flag.StringVar(&artifactsModuleURL, "artifacts-module-url", "", "Storage GCS module HTTP endpoint for bucket/object listing proxy; ARTIFACTS_MODULE_URL")
+	flag.StringVar(&artifactsGCSProjectID, "artifacts-gcs-project-id", "", "GCS project ID for bucket prefix filtering; ARTIFACTS_GCS_PROJECT_ID")
+	flag.StringVar(&artifactsAllowedBuckets, "artifacts-allowed-buckets", "", "Comma-separated static bucket allowlist; ARTIFACTS_ALLOWED_BUCKETS")
 	flag.Parse()
 
 	crlog.SetLogger(zap.New(zap.UseDevMode(false)))
@@ -145,6 +153,25 @@ func main() {
 	if v := strings.TrimSpace(os.Getenv("WORKFLOW_DELETE_WAIT_TIMEOUT")); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {
 			workflowDeleteWait = d
+		}
+	}
+	if strings.TrimSpace(artifactsModuleURL) == "" {
+		artifactsModuleURL = strings.TrimSpace(os.Getenv("ARTIFACTS_MODULE_URL"))
+	}
+	if strings.TrimSpace(artifactsGCSProjectID) == "" {
+		artifactsGCSProjectID = strings.TrimSpace(os.Getenv("ARTIFACTS_GCS_PROJECT_ID"))
+	}
+	if strings.TrimSpace(artifactsAllowedBuckets) == "" {
+		artifactsAllowedBuckets = strings.TrimSpace(os.Getenv("ARTIFACTS_ALLOWED_BUCKETS"))
+	}
+
+	// Parse static allowed buckets
+	staticAllowedBuckets := make(map[string]struct{})
+	if artifactsAllowedBuckets != "" {
+		for _, bucket := range strings.Split(artifactsAllowedBuckets, ",") {
+			if bucket = strings.TrimSpace(bucket); bucket != "" {
+				staticAllowedBuckets[bucket] = struct{}{}
+			}
 		}
 	}
 
@@ -212,23 +239,29 @@ func main() {
 	}
 
 	handler := api.New(api.Options{
-		Catalog:                   cat,
-		OIDC:                      authz,
-		WorkflowsNS:               workflowsNS,
-		HTTPAddr:                  httpAddr,
-		EventsWebhookURL:          eventsWebhookURL,
-		Argo:                      argoClient,
-		LogReadIdle:               logReadIdle,
-		LogMaxReconnect:           logMaxReconnect,
-		WorkflowStore:             wfStore,
-		GCSArtifactBucket:         gcsArtifactBucket,
-		GCSSigningServiceAccount:  gcsSigningSA,
-		Retention:                 retention,
-		WorkflowDeleteWaitTimeout: workflowDeleteWait,
-		K8sClient:                 k8s,
-		ModuleManagerNS:           moduleManagerNS,
-		StateCRName:               stateCRName,
-		CatalogCRName:             catalogCRName,
+		Catalog:                       cat,
+		OIDC:                          authz,
+		WorkflowsNS:                   workflowsNS,
+		HTTPAddr:                      httpAddr,
+		EventsWebhookURL:              eventsWebhookURL,
+		Argo:                          argoClient,
+		LogReadIdle:                   logReadIdle,
+		LogMaxReconnect:               logMaxReconnect,
+		WorkflowStore:                 wfStore,
+		GCSArtifactBucket:             gcsArtifactBucket,
+		GCSSigningServiceAccount:      gcsSigningSA,
+		Retention:                     retention,
+		WorkflowDeleteWaitTimeout:     workflowDeleteWait,
+		K8sClient:                     k8s,
+		ModuleManagerNS:               moduleManagerNS,
+		GCSBucketsNS:                  gcsBucketsNS,
+		StateCRName:                   stateCRName,
+		CatalogCRName:                 catalogCRName,
+		ArtifactsModuleURL:            artifactsModuleURL,
+		ArtifactsModuleToken:          strings.TrimSpace(os.Getenv("ARTIFACTS_MODULE_TOKEN")),
+		ArtifactsModuleCAFile:         strings.TrimSpace(os.Getenv("ARTIFACTS_MODULE_CA_FILE")),
+		ArtifactsGCSProjectID:         artifactsGCSProjectID,
+		ArtifactsStaticAllowedBuckets: staticAllowedBuckets,
 	})
 	if err := mgr.Add(handler); err != nil {
 		log.Fatalf("http: %v", err)

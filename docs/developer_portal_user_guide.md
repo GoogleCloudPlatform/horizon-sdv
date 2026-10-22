@@ -32,8 +32,8 @@ limitations under the License. -->
     - [How the three modules differ (summary)](#how-the-three-modules-differ-summary)
     - [Change git ref in developer portal](#change-git-ref-in-developer-portal)
   - [Workflows via Developer Portal](#workflows-via-developer-portal)
-    - [Submit](#submit)
-    - [History](#history)
+    - [Submit](#submit-workflow)
+    - [History](#history-workflow)
     - [How to abort/delete workflows](#how-to-abortdelete-workflows)
     - [Hello-world application](#hello-world-application)
   - [Workflows via Horizon CLI](#workflows-via-horizon-cli)
@@ -62,6 +62,9 @@ limitations under the License. -->
       - [Abort a running workflow](#abort-a-running-workflow)
       - [Retrieve an artifact signed URL](#retrieve-an-artifact-signed-url)
       - [Download an artifact to a file (optional)](#download-an-artifact-to-a-file-optional)
+    - [History](#history)
+    - [Api](#api)
+    - [Artifacts](#artifacts)
     - [Cleanup](#cleanup)
     - [Uninstall](#uninstall)
       - [Remove the binary](#remove-the-binary)
@@ -166,7 +169,7 @@ Git reference can be easily changed for the modules. It can be done from Adminis
 
 ### Workflows via Developer Portal
 
-#### Submit
+#### Submit Workflow
 
 The module must be enabled to run the workflow.
 
@@ -183,7 +186,7 @@ Currently there are 2 workflows available: _sample-smoke-test_ and _sample-smoke
 
 After the module is run it can be found in "Running Workflow" tab. To open the running workflow and see the details, click on the name of the workflow. From here it is possible to view logs, download artifacts or move to GCS.
 
-#### History
+#### History Workflow
 
 When the workflow is completed it is moved to "History" tab, where all the details can be found. The workflow will be visible there for 1 day.
 
@@ -293,13 +296,28 @@ horizon.exe --help
 **Expected:** Usage text is printed, starting with:
 
 ```
-horizon - Horizon API CLI
-
 Usage:
-  horizon config <init|get|set> ...
-  horizon auth <login|logout|refresh|whoami> [flags]
-  horizon catalog get [--output text|json] [flags]  (default output: text)
-  horizon workflow <submit|wait|logs|abort|delete|show|list|get|running|history|download-artifact> ... [flags]
+   horizon [command] [flag] 
+
+Available Commands:
+   api         Discover Horizon API paths and examples
+   artifacts   List GCS buckets and objects via Horizon API
+   auth        Authentication commands
+   catalog     Inspect the Horizon workflow catalog
+   completion  Generate the autocompletion script for the specified shell
+   config      View or set configuration
+   history     Show recent CLI invocations
+   version     Show CLI version
+   workflow    Workflow/job commands
+
+Flags:    
+  -d, --debug     Enable debug output
+  -h, --help      help for horizon
+  -i, --insecure  Allow insecure TLS (self-signed certificates) - dev only
+  -j, --json      Output as JSON
+  -b, --no-banner Suppress ASCII logo and banner
+
+Use "horizon [command] --help" for more information about a command.
 ```
 
 ##### Alternative: install via `go install`
@@ -423,6 +441,14 @@ sample / sample-smoke-test
 horizon catalog get --output json
 ```
 
+```bash
+horizon catalog get --json
+```
+
+```bash
+horizon catalog get -j
+```
+
 **Expected:** Valid JSON with an `"entries"` array containing objects with `"module"`, `"templateName"`, and `"parameters"` fields.
 
 #### Workflow Submit with Submitted-From Label
@@ -451,6 +477,22 @@ horizon.exe workflow submit `
   --params-json '{"sampleEnv":"cli-test","sampleBuildId":"tcli02-001","sampleNote":"test-run"}' `
   --output json -q
   ```
+
+```bash
+horizon job submit \
+  --module sample \
+  --template sample-smoke-test \
+  --params-json '{"sampleEnv":"cli-test","sampleBuildId":"tcli02-001","sampleNote":"test-run"}' \
+  --output json -q
+```
+
+```bash
+horizon ci submit \
+  --module sample \
+  --template sample-smoke-test \
+  --params-json '{"sampleEnv":"cli-test","sampleBuildId":"tcli02-001","sampleNote":"test-run"}' \
+  --output json -q
+```
 
 **Expected output (stdout):** JSON containing the workflow name:
 
@@ -610,6 +652,165 @@ horizon.exe workflow download-artifact $env:WF_NAME "<artifact-name>" -o ./artif
 
 **Expected:** A progress bar on stderr followed by a completion message. The file `./artifact-output` is created with the artifact contents.
 
+#### History
+
+Each command is appended to `~/.config/horizon/history-YYYY-MM.json` (the `history` command itself is not recorded, so the list stays useful for repeat and audit). Values of secret flags (for example `--client-secret`) and JWT-like tokens are stored as `***`.
+
+Show the last 10 invocations (default):
+
+```bash
+horizon history
+```
+
+Show more (up to 100):
+
+```bash
+horizon history 25
+```
+
+JSON array of `{timestamp, command}` objects:
+
+```bash
+horizon history -j
+```
+
+```bash
+horizon history 5 --json
+```
+
+**Expected (text):** One line per invocation, newest last, for example:
+
+```
+2026-09-15T12:00:00Z  horizon auth login --device --domain example.com
+2026-09-15T12:01:00Z  horizon catalog get
+```
+
+**Expected (JSON):** A JSON array, for example:
+
+```json
+[
+  {
+    "timestamp": "2026-09-15T12:00:00Z",
+    "command": "horizon auth login --client-secret *** --device"
+  }
+]
+```
+
+#### Api
+
+##### `horizon api list`
+List API operations with method, path, and summary. Supports filtering by tag, method, and path prefix.
+
+```bash
+horizon api list [flags]
+```
+
+**Flags:**
+- `--tag TAG`: Filter by tag
+- `--method METHOD`: Filter by HTTP method (GET, POST, etc.)
+- `--path-prefix P`: Filter by path prefix
+- `-j, --json`: Output as JSON
+
+**Examples:**
+```bash
+# List all operations
+horizon api list
+
+# List only GET operations
+horizon api list --method GET
+
+# List operations under a specific path
+horizon api list --path-prefix /v1/workflows
+
+# List operations by tag
+horizon api list --tag Workflows
+
+# Output as JSON
+horizon api list -j
+```
+
+##### `horizon api show`
+Show detailed information about a specific API operation including parameters and example request. Accepts either an operationId or METHOD PATH.
+
+```bash
+horizon api show <operationId|METHOD PATH>
+```
+
+**Examples:**
+```bash
+# Show by operationId
+horizon api show listWorkflowsRunning
+
+# Show by method and path
+horizon api show "GET /v1/catalog"
+
+# Show with JSON output
+horizon api show deleteWorkflow -j
+```
+
+##### `horizon api paths`
+List all unique API paths available in the Horizon API.
+
+```bash
+horizon api paths
+```
+
+##### `horizon api refresh`
+Fetch the latest OpenAPI specification from the Horizon API and cache it locally. This updates the embedded OpenAPI snapshot with live data from `{api}/openapi.json`.
+
+```bash
+horizon api refresh
+```
+
+#### Artifacts
+
+##### `horizon artifacts buckets`
+List GCS buckets that are accessible through the Horizon API. Only buckets in the allowlist or matching GCSBucket CRs are returned.
+
+```bash
+horizon artifacts buckets [flags]
+```
+
+**Examples:**
+```bash
+# List all buckets
+horizon artifacts buckets
+
+# Output as JSON
+horizon artifacts buckets -j
+```
+
+##### `horizon artifacts objects`
+List GCS objects in a GCS bucket through the Horizon API. Supports prefix filtering and pagination
+
+```bash
+horizon artifacts objects BUCKET [flags]
+```
+
+**Flags:**
+- `--limit`: Maximum number of objects to return
+- `--page-token`: Pagination token for next page
+- `--prefix`: Filter objects by prefix
+- `-j, --json`: Output as JSON
+
+**Examples:**
+```bash
+# List all objects
+horizon artifacts objects BUCKET
+
+# List objects with given limit
+horizon artifacts objects BUCKET --limit 2
+
+# List objects with given pagination token
+horizon artifacts objects BUCKET --page-token 2
+
+# Filter objects by given prefix
+horizon artifacts objects BUCKET --prefix "some_prefix"
+
+# Output as JSON
+horizon artifacts objects BUCKET -j
+```
+
 #### Cleanup
 
 After the work is done, optionally log out and remove local state:
@@ -672,7 +873,7 @@ Remove-Item "$env:APPDATA\horizon" -Recurse -Force
 Remove-Item "$HOME\.config\horizon" -Recurse -Force
 ```
 
-This deletes both `config.yaml` and `token.json`.
+This deletes `config.yaml`, `token.json` and `history.json`.
 
 ##### Verify removal
 

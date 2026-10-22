@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package horizon
 
 import (
 	"encoding/base64"
@@ -21,7 +21,7 @@ import (
 )
 
 // decodeJWTPayload returns the middle segment of a JWT as JSON (display-only, not verified).
-func decodeJWTPayload(token string) (map[string]any, error) {
+func DecodeJWTPayload(token string) (map[string]any, error) {
 	parts := strings.Split(strings.TrimSpace(token), ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("not a JWT")
