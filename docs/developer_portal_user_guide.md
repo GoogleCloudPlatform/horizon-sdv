@@ -31,12 +31,13 @@ limitations under the License. -->
       - [Auto-disable](#auto-disable-1)
     - [How the three modules differ (summary)](#how-the-three-modules-differ-summary)
     - [Change git ref in developer portal](#change-git-ref-in-developer-portal)
-  - [Workflows via Developer Portal](#workflows-via-developer-portal)
+  - [Open Argo Workflows from Developer Portal](#open-workflows-from-developer-portal)
+  - [Submit Workflows via Developer Portal](#submit-workflows-via-developer-portal)
     - [Submit](#submit)
     - [History](#history)
     - [How to abort/delete workflows](#how-to-abortdelete-workflows)
     - [Hello-world application](#hello-world-application)
-  - [Workflows via Horizon CLI](#workflows-via-horizon-cli)
+  - [Submit Workflows via Horizon CLI](#submit-workflows-via-horizon-cli)
     - [Installation](#installation)
       - [Prerequisite](#prerequisite)
       - [Build the binary](#build-the-binary)
@@ -106,7 +107,7 @@ There are 3 tabs available by default:
 - Landing
 - Administration
 
-The Landing Page provides a simple and clear home page for the Horizon SDV project with developer (Gerrit, Jenkins, MTK Connect, MCP Gateway Registry) and admin (Keycloak, Argo CD, Headlamp, Grafana) applications as cards opening cluster paths in a new tab.
+The Landing Page provides a simple and clear home page for the Horizon SDV project with developer (Gerrit, Jenkins, MTK Connect, MCP Gateway Registry) and admin (Keycloak, Argo CD, Argo Workflows, Headlamp, Grafana) applications as cards opening cluster paths in a new tab.
 
 In Administration tab the modules can be enabled/disabled; if the module is enabled it should be listed with the other tabs.
 
@@ -164,7 +165,11 @@ Auto-disable of modules is optional. By default - the modules do not get disable
 
 Git reference can be easily changed for the modules. It can be done from Administration tab in Modules section. After the change the Target Revision for this particular app should be aligned automatically in ArgoCD.
 
-### Workflows via Developer Portal
+### Open Workflows from Developer Portal
+
+Argo Workflows can be accessed directly from the Developer Portal through a dedicated application tile. The tile provides a convenient entry point to the Argo Workflows UI, allowing users to open it directly from the Developer Portal.
+
+### Submit Workflows via Developer Portal
 
 #### Submit
 
@@ -204,7 +209,7 @@ _Hello World_ application can be found in "Developer Portal" → "sample tab" �
 - true — if sample-soft is enabled
 - false — if sample-soft is disabled
 
-### Workflows via Horizon CLI
+### Submit Workflows via Horizon CLI
 
 Replace placeholder values (marked with `<...>`) with your environment-specific values before running.
 
