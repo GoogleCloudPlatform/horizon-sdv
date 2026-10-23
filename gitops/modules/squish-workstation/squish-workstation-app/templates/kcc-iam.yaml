@@ -1,0 +1,124 @@
+# Copyright (c) 2026 The Qt Company Ltd., All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Workstation VM service account and project-level IAM bindings.
+# Requires the Config Connector GSA (gke-config-connector-sa) to hold roles/resourcemanager.projectIamAdmin
+# (terraform/env/main.tf). Config Connector cannot bind IAM on WorkstationCluster/WorkstationConfig, and
+# Artifact Registry does not support resource.name IAM conditions, so bindings are project-level; only the
+# Secret Manager binding is narrowed to the Squish license secret with an IAM condition.
+# IAMPolicyMember spec is immutable: names include a hash of member and role so that changing
+# squish.creators creates new bindings and Argo CD prunes the old ones.
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: {{ .Values.squish.serviceAccountId }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+  labels:
+    {{- include "squish-workstation-app.labels" . | nindent 4 }}
+spec:
+  displayName: "Squish Cloud Workstation VM"
+  description: "Runs Squish Cloud Workstation VMs (Horizon SDV module {{ .Values.parentModuleName }})"
+---
+# License key read at workstation start (/etc/workstation-startup.d/200_setting-squish.sh).
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: {{ .Values.parentModuleName }}-vm-license-secret-accessor
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+  labels:
+    {{- include "squish-workstation-app.labels" . | nindent 4 }}
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: {{ .Values.squish.serviceAccountId }}
+  role: roles/secretmanager.secretAccessor
+  resourceRef:
+    kind: Project
+    external: projects/{{ .Values.gcpProjectId }}
+  condition:
+    title: squish-license-secret-only
+    description: Limit access to the Squish license secret {{ .Values.squish.licenseSecretName }}.
+    expression: >-
+      (resource.type == "secretmanager.googleapis.com/Secret" &&
+      resource.name.endsWith("/secrets/{{ .Values.squish.licenseSecretName }}")) ||
+      (resource.type == "secretmanager.googleapis.com/SecretVersion" &&
+      resource.name.extract("/secrets/{secret}/versions/") == "{{ .Values.squish.licenseSecretName }}")
+---
+# Pull the Squish image from Artifact Registry when a workstation starts.
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: {{ .Values.parentModuleName }}-vm-artifactregistry-reader
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+  labels:
+    {{- include "squish-workstation-app.labels" . | nindent 4 }}
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: {{ .Values.squish.serviceAccountId }}
+  role: roles/artifactregistry.reader
+  resourceRef:
+    kind: Project
+    external: projects/{{ .Values.gcpProjectId }}
+---
+# Cloud Logging from the workstation VM (Horizon GNOME base: /google/scripts/cloud_logging_setup.sh).
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: {{ .Values.parentModuleName }}-vm-log-writer
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+  labels:
+    {{- include "squish-workstation-app.labels" . | nindent 4 }}
+spec:
+  memberFrom:
+    serviceAccountRef:
+      name: {{ .Values.squish.serviceAccountId }}
+  role: roles/logging.logWriter
+  resourceRef:
+    kind: Project
+    external: projects/{{ .Values.gcpProjectId }}
+{{- range $member := .Values.squish.creators }}
+{{- range $role := list "roles/workstations.workstationCreator" "roles/workstations.operationViewer" }}
+---
+# Self-service: {{ $member }} may create (and then use) their own workstations.
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: {{ $.Values.parentModuleName }}-creator-{{ printf "%s|%s" $member $role | sha256sum | trunc 12 }}
+  namespace: {{ $.Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    cnrm.cloud.google.com/project-id: "{{ $.Values.gcpProjectId }}"
+  labels:
+    {{- include "squish-workstation-app.labels" $ | nindent 4 }}
+spec:
+  member: {{ $member | quote }}
+  role: {{ $role }}
+  resourceRef:
+    kind: Project
+    external: projects/{{ $.Values.gcpProjectId }}
+{{- end }}
+{{- end }}

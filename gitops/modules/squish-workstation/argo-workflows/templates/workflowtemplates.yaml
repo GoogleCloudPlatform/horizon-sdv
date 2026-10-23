@@ -1,0 +1,263 @@
+# Copyright (c) 2026 The Qt Company Ltd., All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# squish-workstation-init: verifies prerequisites (license secret, Artifact Registry repository, base image) and
+#   builds/pushes the Squish workstation image with the common-docker-image-build ClusterWorkflowTemplate
+#   (workloads-common). Run once after enabling the module and whenever the image should be rebuilt.
+# squish-workstation-execute: smoke test. Creates (if missing) and starts a test workstation from the Squish
+#   WorkstationConfig, checks that the Squish license and installation are present, then stops it.
+# Argo Events: Sensors webhook-squish-workstation-init / webhook-squish-workstation-execute (templates/sensors.yaml).
+{{- $umbrellaCreds := include "squish-workstation-wf.umbrellaCreds" . }}
+{{- $dockerArtifactPathName := printf "%s/%s" .Values.squish.artifactRepository .Values.squish.imageName }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ .Values.parentModuleName }}-init
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    app.kubernetes.io/name: init
+    horizon-sdv.io/expose: "true"
+    horizon-sdv.io/module: {{ .Values.parentModuleName }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: run-init
+  serviceAccountName: {{ .Values.serviceAccounts.init }}
+  archiveLogs: true
+  arguments:
+    parameters:
+      - name: horizonSubmittedFrom
+        value: ""
+        description: "Where the submit call originated (Horizon); mirrored on workflow label horizon-sdv.io/submitted-from."
+      - name: baseImage
+        value: {{ include "squish-workstation-wf.baseImage" . | quote }}
+        description: "Full URI of the Horizon GNOME base image the Squish layer is built on."
+      - name: imageTag
+        value: {{ .Values.squish.imageTag | quote }}
+        description: "Tag for the Squish image. The WorkstationConfig uses squish.imageTag from the module values."
+      - name: dryRun
+        value: "false"
+        description: "When true, build the image but do not push it."
+  templates:
+    - name: run-init
+      dag:
+        tasks:
+          - name: check-prerequisites
+            template: check-prerequisites
+{{- if $umbrellaCreds }}
+          - name: prepare-pipeline-git-creds
+            templateRef:
+              name: prepare-pipeline-git-creds
+              template: prepare-pipeline-git-creds
+              clusterScope: true
+            arguments:
+              parameters:
+                - name: scmAuthMethod
+                  value: {{ .Values.scmAuthMethod | quote }}
+                - name: pipelineStaticGitSecretName
+                  value: {{ .Values.sourceRepoSecret | default "workflow-pipeline-git-creds" | quote }}
+                - name: horizonSubmittedFrom
+                  value: '{{ "{{" }}workflow.parameters.horizonSubmittedFrom{{ "}}" }}'
+{{- end }}
+          - name: build-image
+            templateRef:
+              name: {{ .Values.clusterWorkflowTemplateName | quote }}
+              template: build
+              clusterScope: true
+            depends: check-prerequisites.Succeeded{{ if $umbrellaCreds }} && prepare-pipeline-git-creds.Succeeded{{ end }}
+            arguments:
+              artifacts:
+                - name: source
+                  path: /workspace
+                  git:
+                    repo: {{ .Values.sourceRepo.url | quote }}
+                    revision: {{ .Values.sourceRepo.revision | quote }}
+{{- include "squish-workstation-wf.gitArtifactCreds" . | nindent 20 }}
+              parameters:
+                - name: horizonSubmittedFrom
+                  value: '{{ "{{" }}workflow.parameters.horizonSubmittedFrom{{ "}}" }}'
+                - name: cloudProject
+                  value: {{ .Values.gcpProjectId | quote }}
+                - name: cloudRegion
+                  value: {{ .Values.squish.region | quote }}
+                - name: dockerArtifactPathName
+                  value: {{ $dockerArtifactPathName | quote }}
+                - name: imageTag
+                  value: "{{ "{{" }}workflow.parameters.imageTag{{ "}}" }}"
+                - name: dryRun
+                  value: "{{ "{{" }}workflow.parameters.dryRun{{ "}}" }}"
+                - name: dockerfileDir
+                  value: {{ .Values.dockerfileDir | quote }}
+                - name: buildArgs
+                  value: |
+                    BASE_IMAGE={{ "{{" }}workflow.parameters.baseImage{{ "}}" }}
+                    GCP_REGION={{ .Values.squish.region }}
+                    SQUISH_GCP_LICENSE_SECRET={{ .Values.squish.licenseSecretName }}
+                - name: platform
+                  value: linux/amd64
+    - name: check-prerequisites
+      container:
+        image: {{ .Values.cloudSdkImage | quote }}
+        command: [bash, -euo, pipefail, -c]
+        env:
+          - name: PROJECT
+            value: {{ .Values.gcpProjectId | quote }}
+          - name: REGION
+            value: {{ .Values.squish.region | quote }}
+          - name: LICENSE_SECRET
+            value: {{ .Values.squish.licenseSecretName | quote }}
+          - name: REPOSITORY
+            value: {{ .Values.squish.artifactRepository | quote }}
+          - name: BASE_IMAGE
+            value: "{{ "{{" }}workflow.parameters.baseImage{{ "}}" }}"
+        args:
+          - |
+            echo "Checking access to Secret Manager secret '${LICENSE_SECRET}' (value is not printed)..."
+            if ! gcloud secrets versions access latest --secret="${LICENSE_SECRET}" --project="${PROJECT}" > /dev/null; then
+              echo "ERROR: cannot read secret '${LICENSE_SECRET}'. Create it with your Squish license key (see module README)."
+              exit 1
+            fi
+            echo "Checking Artifact Registry repository '${REPOSITORY}' in ${REGION}..."
+            if ! gcloud artifacts repositories describe "${REPOSITORY}" --location="${REGION}" --project="${PROJECT}" > /dev/null; then
+              echo "ERROR: repository '${REPOSITORY}' not found. Check that Argo CD Application mod-{{ .Values.parentModuleName }}-squish-workstation-app is Synced/Healthy."
+              exit 1
+            fi
+            case "${BASE_IMAGE}" in
+              *-docker.pkg.dev/*)
+                echo "Checking base image '${BASE_IMAGE}'..."
+                if ! gcloud artifacts docker images describe "${BASE_IMAGE}" > /dev/null; then
+                  echo "ERROR: base image '${BASE_IMAGE}' not found. Publish horizon-gnome with the Jenkins job"
+                  echo "'Cloud Workstations > Workstation Images > Horizon GNOME' (or the image chain job), or pass baseImage."
+                  exit 1
+                fi
+                ;;
+              *)
+                echo "Base image '${BASE_IMAGE}' is not in Artifact Registry; skipping existence check."
+                ;;
+            esac
+            echo "Prerequisites OK."
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ .Values.parentModuleName }}-execute
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    app.kubernetes.io/name: execute
+    horizon-sdv.io/expose: "true"
+    horizon-sdv.io/module: {{ .Values.parentModuleName }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: run-execution
+  serviceAccountName: {{ .Values.serviceAccounts.execute }}
+  archiveLogs: true
+  arguments:
+    parameters:
+      - name: horizonSubmittedFrom
+        value: ""
+        description: "Where the submit call originated (Horizon); mirrored on workflow label horizon-sdv.io/submitted-from."
+      - name: workstationId
+        value: squish-smoke-test
+        description: "ID of the test workstation (created from the Squish WorkstationConfig if it does not exist)."
+      - name: verifySquish
+        value: "true"
+        description: "When true, check over SSH that the Squish license and installation are present on the workstation."
+      - name: deleteWorkstation
+        value: "false"
+        description: "When true, delete the test workstation afterwards. Its home disk is retained (reclaimPolicy RETAIN) and must be deleted manually."
+  templates:
+    - name: run-execution
+      dag:
+        tasks:
+          - name: smoke-test
+            template: smoke-test
+    - name: smoke-test
+      container:
+        image: {{ .Values.cloudSdkImage | quote }}
+        command: [bash, -euo, pipefail, -c]
+        env:
+          - name: PROJECT
+            value: {{ .Values.gcpProjectId | quote }}
+          - name: REGION
+            value: {{ .Values.squish.region | quote }}
+          - name: CLUSTER
+            value: {{ .Values.squish.clusterName | quote }}
+          - name: CONFIG
+            value: {{ .Values.squish.configName | quote }}
+          - name: WORKSTATION
+            value: "{{ "{{" }}workflow.parameters.workstationId{{ "}}" }}"
+          - name: VERIFY_SQUISH
+            value: "{{ "{{" }}workflow.parameters.verifySquish{{ "}}" }}"
+          - name: DELETE_WORKSTATION
+            value: "{{ "{{" }}workflow.parameters.deleteWorkstation{{ "}}" }}"
+        args:
+          - |
+            WS_ARGS=(--config="${CONFIG}" --cluster="${CLUSTER}" --region="${REGION}" --project="${PROJECT}")
+
+            echo "Checking WorkstationConfig '${CONFIG}' in cluster '${CLUSTER}' (${REGION})..."
+            IMAGE="$(gcloud workstations configs describe "${CONFIG}" --cluster="${CLUSTER}" --region="${REGION}" \
+              --project="${PROJECT}" --format='value(container.image)')"
+            echo "Configured image: ${IMAGE}"
+            if ! gcloud artifacts docker images describe "${IMAGE}" > /dev/null; then
+              echo "ERROR: image '${IMAGE}' not found. Run {{ .Values.parentModuleName }}-init first."
+              exit 1
+            fi
+
+            cleanup() {
+              echo "Stopping workstation '${WORKSTATION}'..."
+              gcloud workstations stop "${WORKSTATION}" "${WS_ARGS[@]}" || true
+              case "${DELETE_WORKSTATION}" in
+                [Tt][Rr][Uu][Ee])
+                  echo "Deleting workstation '${WORKSTATION}' (home disk is retained)..."
+                  gcloud workstations delete "${WORKSTATION}" "${WS_ARGS[@]}" --quiet || true
+                  ;;
+              esac
+            }
+
+            if ! gcloud workstations describe "${WORKSTATION}" "${WS_ARGS[@]}" > /dev/null 2>&1; then
+              echo "Creating workstation '${WORKSTATION}'..."
+              gcloud workstations create "${WORKSTATION}" "${WS_ARGS[@]}"
+            fi
+            trap cleanup EXIT
+
+            echo "Starting workstation '${WORKSTATION}'..."
+            gcloud workstations start "${WORKSTATION}" "${WS_ARGS[@]}"
+            STATE="$(gcloud workstations describe "${WORKSTATION}" "${WS_ARGS[@]}" --format='value(state)')"
+            echo "Workstation state: ${STATE}"
+            if [ "${STATE}" != "STATE_RUNNING" ]; then
+              echo "ERROR: workstation is not running."
+              exit 1
+            fi
+
+            case "${VERIFY_SQUISH}" in
+              [Tt][Rr][Uu][Ee]) ;;
+              *) echo "Smoke test passed (Squish verification skipped)."; exit 0 ;;
+            esac
+
+            # Fresh, ephemeral pod: accept the workstation host key without prompting.
+            mkdir -p "${HOME}/.ssh"
+            printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' > "${HOME}/.ssh/config"
+            # Startup scripts (/etc/workstation-startup.d) may still be running right after start.
+            for attempt in $(seq 1 20); do
+              if gcloud workstations ssh "${WORKSTATION}" "${WS_ARGS[@]}" \
+                  --command='test -s ~/.squish-license && test -e ~/squish && echo SQUISH_READY' | grep -q SQUISH_READY; then
+                echo "Smoke test passed: Squish license and installation found on '${WORKSTATION}'."
+                exit 0
+              fi
+              echo "Squish not ready yet (attempt ${attempt}/20); retrying in 15s..."
+              sleep 15
+            done
+            echo "ERROR: ~/.squish-license or ~/squish missing on '${WORKSTATION}'. Check the workstation startup logs."
+            exit 1
