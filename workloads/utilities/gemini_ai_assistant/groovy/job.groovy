@@ -84,8 +84,8 @@ pipelineJob('Utilities/Gemini AI Assistant') {
 
     choiceParam {
       name('AI_REVIEW_RUNTIME')
-      description('''<p>AI Review runtime: <code>gemini-cli</code> (CLI, default) or <code>agy</code> (Antigravity SDK).</p>''')
-      choices(['gemini-cli', 'agy'])
+      description('''<p>AI Review runtime: <code>agy</code> (Antigravity SDK, default) or <code>gemini-cli</code> (CLI).</p>''')
+      choices(['agy', 'gemini-cli'])
     }
 
     stringParam {

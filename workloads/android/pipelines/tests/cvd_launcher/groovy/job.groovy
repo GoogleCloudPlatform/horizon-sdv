@@ -212,7 +212,7 @@ pipelineJob(cvdJobFullName) {
     choiceParam {
       name('AI_REVIEW_RUNTIME')
       description('''<p>AI Review runtime: <code>gemini-cli</code> (CLI, default) or <code>agy</code> (Antigravity SDK).</p>''')
-      choices(['gemini-cli', 'agy'])
+      choices(['agy', 'gemini-cli'])
     }
 
     choiceParam {
