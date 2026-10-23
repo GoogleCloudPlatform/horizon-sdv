@@ -153,6 +153,7 @@ def _sanitize_finding(f: dict[str, Any]) -> Finding:
         root_cause=rc,
         confidence=conf,
         evidence=evidence,
+        recommended_fix=_sanitize_fix_list(f.get("recommended_fix")),
     )
 
 
@@ -165,14 +166,24 @@ def _sanitize_recommended_fix(raw_fix: Any) -> RecommendedFix:
         files = [str(f) for f in raw_fix.get("files", []) if isinstance(f, (str, int))]
         commands = [str(c) for c in raw_fix.get("commands", []) if isinstance(c, (str, int))]
         verification = [str(v) for v in raw_fix.get("verification", []) if isinstance(v, (str, int))]
+        patches = [str(p) for p in raw_fix.get("patches", []) if isinstance(p, (str, int))]
         return RecommendedFix(
             summary=summary,
             files=files,
             commands=commands,
             verification=verification,
+            patches=patches,
         )
     return RecommendedFix(summary="Address findings identified during test execution.")
 
+def _sanitize_fix_list(raw_fix: Any) -> list[RecommendedFix]:
+    if isinstance(raw_fix, list):
+        items = raw_fix
+    elif isinstance(raw_fix, (dict, str)):
+        items = [raw_fix]
+    else:
+        return []
+    return [_sanitize_recommended_fix(item) for item in items]
 
 def _sanitize_analysis_dict(data: dict[str, Any], default_classification: str) -> HorizonAnalysis:
     _, _, _, HorizonAnalysis = _resolve_models()

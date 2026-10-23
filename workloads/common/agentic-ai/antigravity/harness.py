@@ -399,22 +399,20 @@ def render_markdown(payload: dict[str, Any]) -> str:
                     if values:
                         sections.extend(["", f"#### {label}", *[f"- `{item}`" if label != "Verification" else f"- {item}" for item in values]])
 
-    # Top-level Evidence (when no findings are present, e.g. insufficient_evidence)
-    if not findings:
-        top_level_evidence = list(payload.get("evidence") or [])
-        evidence_lines: list[str] = []
-        for item in top_level_evidence:
-            if isinstance(item, dict):
-                source = item.get("source") or "unknown"
-                location = f" ({item['location']})" if item.get("location") else ""
-                detail = item.get("detail") or ""
-                evidence_lines.append(f"- `{source}`{location}: {detail}")
-            elif isinstance(item, str) and item.strip():
-                evidence_lines.append(f"- {item.strip()}")
-        if not evidence_lines:
-            evidence_lines = ["- No supporting evidence was returned."]
-
+    # Top-level Evidence 
+    top_level_evidence = list(payload.get("evidence") or [])
+    evidence_lines: list[str] = []
+    for item in top_level_evidence:
+        if isinstance(item, dict):
+            source = item.get("source") or "unknown"
+            location = f" ({item['location']})" if item.get("location") else ""
+            detail = item.get("detail") or ""
+            evidence_lines.append(f"- `{source}`{location}: {detail}")
+        elif isinstance(item, str) and item.strip():
+            evidence_lines.append(f"- {item.strip()}")
+    if evidence_lines:
         sections.extend(["", "## Evidence", *evidence_lines])
+    elif not findings:
 
     # Top-level Recommended Fix (when findings didn't supply fixes or when findings is empty)
     global_fix = payload.get("recommended_fix") or {}
