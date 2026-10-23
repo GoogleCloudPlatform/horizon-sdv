@@ -100,13 +100,14 @@ Delete the ABFS cache directory prior to build.
 
 Optional parameter that allows the user to include additional commands to run after the repo has been synced, or cloned.
 
-The build/soong fix ABFS needs (Soong runs `soong_build` in a sandbox where the ABFS mount is read-only) is applied automatically by `aaos_environment.sh` based on the lunch target, so this parameter can stay empty:
+The build/soong fix ABFS needs (Soong runs `soong_build` in a sandbox where the ABFS mount is read-only) is applied automatically by `aaos_environment.sh` based on `AAOS_REVISION`, so this parameter can stay empty:
 
-| Android | Lunch target | Applied automatically |
-|---------|--------------|-----------------------|
-| 14 (android-14.0.0_r30) | `*ap1a*` | nothing |
-| 15 (android-15.0.0_r36) | `*bp1a*` | build/soong cherry-picks 3619490, 3619491, 3619492 |
-| 16 (android-16.0.0_r3) | `*bp3a*`, `*bp4a*` | `sed` on `ui/build/soong.go` so `TOP` and `LOG_DIR` are passed to `soong_build` as sandbox paths |
+| `AAOS_REVISION` | Applied automatically |
+|-----------------|-----------------------|
+| `android-14*`, `android-15.0.0_r4` | nothing |
+| `android-15*` (tested: android-15.0.0_r36) | build/soong cherry-picks 3619490, 3619491, 3619492 |
+| `android-16*` (tested: android-16.0.0_r3) | `sed` on `ui/build/soong.go` so `TOP` and `LOG_DIR` are passed to `soong_build` as sandbox paths |
+| branch names (`android-latest-release`, `main`, custom) | taken from the release config in the lunch target: `*bp1a*` cherry-picks, `*bp3a*`/`*bp4a*` sed, otherwise nothing |
 
 Anything set here runs after the automatic fix. This is a single command line, so use of logical operators to execute subsequent commands is essential.
 

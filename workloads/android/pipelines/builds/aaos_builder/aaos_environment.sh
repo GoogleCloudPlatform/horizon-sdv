@@ -568,21 +568,42 @@ fi
 # ABFS: Soong runs soong_build in an nsjail sandbox where the ABFS mount is
 # read-only and the out directory is only writable at /src/out. The fix needed
 # so that Soong writes under the sandbox path differs per Android version, so
-# it is selected from the lunch target instead of being a user default.
-#   - Android 14 (ap1a) / 15.0.0_r4 (ap3a): nothing needed.
-#   - Android 15 (bp1a): upstream build/soong sandbox changes 3619490-3619492
+# it is selected from AAOS_REVISION instead of being a user default.
+#   - Android 14 / 15.0.0_r4: nothing needed.
+#   - Android 15: upstream build/soong sandbox changes 3619490-3619492
 #     (abandoned on main, still fetchable).
-#   - Android 16 (bp3a/bp4a): pass TOP and LOG_DIR through sandboxPath in
+#   - Android 16: pass TOP and LOG_DIR through sandboxPath in
 #     ui/build/soong.go; without it soong_build panics with
 #     "open /abfs/out/soong/.temp/rawN: read-only file system".
+# Branch names (android-latest-release, main, custom) carry no version, so for
+# those the release config in the lunch target (bp1a, bp3a, bp4a) is used.
 if [[ "${ABFS_BUILDER}" == "true" ]]; then
-    case "${AAOS_LUNCH_TARGET}" in
-        *bp1a*)
+    ABFS_SOONG_FIX="none"
+    case "${AAOS_REVISION}" in
+        android-14*|android-15.0.0_r4)
+            ABFS_SOONG_FIX="none"
+            ;;
+        android-15*)
+            ABFS_SOONG_FIX="cherry-pick"
+            ;;
+        android-16*)
+            ABFS_SOONG_FIX="sed"
+            ;;
+        *)
+            case "${AAOS_LUNCH_TARGET}" in
+                *bp1a*) ABFS_SOONG_FIX="cherry-pick" ;;
+                *bp3a*|*bp4a*) ABFS_SOONG_FIX="sed" ;;
+            esac
+            echo "ABFS: AAOS_REVISION ${AAOS_REVISION} carries no Android version, build/soong fix '${ABFS_SOONG_FIX}' taken from lunch target ${AAOS_LUNCH_TARGET}"
+            ;;
+    esac
+    case "${ABFS_SOONG_FIX}" in
+        cherry-pick)
             POST_REPO_COMMAND_LIST+=(
                 "cd build/soong ; git fetch https://android.googlesource.com/platform/build/soong refs/changes/90/3619490/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/91/3619491/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/3619492/1 && git cherry-pick FETCH_HEAD; cd -"
             )
             ;;
-        *bp3a*|*bp4a*)
+        sed)
             POST_REPO_COMMAND_LIST+=(
                 "cd build/soong && sed -i -e 's|Set(\"TOP\", os.Getenv(\"TOP\"))|Set(\"TOP\", config.sandboxPath(os.Getenv(\"TOP\"), os.Getenv(\"TOP\")))|' -e 's|Set(\"LOG_DIR\", config.LogsDir())|Set(\"LOG_DIR\", config.sandboxPath(os.Getenv(\"TOP\"), config.LogsDir()))|' ui/build/soong.go && grep -q 'sandboxPath(os.Getenv(\"TOP\")' ui/build/soong.go; cd -"
             )
