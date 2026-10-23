@@ -79,7 +79,7 @@ spec:
   # Model/command: non-empty geminiModel builds gemini --model <name> --yolo --output-format json for gemini-review;
   # if geminiModel is empty, geminiCommandLine is passed through unchanged.
   enableGeminiAiAssistant: "true"
-  # AI review execution runtime: gemini-cli (default) or agy.
+  # AI review execution runtime: agy (chart default) or gemini-cli.
   aiReviewRuntime: "agy"
   geminiModel: "gemini-3.8-flash"
   geminiAnalyseOnSuccess: "false"

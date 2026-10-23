@@ -90,19 +90,20 @@ spec:
   useElevatedWorkflowIam: true
   serviceAccountName: workflow-executor
   enableGeminiAiAssistant: "true"
-  # AI review execution runtime: gemini-cli (default) or agy.
+  # AI review execution runtime: agy (chart default) or gemini-cli.
   aiReviewRuntime: "agy"
-  # Sequenced prompts (triage -> RCA -> fixes); paths under this chart's prompt/sequenced/.
+  # Sequenced prompts for gemini-cli only. Antigravity ignores these and uses antigravity/skills/.
   geminiPromptFile: /workspace/workloads/android/pipelines/builds/aaos_builder/prompt/sequenced/step1_triage.txt
   geminiPromptFile2: /workspace/workloads/android/pipelines/builds/aaos_builder/prompt/sequenced/step2_rca.txt
   geminiPromptFile3: /workspace/workloads/android/pipelines/builds/aaos_builder/prompt/sequenced/step3_fixes.txt
-  # Mandatory path to skills.yaml for gemini_initialise (same directory as sequenced prompts).
+  # skills.yaml for gemini_initialise. Used only when aiReviewRuntime is gemini-cli.
   geminiSkillsYaml: /workspace/workloads/android/pipelines/builds/aaos_builder/prompt/sequenced/skills.yaml
   geminiPreviewFeatures: "true"
   geminiLocationGlobal: "true"
   # Build step only: when non-empty, build pod GEMINI_COMMAND_LINE becomes
   #   gemini --model <geminiModel> --yolo --output-format json
-  # gemini-review pod (inline step) uses the same spec.gemini* keys as the build step for CLI / timeout / Vertex flags.
+  # geminiCommandLine is used only when aiReviewRuntime is gemini-cli.
+  # geminiModel is exported as GEMINI_MODEL for both runtimes. Timeout and Vertex flags apply to both.
   geminiModel: ""
   geminiCommandLine: gemini --yolo --output-format json
   geminiAiExecutionTimeoutMinutes: "60"

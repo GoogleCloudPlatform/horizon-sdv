@@ -32,8 +32,8 @@
 #   3. Optional review-pre hook (GEMINI_HOOK_DIR + GEMINI_HOOK_PROFILE).
 #   4. Rewrite /workspace-prefixed prompt paths to REPO_ROOT when Argo uses /workspace.
 #   5. Analysis runtime (AI_REVIEW_RUNTIME):
-#        gemini-cli (default) → gemini_initialise.sh + gemini_analysis.sh
-#        agy → workloads/common/agentic-ai/antigravity/harness.py
+#        agy (default) → workloads/common/agentic-ai/antigravity/run_agy_ai_review.sh
+#        gemini-cli → gemini_initialise.sh + gemini_analysis.sh
 #   6. Optional review-post hook.
 #   7. Optional move_gemini_artifacts (skip if GEMINI_SKIP_MOVE_ARTIFACTS=1).
 #   8. Trim empty headless JSON; optional GEMINI_POST_REVIEW_COMMAND.

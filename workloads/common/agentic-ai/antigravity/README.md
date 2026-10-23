@@ -23,12 +23,11 @@ The existing pipeline entrypoint remains:
 workloads/common/agentic-ai/gemini/run_ai_review.sh
 ```
 
-Set `AI_REVIEW_RUNTIME=agy` to select this harness. The default remains
-`gemini-cli`.
+`run_ai_review.sh` selects this harness when `AI_REVIEW_RUNTIME` is `agy` or unset. That is the default: Jenkins parameters list `agy` first, Helm charts set `spec.aiReviewRuntime` to `agy`, and the AAOS, CTS, and CVD templates fall back to `agy` when the value is empty. Set `AI_REVIEW_RUNTIME=gemini-cli` to use the headless Gemini CLI instead.
 
 ## Runtime behavior
 
-`run_ai_review.sh` runs `GEMINI_ARTIFACTS_COMMAND` and any configured pre-hook, then starts `run_agy_ai_review.sh` when `AI_REVIEW_RUNTIME` is `agy`. The default runtime remains `gemini-cli`.
+`run_ai_review.sh` runs `GEMINI_ARTIFACTS_COMMAND` and any configured pre-hook, then starts `run_agy_ai_review.sh` when `AI_REVIEW_RUNTIME` is `agy` or unset. `gemini-cli` runs `gemini_initialise.sh` and `gemini_analysis.sh` instead.
 
 The harness:
 
@@ -46,7 +45,9 @@ The fix is a recommendation only. The harness does not edit files, run commands,
 
 In Utilities->Gemini AI Assistant, uploaded prompt files and `GEMINI_SKILLS_YAML` are used only by `gemini-cli`. AGY does not require these files. It ignores them if provided.
 
-A seed log is picked from the workspace, at most two directories deep, in this order: `aaos-build.log.tail`, `aaos-build.log`, `bsw-build.log`, `launcher.log`. If `test-results/` exists, that tree is inventoried. The agent can read other workspace files with its tools.
+A seed log is picked from the workspace, at most two directories deep, in this order: `aaos-build.log.tail`, `aaos-build.log`, `bsw-build.log`, `launcher.log`. At most 16 KB from the tail of that file is copied into the first prompt (`--seed-log-bytes`). If `test-results/` exists, the harness lists at most 80 paths (`.json`, `.log`, `.txt`, `.xml`, `.zip`, and `logcat`); HTML and build-output trees are omitted. The agent can read other workspace files with its tools. When CTS HTML is present, the harness writes `test-results/cts_module_summary.txt` before that inventory and copies it into the artifact directory.
+
+The tool hook denies shell, file edits, subagents, broad searches such as `fail` or `error`, and opening HTML reports. A directory search aimed at a file path is rewritten to the parent directory. If structured output is missing, a fallback parser builds `HorizonAnalysis` from the response text. The harness exits 0 after a completed analysis so Jenkins and Argo can publish the review when the original build or test failed.
 
 ## Outputs
 
@@ -95,8 +96,7 @@ model. Otherwise the SDK default is used.
 
 ## Direct CTS and CVD tests AI Review test
 
-The workspace should contain the already-staged `test-results/` tree. Existing
-Jenkins/Argo preparation must unpack `cuttlefish_logs*.zip` first.
+The workspace should contain the already-staged `test-results/` tree. Jenkins and Argo preparation unpack `cuttlefish*.zip` under `test-results/cvd` and CTS result zips under `test-results/cts` before the agent runs.
 
 ```bash
 python3 /path/to/horizon/workloads/common/agentic-ai/antigravity/harness.py \
@@ -123,7 +123,7 @@ python3 /path/to/horizon/workloads/common/agentic-ai/antigravity/harness.py \
 
 ## End-to-end pipeline test
 
-For Jenkins jobs, select `AI_REVIEW_RUNTIME=agy`. Equivalently:
+Jenkins jobs default **AI Review runtime** to `agy`. Choose `gemini-cli` on the same job to compare CLI output. From a shell:
 
 ```bash
 export AI_REVIEW_RUNTIME=agy
@@ -131,26 +131,25 @@ export GEMINI_ANALYSIS_PATH=/path/to/workspace
 bash workloads/common/agentic-ai/gemini/run_ai_review.sh
 ```
 
-The existing pre/post hooks and artifact movement still run. Existing jobs can
-therefore compare CLI and AGY outputs while the default remains `gemini-cli`.
+The existing pre/post hooks and artifact movement still run.
 
-For Argo, set the corresponding chart value:
+Argo charts already set:
 
 ```yaml
 spec:
   aiReviewRuntime: agy
 ```
 
-| Job | How to select AGY |
+| Job | Default |
 | --- | --- |
-| AAOS Builder, CTS Execution, CVD Launcher | `AI_REVIEW_RUNTIME=agy` in Jenkins pipelines and Helm `aiReviewRuntime: agy` in Argo Worfklow pipelines. For CTS Execution and CVD Launcher, the AI Review stage is in the `cvd-pipeline-shared-library`.|
-| AAOS ABFS Builder, OpenBSW BSW Builder | `AI_REVIEW_RUNTIME=agy` in Jenkins pipelines. They do not have Argo Workflow pipelines. |
-| Utilities / Gemini AI Assistant | Choice parameter **AI Review runtime** = `agy`. `GEMINI_ARTIFACTS_COMMAND` is required. `GEMINI_PROMPT_FILE` is not. |
+| AAOS Builder, CTS Execution, CVD Launcher | Jenkins **AI Review runtime** = `agy`. Helm `aiReviewRuntime: agy`. CTS Execution and CVD Launcher run AI Review from `cvd-pipeline-shared-library`. |
+| AAOS ABFS Builder, OpenBSW BSW Builder | Jenkins **AI Review runtime** = `agy`. These jobs have no Argo workflow. |
+| Utilities / Gemini AI Assistant | **AI Review runtime** = `agy`. `GEMINI_ARTIFACTS_COMMAND` is required. Uploaded prompts and `GEMINI_SKILLS_YAML` are not. |
+| AAOS SDV Builder | Timeout parameter only. This job has no `AI_REVIEW_RUNTIME` parameter. |
 
+The utility and CTS/CVD stages set `GEMINI_ANALYSIS_PATH` to the Jenkins workspace and do not move artifacts afterward. The trace file must be at `${WORKSPACE}/traces/*.json` for the build page to show it. The bucket upload uses the same `traces/` directory when `gemini_storage.sh` runs. `headless_output*.json` is archived only when the runtime is not `agy`.
 
-The utility and CTS/CVD stages set `GEMINI_ANALYSIS_PATH` to the Jenkins workspace and do not move artifacts afterward. The trace file must be at `${WORKSPACE}/traces/*.json` for the build page to show it. The bucket upload uses the same `traces/` directory when `gemini_storage.sh` runs.
-
-`GEMINI_AI_EXECUTION_TIMEOUT_HOURS` bounds the run. The utility job sets it to 2 hours.
+`GEMINI_AI_EXECUTION_TIMEOUT_MINUTES` bounds the run. When unset, `run_ai_review.sh` uses 60 minutes and `timeout --kill-after=1m`. Jenkins choices are 60, 45, 30, 20, 10, 90, and 120. AAOS Builder, CTS Execution, and CVD Launcher Helm charts set `geminiAiExecutionTimeoutMinutes` to `60`.
 
 ## MCP status
 

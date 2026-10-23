@@ -313,7 +313,7 @@ use the local repo mount. Remote git artifact checkouts do not share a PVC, so
 - `spec.forceImageBuild`: `true` to always rebuild the builder image
 - `spec.parallelSyncJobs`: Repo sync parallelism
 - `spec.enableGeminiAiAssistant`: `"true"` / `"false"` — enables **gemini-review** on build failure (WorkflowTemplate default parameter)
-- `spec.geminiSkillsYaml`: **required** path to `skills.yaml` for the **gemini-review** step (`GEMINI_SKILLS_YAML`)
+- `spec.geminiSkillsYaml`: path to `skills.yaml` (`GEMINI_SKILLS_YAML`). Required and read only when `spec.aiReviewRuntime` is `gemini-cli`. Omit it when the runtime is `agy`.
 - `spec.manifestUrl`: Manifest URL for repo init
 - `spec.pipelineRepoUrl`: Pipeline repo URL
 - `spec.pipelineRepoRevision`: Pipeline repo revision
@@ -359,10 +359,12 @@ This chart sets **`podGcStrategy`** on the WorkflowTemplate (default in `values.
 
 ## AI review (Gemini)
 
-When a build fails and `spec.enableGeminiAiAssistant` is enabled, the workflow runs an **inline** **`gemini-review`** container template (`templates/workflow/_gemini-review.tpl`). It mounts the same workflow volumes as **build**, sets **`GEMINI_*`** / **`CLOUD_*`** from **`spec`** (prompts, **`skills.yaml`**, CLI / timeout / Vertex flags — same knobs as the **build** step’s Gemini env), and executes **`workloads/common/agentic-ai/gemini/run_ai_review.sh`**. **AAOS-only** staging (**`/aaos-cache/aaos_builds`**, hook profile **`aaos`**, hooks under **`aaos_builder/hooks/`**) is encoded in that template; other pipelines reuse **`run_ai_review.sh`** with different **`GEMINI_ANALYSIS_PATH`** / **`GEMINI_HOOK_*`** env only.
+When a build fails and `spec.enableGeminiAiAssistant` is enabled, the workflow runs an **inline** **`gemini-review`** container template (`templates/workflow/_gemini-review.tpl`). It mounts the same workflow volumes as **build**, sets **`GEMINI_*`** / **`CLOUD_*`** from **`spec`**, and executes **`workloads/common/agentic-ai/gemini/run_ai_review.sh`**. **AAOS-only** staging (**`/aaos-cache/aaos_builds`**, hook profile **`aaos`**, hooks under **`aaos_builder/hooks/`**) is encoded in that template; other pipelines reuse **`run_ai_review.sh`** with different **`GEMINI_ANALYSIS_PATH`** / **`GEMINI_HOOK_*`** env only.
 
-- **`spec.geminiPromptFile`** / **`spec.geminiPromptFile2`** / **`spec.geminiPromptFile3`** — Sequenced prompts for **gemini-review** (defaults under `prompt/sequenced/` in this chart).
-- **`spec.geminiSkillsYaml`** — **Required for gemini-review.** Path to `skills.yaml`; rewritten for local mounts like the prompts.
+- **`spec.aiReviewRuntime`** — `agy` (chart default) or `gemini-cli`. The review template falls back to `agy` when this value is empty.
+- **`spec.geminiAiExecutionTimeoutMinutes`** — Review timeout in minutes. Chart default `60`. Used by both runtimes.
+- **`spec.geminiPromptFile`** / **`spec.geminiPromptFile2`** / **`spec.geminiPromptFile3`** — Sequenced prompts. The pod receives them either way. **`gemini-cli`** is the only runtime that reads them. Antigravity ignores them and uses `workloads/common/agentic-ai/antigravity/skills/`.
+- **`spec.geminiSkillsYaml`** — Path to `skills.yaml`. Set this only when the runtime is **`gemini-cli`**. The review template then requires it and passes **`GEMINI_SKILLS_YAML`**. With the default runtime **`agy`**, the variable is not set and the value may be empty.
 
 ## Test / Verify
 
