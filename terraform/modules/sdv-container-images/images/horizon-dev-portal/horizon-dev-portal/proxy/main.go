@@ -36,8 +36,14 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-//go:embed all:dist
+// SPA files are embedded from spa. That directory is not named dist, so it
+// stays in git while **/dist/ remains ignored. The image build copies the Vite
+// output over spa before compiling.
+//
+//go:embed all:spa
 var staticFS embed.FS
+
+const staticRoot = "spa"
 
 // Renew access token this long before JWT expiry (proactive refresh / refresh_token exchange).
 const ciTokenRefreshLead = 90 * time.Second
@@ -482,9 +488,9 @@ func spaHandler(baseHref string) http.Handler {
 		if p == "" {
 			p = "index.html"
 		}
-		b, err := staticFS.ReadFile("dist/" + p)
+		b, err := staticFS.ReadFile(staticRoot + "/" + p)
 		if err != nil {
-			b, err = staticFS.ReadFile("dist/index.html")
+			b, err = staticFS.ReadFile(staticRoot + "/index.html")
 			if err != nil {
 				http.NotFound(w, r)
 				return
