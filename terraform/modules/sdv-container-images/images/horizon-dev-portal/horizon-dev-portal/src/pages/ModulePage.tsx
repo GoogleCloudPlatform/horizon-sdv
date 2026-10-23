@@ -35,6 +35,7 @@ import {
   DialogTitle,
   IconButton,
   InputAdornment,
+  MenuItem,
   Stack,
   Tab,
   Table,
@@ -1011,9 +1012,11 @@ function SubmitDialog({
       <DialogContent>
         {entry.parameters
           .filter((p) => p.name !== 'submittedBy')
-          .map((p) => (
+          .map((p) => 
+            p.enum && p.enum.length > 0 ? (
             <TextField
               key={p.name}
+              select
               margin="dense"
               label={p.name}
               helperText={workflowParamHelperText(p)}
@@ -1021,7 +1024,24 @@ function SubmitDialog({
               required={!p.default}
               value={params[p.name] ?? ''}
               onChange={(e) => setParams((prev) => ({ ...prev, [p.name]: e.target.value }))}
-              InputProps={workflowParamInputProps(p, params[p.name] ?? '', entry.templateName)}
+              >
+          {p.enum.map((opt) => (
+            <MenuItem key={opt} value={opt}>
+              {opt}
+            </MenuItem>
+          ))}
+        </TextField>
+      ) : (
+        <TextField
+          key={p.name}
+          margin="dense"
+          label={p.name}
+          helperText={workflowParamHelperText(p)}
+          fullWidth
+          required={!p.default}
+          value={params[p.name] ?? ''}
+          onChange={(e) => setParams((prev) => ({ ...prev, [p.name]: e.target.value }))}
+          InputProps={workflowParamInputProps(p, params[p.name] ?? '', entry.templateName)}
             />
           ))}
         {err && (

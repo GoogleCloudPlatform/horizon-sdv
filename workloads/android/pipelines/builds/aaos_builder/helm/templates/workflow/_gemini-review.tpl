@@ -46,7 +46,11 @@ Same pod volume wiring as build; env matches Jenkins AAOS Gemini review.
         value: "/workspace"
 {{- end }}
       - name: AI_REVIEW_RUNTIME
-        value: {{ .Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+        value: '{{ "{{" }}workflow.parameters.aiReviewRuntime{{ "}}" }}'
+      - name: JOB_NAME
+        value: '{{ "{{" }}workflow.name{{ "}}" }}'
+      - name: BUILD_NUMBER
+        value: '{{ "{{" }}workflow.uid{{ "}}" }}'
       - name: GEMINI_PROMPT_FILE
 {{- if and (or .Values.localRepoHostPath .Values.localRepoPvcName) (hasPrefix "/workspace" .Values.spec.geminiPromptFile) }}
         value: {{ printf "%s%s" .Values.localRepoMountPath (trimPrefix "/workspace" .Values.spec.geminiPromptFile) | quote }}

@@ -62,6 +62,8 @@ spec:
                     - name: storageLabels
                     - name: enableGeminiAiAssistant
                     - name: parallelSyncJobs
+                    - name: aiReviewRuntime
+                      value: {{ .Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
           parameters:
             - src:
                 dependencyName: webhook-dep
@@ -115,3 +117,8 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.parallelSyncJobs
               dest: spec.arguments.parameters.10.value
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.aiReviewRuntime
+                value: {{ .Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+              dest: spec.arguments.parameters.11.value

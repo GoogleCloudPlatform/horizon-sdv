@@ -15,6 +15,7 @@
 package catalog
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/acn-horizon-sdv/horizon-api/internal/workflow"
@@ -38,5 +39,33 @@ func TestExtractParametersOmitsHorizonInjected(t *testing.T) {
 	}
 	if len(params) != 1 || params[0].Name != "sampleEnv" {
 		t.Fatalf("params: %+v", params)
+	}
+}
+
+func TestExtractParametersCapturesEnum(t *testing.T) {
+	t.Parallel()
+	obj := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"arguments": map[string]interface{}{
+				"parameters": []interface{}{
+					map[string]interface{}{
+						"name":  "aiReviewRuntime",
+						"value": "gemini-cli",
+						"enum":  []interface{}{"gemini-cli", "agy"},
+					},
+				},
+			},
+		},
+	}
+	params, err := extractParameters(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(params) != 1 {
+		t.Fatalf("params: %+v", params)
+	}
+	want := []string{"gemini-cli", "agy"}
+	if !reflect.DeepEqual(params[0].Enum, want) {
+		t.Fatalf("enum = %+v, want %+v", params[0].Enum, want)
 	}
 }

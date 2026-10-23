@@ -82,6 +82,8 @@ spec:
                     - name: storageBucketDestination
                     - name: storageLabels
                     - name: submittedBy
+                    - name: aiReviewRuntime
+                      value: {{ $root.Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
           parameters:
             - src:
                 dependencyName: webhook-dep
@@ -196,3 +198,8 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedBy
               dest: spec.arguments.parameters.24.value
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.aiReviewRuntime
+                value: {{ $root.Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+              dest: spec.arguments.parameters.25.value
