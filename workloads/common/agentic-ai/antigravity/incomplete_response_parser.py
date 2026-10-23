@@ -240,13 +240,13 @@ def parse_incomplete_response(response_text: str, failure_context: str) -> Horiz
     text_lower = text.lower()
 
     if "cts" in text_lower or "cts" in ctx_lower:
-        classification = "cts"
+        classification = "cts_execution"
     elif "cvd" in text_lower or "cvd" in ctx_lower or "cuttlefish" in text_lower:
         classification = "cvd_launcher"
     elif "bsw" in text_lower or "bsw" in ctx_lower or "openbsw" in text_lower:
         classification = "openbsw"
-    elif "aaos_build" in text_lower or "aaos" in ctx_lower:
-        classification = "aaos_build"
+    elif "aaos_builder" in text_lower or "aaos_build" in text_lower or "aaos" in ctx_lower:
+        classification = "aaos_builder"
     else:
         classification = "unknown"
 

@@ -346,7 +346,7 @@ async def _pre_tool_call(
         if query in {"fail", "failed", "error", "errors", "exception", "crash"}:
             msg = (
                 f"tool_denied: search query {query!r} across {call_args.get('SearchPath') or call_args.get('search_path')!r} "
-                "is too broad. Please consult the relevant domain SKILL.md (e.g. skills/aaos-cts/SKILL.md) "
+                "is too broad. Please consult the relevant classification SKILL.md (e.g. skills/cts_execution/SKILL.md) "
                 "for recommended query patterns and artifact triage workflow."
             )
             LOG.warning(msg)
@@ -359,7 +359,7 @@ async def _pre_tool_call(
             reporter.log(
                 "TOOL_DENIED",
                 msg,
-                details={**tool_data, "reason": "search_query_too_broad", "hint": "Consult domain SKILL.md"},
+                details={**tool_data, "reason": "search_query_too_broad", "hint": "Consult the classification SKILL.md"},
                 severity="WARNING",
             )
             return types.HookResult(allow=False)
@@ -710,8 +710,8 @@ async def analyze_failure(
     </ci_failure_context>
 
     MANDATORY FIRST ACTION:
-    Identify the relevant domain from the failure context and use view_file to inspect
-    its SKILL.md (e.g. skills/<domain>/SKILL.md)
+    Identify the relevant classification from the failure context and use view_file to inspect
+    its SKILL.md (e.g. skills/<classification>/SKILL.md)
     as your very first action BEFORE performing any searches or opening raw test logs.
 
     Investigate autonomously using the appropriate installed skill and the allowed
@@ -720,7 +720,7 @@ async def analyze_failure(
     tool calls and keep findings concise to conserve context tokens.
 
     CRITICAL CTS INVESTIGATION REQUIREMENTS:
-    - If the domain is CTS and test failures exist (FAILED > 0 in cts_module_summary.txt or invocation_summary.txt),
+    - If the classification is cts_execution and test failures exist (FAILED > 0 in cts_module_summary.txt or invocation_summary.txt),
       you MUST investigate each of the top 2-3 failing modules and report specific Test#Method functional findings (Track A).
     - Do NOT stop prematurely after discovering a setup error or incomplete module. A setup error on attempt 0
       does not excuse omitting root-cause analysis for genuine test failures in the same or other modules.

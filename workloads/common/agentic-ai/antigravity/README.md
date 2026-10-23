@@ -31,7 +31,7 @@ workloads/common/agentic-ai/gemini/run_ai_review.sh
 
 The harness:
 
-1. Loads every skill package under `workloads/common/agentic-ai/antigravity/skills/` (`aaos-build`, `aaos-cts`, `cvd_launcher`, `openbsw`). The agent chooses the domain from the logs. It does not use the Jenkins job name.
+1. Loads every skill package under `workloads/common/agentic-ai/antigravity/skills/` (`aaos_builder`, `cts_execution`, `cvd_launcher`, `openbsw`). The package name is the classification. The agent sets it from the logs. It does not use the Jenkins job name.
 2. Allows only read-only workspace tools: list directory, search, find file, view file, and finish. Shell commands, file edits, and subagents are denied.
 3. Runs one `agent.chat()` session. The SDK may take several tool turns inside that session.
 4. Returns a structured analysis. The harness stamps the model name and the tools that actually ran.

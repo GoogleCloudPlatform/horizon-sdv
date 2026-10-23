@@ -1,5 +1,5 @@
 ---
-name: aaos-cts
+name: cts_execution
 description: Analyze AAOS CTS suite failures and CTS pipeline Cuttlefish-only failures using staged artifacts.
 ---
 <!-- Copyright (c) 2026 Accenture, All Rights Reserved.
@@ -125,10 +125,10 @@ Modules run sequentially on whichever device they are assigned to. While an unre
 ## Fix Recommendation & Output Mapping (`HorizonAnalysis`)
 
 - **status**: `analyzed`, `insufficient_evidence`, or `unsupported`.
-- **classification**: `cts`.
+- **classification**: `cts_execution`.
 - **confidence**: Score from 0.0 to 1.0.
 - **summary** (≤120 chars):
-  - Suite: `MODE: CTS_SUITE. <N> tests failed across <M> modules[, with <K> modules incomplete]. <Primary failure domain(s) summary>.`
+  - Suite: `MODE: CTS_SUITE. <N> tests failed across <M> modules[, with <K> modules incomplete]. <Primary failing area(s) summary>.`
     - `<N>` and `<K>` must strictly match the exact integers extracted in Step 1 from `cts_module_summary.txt` (or `invocation_summary.txt`).
     - If `<K> > 0`, include `, with <K> modules incomplete`. If `<K> == 0`, omit that clause.
   - CVD: `MODE: CVD_ONLY. <Concise summary>.`

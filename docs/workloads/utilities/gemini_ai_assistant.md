@@ -52,7 +52,7 @@ The CLI expects **one directory per skill**, not one monolithic `skills.md`. A s
 
 ## Offline analysis & prompt/skill iteration
 
-Use this utility against archived artifacts from any pipeline — Build, CVD Launcher, CTS Execution — to analyse passes or failures without re-running the original job. The default runtime is `agy`: the agent classifies the domain from the artifacts and reads the matching skill under `workloads/common/agentic-ai/antigravity/skills/`. Uploaded prompts and `skills.yaml` are ignored. With `gemini-cli`, the job is also a sandbox for prompt and `skills.yaml` development:
+Use this utility against archived artifacts from any pipeline — Build, CVD Launcher, CTS Execution — to analyse passes or failures without re-running the original job. The default runtime is `agy`: the agent sets the classification from the artifacts and reads the matching skill under `workloads/common/agentic-ai/antigravity/skills/`. Uploaded prompts and `skills.yaml` are ignored. With `gemini-cli`, the job is also a sandbox for prompt and `skills.yaml` development:
 
 - **Pick your artifacts.** Set `GEMINI_ARTIFACTS_COMMAND` to fetch the archived workspace or `test-results/` of the run you want to investigate (success or failure). Examples:
   - `gcloud storage cp -r gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Tests/CVD_Launcher/<BUILD_NUMBER>/test-results/ .`

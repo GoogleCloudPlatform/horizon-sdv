@@ -1,5 +1,5 @@
 ---
-name: aaos-build
+name: aaos_builder
 description: Analyze AAOS and ABFS build failures through ordered triage, root-cause analysis and proposed fix(es).
 ---
 <!-- Copyright (c) 2026 Accenture, All Rights Reserved.
@@ -80,7 +80,7 @@ Complete these stages in order in one autonomous session:
 
 Format the response strictly according to `HorizonAnalysis`:
 
-- **classification**: Set to `aaos_build`.
+- **classification**: Set to `aaos_builder`.
 - **summary**: Provide a concise summary of the build failure and lunch target.
 - **root_cause**: Provide a 2–3 sentence technical explanation of why the build failed.
 - **findings**: Add one finding per distinct build blocker:

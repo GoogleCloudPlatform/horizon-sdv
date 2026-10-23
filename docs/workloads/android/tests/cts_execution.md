@@ -255,7 +255,7 @@ Note: Prompts are piped via `stdin` and output is redirected to a JSON file. Ant
 
 ### `AI_REVIEW_RUNTIME`
 
-`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. The CTS Execution Helm chart sets `aiReviewRuntime` to `agy`. Antigravity uses `workloads/common/agentic-ai/antigravity/skills/aaos-cts/SKILL.md` and ignores the sequenced prompt files. Before analysis it writes `test-results/cts_module_summary.txt` from the suite HTML so the agent does not open the full report.
+`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. The CTS Execution Helm chart sets `aiReviewRuntime` to `agy`. Antigravity uses the skills under `workloads/common/agentic-ai/antigravity/skills` and ignores the sequenced prompt files. Before analysis it writes `test-results/cts_module_summary.txt` from the suite HTML so the agent does not open the full report.
 
 ### `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES`
 
