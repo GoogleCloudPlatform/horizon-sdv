@@ -1,4 +1,16 @@
-<!-- Copyright (c) 2026 Accenture, All Rights Reserved. -->
+<!-- Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
 
 # GKE Applications, Ingress Gateway & Networking
 
@@ -161,7 +173,9 @@ spec:
 
 ## 4. Network Security Policies
 
-When `config.enableNetworkPolicies` is enabled on the platform, all cross-namespace traffic is denied by default. Explicitly allow ingress from the GKE Gateway:
+When `config.enableNetworkPolicies` is true, platform namespaces in `gitops/templates/namespaces.yaml` get a `default-deny-all` policy. Module namespaces created by Argo CD (`CreateNamespace=true`) do not, so module pods accept traffic unless the module adds its own policies.
+
+The policy below follows the pattern used by platform services (e.g. `gitops/templates/gateway-jenkins.yaml`) and `sample-module`: it opens port 8080 to any source and only restricts anything if the namespace also has a default-deny policy. If the module runs in a namespace with default-deny, scope the `from` sources instead (see `gitops/modules/storage-gcs-module/templates/network-policies.yaml`).
 
 ```yaml
 {{- if .Values.config.enableNetworkPolicies }}
@@ -189,18 +203,22 @@ spec:
 
 ## 5. Exposing Applications in the Developer Portal
 
-To expose your application in the Developer Portal top navigation or module tab, configure annotations on the child Argo CD `Application` resource in the parent module chart:
+To expose your application in the Developer Portal top navigation or module tab, configure labels and annotations on the child Argo CD `Application` resource in the parent module chart:
 
 ```yaml
 metadata:
   labels:
+    horizon-sdv.io/module: {{ .Values.moduleName }}
+    horizon-sdv.io/app-role: child
     horizon-sdv.io/expose: "true"
   annotations:
-    horizon-sdv.io/portal-url: {{ .Values.rootPath | quote }}
+    horizon-sdv.io/portal-url: {{ .Values.app.rootPath | quote }}
     horizon-sdv.io/portal-title: "My App Title"
     horizon-sdv.io/portal-id: "my-app"
 ```
 
-- `horizon-sdv.io/expose: "true"`: Enables portal visibility when the module is active.
-- `horizon-sdv.io/portal-url`: Relative URL path configured in the HTTPRoute (e.g. `/my-app`).
+- `horizon-sdv.io/module`, `horizon-sdv.io/app-role: child` and `horizon-sdv.io/expose: "true"`: all three are required; Module Manager ignores child Applications without them.
+- `horizon-sdv.io/portal-url`: Required. Relative URL path configured in the HTTPRoute (e.g. `/my-app`).
 - `horizon-sdv.io/portal-title`: Label displayed in the Developer Portal navigation bar.
+
+`portal-title` and `portal-id` are both optional; Module Manager falls back to the Application name.

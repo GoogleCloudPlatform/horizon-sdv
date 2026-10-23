@@ -1,3 +1,17 @@
+<!-- Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
+
 # Troubleshooting & Operational Failure Modes
 
 This document provides resolutions for common issues encountered during Horizon SDV deployment and initial configuration.
@@ -31,11 +45,12 @@ This document provides resolutions for common issues encountered during Horizon 
 ```text
 Error: Error when reading or editing Certificate: googleapi: Error 400: can't delete certificate that is referenced by a CertificateMapEntry or other resources
 ```
+**Cause**: Before Release 3.1.0 each environment had its own certificate map. Since 3.1.0 all environments share one map, `horizon-sdv-map`, which the live Gateway uses for HTTPS.
+
 **Fix**:
-Delete the blocking Certificate Map to unblock certificate recreation/update:
-```bash
-gcloud certificate-manager maps delete horizon-sdv-map --project=<GCP_PROJECT_ID>
-```
+- Do **not** delete `horizon-sdv-map`. It serves TLS for the main environment and all sub-environments.
+- If the environment was upgraded from a release before 3.1.0, follow the matching upgrade guide in `docs/guides/`.
+- Otherwise, stop and report the full error to the user. Do not delete certificates or map entries without explicit approval.
 
 ---
 
@@ -46,10 +61,16 @@ gcloud certificate-manager maps delete horizon-sdv-map --project=<GCP_PROJECT_ID
 Error: Error creating SslPolicy: googleapi: Error 409: The resource 'projects/<PROJECT_ID>/global/sslPolicies/gke-ssl-policy' already exists, alreadyExists
 ```
 **Fix**:
-Delete the orphaned SSL policy manually:
-```bash
-gcloud compute ssl-policies delete gke-ssl-policy --global --project=<GCP_PROJECT_ID>
-```
+The policy exists in the project but not in this Terraform state, usually left over from an earlier deployment.
+1. Confirm it is not in use. This must return nothing:
+   ```bash
+   gcloud compute target-https-proxies list --project=<GCP_PROJECT_ID> --filter="sslPolicy~gke-ssl-policy" --format="value(name)"
+   ```
+2. If it is in use, stop: another deployment may own it. Report this to the user.
+3. If unused, and only with explicit user approval (destructive), delete it and re-run the standard deployment:
+   ```bash
+   gcloud compute ssl-policies delete gke-ssl-policy --global --project=<GCP_PROJECT_ID>
+   ```
 
 ---
 
@@ -85,7 +106,7 @@ Increase resources assigned to Docker:
 
 **Fix**:
 1. Access Argo CD directly at `/argocd`.
-2. Log in with `admin` and the password stored in GCP Secret Manager under `argocd-admin-password-b64` (or key `s5` in `manual_secrets`).
+2. Log in with `admin` and the value of `manual_secrets.s5` in `terraform/env/terraform.tfvars` (Secret Manager `argocd-admin-password-b64` holds only a bcrypt hash).
 3. Check the `horizon-sdv` root application health state.
 4. Click **Refresh**, then click **Sync** → **Synchronize** with `Prune` and `Apply` enabled.
 5. Wait for all Kubernetes applications and ingress resources to turn green / **Healthy**.
@@ -113,7 +134,7 @@ Increase resources assigned to Docker:
 ### 7.1 `terraform.tfvars` Missing in Build Context
 **Symptom**: `[ERROR] Config file not found at /workspace/.../terraform.tfvars`.  
 **Cause**: `.gitignore` contains `**/terraform.tfvars`, and Google Cloud SDK (`gcloud builds submit`) inherits `.gitignore` when no `.gcloudignore` exists.  
-**Fix**: Ensure a `.gcloudignore` file exists in the repository root with an explicit exception:
+**Fix**: `cloud-deploy.sh` passes `--ignore-file=.agents/plugins/horizon-ops/skills/horizon-deploy/scripts/gcloudignore`, which contains the exception below. Make sure `scripts/gcloudignore` still has it and that the build was submitted through `cloud-deploy.sh`:
 ```
 !terraform/env/terraform.tfvars
 ```
@@ -141,7 +162,7 @@ gcloud projects add-iam-policy-binding <GCP_PROJECT_ID> \
 ## 8. Argo CD Sync Stalls (Sync Waves)
 
 ### Problem
-When a multi-wave Argo CD application hangs or times out in an `OutOfSync` state (e.g., hitting the max retry limit of 5), subsequent deployment waves (such as Gateway routing rules in Wave 5) are completely blocked.
+When a multi-wave Argo CD application hangs or times out in an `OutOfSync` state (e.g., hitting the max retry limit of 5), later sync waves are blocked, including most Gateway HTTPRoutes (they span waves 1-9; see the wave table in [ref 04 §5.1](./04_post_deployment_setup.md#51-sync-wave-sequence--architecture)).
 
 ### Troubleshooting Checklist
 1. **Inspect the phase where the app is stuck**:
@@ -170,7 +191,7 @@ When a multi-wave Argo CD application hangs or times out in an `OutOfSync` state
 ## 9. GKE Gateway "fault filter abort"
 
 ### Problem
-Accessing a domain name (e.g., `https://sdv-dev.horizon-sdv3.automobility.cloud/` or `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/`) returns an Envoy/GFE error with the message **"fault filter abort"**.
+Accessing `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/` (or a route under it) returns an Envoy/GFE error with the message **"fault filter abort"**.
 
 ### Diagnostic Steps
 1. **Verify if the target HTTPRoute has been applied to the GKE cluster**:
@@ -203,20 +224,38 @@ Changing or adding routes in GKE Gateway updates the Global L7 Load Balancer URL
 GKE pods remain in `Pending` with `FailedScheduling` events, and the cluster autoscaler is unable to scale up node pools (e.g. `sdv-abfs-build-node-pool`).
 
 ### Diagnostic Steps
-1. **Check global CPU quota usage**:
+1. **Confirm the scheduling failure**:
    ```bash
-   gcloud compute project-info describe --project=<project-id> --format="yaml(quotas)"
+   kubectl describe pod <pod> -n <namespace> | grep -A5 Events
    ```
-2. **Check regional CPU limits** (e.g. `N2_CPUS` in target region):
+2. **List the machine types actually used by the node pools**:
    ```bash
-   gcloud compute regions describe <region> --project=<project-id> --format="yaml(quotas)"
+   gcloud container node-pools list --cluster=sdv-cluster --region=<region> --project=<project-id> \
+     --format="table(name,config.machineType,autoscaling.maxNodeCount)"
+   ```
+   Map the machine type prefix to its quota family: `c2d-*` → `C2D_CPUS`, `n2-*` → `N2_CPUS`, `n1-*` → `CPUS`.
+3. **Check regional quota for those families**:
+   ```bash
+   gcloud compute regions describe <region> --project=<project-id> --flatten=quotas \
+     --filter="quotas.metric:(C2D_CPUS N2_CPUS CPUS)" \
+     --format="table(quotas.metric,quotas.usage,quotas.limit)"
+   ```
+   Also check the global quota:
+   ```bash
+   gcloud compute project-info describe --project=<project-id> --flatten=quotas \
+     --filter="quotas.metric=CPUS_ALL_REGIONS" \
+     --format="table(quotas.metric,quotas.usage,quotas.limit)"
    ```
 
 ### Remediation
-Advise the user to submit a **Quota Increase Request (QIR)** via the GCP Console:
-- **Service**: Compute Engine API
-- **Metric Name**: `compute.googleapis.com/cpus_all_regions` (Global CPUs)
-- **Target**: e.g., `128` or `160` (providing comfortable headroom for multiple `n2-highcpu-32` nodes alongside core platform services).
+Advise the user to submit a **Quota Increase Request (QIR)** via the GCP Console for the exhausted metric.
+
+The build and ABFS build pools use the largest machines (`c2d-highcpu-112` at the time of writing, 112 vCPUs per node; confirm with step 2). Each concurrent Android build normally takes a whole node.
+
+**Ask the user how many builds must run at the same time**, then size the request:
+- Regional family quota (e.g. `C2D_CPUS`) ≥ vCPUs per build node × concurrent builds + other pools in that family (e.g. OpenBSW).
+- Global `CPUS_ALL_REGIONS` ≥ the regional total above + main pool (`CPUS`) + utility pool (`N2_CPUS`).
+- Example: 3 concurrent builds need at least 336 `C2D_CPUS`, before headroom.
 
 ---
 
@@ -231,7 +270,7 @@ Keycloak initial credentials are defined in the project's Terraform variables fi
 | Realm | Username | Variable in `terraform.tfvars` | Sample / Note |
 | :--- | :--- | :--- | :--- |
 | **Master Realm** | `admin` | `sdv_keycloak_admin_password` | Root administrator for Keycloak server |
-| **Horizon Realm** | `horizon-admin` | `sdv_keycloak_horizon_admin_password` | Platform administrator for Horizon realm |
+| **Horizon Realm** | `horizon-admin` | `sdv_keycloak_horizon_admin_password` | Platform administrator for Horizon realm. Initial password; must be changed at first login. |
 
 ### Remediation & Console Navigation
 1. Always log in to the main administration console using the root admin user:
@@ -245,34 +284,7 @@ Keycloak initial credentials are defined in the project's Terraform variables fi
 
 ---
 
-## 12. Shielded VM & Secure Boot Constraint (`constraints/compute.requireShieldedVm`)
-
-### Problem
-GKE cluster creation fails with:
-```text
-Error waiting for creating GKE cluster:
-Instance 'gke-sdv-cluster-default-pool-...' creation failed: 
-Constraint constraints/compute.requireShieldedVm violated for project projects/<PROJECT_ID>. 
-Secure Boot is not enabled in the 'shielded_instance_config' field.
-```
-
-### Cause
-The GCP Organization enforces the constraint `constraints/compute.requireShieldedVm`. GKE cluster and node pools cannot launch virtual machines without Secure Boot explicitly enabled.
-
-### Remediation
-Ensure `shielded_instance_config` with `enable_secure_boot = true` and `enable_integrity_monitoring = true` is declared in `terraform/modules/sdv-gke-cluster/main.tf` under:
-1. `google_container_cluster.sdv_cluster` (`node_config` block)
-2. Every `google_container_node_pool` (`sdv_main_node_pool`, `sdv_build_node_pool`, `sdv_abfs_build_node_pool`, `sdv_openbsw_build_node_pool`, `sdv_utility_node_pool`):
-```hcl
-    shielded_instance_config {
-      enable_secure_boot          = true
-      enable_integrity_monitoring = true
-    }
-```
-
----
-
-## 13. Argo CD "Permission Denied: applications, sync"
+## 12. Argo CD "Permission Denied: applications, sync"
 
 ### Symptom
 When clicking **SYNC** on any application in Argo CD, the UI shows a red error banner:

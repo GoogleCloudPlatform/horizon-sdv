@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2026 Accenture, All Rights Reserved.
+# Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,17 @@ Options:
   --base-dir, -b     Base modules directory [Default: gitops/modules]
   --help, -h         Show this help message
 EOF
-  exit 0
+  exit "${1:-0}"
+}
+
+# Escape a value for use as a sed replacement string
+sed_escape() {
+  printf '%s' "$1" | sed -e 's/[\/&|\\]/\\&/g'
+}
+
+# Quote a value as a YAML double-quoted scalar
+yaml_quote() {
+  printf '"%s"' "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -59,22 +69,24 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --help|-h)
-      usage
+      usage 0
       ;;
     *)
       echo "Unknown argument: $1" >&2
-      usage
+      usage 1
       ;;
   esac
 done
 
 if [[ -z "$MODULE_NAME" ]]; then
   echo "Error: --name is required." >&2
-  usage
+  usage 1
 fi
 
-# Sanitize module name: lowercase, numbers and hyphens only
-MODULE_NAME="$(echo "$MODULE_NAME" | tr '[:upper:]' '[:lower:]' | tr '_' '-' | tr -cd 'a-z0-9-')"
+if [[ ! "$MODULE_NAME" =~ ^[a-z0-9-]+$ ]]; then
+  echo "Error: --name '$MODULE_NAME' must be lowercase kebab-case (^[a-z0-9-]+$)." >&2
+  exit 1
+fi
 
 if [[ -z "$MODULE_TITLE" ]]; then
   MODULE_TITLE="$(echo "$MODULE_NAME" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++)sub(/./,toupper(substr($i,1,1)),$i)}1')"
@@ -105,6 +117,9 @@ echo " Path Prefix: $PATH_PREFIX"
 echo " Directory:   $TARGET_DIR"
 echo "================================================================="
 
+# Remove the partially created module if any step fails
+trap 'echo "Error: scaffolding failed; removing $TARGET_DIR" >&2; rm -rf "$TARGET_DIR"' ERR
+
 # Create folder structure
 mkdir -p "${TARGET_DIR}/portal"
 mkdir -p "${TARGET_DIR}/templates"
@@ -122,7 +137,7 @@ type: application
 appVersion: "0.1.0"
 EOF
 sed -i.bak "s/MODULE_NAME_PLACEHOLDER/${MODULE_NAME}/g" "${TARGET_DIR}/Chart.yaml"
-sed -i.bak "s/MODULE_DESC_PLACEHOLDER/${MODULE_DESC}/g" "${TARGET_DIR}/Chart.yaml"
+sed -i.bak "s|MODULE_DESC_PLACEHOLDER|$(sed_escape "$(yaml_quote "$MODULE_DESC")")|g" "${TARGET_DIR}/Chart.yaml"
 rm -f "${TARGET_DIR}/Chart.yaml.bak"
 
 # 2. Parent values.yaml
@@ -377,7 +392,7 @@ metadata:
     horizon-sdv.io/module-manager-managed: "true"
   annotations:
     horizon-sdv.io/portal-url: {{ .Values.app.rootPath | quote }}
-    horizon-sdv.io/portal-title: "${MODULE_TITLE}"
+    horizon-sdv.io/portal-title: $(yaml_quote "$MODULE_TITLE")
     horizon-sdv.io/portal-id: "${MODULE_NAME}-app"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -537,7 +552,7 @@ spec:
       port: 8080
       targetPort: http
 EOF
-sed -i.bak "s/\${MODULE_TITLE}/${MODULE_TITLE}/g" "${TARGET_DIR}/${MODULE_NAME}-app/templates/deployment.yaml"
+sed -i.bak "s|\${MODULE_TITLE}|$(sed_escape "$MODULE_TITLE")|g" "${TARGET_DIR}/${MODULE_NAME}-app/templates/deployment.yaml"
 rm -f "${TARGET_DIR}/${MODULE_NAME}-app/templates/deployment.yaml.bak"
 
 cat << 'EOF' > "${TARGET_DIR}/${MODULE_NAME}-app/templates/gateway-route.yaml"
@@ -905,6 +920,37 @@ spec:
               dest: spec.arguments.parameters.2.value
 EOF
 
+# Apache 2.0 license headers (generated module code must be Apache 2.0)
+LICENSE_BODY="Licensed under the Apache License, Version 2.0 (the \"License\");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an \"AS IS\" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License."
+COPYRIGHT_LINE="Copyright (c) $(date +%Y) <COPYRIGHT HOLDER>, All Rights Reserved."
+YAML_HEADER="# ${COPYRIGHT_LINE}
+#
+$(printf '%s\n' "$LICENSE_BODY" | sed -e 's/^/# /' -e 's/ $//')"
+HTML_HEADER="<!-- ${COPYRIGHT_LINE}
+
+${LICENSE_BODY} -->
+"
+
+while IFS= read -r -d '' f; do
+  { printf '%s\n\n' "$YAML_HEADER"; sed '1{/^# Copyright (c) [0-9]\{4\} Accenture, All Rights Reserved\.$/d;}' "$f"; } > "$f.tmp"
+  mv "$f.tmp" "$f"
+done < <(find "$TARGET_DIR" -name '*.yaml' -print0)
+
+for f in "${TARGET_DIR}/README.md" "${TARGET_DIR}/portal/overview.html"; do
+  { printf '%s\n' "$HTML_HEADER"; cat "$f"; } > "$f.tmp"
+  mv "$f.tmp" "$f"
+done
+
 echo "✓ Successfully scaffolded module at: $TARGET_DIR"
 echo ""
 echo "Next Steps:"
@@ -916,7 +962,10 @@ echo "     overviewService: mod-${MODULE_NAME}-overview"
 echo "     overviewServiceNamespace: ${MODULE_NAME}-app"
 echo ""
 echo "2. Run linting:"
-echo "   helm lint ${TARGET_DIR}"
+echo "   helm lint ${TARGET_DIR} -f .agents/plugins/horizon-dev/skills/horizon-create-module/scripts/lint-values.yaml"
 echo "   helm lint ${TARGET_DIR}/${MODULE_NAME}-app"
 echo "   helm lint ${TARGET_DIR}/argo-workflows"
+echo ""
+echo "3. Replace '<COPYRIGHT HOLDER>' in every generated file's license header:"
+echo "   grep -rl '<COPYRIGHT HOLDER>' ${TARGET_DIR}"
 echo "================================================================="

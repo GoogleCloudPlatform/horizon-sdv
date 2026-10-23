@@ -1,4 +1,16 @@
-<!-- Copyright (c) 2026 Accenture, All Rights Reserved. -->
+<!-- Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
 
 # Partner & External Contributions Guide
 
@@ -10,16 +22,14 @@ This guide outlines the rules, directory structures, licensing requirements, and
 
 Every contribution to Horizon SDV must adhere to these foundational principles:
 
-1. **All Modules in `gitops/modules/` (No Top-Level `partner/` Folder)**:
-   All deployable extensions—including partner-developed solutions, virtual device workloads, and CI/CT pipelines—must reside directly in **`gitops/modules/<module-name>/`**.
-   > [!IMPORTANT]
-   > There is **no top-level `partner/` directory** in the repository. Partner solutions are first-class modules within `gitops/modules/` and follow the standard Helm App-of-Apps and ModuleCatalog architecture.
+1. **All Modules in `gitops/modules/`**:
+   All modules, including partner modules, must reside directly in **`gitops/modules/<module-name>/`**. For the correct location of all other files, follow `docs/contributing.md`.
 
 2. **Strict Apache 2.0 Licensing for Module Contributions**:
    All partner-contributed code, Helm charts, manifests, and documentation under `gitops/modules/<module-name>/` **must be licensed under Apache 2.0**.
 
-3. **Third-Party Non-Apache 2.0 Isolation in `third_party/`**:
-   Any external dependency, pre-built binary, or library required by a partner solution that **cannot be licensed under Apache 2.0** must be isolated strictly within the **`third_party/<component_name>/`** directory.
+3. **Partner Content and Non-Apache 2.0 Dependencies**:
+   Follow `docs/contributing.md` for where they go and how they are licensed.
 
 4. **Self-Deployment Validation**:
    Before opening a Pull Request, you must verify your changes on a live, self-deployed Horizon SDV instance running in your own GCP project.
@@ -35,10 +45,7 @@ Every contribution to Horizon SDV must adhere to these foundational principles:
 ## 2. Git Workflow & Collaboration Rules
 
 ### Branch Naming & Targets
-- **Feature Branches**: Must use the naming prefix `contrib/*` (e.g. `contrib/partner-vendor-runner`, `contrib/cvd-accelerator`).
-- **Target Branch**: All Pull Requests with functionality changes must be raised against the **`devel`** branch.
-  > [!WARNING]
-  > PRs raised against the `main` branch will be rejected and requested to rebase onto `devel`.
+Follow `docs/contributing.md` and `docs/branching_strategy.md`.
 
 ### Contributor License Agreement (CLA)
 Contributions must be accompanied by a signed Google CLA.
@@ -69,7 +76,7 @@ gitops/modules/<partner-module-name>/
 │       ├── service.yaml
 │       ├── gateway-route.yaml               # Gateway API HTTPRoute (if UI / API exposed)
 │       ├── network-policies.yaml
-│       └── kcc-<resource>.yaml              # Declarative GCP resources (Pub/Sub, GCS, IAM)
+│       └── kcc-<resource>.yaml              # Declarative GCP resources (Pub/Sub, GCS, BigQuery)
 └── argo-workflows/                          # Workflows Helm subchart (Pipelines & Sensors)
     ├── Chart.yaml
     ├── values.yaml
@@ -87,8 +94,6 @@ gitops/modules/<partner-module-name>/
 | **Partner Web UI / API** | `<workload-app>/templates/gateway-route.yaml` | Exposes partner dashboards or APIs via GKE Gateway API HTTPRoutes. |
 | **Developer Portal Documentation** | `portal/overview.html` | Custom HTML overview page describing features, endpoints, and workflows in the Portal. |
 | **Declarative GCP Infrastructure** | `<workload-app>/templates/kcc-*.yaml` | Config Connector manifests for dedicated Pub/Sub topics, GCS buckets, or BigQuery datasets. |
-| **Non-Apache Dependencies** | `third_party/<component_name>/` | Proprietary binaries, vendor trial SDKs, or non-Apache licensed tooling. |
-
 ---
 
 ## 4. Documentation & PR Checklist
@@ -96,10 +101,10 @@ gitops/modules/<partner-module-name>/
 When opening your Pull Request:
 
 - [ ] I have signed the Google Contributor License Agreement (CLA).
-- [ ] My PR branch is named `contrib/<feature-name>` and targets branch **`devel`**.
-- [ ] My module is placed directly in **`gitops/modules/<module-name>/`** (not in deprecated `workloads/` or non-existent `partner/`).
+- [ ] My branch and pull request follow `docs/contributing.md` and `docs/branching_strategy.md`.
+- [ ] My module is placed directly in **`gitops/modules/<module-name>/`**, and all other files follow the locations in `docs/contributing.md`.
 - [ ] All code and Helm manifests in `gitops/modules/<module-name>/` are licensed under **Apache 2.0**.
-- [ ] Any non-Apache 2.0 dependencies are placed strictly in **`third_party/<component_name>/`**.
+- [ ] Partner content and any non-Apache 2.0 dependencies follow `docs/contributing.md`.
 - [ ] I have tested and verified the module on my self-deployed Horizon SDV instance.
 - [ ] All Helm charts pass `helm lint` and `helm template`.
 - [ ] The module is registered in `gitops/apps/module-manager/templates/module-catalog.yaml`.

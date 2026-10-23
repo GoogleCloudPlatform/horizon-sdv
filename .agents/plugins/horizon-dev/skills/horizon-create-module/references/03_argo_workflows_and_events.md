@@ -1,4 +1,16 @@
-<!-- Copyright (c) 2026 Accenture, All Rights Reserved. -->
+<!-- Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
 
 # Argo Workflows & Argo Events in Horizon Modules
 
@@ -8,19 +20,19 @@ This guide explains how to define, expose, and trigger **Argo Workflows** and **
 
 ## 1. Pipeline Naming Conventions & Defaults
 
-By default, every Horizon SDV module should provide **two standard pipeline types**:
+The scaffold creates **two starting pipeline types**. Existing modules use other names (table below); rename, add or remove them to fit the module:
 1. **Initialization Pipeline (`<module-name>-init`)**: Prepares credentials, verifies KCC cloud resources, sets up buckets/topics, initializes databases, downloads seed assets, or warms build caches.
 2. **Execution Pipeline (`<module-name>-execute` or `<module-name>-smoke-test`)**: Runs the main workload, compilation, test suite, or data processing flow and publishes output artifacts.
 
 ### Naming Conventions in Existing Modules
 
-| Module Name | Initialization Pipeline (`-init` / setup) | Execution Pipeline (`-execute` / smoke-test) | Webhook Sensor (`webhook-`) |
-| :--- | :--- | :--- | :--- |
-| `sample-module` | `sample-init` | `sample-smoke-test` / `sample-smoke-test-alt` | `webhook-sample-smoke-test` |
-| `sample-hard-module` | `sample-hard-init` | `sample-hard-smoke-test` / `sample-hard-smoke-test-alt` | `webhook-sample-hard-smoke-test` |
-| `sample-soft-module` | `sample-soft-init` | `sample-soft-smoke-test` | `webhook-sample-soft-smoke-test` |
-| `storage-gcs-module` | `storage-gcs-module-internal` | `storage-gcs-upload` (`upload`, `resumable-upload`) | Managed via internal API / CRDs |
-| `workloads-common` | `prepare-pipeline-git-creds` | `common-docker-image-build` | `webhook-prepare-pipeline-git-creds` |
+| Module Name | WorkflowTemplates | Webhook Sensors |
+| :--- | :--- | :--- |
+| `sample-module` | `sample-smoke-test`, `sample-smoke-test-alt` | `webhook-sample-smoke-test`, `webhook-sample-smoke-test-alt` |
+| `sample-hard-module` | `sample-hard-smoke-test`, `sample-hard-smoke-test-alt` | `webhook-sample-hard-smoke-test`, `webhook-sample-hard-smoke-test-alt` |
+| `sample-soft-module` | `sample-soft-smoke-test`, `sample-soft-smoke-test-alt` | `webhook-sample-soft-smoke-test`, `webhook-sample-soft-smoke-test-alt` |
+| `storage-gcs-module` | `storage-gcs-module-internal`, `storage-gcs-upload` | None |
+| `workloads-common` | ClusterWorkflowTemplates `prepare-pipeline-git-creds`, `prepare-github-app-git-creds`, `common-docker-image-build` | `webhook-prepare-github-app-git-creds`, `webhook-common-docker-image-build` |
 
 ---
 

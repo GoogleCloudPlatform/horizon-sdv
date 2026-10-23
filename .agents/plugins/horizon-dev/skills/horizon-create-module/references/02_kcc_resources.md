@@ -1,4 +1,16 @@
-<!-- Copyright (c) 2026 Accenture, All Rights Reserved. -->
+<!-- Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
 
 # Kubernetes Config Connector (KCC) in Horizon Modules
 
@@ -10,7 +22,7 @@ This guide details how to declare, configure, and manage Google Cloud Platform (
 
 **Kubernetes Config Connector (KCC)** allows developers to manage GCP infrastructure declaratively using Kubernetes Custom Resource Definitions (CRDs). In Horizon SDV:
 - Platform-level infrastructure (VPC, GKE cluster, Cloud DNS, core IAM) is provisioned via **Terraform**.
-- Module-level infrastructure (Pub/Sub topics, Cloud Storage buckets, BigQuery datasets, Cloud KMS keys, IAM bindings) is provisioned via **KCC manifests** inside module Helm charts.
+- Module-level infrastructure (Pub/Sub topics, Cloud Storage buckets, BigQuery datasets, Cloud KMS keys) is provisioned via **KCC manifests** inside module Helm charts.
 
 This ensures modules remain self-contained: enabling a module in the Developer Portal automatically provisions its required GCP cloud resources via Argo CD without running Terraform again.
 
@@ -40,6 +52,9 @@ annotations:
 Control whether the underlying GCP resource is deleted or retained when the module or Argo CD application is deleted:
 - `cnrm.cloud.google.com/deletion-policy: "delete"` (default): Deletes the GCP resource when the Kubernetes CR is removed.
 - `cnrm.cloud.google.com/deletion-policy: "abandon"`: Retains the GCP resource in Google Cloud even if the Kubernetes CR is deleted.
+
+### 4. Cluster-mode Config Connector
+Horizon runs Config Connector in cluster mode as `gke-config-connector-sa` (`gitops/templates/config-connector.yaml`, roles in `terraform/env/main.tf`). Resources in any namespace are reconciled. Do not create a `ConfigConnectorContext`; the operator rejects it in cluster mode.
 
 ---
 
@@ -100,7 +115,7 @@ Manifest: `gitops/modules/<module-name>/<app-name>/templates/kcc-bigquery.yaml`
 apiVersion: bigquery.cnrm.cloud.google.com/v1beta1
 kind: BigQueryDataset
 metadata:
-  name: {{ .Values.parentModuleName | replace "-" "_" }}_dataset
+  name: {{ .Values.parentModuleName }}-dataset
   namespace: {{ .Values.namespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
@@ -108,31 +123,10 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ .Values.parentModuleName }}
 spec:
+  resourceID: {{ .Values.parentModuleName | replace "-" "_" }}_dataset  # BigQuery IDs allow `_`; Kubernetes names do not
   location: {{ .Values.config.region | default "europe-west1" }}
   description: "Analytics dataset for {{ .Values.parentModuleName }}"
   defaultTableExpirationMs: "2592000000" # 30 days
-```
-
-### Example 4: IAM Policy Member (Workload Identity Binding)
-
-Allowing a Kubernetes Service Account to access GCP services:
-
-```yaml
-apiVersion: iam.cnrm.cloud.google.com/v1beta1
-kind: IAMPolicyMember
-metadata:
-  name: {{ .Values.parentModuleName }}-pubsub-publisher
-  namespace: {{ .Values.namespace }}
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
-    cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
-spec:
-  member: "serviceAccount:{{ .Values.gcpProjectId }}.svc.id.goog[{{ .Values.namespace }}/{{ .Values.parentModuleName }}-sa]"
-  role: "roles/pubsub.publisher"
-  resourceRef:
-    apiVersion: pubsub.cnrm.cloud.google.com/v1beta1
-    kind: PubSubTopic
-    name: {{ .Values.parentModuleName }}-events
 ```
 
 ---
@@ -165,7 +159,10 @@ Status:
 ### Common Issues
 1. **`Permission Denied` / `403 Forbidden`**:
    - Cause: Config Connector's service account lacks IAM permissions in the GCP project to create the specified resource.
-   - Fix: Ensure the GKE / KCC service account has appropriate GCP project roles (e.g. `roles/pubsub.admin`, `roles/storage.admin`).
+   - Fix: Config Connector acts as `gke-config-connector-sa` with `roles/editor` (`terraform/env/main.tf`). Editor covers creating most resources but not IAM policy changes. Missing roles must be added in Terraform, not granted manually.
 2. **`Missing Project ID`**:
    - Cause: The `cnrm.cloud.google.com/project-id` annotation is missing or evaluated to an empty string.
    - Fix: Ensure `gcpProjectId: {{ .Values.config.projectID | quote }}` is passed in the parent child `Application` Helm values.
+3. **`SERVICE_DISABLED` / API not enabled**:
+   - Cause: Terraform enables only the APIs listed in `terraform/env/main.tf`; Pub/Sub and BigQuery are not in that list.
+   - Fix: Check with `gcloud services list --enabled --project=<project-id>`. Document any required API in the module README as a prerequisite.

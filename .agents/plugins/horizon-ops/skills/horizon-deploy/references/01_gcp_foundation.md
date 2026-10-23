@@ -1,3 +1,17 @@
+<!-- Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
+
 # Phase 1: GCP Foundation Setup
 
 This guide details the creation and configuration of required Google Cloud Platform (GCP) services prior to running Terraform.
@@ -24,47 +38,20 @@ The deploying identity (user account or pipeline service account) requires the f
 ### CLI Tools & Interactive Authentication
 Ensure Google Cloud SDK (`gcloud`, `gsutil`, `bq`) is authenticated for both CLI and Application Default Credentials (ADC):
 ```bash
-# 1. Initiate browser-based OAuth authentication flow
-gcloud auth login --update-adc --no-launch-browser
+# 1. The user runs this in their own terminal (authenticates gcloud and ADC)
+gcloud auth login --update-adc
 
-# 2. Set active target project
+# 2. The agent verifies the login; stop if it fails
+gcloud auth application-default print-access-token >/dev/null && \
+  gcloud auth list --filter=status:ACTIVE --format="value(account)"
+
+# 3. Set active target project
 gcloud config set project <GCP_PROJECT_ID>
 ```
-*The agent presents the generated authentication link to the user, pauses execution, and awaits the verification code.*
+*Never ask the user to paste verification codes into chat.*
 
 ### Enable Required GCP APIs
-Enable core services, Cloud Resource Manager, and Cloud Build APIs:
-```bash
-gcloud services enable \
-  compute.googleapis.com \
-  container.googleapis.com \
-  dns.googleapis.com \
-  secretmanager.googleapis.com \
-  certificatemanager.googleapis.com \
-  artifactregistry.googleapis.com \
-  cloudbuild.googleapis.com \
-  cloudresourcemanager.googleapis.com \
-  serviceusage.googleapis.com \
-  iam.googleapis.com \
-  iamcredentials.googleapis.com \
-  sts.googleapis.com \
-  gkehub.googleapis.com \
-  connectgateway.googleapis.com \
-  monitoring.googleapis.com \
-  oslogin.googleapis.com \
-  autoscaling.googleapis.com \
-  file.googleapis.com \
-  iap.googleapis.com \
-  networkconnectivity.googleapis.com \
-  networkmanagement.googleapis.com \
-  integrations.googleapis.com \
-  aiplatform.googleapis.com \
-  storage.googleapis.com \
-  workstations.googleapis.com \
-  spanner.googleapis.com \
-  parametermanager.googleapis.com \
-  --project=<GCP_PROJECT_ID>
-```
+Run the API list in `SKILL.md` Phase 1 step 4. That list is the single source; do not duplicate it here.
 
 ---
 
@@ -73,9 +60,9 @@ gcloud services enable \
 Inspect organization constraints early before configuring or deploying infrastructure:
 
 ### 2.1 Service Account Key Creation Constraint (`constraints/iam.disableServiceAccountKeyCreation`)
-Check if the project restricts Service Account Key creation:
+Check if the project restricts Service Account Key creation (`--effective` includes policies inherited from the folder or organization):
 ```bash
-gcloud org-policies describe constraints/iam.disableServiceAccountKeyCreation --project=<GCP_PROJECT_ID>
+gcloud org-policies describe constraints/iam.disableServiceAccountKeyCreation --project=<GCP_PROJECT_ID> --effective
 ```
 
 > [!IMPORTANT]
@@ -109,8 +96,8 @@ gcloud iam service-accounts list \
 Format of the default compute SA: `<GCP_PROJECT_NUMBER>-compute@developer.gserviceaccount.com`.  
 *Save this email as it is required for `sdv_gcp_compute_sa_email` in `terraform.tfvars`.*
 
-### Grant Cloud Build & Compute IAM Roles
-Grant `roles/owner` (or Editor + Project IAM Admin) to the Cloud Build and Compute service accounts to allow automated provisioning:
+### Grant Cloud Build & Compute IAM Roles (Cloud Build variant only)
+Only if the user chose the [Cloud Build variant](./06_cloud_build_deployment.md): grant `roles/owner` (or Editor + Project IAM Admin) to the Cloud Build and Compute service accounts so the build can provision the platform. The standard `deploy.sh` and `container-deploy.sh` paths run as the user and do not need these grants.
 ```bash
 # Grant Cloud Build SA
 gcloud projects add-iam-policy-binding <GCP_PROJECT_ID> \
@@ -125,7 +112,7 @@ gcloud projects add-iam-policy-binding <GCP_PROJECT_ID> \
 
 ---
 
-## 3. Create Terraform Backend GCS Bucket & .gcloudignore
+## 4. Create Terraform Backend GCS Bucket
 
 Create a globally unique Cloud Storage bucket in your project to store Terraform remote state:
 
@@ -140,32 +127,11 @@ gcloud storage buckets create gs://$BUCKET_NAME \
 gcloud storage buckets update gs://$BUCKET_NAME --project=<GCP_PROJECT_ID> --versioning
 ```
 
-### Configure .gcloudignore
-Ensure `.gcloudignore` includes `!terraform/env/terraform.tfvars` so the configuration is uploaded to Cloud Build:
-```bash
-cat << 'EOF' > .gcloudignore
-.gcloudignore
-.git
-.gitignore
-.DS_Store
-**/.DS_Store
-**/.terraform/*
-*.tfstate
-*.tfstate.*
-**/node_modules/
-**/dist/
-**/.vite/
-
-# Ensure terraform.tfvars is included for Cloud Build deployments
-!terraform/env/terraform.tfvars
-EOF
-```
-
 *Save `<GCP_BACKEND_BUCKET_NAME>` as it will be used for `sdv_gcp_backend_bucket` in `terraform.tfvars` and `backend.tf`.*
 
 ---
 
-## 4. Cloud DNS Managed Zone (Terraform-Managed)
+## 5. Cloud DNS Managed Zone (Terraform-Managed)
 
 Cloud DNS managed zones (`google_dns_managed_zone.sdv-cloud-dns-zone`) are provisioned and managed directly by Terraform as part of the core infrastructure deployment.
 
@@ -176,14 +142,14 @@ Cloud DNS managed zones (`google_dns_managed_zone.sdv-cloud-dns-zone`) are provi
 
 ---
 
-## 5. Create OAuth2 Consent Screen and Client ID
+## 6. Create OAuth2 Consent Screen and Client ID
 
 Google OAuth2 credentials provide Single Sign-On (SSO) via Keycloak across all Horizon applications.
 
 > [!NOTE]
 > Terraform deploys successfully even if this step is postponed, but Keycloak Google SSO login will require these credentials to be updated in Secret Manager and configured in the Keycloak admin console.
 
-### Step 4.1: Configure OAuth Consent Screen
+### Step 6.1: Configure OAuth Consent Screen
 1. In GCP Console, navigate to **APIs & Services** → **OAuth consent screen**.
 2. Click **Get Started**.
 3. **App name**: `Horizon - SDV`.
@@ -195,7 +161,7 @@ Google OAuth2 credentials provide Single Sign-On (SSO) via Keycloak across all H
    - Authorized Domains: `<HORIZON_DOMAIN>`
 8. Click **Save and Continue**.
 
-### Step 4.2: Create OAuth 2.0 Web Client ID
+### Step 6.2: Create OAuth 2.0 Web Client ID
 1. Navigate to **APIs & Services** → **Credentials**.
 2. Click **Create Credentials** → **OAuth client ID**.
 3. **Application type**: `Web application`.
@@ -207,7 +173,9 @@ Google OAuth2 credentials provide Single Sign-On (SSO) via Keycloak across all H
 6. Click **Create**.
 7. Copy the generated **Client ID** and **Client Secret** immediately.
 
-### Step 4.3: Store Client Secret in GCP Secret Manager
-1. Navigate to **Security** → **Secret Manager**.
-2. Verify or create the secret named `oauth2-client-secret`.
-3. Add a secret version containing the plain Client Secret value copied above.
+### Step 6.3: Store Client Secret in GCP Secret Manager (after deployment)
+Terraform creates `keycloak-idp-client-secret` as a placeholder and does not overwrite later versions. Add the real value as a new version:
+```bash
+printf '%s' '<CLIENT_SECRET>' | gcloud secrets versions add keycloak-idp-client-secret --data-file=- --project=<GCP_PROJECT_ID>
+```
+This is storage only. Keycloak's Google login uses the Client ID and Client Secret entered in the Keycloak UI ([04_post_deployment_setup.md §3.2](./04_post_deployment_setup.md#32-configure-google-identity-provider)).

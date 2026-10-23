@@ -1,4 +1,16 @@
-<!-- Copyright (c) 2026 Accenture, All Rights Reserved. -->
+<!-- Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
 
 # ModuleCatalog Registration & Developer Portal Integration
 
@@ -40,11 +52,11 @@ spec:
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `name` | string | Unique kebab-case module identifier (e.g. `my-module`). |
+| `name` | string | Unique kebab-case module identifier (e.g. `my-module`). Injected into the parent chart as `moduleName`; the parent Argo CD Application is `mod-<name>` and child Applications must be named `mod-<name>-<suffix>`. It may differ from the directory name; the scaffold uses the same value for both. |
 | `path` | string | Git repository path to the parent Helm chart (e.g. `gitops/modules/my-module`). |
 | `overviewPath` | string | Path within the module chart to the static HTML file (`portal/overview.html`). |
-| `overviewService` | string | Kubernetes Service name serving the HTML documentation (`mod-<name>-overview`). |
-| `overviewServiceNamespace` | string | Namespace where the overview service runs. |
+| `overviewService` | string | Kubernetes Service name serving the HTML documentation (`mod-<name>-overview`). Must equal `overviewServiceName` in the parent `values.yaml`. |
+| `overviewServiceNamespace` | string | Namespace where the overview service runs. Injected into the parent chart as `overviewNamespace`. For `workloads-*` modules, use Module Manager's namespace. |
 | `autoDisableWhenUnused` | bool | (Optional) Automatically disable this module when no other enabled module depends on it. |
 | `hardDependencies` | []string | Modules required for this module to function. |
 | `softDependencies` | []string | Modules that provide optional functionality when enabled. |
