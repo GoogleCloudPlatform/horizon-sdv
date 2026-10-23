@@ -36,7 +36,7 @@ spec:
     # Reference to the pre-existing VPC (not created by KCC).
     external: "projects/{{ .Values.gcpProjectId }}/global/networks/{{ .Values.config.networkName | default "sdv-network" }}"
   sourceRanges:
-    - "{{ .Values.config.subnetCidr | default "10.1.0.0/24" }}"   # abfs-west4 subnet
+    - "{{ .Values.config.subnetCidr | default "10.1.0.0/24" }}"
   allow:
     - protocol: tcp
       ports:

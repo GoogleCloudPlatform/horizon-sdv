@@ -436,6 +436,5 @@ spec:
               else
                 write_status "applied" "base64Length=${#desired}"
               fi
-              echo "Verify from a pod on either ABFS pool:"
-              echo "  curl -s -H 'Metadata-Flavor: Google' \\"
-              echo "    http://metadata.google.internal/computeMetadata/v1/instance/attributes/${METADATA_KEY} | wc -c"
+              # Metadata can be verified from a pod on either ABFS pool with:
+              # curl -s -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/attributes/${METADATA_KEY} | wc -c"
