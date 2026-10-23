@@ -302,8 +302,16 @@ pipelineJob('OpenBSW/Builds/BSW Builder') {
 
     choiceParam {
       name('AI_REVIEW_RUNTIME')
-      description('''<p>AI Review runtime: <code>gemini-cli</code> (CLI, default) or <code>agy</code> (Antigravity SDK).</p>''')
-      choices(['gemini-cli', 'agy'])
+      description('''<p>AI Review runtime: <code>agy</code> (Antigravity SDK, default) or <code>gemini-cli</code> (CLI).</p>''')
+      choices(['agy', 'gemini-cli'])
+    }
+
+    choiceParam {
+      name('GEMINI_AI_EXECUTION_TIMEOUT_MINUTES')
+      description('''
+        <p>Maximum duration in minutes allowed for the Gemini assistant to run before automatic termination.</p>
+        <p><i>Note: This safety limit prevents hung processes and optimizes resource usage.</i></p>''')
+      choices(['60', '45', '30', '20', '10', '90', '120'])
     }
 
     stringParam {

@@ -232,7 +232,7 @@ pipeline {
                   set +ex
                   if [ "${ABFS_CACHED_BUILD}" = "true" ]; then export GEMINI_ANALYSIS_PATH="/aaos-cache/abfs"; else export GEMINI_ANALYSIS_PATH="/abfs"; fi
                   export PIPELINE_REPO_ROOT="${WORKSPACE}"
-                  export AI_REVIEW_RUNTIME="${AI_REVIEW_RUNTIME:-gemini-cli}"
+                  export AI_REVIEW_RUNTIME="${AI_REVIEW_RUNTIME:-agy}"
                   export GEMINI_HOOK_PROFILE="aaos"
                   export GEMINI_HOOK_DIR="workloads/android/pipelines/builds/aaos_builder/hooks"
                   export GEMINI_AAOS_LOG_TAIL_MODE="fullcopy"
@@ -243,8 +243,9 @@ pipeline {
                   export GEMINI_PREVIEW_FEATURES="${GEMINI_PREVIEW_FEATURES}"
                   [ "$GEMINI_LOCATION_GLOBAL" = "true" ] && export GOOGLE_CLOUD_LOCATION="global" || export GOOGLE_CLOUD_LOCATION="${CLOUD_REGION}"
                   export GOOGLE_CLOUD_PROJECT="${CLOUD_PROJECT}"
+                  export GEMINI_MODEL="${GEMINI_MODEL:-}"
                   export GEMINI_COMMAND_LINE="${GEMINI_COMMAND_LINE}"
-                  export GEMINI_AI_EXECUTION_TIMEOUT_HOURS="${GEMINI_AI_EXECUTION_TIMEOUT}"
+                  export GEMINI_AI_EXECUTION_TIMEOUT_MINUTES="${GEMINI_AI_EXECUTION_TIMEOUT_MINUTES:-60}"
                   bash "${WORKSPACE}/workloads/common/agentic-ai/gemini/run_ai_review.sh"
                   '''
               }

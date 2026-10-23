@@ -167,7 +167,7 @@ AAOS SDV:
 
 Enable Gemini **AI Review** in the shared `cvd-pipeline-shared-library` **Diagnostics** stage (`cvdPipeline`, same family as [CTS Execution](../cts_execution/README.md)). The **AI Review** sub-stage runs only when **`ENABLE_GEMINI_AI_ASSISTANT`** is **`true`**, the overall pipeline result is **`FAILURE`**, and **`MTK_CONNECT_STAGE_FAILED`** is not **`true`** (see `cvdPipeline.groovy`). This job does **not** use **`requireCtsNotListOnly`** (that gate applies only to CTS Execution).
 
-The **`Jenkinsfile`** sets **`aiReview`** with **`preset: 'cvd'`**: artifact collection matches CTS Execution’s Cuttlefish/host patterns but **does not** include CTS result trees (`android-cts-results/**`, `android-cts-results-html/**`), which do not apply to this job.
+The **`Jenkinsfile`** sets **`aiReview`** with **`preset: 'cvd'`**: artifact collection uses the shared Cuttlefish patterns (`**/wifi*.log`, `**/cvd*.log`, `**/cts*.txt`, `**/cuttlefish*.zip`) and **does not** add the CTS Execution extras (`**/*.zip`, `**/invocation_summary.txt`, `**/test_result*.html`).
 
 ### `GEMINI_ANALYSE_ON_SUCCESS` <a name="gemini_analyse_on_success"></a>
 
@@ -187,7 +187,15 @@ Notes:
 
 ### `GEMINI_COMMAND_LINE`
 
-Interface for the headless [gemini-cli](https://geminicli.com/docs/cli/headless/). Same role as on CTS Execution; defaults are seeded in `groovy/job.groovy` (including optional `GEMINI_MODEL` via job environment).
+Interface for the headless [gemini-cli](https://geminicli.com/docs/cli/headless/). Same role as on CTS Execution; defaults are seeded in `groovy/job.groovy` (including optional `GEMINI_MODEL` via job environment). Antigravity does not read this parameter. It reads `GEMINI_MODEL`.
+
+### `AI_REVIEW_RUNTIME`
+
+`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. The CVD Launcher Helm chart sets `aiReviewRuntime` to `agy`. Antigravity uses `workloads/common/agentic-ai/antigravity/skills/cvd_launcher/SKILL.md` and ignores the sequenced prompt files.
+
+### `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES`
+
+Maximum duration in minutes before the review is terminated. Jenkins choices are `60`, `45`, `30`, `20`, `10`, `90`, and `120` (first choice `60`). When unset, `run_ai_review.sh` uses 60 minutes. The Helm chart sets `geminiAiExecutionTimeoutMinutes` to `60`.
 
 ### `CTS_ARTIFACT_STORAGE_SOLUTION`
 
@@ -209,7 +217,7 @@ Cuttlefish/CVD line-number grep guidance (example failure buckets, log paths, an
 
 **CVD logs and devices that do not boot:** This job does **not** run Tradefed. When Gemini is enabled and the build **fails**, AI Review analyzes the copied Cuttlefish/CVD material to explain **launch and runtime** problems—especially **guest `kernel.log`** (bootconfig, panics, early boot), **`launcher.log`** (crosvm / assemble), workspace **`cvd*.log`**, Wi‑Fi logs, and **`cuttlefish_logs*.zip`**—not Compatibility Test assertions. That is the right diagnostic path when virtual devices **fail to boot**, **fail to stabilize**, or **never become usable** before any CTS run would matter. For failures that also require **which CTS tests failed** and Tradefed HTML/XML, use [CTS Execution](../cts_execution/README.md) (`preset: 'cts'`).
 
-For AI Review, the shared library copies artifacts using the **CVD** filter: `**/wifi*.log`, `**/cvd*.log`, `**/cts_execution_parameters.txt`, `**/cuttlefish_logs*.zip`. The job definition grants **Copy Artifact** permission on itself so the Diagnostics stage can copy from the same build.
+For AI Review, the shared library copies artifacts using the **CVD** filter: `**/wifi*.log`, `**/cvd*.log`, `**/cts*.txt`, `**/cuttlefish*.zip`. Cuttlefish zips are unpacked under `test-results/cvd` before review. The job definition grants **Copy Artifact** permission on itself so the Diagnostics stage can copy from the same build.
 
 ## Example Usage <a name="examples"></a>
 
