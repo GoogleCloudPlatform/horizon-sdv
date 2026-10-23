@@ -1,6 +1,6 @@
 # remotive-topology
 
-Run [RemotiveTopology](https://docs.remotivelabs.com/) vehicle-system simulations
+Run [RemotiveTopology](https://developer.remotivelabs.com/) vehicle-system simulations
 ("system of systems") on ephemeral GCE VMs, following the Horizon SDV
 Packer → KCC `ComputeInstanceTemplate` → ephemeral-GCE-driver pattern
 (`cf_instance_template` + `cvd_launcher` parity).
