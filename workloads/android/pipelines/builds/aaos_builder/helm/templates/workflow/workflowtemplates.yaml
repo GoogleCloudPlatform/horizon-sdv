@@ -83,15 +83,15 @@ spec:
       - name: enableGeminiAiAssistant
         value: {{ .Values.spec.enableGeminiAiAssistant | quote }}
         description: "Enable Gemini AI review on failure (when build fails)."
+      - name: parallelSyncJobs
+        value: {{ .Values.spec.parallelSyncJobs | quote }}
+        description: "Parallel repo sync jobs."
       - name: aiReviewRuntime
         value: {{ .Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
         enum:
           - gemini-cli
           - agy
         description: "AI review runtime: Gemini CLI or Antigravity SDK (agy)."
-      - name: parallelSyncJobs
-        value: {{ .Values.spec.parallelSyncJobs | quote }}
-        description: "Parallel repo sync jobs."
   templateDefaults:
     metadata:
       annotations:

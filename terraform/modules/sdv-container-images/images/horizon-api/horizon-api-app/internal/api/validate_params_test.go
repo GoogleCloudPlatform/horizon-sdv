@@ -37,3 +37,30 @@ func TestValidateParamsRejectsInjectedSampleSoftEnabled(t *testing.T) {
 		t.Fatalf("expected unknown parameter error, got %v", err)
 	}
 }
+
+func TestValidateParamsRejectsValueNotInEnum(t *testing.T) {
+	t.Parallel()
+	ent := catalog.Entry{
+		Parameters: []catalog.Parameter{
+			{Name: "aiReviewRuntime", Default: "gemini-cli", Enum: []string{"gemini-cli", "agy"}},
+		},
+	}
+	err := validateParams(ent, map[string]string{
+		"aiReviewRuntime": "not-a-runtime",
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid value") {
+		t.Fatalf("expected invalid value error, got %v", err)
+	}
+}
+
+func TestValidateParamsAcceptsValueInEnum(t *testing.T) {
+	t.Parallel()
+	ent := catalog.Entry{
+		Parameters: []catalog.Parameter{
+			{Name: "aiReviewRuntime", Default: "gemini-cli", Enum: []string{"gemini-cli", "agy"}},
+		},
+	}
+	if err := validateParams(ent, map[string]string{"aiReviewRuntime": "agy"}); err != nil {
+		t.Fatalf("expected no error for enum value, got %v", err)
+	}
+}

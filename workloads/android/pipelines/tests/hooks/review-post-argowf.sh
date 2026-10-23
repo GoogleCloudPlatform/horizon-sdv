@@ -44,21 +44,25 @@ if [[ -n "${GEMINI_ARTIFACT_ROOT_NAME:-}" ]]; then
   # Move them out before upload so storage keeps one copy beside test-results.
   _results="${GEMINI_ANALYSIS_PATH:-/workspace/test-results}"
   _results="${_results%/}"
-  _stage="$(mktemp -d "${TMPDIR:-/tmp}/gemini-artifacts.XXXXXX")"
+  if ! _stage="$(mktemp -d "${TMPDIR:-/tmp}/gemini-artifacts.XXXXXX")" || [[ -z "${_stage}" ]]; then
+    echo "WARN: mktemp failed; gemini artifacts may be uploaded twice, nested in the test-results folder and outside it." >&2
+  else
+    for _name in "${GEMINI_ARTIFACT_PATH:-gemini-assist}" traces; do
+      if [[ -e "${_results}/${_name}" ]]; then
+        mv "${_results}/${_name}" "${_stage}/" \
+          || echo "WARN: failed to move ${_results}/${_name} to ${_stage}" >&2
+      fi
+    done
 
-  for _name in "${GEMINI_ARTIFACT_PATH:-gemini-assist}" traces; do
-    if [[ -e "${_results}/${_name}" ]]; then
-      mv "${_results}/${_name}" "${_stage}/"
-    fi
-  done
+    shopt -s nullglob
+    for _json in "${_results}"/headless_output*.json "${_results}"/gemini-client-error.zip; do
+      mv "${_json}" "${_stage}/" \
+        || echo "WARN: failed to move ${_json} to ${_stage}" >&2
+    done
+    shopt -u nullglob
 
-  shopt -s nullglob
-  for _json in "${_results}"/headless_output*.json "${_results}"/gemini-client-error.zip; do
-    mv "${_json}" "${_stage}/"
-  done
-  shopt -u nullglob
-
-  export GEMINI_ARTIFACT_WRITE_ROOT="${_stage}"
+    export GEMINI_ARTIFACT_WRITE_ROOT="${_stage}"
+  fi
 
   # shellcheck disable=SC1091
   source "${REPO_ROOT}/workloads/common/agentic-ai/gemini/gemini_environment.sh"

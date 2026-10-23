@@ -291,6 +291,13 @@ func submitRequestBodySchema(e Entry) map[string]interface{} {
 		if p.Default != "" {
 			prop["default"] = p.Default
 		}
+		if len(p.Enum) > 0 {
+			enumVals := make([]interface{}, len(p.Enum))
+			for i, v := range p.Enum {
+				enumVals[i] = v
+			}
+			prop["enum"] = enumVals
+		}
 		if p.Name == workflow.SubmitParamSubmittedFrom {
 			prop["maxLength"] = 63
 			suffix := " Optional: omit to use X-Horizon-Submitted-From (default api). Built-in values: api, developer-portal, horizon-cli (aliases: rest-api, portal, cli). Any other value must follow Kubernetes label value rules (e.g. my-ci, string). For OpenAPI-only clients, you may set header X-Horizon-Submitted-From to \"custom\" and send the id in X-Horizon-Submitted-From-Detail instead."

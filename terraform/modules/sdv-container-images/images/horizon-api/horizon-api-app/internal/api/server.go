@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -279,8 +280,12 @@ func validateParams(ent catalog.Entry, got map[string]string) error {
 		got = map[string]string{}
 	}
 	allowed := make(map[string]bool)
+	enums := make(map[string][]string)
 	for _, p := range ent.Parameters {
 		allowed[p.Name] = true
+		if len(p.Enum) > 0 {
+			enums[p.Name] = p.Enum
+		}
 		if p.Default != "" {
 			continue
 		}
@@ -292,9 +297,12 @@ func validateParams(ent catalog.Entry, got map[string]string) error {
 			return fmt.Errorf("missing parameter %q", p.Name)
 		}
 	}
-	for k := range got {
+	for k, v := range got {
 		if k == "" || !allowed[k] {
 			return fmt.Errorf("unknown or empty parameter key %q", k)
+		}
+		if vals, ok := enums[k]; ok && v != "" && !slices.Contains(vals, v) {
+			return fmt.Errorf("invalid value %q for parameter %q, allowed: %s", v, k, strings.Join(vals, ", "))
 		}
 	}
 	return nil
