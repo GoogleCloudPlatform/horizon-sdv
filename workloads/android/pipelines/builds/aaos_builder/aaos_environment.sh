@@ -565,6 +565,31 @@ if [ -n "${POST_REPO_INITIALISE_COMMAND}" ]; then
     POST_REPO_INITIALISE_COMMANDS_LIST+=("${POST_REPO_INITIALISE_COMMAND}")
 fi
 
+# ABFS: Soong runs soong_build in an nsjail sandbox where the ABFS mount is
+# read-only and the out directory is only writable at /src/out. The fix needed
+# so that Soong writes under the sandbox path differs per Android version, so
+# it is selected from the lunch target instead of being a user default.
+#   - Android 14 (ap1a) / 15.0.0_r4 (ap3a): nothing needed.
+#   - Android 15 (bp1a): upstream build/soong sandbox changes 3619490-3619492
+#     (abandoned on main, still fetchable).
+#   - Android 16 (bp3a/bp4a): pass TOP and LOG_DIR through sandboxPath in
+#     ui/build/soong.go; without it soong_build panics with
+#     "open /abfs/out/soong/.temp/rawN: read-only file system".
+if [[ "${ABFS_BUILDER}" == "true" ]]; then
+    case "${AAOS_LUNCH_TARGET}" in
+        *bp1a*)
+            POST_REPO_COMMAND_LIST+=(
+                "cd build/soong ; git fetch https://android.googlesource.com/platform/build/soong refs/changes/90/3619490/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/91/3619491/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/3619492/1 && git cherry-pick FETCH_HEAD; cd -"
+            )
+            ;;
+        *bp3a*|*bp4a*)
+            POST_REPO_COMMAND_LIST+=(
+                "cd build/soong && sed -i -e 's|Set(\"TOP\", os.Getenv(\"TOP\"))|Set(\"TOP\", config.sandboxPath(os.Getenv(\"TOP\"), os.Getenv(\"TOP\")))|' -e 's|Set(\"LOG_DIR\", config.LogsDir())|Set(\"LOG_DIR\", config.sandboxPath(os.Getenv(\"TOP\"), config.LogsDir()))|' ui/build/soong.go && grep -q 'sandboxPath(os.Getenv(\"TOP\")' ui/build/soong.go; cd -"
+            )
+            ;;
+    esac
+fi
+
 if [ -n "${POST_REPO_COMMAND}" ]; then
     POST_REPO_COMMAND_LIST+=("${POST_REPO_COMMAND}")
 fi
