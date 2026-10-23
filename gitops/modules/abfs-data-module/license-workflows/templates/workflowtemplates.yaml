@@ -1,0 +1,143 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# WorkflowTemplates that manage Secret abfs-license (key: license) in horizon
+# and, when the ABFS data node pool CR exists, delete it so Argo recreates
+# with create-time GCE metadata from Helm lookup.
+#
+# Exposed in the Developer Portal (horizon-sdv.io/expose=true). Sync-wave 7.
+# Portal submit goes through Sensors (sensors.yaml); argo CLI can submit directly.
+
+{{- if .Values.mainEnv }}
+# --- import: verify, then write or replace the license ---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: abfs-license-import
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    app.kubernetes.io/name: abfs-license-import
+    horizon-sdv.io/module: abfs-data
+    horizon-sdv.io/expose: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: import-license
+  serviceAccountName: {{ .Values.jobServiceAccountName }}
+  volumes:
+    - name: license-verify
+      configMap:
+        name: abfs-license-verify
+  arguments:
+    parameters:
+      - name: licensePayload
+        value: ""
+        description: "ABFS license JSON (or JWT) to store in Secret key license. Required. A later import replaces the stored license."
+  templates:
+    - name: import-license
+      inputs:
+        parameters:
+          - name: licensePayload
+            value: "{{ "{{workflow.parameters.licensePayload}}" }}"
+      container:
+        image: {{ .Values.cloudSdkImage | quote }}
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: HORIZON_NAMESPACE
+            value: {{ .Values.horizonNamespace | quote }}
+          - name: LICENSE_SECRET_NAME
+            value: {{ .Values.licenseSecretName | quote }}
+          - name: LICENSE_PAYLOAD
+            value: "{{ "{{inputs.parameters.licensePayload}}" }}"
+          {{- include "license.recreatePoolEnv" . | nindent 10 }}
+        command: [bash, -euo, pipefail, -c]
+        volumeMounts:
+          - name: license-verify
+            mountPath: /etc/abfs
+            readOnly: true
+        args:
+          - |
+            set -euo pipefail
+            {{ include "license.recreatePoolBash" . | nindent 12 }}
+            if [[ -z "${LICENSE_PAYLOAD}" ]]; then
+              echo "ERROR: licensePayload is empty" >&2
+              exit 1
+            fi
+            if ! kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NAMESPACE}" >/dev/null 2>&1; then
+              echo "ERROR: Secret ${LICENSE_SECRET_NAME} not found in ${HORIZON_NAMESPACE} (enable abfs-data first)" >&2
+              exit 1
+            fi
+            verify_abfs_license
+            encoded="$(printf '%s' "${LICENSE_PAYLOAD}" | base64 -w0 2>/dev/null || printf '%s' "${LICENSE_PAYLOAD}" | base64 | tr -d '\n')"
+            kubectl patch secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NAMESPACE}" --type merge \
+              -p "{\"data\":{\"license\":\"${encoded}\"}}"
+            echo "License imported into ${HORIZON_NAMESPACE}/${LICENSE_SECRET_NAME}"
+            recreate_data_node_pool_for_license
+---
+# --- clear: empty license value; keep Secret. confirm=yes avoids Portal white-screen
+#     when catalog parameters would otherwise be null. ---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: abfs-license-clear
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    app.kubernetes.io/name: abfs-license-clear
+    horizon-sdv.io/module: abfs-data
+    horizon-sdv.io/expose: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: clear-license
+  serviceAccountName: {{ .Values.jobServiceAccountName }}
+  arguments:
+    parameters:
+      - name: confirm
+        value: "yes"
+        description: "Leave as yes and submit to clear the license key (Secret object is kept)."
+  templates:
+    - name: clear-license
+      inputs:
+        parameters:
+          - name: confirm
+            value: "{{ "{{workflow.parameters.confirm}}" }}"
+      container:
+        image: {{ .Values.cloudSdkImage | quote }}
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: HORIZON_NAMESPACE
+            value: {{ .Values.horizonNamespace | quote }}
+          - name: LICENSE_SECRET_NAME
+            value: {{ .Values.licenseSecretName | quote }}
+          - name: CONFIRM
+            value: "{{ "{{inputs.parameters.confirm}}" }}"
+          {{- include "license.recreatePoolEnv" . | nindent 10 }}
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            set -euo pipefail
+            {{ include "license.recreatePoolBash" . | nindent 12 }}
+            if [[ "${CONFIRM}" != "yes" ]]; then
+              echo "ERROR: confirm must be yes (got: ${CONFIRM})" >&2
+              exit 1
+            fi
+            if ! kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NAMESPACE}" >/dev/null 2>&1; then
+              echo "ERROR: Secret ${LICENSE_SECRET_NAME} not found in ${HORIZON_NAMESPACE} (enable abfs-data first)" >&2
+              exit 1
+            fi
+            kubectl patch secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NAMESPACE}" --type merge \
+              -p '{"stringData":{"license":""}}'
+            echo "License cleared in ${HORIZON_NAMESPACE}/${LICENSE_SECRET_NAME} (Secret object kept)"
+            recreate_data_node_pool_for_license
+{{- end }}

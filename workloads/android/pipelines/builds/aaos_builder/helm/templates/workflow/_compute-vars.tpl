@@ -27,6 +27,15 @@ Dependencies: outputs sdkAndroidVersion for init/build/storage.
     source: |
       set -euo pipefail
       revision='{{ "{{" }}workflow.parameters.androidRevision{{ "}}" }}'
+{{- if eq (include "aaos-builder.isAbfs" .) "true" }}
+      lunch='{{ "{{" }}workflow.parameters.lunchTarget{{ "}}" }}'
+      case "${lunch}" in
+        *rpi*)
+          echo "ABFS does not support RPi lunch targets: ${lunch}" >&2
+          exit 1
+          ;;
+      esac
+{{- end }}
       case "${revision}" in
         *android-14*) android_version="14" ;;
         *android-15*) android_version="15" ;;

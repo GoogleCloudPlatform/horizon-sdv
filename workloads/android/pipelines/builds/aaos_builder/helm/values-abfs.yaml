@@ -1,0 +1,89 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Description:
+# ABFS variant of the AAOS builder: renders WorkflowTemplate aaos-builder-abfs and
+# Sensor webhook-aaos-builder-abfs from this chart. Layered on values.yaml
+# (workloads-android passes valueFiles: [values-abfs.yaml]); only the keys that
+# differ from the AAOS builder are set here. The build runs in one pod on the
+# ABFS mount (templates/workflow/_abfs-build.tpl).
+
+variant: abfs
+workflowTemplateName: aaos-builder-abfs
+# WorkflowTemplate called when the builder image is missing or forceImageBuild
+# is set: the ABFS image template from abfs/docker_image_template,
+# so a rebuild produces the ABFS flavour, not the generic AAOS image.
+# Note: with its current defaults it builds tag argowf-latest with noPush
+# "true", so it does not publish the image named below.
+aaosBuilderImageWorkflowTemplateName: abfs-builder-runtime-image
+
+spec:
+  lunchTarget: aosp_cf_x86_64_auto-bp1a-userdebug
+  androidRevision: android-15.0.0_r36
+  # ABFS uses one dedicated cache StorageClass and size, matching
+  # ABFS_STORAGE_CLASS_SUFFIX and ABFS_STORAGE_SIZE in the Jenkins job. It does
+  # not pick a class per Android revision the way the AAOS builder does.
+  aaosCacheStorageClassName: reclaimable-storage-class-android-abfs
+  aaosCacheStorageSize: "750Gi"
+  # Folder under gs://<project>-aaos/Android/Builds/ for the build artifacts (STORAGE_BUCKET_BASE).
+  storageBuildsDir: AAOS_Builder_ABFS
+  # Optional Gerrit topic; when set, aaos_initialise.sh fetches every change
+  # under the topic instead of a single change.
+  gerritTopic: ""
+  # Optional replacement for the default make command line. Single command
+  # line only; chain with logical operators. Consumed by aaos_environment.sh.
+  overrideMakeCommand: ""
+  # Commands run after the sources are mounted and before the build, as the
+  # Jenkins job's POST_REPO_COMMAND. The default is the Jenkins default: three
+  # build/soong changes ABFS needs for Android 15 ("The values here are for
+  # ABFS Android 15"); without them lunch fails in the Soong sandbox on the
+  # unreplaced {ABFS_DIR} mount. Single command line.
+  postRepoCommand: "cd build/soong ; git fetch https://android.googlesource.com/platform/build/soong refs/changes/90/3619490/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/91/3619491/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/3619492/1 && git cherry-pick FETCH_HEAD; cd -"
+  # Parallel build jobs (-j) for the ABFS build, passed as AAOS_PARALLEL_BUILD_JOBS.
+  # The shared aaos_environment.sh no longer caps it, so without a value the
+  # build uses every core on the node. Safe default for ABFS is '16'.
+  # Empty lets the build system decide. If the ABFS cacheman socket gets
+  # overloaded (resource temporarily unavailable, build stopped), the value
+  # may be too high.
+  parallelBuildJobs: "16"
+  # ABFS client/server defaults (Jenkins AAOS Builder ABFS).
+  abfs:
+    server: abfs-server.abfs.svc.cluster.local:50051
+    # Flags for every ABFS client command (init, config, cacheman, mount, setup
+    # in aaos_initialise.sh), passed as ABFS_CLIENT_FLAGS. They must match how
+    # the server listens: abfs-service-module runs it without TLS and without
+    # auth (abfs.clientFlags in its chart). The Jenkins job sets the same
+    # default through its ABFS_CLIENT_FLAGS parameter. Without them the client
+    # opens a TLS session and cacheman stops at initialise with
+    # "tls: first record does not look like a TLS handshake".
+    clientFlags: "--disable-tls=true --auth-type none"
+    cachedBuild: "false"
+    version: "0.1.14"
+    casfsVersion: "0.1.14"
+    repository: abfs-apt-alpha-public
+    # Manifest host passed to abfs --manifest-server. Must be the host the
+    # uploader pusher seeds from (abfs-service-module manifestProjectUrl),
+    # not the Horizon domain. Matches UPLOADER_MANIFEST_SERVER in the seed job.
+    uploaderManifestServer: android.googlesource.com
+    # Clean the ABFS cache directory before the build.
+    cleanCache: "false"
+    # cacheman sync timeout in seconds; 0 disables the wait. Only meaningful
+    # when cachedBuild is true.
+    cachemanTimeout: "180"
+  imageBuild:
+    # The image the Jenkins ABFS job runs (ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME
+    # in values-jenkins.yaml, tag latest in its Jenkinsfile). It adds the ABFS
+    # apt source, apt-transport-artifact-registry and kmod to the AAOS image.
+    artifactPathName: horizon-sdv/aaos-abfs-builder
+    imageTag: "latest"

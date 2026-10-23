@@ -1,0 +1,107 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# PreSync Job (wave -2): undelete soft-deleted GCP SA abfs-license before KCC
+# applies IAMServiceAccount in the main sync. If KCC creates first, GCP assigns a
+# new UniqueID and the previous license identity is lost.
+#
+# Reads ConfigMap abfs-license-sa-identity (uniqueId + email only). Undelete uses
+# uniqueId; email is for logging/verification. projectID comes from Helm values
+# (Module Manager config), not the ConfigMap.
+#
+# If undelete fails (e.g. UniqueID gone after ~30 days), exit 1 and leave the
+# ConfigMap unchanged so Argo reports Failed. KCC must not mint a new SA (new
+# UniqueID would silently invalidate the Google licence). Clearing uniqueId to
+# allow a new SA + new licence is a conscious operator step, not a fallback.
+# HookSucceeded deletes this Job only after success so failed-run logs remain.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: abfs-license-sa-undelete
+  namespace: {{ .Values.workflowsNamespace }}
+  labels:
+    horizon-sdv.io/module: abfs-data
+    app.kubernetes.io/name: abfs-license-sa-undelete
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: abfs-license-sa-undelete
+        horizon-sdv.io/module: abfs-data
+    spec:
+      serviceAccountName: {{ .Values.jobServiceAccountName }}
+      restartPolicy: Never
+      containers:
+        - name: undelete
+          image: {{ .Values.cloudSdkImage | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PROJECT_ID
+              value: {{ .Values.projectID | quote }}
+            - name: SA_ID
+              value: {{ .Values.serviceAccountId | quote }}
+            - name: HORIZON_NS
+              value: {{ .Values.horizonNamespace | quote }}
+            - name: IDENTITY_CM
+              value: {{ .Values.identityConfigMapName | quote }}
+          command: [bash, -euo, pipefail, -c]
+          args:
+            - |
+              set -euo pipefail
+              {{ include "abfsLicenseSa.ensureKubectl" . | nindent 14 }}
+              email="${SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
+              echo "Undelete check for ${email}"
+
+              if gcloud iam service-accounts describe "${email}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+                echo "Service account already exists (active); nothing to undelete."
+                exit 0
+              fi
+
+              unique_id=""
+              if kubectl get configmap "${IDENTITY_CM}" -n "${HORIZON_NS}" >/dev/null 2>&1; then
+                unique_id="$(kubectl get configmap "${IDENTITY_CM}" -n "${HORIZON_NS}" \
+                  -o jsonpath='{.data.uniqueId}' 2>/dev/null || true)"
+              fi
+
+              if [[ -z "${unique_id}" ]]; then
+                echo "No stored UniqueID; first enable — KCC will create the SA."
+                exit 0
+              fi
+
+              echo "SA missing; undeleting UniqueID=${unique_id} before KCC create..."
+              if ! gcloud iam service-accounts undelete "${unique_id}" --project="${PROJECT_ID}"; then
+                echo "ERROR: undelete failed (UniqueID not restorable — e.g. past ~30 day grace or invalid)." >&2
+                echo "ERROR: refusing to create a new SA (would invalidate the Google licence)." >&2
+                echo "ERROR: to proceed with a new SA, clear uniqueId on ConfigMap ${IDENTITY_CM} by hand, then retry." >&2
+                exit 1
+              fi
+
+              echo "Undelete requested; waiting for SA to become active..."
+              for i in $(seq 1 60); do
+                if gcloud iam service-accounts describe "${email}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+                  echo "SA active after undelete."
+                  exit 0
+                fi
+                sleep 5
+              done
+
+              echo "ERROR: undelete did not yield an active SA; refusing KCC create of a new identity." >&2
+              echo "ERROR: ConfigMap ${IDENTITY_CM} uniqueId left unchanged." >&2
+              exit 1

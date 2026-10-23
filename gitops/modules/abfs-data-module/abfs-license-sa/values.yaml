@@ -1,0 +1,51 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Defaults for abfs-license-sa (parent Application overrides from Module Manager).
+
+# Target namespaces (parent sets {namespacePrefix}horizon / workflows).
+horizonNamespace: horizon
+workflowsNamespace: workflows
+
+# GCP project — from Module Manager config.projectID (not stored in identity ConfigMap).
+projectID: ""
+
+# KCC IAMServiceAccount id → abfs-license@<project>.iam.gserviceaccount.com
+serviceAccountId: abfs-license
+
+# Job-applied ConfigMap: uniqueId + email only; survives prune; used by undelete Job.
+identityConfigMapName: abfs-license-sa-identity
+
+# Helm-owned Secret placeholder (key license); created on enable, deleted on disable.
+licenseSecretName: abfs-license
+
+# Jobs need gcloud + kubectl. Use debian_component_based so kubectl can be
+# installed at runtime (google-cloud-cli:stable does not ship kubectl).
+jobServiceAccountName: workflow-executor-elevated
+cloudSdkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based
+
+# KCC StorageBucket — parent sets bucketResourceID (<projectID>-abfs) and location.
+gcs:
+  bucketName: abfs
+  # Globally unique GCS bucket name (resourceID).
+  bucketResourceID: ""
+  location: ""
+
+# KCC Spanner — parent sets region from config.region.
+spanner:
+  instanceId: abfs
+  databaseId: abfs
+  displayName: ABFS Spanner
+  region: ""
+  numNodes: 1

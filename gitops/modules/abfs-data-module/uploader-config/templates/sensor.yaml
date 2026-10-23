@@ -1,0 +1,77 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Portal submit for abfs-uploader-config-select. Sensor lives in argo-events.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: webhook-abfs-uploader-config-select
+  namespace: {{ .Values.eventsNamespace }}
+  labels:
+    horizon-sdv.io/module: abfs-data
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: sensor-submit-workflow
+  dependencies:
+    - name: webhook-dep
+      eventSourceName: webhook
+      eventName: workflow-dispatch
+      filters:
+        data:
+          - path: body.workflowTemplateName
+            type: string
+            value:
+              - "abfs-uploader-config-select"
+  triggers:
+    - template:
+        name: submit-abfs-uploader-config-select
+        argoWorkflow:
+          operation: submit
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: abfs-uploader-config-select-
+                namespace: {{ .Values.workflowNamespace }}
+                labels:
+                  horizon-sdv.io/module: abfs-data
+              spec:
+                workflowTemplateRef:
+                  name: abfs-uploader-config-select
+                arguments:
+                  parameters:
+                    - name: Android_Versions
+                    - name: Configuration
+          parameters:
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.horizonSubmittedBy
+              dest: metadata.annotations.horizon-sdv\.io/submitted-by
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.horizonSubmittedFrom
+              dest: metadata.labels.horizon-sdv\.io/submitted-from
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.Android_Versions
+              dest: spec.arguments.parameters.0.value
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.Configuration
+              dest: spec.arguments.parameters.1.value

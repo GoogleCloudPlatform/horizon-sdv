@@ -1,0 +1,48 @@
+# Copyright (c) 2026 Google LLC
+#
+# Modifications Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mod-{{ .Values.moduleName }}-argo-workflows
+  namespace: {{ .Values.argocd.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.moduleName }}
+    horizon-sdv.io/module: {{ .Values.moduleName }}
+    horizon-sdv.io/app-role: child
+    horizon-sdv.io/module-manager-managed: "true"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocd.project }}
+  source:
+    repoURL: {{ .Values.repo.url | quote }}
+    targetRevision: {{ .Values.repo.revision | quote }}
+    path: gitops/modules/abfs-service-module/argo-workflows
+    helm:
+      values: |
+        workflowNamespace: {{ .Values.config.namespacePrefix }}workflows
+        eventsNamespace: {{ .Values.config.namespacePrefix }}argo-events
+        abfsNamespace: {{ .Values.abfsNamespace }}
+        networkPolicies: {{ .Values.config.enableNetworkPolicies | default false }}
+        gcpProjectId: {{ .Values.config.projectID | quote }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.config.namespacePrefix }}workflows
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated: {}

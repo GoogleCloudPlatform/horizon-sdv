@@ -36,6 +36,26 @@ workflow-executor-elevated
 {{- end -}}
 
 {{/*
+True for the ABFS variant (values-abfs.yaml sets variant: abfs). It builds in one pod on the ABFS
+mount (_abfs-build.tpl) instead of the init, build, gemini-review and storage steps.
+*/}}
+{{- define "aaos-builder.isAbfs" -}}
+{{- if eq (.Values.variant | default "aaos") "abfs" }}true{{- end -}}
+{{- end -}}
+
+{{/*
+StorageClass for the AAOS cache PVC, quoted. spec.aaosCacheStorageClassName when set (ABFS uses one dedicated
+class); otherwise one class per Android version, with an -rpi suffix for RPi lunch targets.
+*/}}
+{{- define "aaos-builder.cacheStorageClassName" -}}
+{{- if .Values.spec.aaosCacheStorageClassName -}}
+{{- .Values.spec.aaosCacheStorageClassName | quote -}}
+{{- else -}}
+'reclaimable-storage-class-android-{{ printf "{{=sprig.regexFind(\"[0-9]+\", workflow.parameters.androidRevision)}}" }}{{ printf "{{=sprig.regexFind(\"rpi\", workflow.parameters.lunchTarget) != \"\" ? \"-rpi\" : \"\"}}" }}'
+{{- end -}}
+{{- end -}}
+
+{{/*
 SCM auth: default values and GitOps set .Values.git.authMethod; .Values.scm.authMethod is accepted for compatibility.
 */}}
 {{- define "aaos-builder.scmAuthMethod" -}}
@@ -72,7 +92,7 @@ True when using the per-workflow pipeline-workspace PVC (remote repo + sharedPip
 
 {{/*
 True when each pod should use an Argo git artifact for the pipeline repo (remote, not shared volume).
-Used by clean|init|build|storage only when sharedPipelineWorkspace is false.
+Used by clean|init|build|storage (clean|abfs-build for ABFS) only when sharedPipelineWorkspace is false.
 */}}
 {{- define "aaos-builder.usePerPodGitArtifact" -}}
 {{- if and (not (or .Values.localRepoHostPath .Values.localRepoPvcName)) (not .Values.sharedPipelineWorkspace) }}true{{- end -}}
@@ -95,7 +115,7 @@ using shared pipeline-workspace PVC (avoids Argo reserving /workspace for git in
 {{- end -}}
 
 {{/*
-Kubernetes resources block for spec.workflowStepResources.<step> (fetchPipeline, init, clean, storage, geminiReview).
+Kubernetes resources block for spec.workflowStepResources.<step> (fetchPipeline, init, clean, storage, geminiReview; ABFS uses fetchPipeline and clean).
 */}}
 {{- define "aaos-builder.workflowStepResources" -}}
 {{- $r := index .root.Values.spec.workflowStepResources .step }}

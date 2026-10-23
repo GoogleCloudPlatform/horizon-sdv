@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+namespace: abfs-client-module-ubuntu-overview
+parentModuleName: abfs-client-module-ubuntu
+gcpProjectId: ""
+clusterName: sdv-cluster
+location: ""
+nodeLocations: []
+# Must be injected (MODULE_CONFIG config.gcpComputeSaEmail ← Terraform sdv_gcp_compute_sa_email).
+# Empty fails helm render (required in containernodepool.yaml) — do not use project default compute SA.
+gcpComputeSaEmail: ""
+# From MODULE_CONFIG (Terraform sdv_cluster_release_channel). Empty/non-UNSPECIFIED => autoUpgrade true
+# (safe on channel-enrolled clusters). Set explicitly to UNSPECIFIED only to pin version / disable autoUpgrade.
+# nodePool.version is applied only when releaseChannel is UNSPECIFIED; otherwise it is omitted (no false pin).
+releaseChannel: ""
+nodePool:
+  # GCP node pool name / KCC resourceID
+  name: abfs-build-node-pool-ubuntu
+  # CASFS pin: used only when releaseChannel is UNSPECIFIED (see containernodepool.yaml).
+  version: ""
+  machineType: c2d-highcpu-112
+  diskSizeGb: 500
+  imageType: UBUNTU_CONTAINERD
+  initialNodeCount: 0
+  minNodeCount: 0
+  maxNodeCount: 20
+  workloadLabel: android-abfs-build
+  workloadType: android-abfs-build

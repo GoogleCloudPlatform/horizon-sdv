@@ -47,9 +47,10 @@ type Entry struct {
 }
 
 type Parameter struct {
-	Name        string `json:"name"`
-	Default     string `json:"default,omitempty"`
-	Description string `json:"description,omitempty"`
+	Name        string   `json:"name"`
+	Default     string   `json:"default,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Enum        []string `json:"enum,omitempty"`
 }
 
 // RetentionOpenAPI documents workflow TTL values echoed by list endpoints (mirrors Argo workflowDefaults.ttlStrategy).
@@ -262,7 +263,8 @@ func extractParameters(obj map[string]interface{}) ([]Parameter, error) {
 			def, _, _ = unstructured.NestedString(m, "default")
 		}
 		desc, _, _ := unstructured.NestedString(m, "description")
-		out = append(out, Parameter{Name: name, Default: def, Description: desc})
+		enum, _, _ := unstructured.NestedStringSlice(m, "enum")
+		out = append(out, Parameter{Name: name, Default: def, Description: desc, Enum: enum})
 	}
 	return out, nil
 }
@@ -288,6 +290,13 @@ func submitRequestBodySchema(e Entry) map[string]interface{} {
 		}
 		if p.Default != "" {
 			prop["default"] = p.Default
+		}
+		if len(p.Enum) > 0 {
+			vals := make([]interface{}, len(p.Enum))
+			for i, v := range p.Enum {
+				vals[i] = v
+			}
+			prop["enum"] = vals
 		}
 		if p.Name == workflow.SubmitParamSubmittedFrom {
 			prop["maxLength"] = 63
@@ -368,6 +377,10 @@ func openapiComponentSchemas() map[string]interface{} {
 				"name":        map[string]interface{}{"type": "string"},
 				"default":     map[string]interface{}{"type": "string"},
 				"description": map[string]interface{}{"type": "string"},
+				"enum": map[string]interface{}{
+					"type":  "array",
+					"items": map[string]interface{}{"type": "string"},
+				},
 			},
 			"required": []interface{}{"name"},
 		},
