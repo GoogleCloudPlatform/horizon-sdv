@@ -413,9 +413,13 @@ def render_markdown(payload: dict[str, Any]) -> str:
     if evidence_lines:
         sections.extend(["", "## Evidence", *evidence_lines])
     elif not findings:
+        sections.extend(["", "## Evidence", "- No supporting evidence was returned."])
 
-    # Top-level Recommended Fix (when findings didn't supply fixes or when findings is empty)
+    # Top-level Recommended Fix (one object; a list is accepted from older output)
     global_fix = payload.get("recommended_fix") or {}
+    if isinstance(global_fix, list):
+        dicts = [item for item in global_fix if isinstance(item, dict)]
+        global_fix = dicts[0] if dicts else {}
     if isinstance(global_fix, str) and global_fix.strip():
         global_fix = {"summary": global_fix.strip()}
 

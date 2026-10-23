@@ -101,6 +101,8 @@ class Finding(BaseModel):
     summary: str
     root_cause: str
     confidence: float = Field(ge=0.0, le=1.0)
+    evidence: list[Evidence] = Field(default_factory=list)
+    recommended_fix: list[RecommendedFix] = Field(default_factory=list)
 
 
 class HorizonAnalysis(BaseModel):
@@ -112,7 +114,7 @@ class HorizonAnalysis(BaseModel):
     root_cause: str
     findings: list[Finding] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
-    recommended_fix: list[RecommendedFix] = Field(default_factory=list)
+    recommended_fix: RecommendedFix | None = None
     tools_used: list[str] = Field(
         default_factory=list,
         description="Filled by the harness from actual tool calls, not the LLM.",

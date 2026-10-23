@@ -157,8 +157,30 @@ def _sanitize_finding(f: dict[str, Any]) -> Finding:
     )
 
 
-def _sanitize_recommended_fix(raw_fix: Any) -> RecommendedFix:
+def _sanitize_recommended_fix(raw_fix: Any) -> RecommendedFix | None:
     _, _, RecommendedFix, _ = _resolve_models()
+    if isinstance(raw_fix, list):
+        items = [item for item in raw_fix if isinstance(item, (dict, str)) and item != ""]
+        if not items:
+            return None
+        if len(items) == 1:
+            return _sanitize_recommended_fix(items[0])
+        merged = _sanitize_recommended_fix(items[0])
+        if merged is None:
+            return None
+        for item in items[1:]:
+            extra = _sanitize_recommended_fix(item)
+            if extra is None:
+                continue
+            merged.files.extend(extra.files)
+            merged.commands.extend(extra.commands)
+            merged.patches.extend(extra.patches)
+            merged.verification.extend(extra.verification)
+            if extra.summary and extra.summary not in merged.summary:
+                merged.summary = f"{merged.summary}\n\n{extra.summary}"
+        return merged
+    if raw_fix is None or raw_fix == "":
+        return None
     if isinstance(raw_fix, str):
         return RecommendedFix(summary=raw_fix)
     if isinstance(raw_fix, dict):
@@ -183,7 +205,7 @@ def _sanitize_fix_list(raw_fix: Any) -> list[RecommendedFix]:
         items = [raw_fix]
     else:
         return []
-    return [_sanitize_recommended_fix(item) for item in items]
+    return [fix for fix in (_sanitize_recommended_fix(item) for item in items) if fix is not None]
 
 def _sanitize_analysis_dict(data: dict[str, Any], default_classification: str) -> HorizonAnalysis:
     _, _, _, HorizonAnalysis = _resolve_models()
