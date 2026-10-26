@@ -1,0 +1,93 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# RBAC for license WorkflowTemplates (import / clear).
+# Workflow pods run as workflow-executor-elevated in the workflows namespace.
+# Sync-wave 6 — before WorkflowTemplates (wave 7).
+
+{{- if .Values.mainEnv }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: abfs-data-license-workflows
+  namespace: {{ .Values.horizonNamespace }}
+  labels:
+    horizon-sdv.io/module: abfs-data
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.licenseSecretName | quote }}]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ .Values.identityConfigMapName | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: abfs-data-license-workflows
+  namespace: {{ .Values.horizonNamespace }}
+  labels:
+    horizon-sdv.io/module: abfs-data
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: abfs-data-license-workflows
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.jobServiceAccountName }}
+    namespace: {{ .Values.workflowNamespace }}
+---
+# Optional: delete the ABFS Server/Uploader ContainerNodePools in abfs so Argo recreates them with licence metadata.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: abfs-data-license-workflows-pool
+  namespace: {{ .Values.abfsNamespace }}
+  labels:
+    horizon-sdv.io/module: abfs-data
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+rules:
+  - apiGroups: ["container.cnrm.cloud.google.com"]
+    resources: ["containernodepools"]
+    resourceNames: {{ .Values.dataNodePoolNames | default list | toJson }}
+    verbs: ["get", "delete", "list", "watch"]
+  - apiGroups: ["container.cnrm.cloud.google.com"]
+    resources: ["containernodepools"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: abfs-data-license-workflows-pool
+  namespace: {{ .Values.abfsNamespace }}
+  labels:
+    horizon-sdv.io/module: abfs-data
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: abfs-data-license-workflows-pool
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.jobServiceAccountName }}
+    namespace: {{ .Values.workflowNamespace }}
+{{- end }}

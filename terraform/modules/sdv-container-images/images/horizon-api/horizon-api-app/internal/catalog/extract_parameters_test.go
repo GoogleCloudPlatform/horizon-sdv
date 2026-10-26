@@ -40,3 +40,32 @@ func TestExtractParametersOmitsHorizonInjected(t *testing.T) {
 		t.Fatalf("params: %+v", params)
 	}
 }
+
+func TestExtractParametersKeepsEnum(t *testing.T) {
+	t.Parallel()
+	obj := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"arguments": map[string]interface{}{
+				"parameters": []interface{}{
+					map[string]interface{}{
+						"name":        "selection",
+						"value":       "Android15",
+						"description": "Android manifest row to seed. AndroidCustom uses custom Configuration.",
+						"enum":        []interface{}{"Android14", "Android15", "Custom"},
+					},
+				},
+			},
+		},
+	}
+	params, err := extractParameters(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(params) != 1 {
+		t.Fatalf("params: %+v", params)
+	}
+	got := params[0]
+	if got.Default != "Android15" || len(got.Enum) != 3 || got.Enum[2] != "Custom" {
+		t.Fatalf("params: %+v", got)
+	}
+}

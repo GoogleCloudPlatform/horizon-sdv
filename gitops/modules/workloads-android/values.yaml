@@ -25,15 +25,33 @@ repo:
   url: ""
   revision: HEAD
 
-# From MODULE_CONFIG (root module-manager Helm values): projectID, region, zone, namespacePrefix,
-# domain, workloads.android.url/branch, config.arm64 (Terraform placement), and pipeline auth via config.scm.authMethod.
-# AAOS / CF webhook Sensors (webhook-aaos-builder*, webhook-cf-instance-template-*) deploy from the aaos_builder,
-# docker_image_template, and cf_instance_template Helm sources on workloads-android into namespacePrefix+argo-events.
+# Module Manager replaces this entire `config` map with MODULE_CONFIG from the Argo root
+# application (Terraform sdv-gke-apps → module-manager Helm values → env MODULE_CONFIG).
+# Keys below document the contract; do not put real project/region/zone defaults here.
+#
+# Flow:
+#   terraform.tfvars (gcp_project_id, gcp_cloud_region, gcp_cloud_zone, scm_*)
+#     → container-deploy / Terraform sdv-gke-apps root Argo Application helm.values.config
+#     → Module Manager Deployment MODULE_CONFIG
+#     → mod-workloads-android Application helm.values.config (merged on enable/sync)
+#     → child Application workloads-android sources (aaos / abfs docker_image_template / …)
+#       override each chart’s spec.cloudProject / cloudRegion / cloudZone
+#
+# AAOS / ABFS / CF webhook Sensors deploy from those Helm sources into namespacePrefix+argo-events.
 # webhooks.enabled is retained for MODULE_CONFIG compatibility (previously gated a duplicate Argo Application).
 config:
-  # ARM64 placement (config.arm64) comes from MODULE_CONFIG / Terraform — not defaulted in this chart.
+  projectID: ""
+  region: ""
+  zone: ""
+  namespacePrefix: ""
+  domain: ""
+  scm:
+    authMethod: ""
+  # ARM64 placement (config.arm64) comes from MODULE_CONFIG / Terraform — not defaulted here.
   workloads:
     android:
+      url: ""
+      branch: ""
       webhooks:
         enabled: true
 
