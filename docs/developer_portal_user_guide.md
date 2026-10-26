@@ -297,13 +297,13 @@ Use **Tools → Horizon CLI**. Download, checksum, install, and the expected `ho
 
 ##### Contributor: build from source
 
-Go [1.22+](https://go.dev/dl/) must be installed. Verify with:
+Go [1.27+](https://go.dev/dl/) must be installed. Verify with:
 
 ```bash
 go version
 ```
 
-**Expected:** Output shows `go1.22` or higher.
+**Expected:** Output shows `go1.27` or higher.
 
 ##### Build the binary
 
