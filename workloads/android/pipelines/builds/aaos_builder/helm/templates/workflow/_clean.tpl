@@ -53,6 +53,12 @@ Dependencies: runs after compute-vars and image check/build.
         value: '{{ "{{" }}workflow.parameters.lunchTarget{{ "}}" }}'
       - name: AAOS_CLEAN
         value: '{{ "{{" }}workflow.parameters.cleanBuild{{ "}}" }}'
+{{- if eq (include "aaos-builder.isAbfs" .) "true" }}
+      - name: ABFS_BUILDER
+        value: "true"
+      - name: ABFS_CACHED_BUILD
+        value: '{{ "{{" }}workflow.parameters.abfsCachedBuild{{ "}}" }}'
+{{- end }}
     resources:
       # spec.workflowStepResources.clean
 {{- include "aaos-builder.workflowStepResources" (dict "step" "clean" "root" .) | nindent 6 }}

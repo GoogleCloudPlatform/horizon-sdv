@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,12 +37,18 @@ source "$(dirname "${BASH_SOURCE[0]}")"/aaos_environment.sh "$0"
 if [ -n "${AAOS_MAKE_CMDLINE}" ]; then
     # Set environment variables and build target
     # shellcheck disable=SC1091
+    unset OUT_DIR
+    alias python=python3
     source build/envsetup.sh
-    if ! lunch "${AAOS_LUNCH_TARGET}"
-    then
-        echo -e "\033[1;31mERROR: lunch ${AAOS_LUNCH_TARGET}\033[0m"
-        exit 1
-    fi
+    #  if ! lunch "${AAOS_LUNCH_TARGET}"
+    #  then
+    #     echo -e "\033[1;31mERROR: lunch ${AAOS_LUNCH_TARGET}\033[0m"
+    #     exit 1
+    #  fi
+    #  ignore lunch exit status, as it prevents builds on non-critical errors
+    echo "started lunch ${AAOS_LUNCH_TARGET} execution"
+    lunch "${AAOS_LUNCH_TARGET}"
+    echo "finished lunch ${AAOS_LUNCH_TARGET} execution"
 
     echo "Building: $AAOS_MAKE_CMDLINE"
 

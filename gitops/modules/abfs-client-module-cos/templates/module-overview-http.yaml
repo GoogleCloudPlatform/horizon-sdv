@@ -1,0 +1,114 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# In-cluster static overview HTML for the Developer Portal (Module Manager GET /modules/{name}/overview).
+# Synced with the parent module Application; not a separate Argo Application.
+# overviewServiceName and overviewNamespace are chart values (Module Manager merges overviewNamespace for workload modules).
+#
+# Parent Application destination is Module Manager's namespace; CreateNamespace=true only creates that
+# destination. Overview resources live in overviewNamespace — create it here (same pattern as sample-data-module).
+
+{{- if not (default false .Values.config.isSubEnvironment) }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.overviewNamespace }}
+  labels:
+    horizon-sdv.io/module: {{ .Values.moduleName | default "abfs-client-module-cos" | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.overviewServiceName }}-html
+  namespace: {{ .Values.overviewNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    app.kubernetes.io/component: module-overview-http
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+data:
+  index.html: |-
+{{ .Files.Get "portal/overview.html" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.overviewServiceName }}
+  namespace: {{ .Values.overviewNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: module-overview
+      horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: module-overview
+        horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+    spec:
+      containers:
+        - name: nginx
+          image: {{ .Values.config.nginx.image }}:{{ .Values.config.nginx.tag }}
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: html
+          configMap:
+            name: {{ .Values.overviewServiceName }}-html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.overviewServiceName }}
+  namespace: {{ .Values.overviewNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

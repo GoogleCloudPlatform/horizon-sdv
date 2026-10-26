@@ -90,7 +90,7 @@ export interface CatalogEntry {
   module: string;
   templateName: string;
   namespace: string;
-  parameters: { name: string; default?: string; description?: string }[];
+  parameters: { name: string; default?: string; description?: string; enum?: string[] }[];
 }
 
 export interface CatalogResponse {

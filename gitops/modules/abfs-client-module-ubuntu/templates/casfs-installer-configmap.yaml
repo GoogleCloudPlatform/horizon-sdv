@@ -1,0 +1,122 @@
+# Copyright 2026 Google LLC
+#
+# Modifications Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if eq .Values.casfs.provider "daemonset" }}
+{{- $ds := .Values.casfs.daemonset }}
+{{- $aptProject := $ds.aptProject }}
+{{- $aptLocation := $ds.aptLocation }}
+{{- $aptRepository := $ds.aptRepository }}
+{{- $casfsVersion := $ds.version }}
+{{- $sourceUrl := printf "%s/casfs-%s.tar.gz" $ds.sourceUrl $ds.version }}
+# Loader script for the casfs installer DaemonSet (Ubuntu nodes). Looks up a prebuilt
+# casfs-kmod package in Artifact Registry and, if that package is missing or does not
+# load, builds casfs from source for the node's running kernel.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: abfs-casfs-installer-client
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    app.kubernetes.io/name: abfs
+    app.kubernetes.io/component: casfs-installer
+data:
+  install_casfs_client.sh: |
+    {{- if $ds.script }}
+    {{- $ds.script | nindent 4 }}
+    {{- else }}
+    #!/usr/bin/env bash
+    # Prefer the prebuilt casfs-kmod package. Build from source when it is missing.
+    set -euo pipefail
+    log() { echo "[casfs-installer] $*"; }
+    KVER="$(uname -r)"
+    if [ -d /sys/module/casfs ]; then
+      log "casfs already loaded (kernel ${KVER}); nothing to do"
+      exec sleep infinity
+    fi
+
+    install_from_apt() {
+      local pkg artifacts
+      pkg="casfs-kmod-${KVER}_{{ $casfsVersion }}"
+      artifacts="/tmp/casfs-apt-list.txt"
+      log "Fetching casfs apt ${pkg} from {{ $aptProject }}/{{ $aptLocation }}/{{ $aptRepository }}"
+      gcloud artifacts files list --project={{ $aptProject }} --location={{ $aptLocation }} --repository={{ $aptRepository }} >> "${artifacts}" 2>&1
+      if grep -Fq "pool/${pkg}" "${artifacts}"; then
+        echo "Apt ${pkg} found."
+        grep -F "pool/${pkg}" "${artifacts}" | awk '{print $1}' | while read -r a; do
+          gcloud artifacts files download --project={{ $aptProject }} --location={{ $aptLocation }} --repository={{ $aptRepository }} --destination=/host/tmp/ "${a}"
+        done
+        if ls /host/tmp/*"${pkg}"* 1> /dev/null 2>&1; then
+          echo "Apt ${pkg} downloaded."
+          chroot /host /bin/bash -euo pipefail -c '
+            export DEBIAN_FRONTEND=noninteractive
+            KVER="$(uname -r)"
+            CMD="find /tmp/ -maxdepth 1 -type f -name \"pool*\" -exec apt-get install -y \"./{}\" \\;"
+            echo "Command: ${CMD}"
+            eval "${CMD}"
+            depmod -a "${KVER}"
+            modprobe casfs && echo "Modprobe succeeded" || echo "Modprobe failed"
+            CMD="find /tmp/ -maxdepth 1 -type f -name \"pool*\" -exec rm -rf \"./{}\" \\;"
+            echo "Command: ${CMD}"
+            eval "${CMD}"
+          '
+        else
+          echo "Apt ${pkg} not downloaded."
+        fi
+      else
+        echo "Apt ${pkg} not found."
+      fi
+      
+      if [ -d /sys/module/casfs ]; then
+        return 0
+      fi
+      return 1
+    }
+
+    install_from_source() {
+      log "building casfs from source {{ $sourceUrl }}"
+      gcloud storage cp {{ $sourceUrl | quote }} /host/tmp/casfs-src.tar.gz
+      log "building + loading casfs for kernel ${KVER} (host toolchain)"
+      chroot /host /bin/bash -euo pipefail -c '
+        export DEBIAN_FRONTEND=noninteractive
+        KVER="$(uname -r)"
+        if ! command -v gcc >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1; then
+          apt-get update -qq && apt-get install -y -qq build-essential
+        fi
+        rm -rf /tmp/casfs-build && mkdir -p /tmp/casfs-build
+        tar xf /tmp/casfs-src.tar.gz -C /tmp/casfs-build --strip-components=1
+        cd /tmp/casfs-build
+        make ko KERNEL_RELEASE="${KVER}"
+        install -D -m 0644 casfs.ko "/lib/modules/${KVER}/kernel/fs/casfs/casfs.ko"
+        depmod "${KVER}"
+        modprobe casfs
+      '
+      if [ -d /sys/module/casfs ]; then
+        return 0
+      fi
+      return 1
+    }
+
+    if install_from_apt; then
+      log "casfs loaded from the Artifact Registry package on kernel ${KVER}"
+    elif install_from_source; then
+      log "casfs loaded after source build on kernel ${KVER}"
+    else
+      log "ERROR: casfs did not load from the package or from source on kernel ${KVER}" >&2
+      exit 1
+    fi
+    exec sleep infinity
+    {{- end }}
+{{- end }}

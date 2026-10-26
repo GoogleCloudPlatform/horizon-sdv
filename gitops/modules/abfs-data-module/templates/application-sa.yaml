@@ -1,0 +1,78 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Child Argo CD Application: mod-<module>-sa
+# Deploys abfs-license-sa/ into the horizon namespace:
+#   - KCC IAMServiceAccount abfs-license (+ UniqueID undelete/persist Jobs)
+#   - Secret abfs-license (license placeholder)
+#   - KCC Spanner instance/database abfs
+#   - KCC StorageBucket <projectID>-abfs
+#
+# Skipped for sub-environments. ignoreDifferences + RespectIgnoreDifferences
+# keep workflow-written Secret data.license from being wiped on auto-sync.
+
+{{- if not (default false .Values.config.isSubEnvironment) }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mod-{{ .Values.moduleName }}-sa
+  namespace: {{ .Values.argocd.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.moduleName }}
+    horizon-sdv.io/module: {{ .Values.moduleName }}
+    horizon-sdv.io/app-role: child
+    horizon-sdv.io/module-manager-managed: "true"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocd.project }}
+  source:
+    repoURL: {{ .Values.repo.url | quote }}
+    targetRevision: {{ .Values.repo.revision | quote }}
+    path: gitops/modules/abfs-data-module/abfs-license-sa
+    helm:
+      values: |
+        horizonNamespace: {{ .Values.config.namespacePrefix }}horizon
+        workflowsNamespace: {{ .Values.config.namespacePrefix }}workflows
+        projectID: {{ .Values.config.projectID | quote }}
+        serviceAccountId: abfs-license
+        identityConfigMapName: abfs-license-sa-identity
+        licenseSecretName: abfs-license
+        gcs:
+          bucketName: abfs
+          bucketResourceID: {{ .Values.config.projectID }}-abfs
+          location: {{ .Values.config.storageLocation | quote }}
+        spanner:
+          instanceId: abfs
+          databaseId: abfs
+          displayName: ABFS Spanner
+          region: {{ .Values.config.region | quote }}
+          numNodes: 1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.config.namespacePrefix }}horizon
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+    automated: {}
+  # License workflows patch data.license; ignore drift so sync does not clear it.
+  ignoreDifferences:
+    - kind: Secret
+      name: abfs-license
+      namespace: {{ .Values.config.namespacePrefix }}horizon
+      jsonPointers:
+        - /data
+        - /stringData
+{{- end }}

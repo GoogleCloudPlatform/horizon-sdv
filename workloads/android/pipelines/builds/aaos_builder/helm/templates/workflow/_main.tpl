@@ -87,6 +87,25 @@ Dependencies: orchestrates downstream templates; no inputs.
         when: >-
           '{{ "{{" }}workflow.parameters.lunchTarget{{ "}}" }}' != "" &&
           '{{ "{{" }}workflow.parameters.cleanBuild{{ "}}" }}' != "NO_CLEAN"
+{{- if eq (include "aaos-builder.isAbfs" .) "true" }}
+      # One pod for the whole ABFS build: see _abfs-build.tpl for why.
+      - name: abfs-build
+        template: abfs-build
+        depends: >-
+{{- if $sharedWs }}
+          fetch-pipeline.Succeeded &&
+{{- end }}
+          compute-vars.Succeeded &&
+          (clean.Succeeded || clean.Skipped) &&
+          check-aaos-image.Succeeded &&
+          (build-aaos-image.Succeeded || build-aaos-image.Skipped)
+        when: >-
+          '{{ "{{" }}workflow.parameters.lunchTarget{{ "}}" }}' != ""
+        arguments:
+          parameters:
+            - name: sdkAndroidVersion
+              value: '{{ "{{" }}tasks.compute-vars.outputs.parameters.sdkAndroidVersion{{ "}}" }}'
+{{- else }}
       - name: init
         template: init
         depends: >-
@@ -180,4 +199,5 @@ Dependencies: orchestrates downstream templates; no inputs.
         when: >-
           '{{ "{{" }}tasks.build.status{{ "}}" }}' == "Failed" ||
           '{{ "{{" }}tasks.build.status{{ "}}" }}' == "Error"
+{{- end }}
 {{- end }}
