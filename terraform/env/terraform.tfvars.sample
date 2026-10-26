@@ -244,12 +244,10 @@ sdv_cluster_maintenance_recurring_window_recurrence = "FREQ=WEEKLY;BYDAY=SA,SU"
  ]
 
 # ----------------------------------------
-# GKE: ABFS Ubuntu build node pool (CASFS) — via abfs-client-module-ubuntu (KCC)
+# GKE: ABFS build node pool (CASFS)
 # ----------------------------------------
-# `sdv_abfs_build_node_pool_version` — CASFS-compatible GKE node version for the KCC pool.
-# Applied only when `sdv_cluster_release_channel` is UNSPECIFIED (autoUpgrade false).
-# On RAPID/REGULAR/STABLE/EXTENDED, autoUpgrade is required true; this value is not used as a
-# lasting pin — use maintenance exclusions (NO_MINOR_OR_NODE_UPGRADES) for CASFS-sensitive windows.
+# `sdv_abfs_build_node_pool_version` — Kubernetes (node) version for the pool; see
+# release channel & version above for how that interacts with `sdv_cluster_release_channel`.
 sdv_abfs_build_node_pool_version = "1.32.7-gke.1079000"
 
 # ========================================

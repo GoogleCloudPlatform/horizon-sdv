@@ -466,12 +466,6 @@ resource "kubectl_manifest" "argocd_application" {
                 - ${var.arm64_nodes_range}
 %{endif~}
               useStaticDnsARecords: ${var.use_static_dns_a_records}
-              clusterName: ${var.sdv_cluster_name}
-              gcpComputeSaEmail: ${var.gcp_compute_sa_email}
-              releaseChannel: ${var.cluster_release_channel}
-              nodeLocations: ${jsonencode(var.cluster_node_locations)}
-              abfsBuildNodePool:
-                version: ${var.abfs_build_node_pool_version}
               arm64:
                 region: ${local.arm64_placement_region}
                 zone: ${local.arm64_placement_zone}

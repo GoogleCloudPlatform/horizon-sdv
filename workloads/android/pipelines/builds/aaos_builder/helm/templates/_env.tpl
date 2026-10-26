@@ -49,7 +49,7 @@ envFrom:
 - name: AAOS_ARTIFACT_STORAGE_SOLUTION
   value: "GCS_BUCKET"
 - name: STORAGE_BUCKET_BASE
-  value: 'gs://{{ .Values.spec.cloudProject }}-aaos/Android/Builds/{{ .Values.spec.storageBuildsDir | default "AAOS_Builder" }}'
+  value: 'gs://{{ .Values.spec.cloudProject }}-aaos/Android/Builds/AAOS_Builder'
 - name: WORKFLOW_NAME
   # Argo generateName (e.g., aaos-builder-6v79q). Storage step composes <date>-<time>_{workflow.name} at runtime.
   value: '{{ "{{" }}workflow.name{{ "}}" }}'
@@ -75,41 +75,10 @@ envFrom:
   value: "password"
 - name: GERRIT_REPO_SYNC_JOBS
   value: '{{ "{{" }}workflow.parameters.parallelSyncJobs{{ "}}" }}'
-{{- if eq (include "aaos-builder.isAbfs" .) "true" }}
-- name: GERRIT_TOPIC
-  value: '{{ "{{" }}workflow.parameters.gerritTopic{{ "}}" }}'
-- name: OVERRIDE_MAKE_COMMAND
-  value: '{{ "{{" }}workflow.parameters.overrideMakeCommand{{ "}}" }}'
-- name: ABFS_BUILDER
-  value: "true"
-- name: ABFS_SERVER
-  value: '{{ "{{" }}workflow.parameters.abfsServer{{ "}}" }}'
-# TLS/auth flags for the ABFS client; see spec.abfs.clientFlags in values-abfs.yaml.
-- name: ABFS_CLIENT_FLAGS
-  value: {{ .Values.spec.abfs.clientFlags | quote }}
-- name: ABFS_CACHED_BUILD
-  value: '{{ "{{" }}workflow.parameters.abfsCachedBuild{{ "}}" }}'
-- name: ABFS_VERSION
-  value: '{{ "{{" }}workflow.parameters.abfsVersion{{ "}}" }}'
-- name: ABFS_CASFS_VERSION
-  value: '{{ "{{" }}workflow.parameters.abfsCasfsVersion{{ "}}" }}'
-- name: ABFS_REPOSITORY
-  value: '{{ "{{" }}workflow.parameters.abfsRepository{{ "}}" }}'
-- name: ABFS_CLEAN_CACHE
-  value: '{{ "{{" }}workflow.parameters.abfsCleanCache{{ "}}" }}'
-- name: ABFS_CACHEMAN_TIMEOUT
-  value: '{{ "{{" }}workflow.parameters.abfsCachemanTimeout{{ "}}" }}'
-- name: POST_REPO_COMMAND
-  value: '{{ "{{" }}workflow.parameters.postRepoCommand{{ "}}" }}'
-- name: AAOS_PARALLEL_BUILD_JOBS
-  value: '{{ "{{" }}workflow.parameters.aaosParallelBuildJobs{{ "}}" }}'
-- name: UPLOADER_MANIFEST_SERVER
-  value: '{{ "{{" }}workflow.parameters.uploaderManifestServer{{ "}}" }}'
-{{- end }}
 - name: AAOS_CACHE_STORAGE_CLASS_NAME
-  value: {{ include "aaos-builder.cacheStorageClassName" . }}
+  value: 'reclaimable-storage-class-android-{{ printf "{{=sprig.regexFind(\"[0-9]+\", workflow.parameters.androidRevision)}}" }}{{ printf "{{=sprig.regexFind(\"rpi\", workflow.parameters.lunchTarget) != \"\" ? \"-rpi\" : \"\"}}" }}'
 - name: AAOS_CACHE_SIZE
-  value: {{ .Values.spec.aaosCacheStorageSize | default "1000Gi" | quote }}
+  value: "1000Gi"
 {{- end }}
 
 {{- define "aaos-builder.androidVersionEnv" -}}

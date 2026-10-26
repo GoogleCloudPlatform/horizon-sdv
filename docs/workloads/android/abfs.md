@@ -20,6 +20,7 @@ limitations under the License. -->
   - [Service Account](#serviceaccount)
   - [ABFS License](#license)
   - [Horizon-SDV Setup](#horizonsetup)
+  - [ABFS Utilities](#abfsutilities)
 - [Known Issues](#knownissues)
 
 ## Introduction <a name="overview"></a>
@@ -67,33 +68,87 @@ Android Build File System - EAP</a>: Android Build File System is currently avai
 
 ### Horizon-SDV Setup<a name="horizonsetup"></a>
 
-> [!IMPORTANT]
-> **ABFS infrastructure is no longer provisioned from Jenkins.** The Server Administration
-> and Uploader Administration jobs, and the Docker Infra Image Template that built the
-> Terraform image they used, have been removed. The ABFS Server, ABFS Uploaders
-> and their GCP resources are now reconciled by the `abfs-service-module` through Config
-> Connector and Helm, enabled from the Developer Portal.
->
-> This page still describes the Jenkins-based flow of ABFS 0.0.33 in places. It is rewritten
-> for the module-based architecture. Until then, see `gitops/modules/abfs-service-module/README.md`.
+Once Google provide you the ABFS license in JSON form, the license must be supplied directly via Jenkins when provisioning ABFS components. 
 
-Jenkins keeps two ABFS responsibilities: building the ABFS-enabled AAOS builder image, and
-running ABFS builds.
-
-1. **Android Workload**: prepare the Jenkins CI/CD system to support ABFS.
+1. **Base64 encode the license** Ensure there are no stray spaces in the license nor new lines. Then:
+   ```echo -n '<LICENSE STRING>' | base64```
+2. **Jenkins Job Parameter** Provide the Base64-encoded ABFS license using the following Jenkins job parameter:
+  - `ABFS_LICENSE_B64` 
+  This parameter must be supplied when provisioning ABFS components and is consumed by the following Jenkins jobs when 
+  `ABFS_TERRAFORM_ACTION=APPLY`:
+    - `ABFS Server provisioning`
+    - `ABFS Uploader provisioning`
+3. **Android Workload**: this next step will prepare the Jenkins CI/CD system to support ABFS.
    - Open `Seed Workloads`
      - Review `ABFS_REPOSITORY`, `ABFS_VERSION` and `ABFS_CASFS_VERSION` match expectation. Refer to `aaos_abfs_builder.md` for additional details.
      - Select `SEED_WORKLOAD` `android` and `Build`
      - Wait for seed job to complete successfully.
+   - Open `Android Workflows → Environment → ABFS → Docker Infra Image Template`
+     - Deselect `NO_PUSH` and wait for image creation to complete.
    - Open `Android Workflows → Environment → ABFS → Docker Image Template`
      - Deselect `NO_PUSH` and wait for image creation to complete.
-2. **ABFS infrastructure**: enable the `abfs-service-module` from the Developer Portal. It
-   requires a valid ABFS license; the license and the underlying Spanner database and storage
-   bucket are owned by the `abfs-data-module`.
-   - Seeding from Gerrit takes ~24 hours per branch or tag. Monitor the uploader pods to
-     confirm all repositories have been seeded. Discuss with Google for details.
+   - Open `Android Workflows → Environment → ABFS → Server Administration → Server Operations`
+     - Ensure `ABFS_TERRAFORM_ACTION` is `APPLY`
+     - Select `Build` and wait for server VM instance to complete creation.
+   - Open `Android Workflows → Environment → ABFS → Server Administration → Get Server Details`
+     - Select `Build`.
+     - Job will report failure if the server has not been provisioned correctly for ABFS.
+   - Open `Android Workflows → Environment → ABFS → Uploader Administration → Uploader Operations`
+     - Ensure `ABFS_TERRAFORM_ACTION` is `APPLY`
+     - Select `Build` and wait for uploader VM instances to complete creation.
+   - Open `Android Workflows → Environment → ABFS → Uploader Administration → Get Uploader Details`
+     - Select `Build`.
+     - Job will report failure if any of the uploader instances have not been provisioned correctly for ABFS.
+   - **Note**:
+      - There are additional parameters, currently set to defaults, e.g. `UPLOADER_GIT_BRANCH` is set to seed `android-16.0.0_r3`
+      - `GOOGLE_ABFS_TERRAFORM_VERSION` defaults to `v0.10.0` and accepts either a git tag or a specific commit sha1.
+      - Advanced module parameters are exposed in server/uploader operation jobs (extra ABFS args, uploader manifest scheme, spanner node/table options, and optional pre-start hooks).
+      - Server-side Spanner schema control is module-driven. Legacy `SPANNER_DDL_FILE` script path has been removed.
+      - Set `ABFS_SPANNER_DATABASE_CREATE_TABLES=true` only for new ABFS Spanner DB creation; keep `false` for upgrades/legacy DBs.
+      - Refer to specific README files and parameter descriptions for additional details.
+      - This task can take ~24 hours per branch/tag and the only way of knowing it is complete is to monitor the docker
+        logs on the uploader instances to ensure all repositories have been seeded fully. Discuss with Google for details.
 
-Users can then build from the ABFS seeded source/cache, see `Android Workflows → Builds → AAOS Builder ABFS`. Enable `ABFS_CACHED_BUILD` if wishing to store the cacheman cache and ABFS source mount path in persistent storage in order to improve build times.
+Users can now build from the ABFS seeded source/cache, see `Android Workflows → Builds → AAOS Builder ABFS`. Enable `ABFS_CACHED_BUILD` if wishing to store the cacheman cache and ABFS source mount path in persistent storage in order to improve build times.
+
+## ABFS Utilities<a name="abfsutilities"></a>
+
+Several adminstrative jobs have been added to aid in management of the ABFS instances, database, backup schedules and
+storage.
+
+For example, when the server is destroyed, the spanner DB, backups and bucket storage remain. As such we have
+added tools to allow users to clean up the platform and free up resources.
+
+Also, on occassions the uploader instances are created but not all have ABFS running on the instance, rendering the
+instance of no use in seeding the server. In this case it is best to destroy the uploaders, recreate and check status
+to ensure all instances have been provisioned correctly.
+
+These tools can be found under `Android Workflows → Environment → ABFS`
+
+`Server Administration → Get Server Details`
+
+This returns the state of the server and ABFS process liveness. If ABFS is found not to be running, it will report so.
+
+`Server Administration → Get Spanner Details`
+
+This returns the state of the spanner instance, database backups, schedules and bucket storage. These details will help
+in maintaining and destroying the spanner instance and it's dependencies.
+
+`Server Administration → Update Spanner Backups`
+
+This allows the spanner database backup schedules to be updated, deleted or new schedules created. Backup schedules are
+provided by the `Get Spanner Details` job.
+
+`Server Administration → Destroy Spanner Instance`
+
+When the server is destroyed from `Server Administration → Server Operations`, there are many dependencies that remain
+on the platform and adding additional costs.
+
+Use this job to destroy the spanner instance, the associated backups and bucket storage.
+
+`Uploader Administration → Get Uploader Details`
+
+This returns the state of the uploaders and ABFS process liveness. If ABFS is found not to be running, it will report so.
 
 ## Known issues<a name="knownissues"></a>
 

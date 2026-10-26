@@ -274,15 +274,6 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "dispatched"})
 }
 
-func enumContains(values []string, got string) bool {
-	for _, v := range values {
-		if v == got {
-			return true
-		}
-	}
-	return false
-}
-
 func validateParams(ent catalog.Entry, got map[string]string) error {
 	if got == nil {
 		got = map[string]string{}
@@ -290,9 +281,6 @@ func validateParams(ent catalog.Entry, got map[string]string) error {
 	allowed := make(map[string]bool)
 	for _, p := range ent.Parameters {
 		allowed[p.Name] = true
-		if v, ok := got[p.Name]; ok && len(p.Enum) > 0 && !enumContains(p.Enum, v) {
-			return fmt.Errorf("parameter %q must be one of %s", p.Name, strings.Join(p.Enum, ", "))
-		}
 		if p.Default != "" {
 			continue
 		}

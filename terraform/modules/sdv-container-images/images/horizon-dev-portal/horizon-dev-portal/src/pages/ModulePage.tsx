@@ -33,13 +33,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  FormHelperText,
   IconButton,
   InputAdornment,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
   Tab,
   Table,
@@ -939,52 +934,9 @@ function workflowParamInputProps(
   };
 }
 
-/** Choices for a workflow parameter that declares an enum. */
-function dropdownOptions(p: { enum?: string[] }): string[] {
-  return (p.enum ?? []).map((value) => value.trim()).filter((value) => value !== '');
-}
-
-/** `Name (branch)` is one dropdown value. `Name` is both the menu label and the stored row. */
-function dropdownChoice(choice: string): { name: string; detail: string } | null {
-  const match = choice.match(/^([A-Za-z][A-Za-z0-9_-]*) \(([^)]+)\)$/);
-  if (!match) {
-    return null;
-  }
-  return { name: match[1], detail: match[2] };
-}
-
-function dropdownLabel(choice: string): string {
-  return dropdownChoice(choice)?.name ?? choice;
-}
-
-function isCustomChoice(choice: string): boolean {
-  return dropdownLabel(choice) === 'AndroidCustom';
-}
-
-function replaceYamlScalar(text: string, key: string, next: string): string {
-  return text.replace(
-    new RegExp(`^(\\s*(?:-\\s*)?${key}:\\s*)(?:"[^"]*"|'[^']*'|\\S+)`, 'm'),
-    `$1${next}`
-  );
-}
-
-/** Fill `name` and `branch` in a YAML template from a `Name (detail)` choice. */
-function configForChoice(template: string, choice: string): string {
-  const parsed = dropdownChoice(choice);
-  if (!parsed) {
-    return template;
-  }
-  return replaceYamlScalar(replaceYamlScalar(template, 'name', parsed.name), 'branch', parsed.detail);
-}
-
 function workflowParamHelperText(p: { description?: string }): string | undefined {
   const desc = p.description?.trim();
   return desc && desc.length <= 72 ? desc : undefined;
-}
-
-/** A parameter value that already contains newlines is a YAML document. */
-function isYamlWorkflowParam(value: string): boolean {
-  return value.includes('\n');
 }
 
 function SubmitDialog({
@@ -1001,9 +953,7 @@ function SubmitDialog({
   const [params, setParams] = useState<Record<string, string>>(() => {
     const o: Record<string, string> = {};
     for (const p of entry.parameters) {
-      const initial = p.default ?? '';
-      const options = dropdownOptions(p);
-      o[p.name] = options.length > 0 && !options.includes(initial) ? options[0] : initial;
+      o[p.name] = p.default ?? '';
     }
     return o;
   });
@@ -1055,83 +1005,25 @@ function SubmitDialog({
     }
   };
 
-  const hasYamlField = entry.parameters.some(
-    (p) => p.name !== 'submittedBy' && isYamlWorkflowParam(params[p.name] ?? p.default ?? '')
-  );
-
   return (
-    <Dialog open onClose={onClose} maxWidth={hasYamlField ? 'md' : 'sm'} fullWidth>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Submit: {entry.templateName}</DialogTitle>
       <DialogContent>
         {entry.parameters
           .filter((p) => p.name !== 'submittedBy')
-          .map((p) => {
-            const value = params[p.name] ?? '';
-            const options = dropdownOptions(p);
-            if (options.length > 0) {
-              const selected = options.includes(value) ? value : options[0];
-              const helper = workflowParamHelperText(p);
-              return (
-                <FormControl key={p.name} margin="dense" fullWidth required={!p.default}>
-                  <InputLabel id={`${entry.templateName}-${p.name}-label`}>{p.name}</InputLabel>
-                  <Select
-                    labelId={`${entry.templateName}-${p.name}-label`}
-                    label={p.name}
-                    value={selected}
-                    renderValue={(selectedValue) => dropdownLabel(String(selectedValue))}
-                    onChange={(e) => setParams((prev) => ({ ...prev, [p.name]: e.target.value }))}
-                  >
-                    {options.map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {dropdownLabel(option)}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {helper && <FormHelperText>{helper}</FormHelperText>}
-                </FormControl>
-              );
-            }
-            const choiceParam = entry.parameters.find((item) => dropdownOptions(item).some((option) => isCustomChoice(option)));
-            const choiceOptions = choiceParam ? dropdownOptions(choiceParam) : [];
-            const chosenRaw = choiceParam ? params[choiceParam.name] ?? '' : '';
-            const chosen = choiceOptions.includes(chosenRaw) ? chosenRaw : choiceOptions[0] ?? '';
-            const readOnlyConfig =
-              choiceOptions.some((option) => isCustomChoice(option)) &&
-              !isCustomChoice(chosen) &&
-              (p.default ?? value).includes('\n');
-            const shown = readOnlyConfig ? configForChoice(p.default ?? value, chosen) : value;
-            const yaml = isYamlWorkflowParam(shown || (p.default ?? ''));
-            return (
-              <TextField
-                key={p.name}
-                margin="dense"
-                label={p.name}
-                helperText={workflowParamHelperText(p)}
-                fullWidth
-                required={!p.default}
-                multiline={yaml}
-                minRows={yaml ? Math.max(8, shown.split('\n').length) : undefined}
-                spellCheck={yaml ? false : undefined}
-                value={shown}
-                onChange={(e) => {
-                  if (!readOnlyConfig) {
-                    setParams((prev) => ({ ...prev, [p.name]: e.target.value }));
-                  }
-                }}
-                InputProps={{
-                  ...workflowParamInputProps(p, shown, entry.templateName),
-                  readOnly: readOnlyConfig,
-                  sx: yaml
-                    ? {
-                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                        fontSize: 13,
-                        lineHeight: 1.5,
-                      }
-                    : undefined,
-                }}
-              />
-            );
-          })}
+          .map((p) => (
+            <TextField
+              key={p.name}
+              margin="dense"
+              label={p.name}
+              helperText={workflowParamHelperText(p)}
+              fullWidth
+              required={!p.default}
+              value={params[p.name] ?? ''}
+              onChange={(e) => setParams((prev) => ({ ...prev, [p.name]: e.target.value }))}
+              InputProps={workflowParamInputProps(p, params[p.name] ?? '', entry.templateName)}
+            />
+          ))}
         {err && (
           <Alert severity="error" sx={{ mt: 1 }}>
             {err}

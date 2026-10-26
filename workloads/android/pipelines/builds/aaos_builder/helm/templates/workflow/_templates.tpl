@@ -24,13 +24,9 @@ Workflow template fragments for aaos-builder.
 {{ include "aaos-builder.template.check-aaos-image" $ctx }}
 {{ include "aaos-builder.template.fetch-pipeline" $ctx }}
 {{ include "aaos-builder.template.clean" $ctx }}
-{{- if eq (include "aaos-builder.isAbfs" $ctx) "true" }}
-{{ include "aaos-builder.template.abfs-build" $ctx }}
-{{- else }}
 {{ include "aaos-builder.template.init" $ctx }}
 {{ include "aaos-builder.template.build" $ctx }}
 {{ include "aaos-builder.template.gemini-review" $ctx }}
 {{ include "aaos-builder.template.storage" $ctx }}
 {{ include "aaos-builder.template.fail-workflow" $ctx }}
-{{- end }}
 {{- end }}

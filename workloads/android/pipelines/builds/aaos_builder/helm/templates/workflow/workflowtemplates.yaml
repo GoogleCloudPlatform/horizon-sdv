@@ -11,20 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+#
 # Description:
 # Argo WorkflowTemplate for the AAOS builder pipeline (Horizon catalog: exposed when module workloads-android is enabled).
-# Argo Events: Sensor webhook-{{ .Values.workflowTemplateName }} filters body.workflowTemplateName == this metadata.name (workflow/sensors.yaml).
-
-{{- /* With values-abfs.yaml (variant: abfs) this renders aaos-builder-abfs: same chart, ABFS mount, one build pod. */}}
-{{- $abfs := eq (include "aaos-builder.isAbfs" .) "true" }}
+# Argo Events: Sensor webhook-aaos-builder filters body.workflowTemplateName == this metadata.name (workflow/sensors.yaml).
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: {{ .Values.workflowTemplateName | quote }}
   namespace: {{ include "aaos-builder.workflowNamespace" . | quote }}
   labels:
-    app.kubernetes.io/name: {{ .Values.workflowTemplateName }}
+    app.kubernetes.io/name: aaos-builder
     horizon-sdv.io/expose: "true"
     horizon-sdv.io/module: workloads-android
   annotations:
@@ -37,7 +34,7 @@ spec:
   # Argo UI list: title + description (https://argo-workflows.readthedocs.io/en/latest/title-and-description/)
   workflowMetadata:
     annotations:
-      workflows.argoproj.io/title: '{{ "{{" }}workflow.parameters.lunchTarget{{ "}}" }}{{ if $abfs }} (ABFS){{ end }}'
+      workflows.argoproj.io/title: '{{ "{{" }}workflow.parameters.lunchTarget{{ "}}" }}'
       workflows.argoproj.io/description: '{{ "{{" }}workflow.parameters.androidRevision{{ "}}" }}'
 {{- if .Values.podGcStrategy }}
   # podGC strategy per Argo (e.g., OnPodCompletion, OnWorkflowCompletion).
@@ -64,11 +61,7 @@ spec:
         description: "AAOS lunch target to build."
       - name: androidRevision
         value: {{ .Values.spec.androidRevision | quote }}
-{{- if $abfs }}
-        description: "AAOS branch/tag to mount; must already be seeded on the ABFS server."
-{{- else }}
         description: "AAOS branch or tag to sync."
-{{- end }}
       - name: manifestUrl
         value: {{ .Values.spec.manifestUrl | quote }}
         description: "Base manifest URL for repo init."
@@ -92,68 +85,6 @@ spec:
         description: "Enable Gemini AI review on failure (when build fails)."
       - name: parallelSyncJobs
         value: {{ .Values.spec.parallelSyncJobs | quote }}
-{{- if $abfs }}
-        description: "Unused for ABFS mount (kept for script compatibility)."
-      - name: abfsServer
-        value: {{ .Values.spec.abfs.server | quote }}
-        description: "ABFS gRPC endpoint (FQDN host:port)."
-      - name: abfsCachedBuild
-        value: {{ .Values.spec.abfs.cachedBuild | quote }}
-        description: "When true, cacheman and the CASFS mount use /aaos-cache."
-      - name: abfsVersion
-        value: {{ .Values.spec.abfs.version | quote }}
-        description: "abfs-client apt version (i.e. 0.1.14)."
-      - name: abfsCasfsVersion
-        value: {{ .Values.spec.abfs.casfsVersion | quote }}
-        description: "casfs-kmod apt version."
-      - name: abfsRepository
-        value: {{ .Values.spec.abfs.repository | quote }}
-        description: "ABFS apt Artifact Registry repository."
-      - name: uploaderManifestServer
-        value: {{ .Values.spec.abfs.uploaderManifestServer | quote }}
-        description: "abfs --manifest-server host; must match the pusher Gerrit seed."
-      # Appended, never inserted: sensors.yaml addresses these by position
-      # (spec.arguments.parameters.<N>.value). Inserting above shifts every
-      # later index and silently misroutes webhook values.
-      - name: gerritTopic
-        value: {{ .Values.spec.gerritTopic | quote }}
-        description: "Optional Gerrit topic; fetches every change under it."
-      - name: overrideMakeCommand
-        value: {{ .Values.spec.overrideMakeCommand | quote }}
-        description: "Optional override of the default make command (single line)."
-      - name: abfsCleanCache
-        value: {{ .Values.spec.abfs.cleanCache | quote }}
-        description: "Clean the ABFS cache directory before the build."
-      - name: abfsCachemanTimeout
-        value: {{ .Values.spec.abfs.cachemanTimeout | quote }}
-        description: "cacheman sync timeout in seconds; 0 disables the wait."
-      - name: postRepoCommand
-        value: {{ .Values.spec.postRepoCommand | quote }}
-        description: "Commands run after the mount and before the build (Jenkins POST_REPO_COMMAND); default applies the build/soong changes ABFS needs for Android 15."
-      - name: aaosParallelBuildJobs
-        value: {{ .Values.spec.parallelBuildJobs | quote }}
-        description: "Parallel build jobs (-j). Default: 16. Empty lets the build system decide. If the ABFS cacheman socket gets overloaded during the build, the value may be too high."
-  templateDefaults:
-    metadata:
-      annotations:
-        # ABFS builds run for hours. Evicting the pod loses the whole build,
-        # so the autoscaler must leave it alone; the Jenkins job sets this to
-        # "false" for the same reason.
-        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
-      labels:
-        aaos_abfs_pod: "true"
-    nodeSelector:
-      workloadLabel: android-abfs-build
-      # The COS build pool carries the same workloadLabel and taint. Pin to the
-      # Ubuntu pool, the only one the casfs installer DaemonSet runs on
-      # (abfs-client-module-ubuntu values.yaml uses the same selector).
-      cloud.google.com/gke-nodepool: abfs-build-node-pool-ubuntu
-    tolerations:
-      - key: workloadType
-        operator: Equal
-        value: android-abfs-build
-        effect: NoSchedule
-{{- else }}
         description: "Parallel repo sync jobs."
   templateDefaults:
     metadata:
@@ -168,7 +99,6 @@ spec:
         operator: Equal
         value: android
         effect: NoSchedule
-{{- end }}
     # Pod anti-affinity is applied only to build templates.
   # Per-workflow PVC (one per workflow execution).
   # Per-workflow mode keeps different workflows isolated even on same node.
@@ -176,7 +106,7 @@ spec:
     - metadata:
         name: aaos-cache
         labels:
-          app.kubernetes.io/name: {{ .Values.workflowTemplateName | quote }}
+          app.kubernetes.io/name: {{ .Chart.Name | quote }}
           app.kubernetes.io/instance: {{ .Release.Name | quote }}
           aaos-cache-scope: "workflow"
           aaos-revision: {{ printf "{{=sprig.regexFind(\"android-[0-9]+\", workflow.parameters.androidRevision)}}" | quote }}
@@ -186,15 +116,15 @@ spec:
       spec:
         accessModes:
           - {{ .Values.spec.aaosCacheAccessMode | default "ReadWriteOnce" | quote }}
-        storageClassName: {{ include "aaos-builder.cacheStorageClassName" . }}
+        storageClassName: 'reclaimable-storage-class-android-{{ printf "{{=sprig.regexFind(\"[0-9]+\", workflow.parameters.androidRevision)}}" }}{{ printf "{{=sprig.regexFind(\"rpi\", workflow.parameters.lunchTarget) != \"\" ? \"-rpi\" : \"\"}}" }}'
         resources:
           requests:
-            storage: {{ .Values.spec.aaosCacheStorageSize | default "1000Gi" | quote }}
+            storage: "1000Gi"
 {{- if and .Values.sharedPipelineWorkspace (not (or .Values.localRepoHostPath .Values.localRepoPvcName)) }}
     - metadata:
         name: pipeline-workspace
         labels:
-          app.kubernetes.io/name: {{ .Values.workflowTemplateName | quote }}
+          app.kubernetes.io/name: {{ .Chart.Name | quote }}
           app.kubernetes.io/instance: {{ .Release.Name | quote }}
           aaos-pipeline-workspace: "workflow"
       spec:

@@ -11,13 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+#
 # Child Application: multi-source workloads-android (gitops values, aaos-builder, docker_image_template,
-# abfs docker_image_template, cf-instance-template, cvd-launcher, cts-execution). Inline **gemini-review**
-# on aaos-builder / cvd-launcher / cts-execution runs workloads/common/agentic-ai/gemini/run_ai_review.sh when Gemini is enabled.
+# cf-instance-template, cvd-launcher, cts-execution). Inline **gemini-review** on aaos-builder / cvd-launcher /
+# cts-execution runs workloads/common/agentic-ai/gemini/run_ai_review.sh when Gemini is enabled.
 # Deployed only via Module Manager enable (mod-workloads-android → this Application).
 # Applied when Module Manager enable creates mod-workloads-android.
-
 {{- if and .Values.repo.url .Values.repo.revision }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -64,26 +63,6 @@ spec:
             pipelineRepoSecret: {{ if or (eq .Values.config.scm.authMethod "userpass") (eq .Values.config.scm.authMethod "app") }}{{ "workflow-pipeline-git-creds" | quote }}{{ else }}{{ "" | quote }}{{ end }}
     - repoURL: {{ .Values.repo.url | quote }}
       targetRevision: {{ .Values.repo.revision | quote }}
-      # Same chart as the source above; values-abfs.yaml switches it to the ABFS builder (aaos-builder-abfs).
-      path: workloads/android/pipelines/builds/aaos_builder/helm
-      helm:
-        releaseName: workloads-android-aaos-builder-abfs
-        valueFiles:
-          - values-abfs.yaml
-        values: |
-          namespacePrefix: {{ .Values.config.namespacePrefix | quote }}
-          scm:
-            authMethod: {{ .Values.config.scm.authMethod | quote }}
-          spec:
-            cloudProject: {{ .Values.config.projectID | quote }}
-            cloudRegion: {{ .Values.config.region | quote }}
-            cloudZone: {{ .Values.config.zone | quote }}
-            horizonDomain: {{ .Values.config.domain | quote }}
-            pipelineRepoUrl: {{ .Values.config.workloads.android.url | quote }}
-            pipelineRepoRevision: {{ .Values.config.workloads.android.branch | quote }}
-            pipelineRepoSecret: {{ if or (eq .Values.config.scm.authMethod "userpass") (eq .Values.config.scm.authMethod "app") }}{{ "workflow-pipeline-git-creds" | quote }}{{ else }}{{ "" | quote }}{{ end }}
-    - repoURL: {{ .Values.repo.url | quote }}
-      targetRevision: {{ .Values.repo.revision | quote }}
       path: workloads/android/pipelines/environment/docker_image_template/helm
       helm:
         values: |
@@ -92,26 +71,6 @@ spec:
             authMethod: {{ .Values.config.scm.authMethod | quote }}
           cloudEnvConfigMapName: "horizon-workflow-cloud-env"
           spec:
-            cloudProject: {{ .Values.config.projectID | quote }}
-            cloudRegion: {{ .Values.config.region | quote }}
-            cloudZone: {{ .Values.config.zone | quote }}
-            pipelineRepoUrl: {{ .Values.config.workloads.android.url | quote }}
-            pipelineRepoRevision: {{ .Values.config.workloads.android.branch | quote }}
-            pipelineRepoSecret: {{ if or (eq .Values.config.scm.authMethod "userpass") (eq .Values.config.scm.authMethod "app") }}{{ "workflow-pipeline-git-creds" | quote }}{{ else }}{{ "" | quote }}{{ end }}
-    - repoURL: {{ .Values.repo.url | quote }}
-      targetRevision: {{ .Values.repo.revision | quote }}
-      path: workloads/android/pipelines/environment/abfs/docker_image_template/helm
-      helm:
-        releaseName: workloads-android-abfs-builder-runtime-image
-        values: |
-          namespacePrefix: {{ .Values.config.namespacePrefix | quote }}
-          scm:
-            authMethod: {{ .Values.config.scm.authMethod | quote }}
-          git:
-            authMethod: {{ .Values.config.scm.authMethod | quote }}
-          cloudEnvConfigMapName: "horizon-workflow-cloud-env"
-          spec:
-            # Injected from MODULE_CONFIG (Terraform gcp_project_id / gcp_cloud_region / gcp_cloud_zone).
             cloudProject: {{ .Values.config.projectID | quote }}
             cloudRegion: {{ .Values.config.region | quote }}
             cloudZone: {{ .Values.config.zone | quote }}

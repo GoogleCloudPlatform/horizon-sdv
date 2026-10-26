@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -49,14 +49,6 @@ spec:
           isSubEnvironment: {{ .Values.config.isSubEnvironment }}
           environmentName: {{ .Values.config.environmentName | quote }}
           enableNetworkPolicies: {{ .Values.config.enableNetworkPolicies }}
-          clusterName: {{ .Values.config.clusterName | default "sdv-cluster" | quote }}
-          gcpComputeSaEmail: {{ .Values.config.gcpComputeSaEmail | default "" | quote }}
-          releaseChannel: {{ .Values.config.releaseChannel | default "" | quote }}
-          nodeLocations:
-            {{- .Values.config.nodeLocations | default list | toYaml | nindent 12 }}
-          {{- $abfsPool := default dict .Values.config.abfsBuildNodePool }}
-          abfsBuildNodePool:
-            version: {{ $abfsPool.version | default "" | quote }}
           {{- with .Values.config.probeSourceCIDRs }}
           probeSourceCIDRs:
             {{- range . }}

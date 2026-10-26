@@ -1,0 +1,74 @@
+// Copyright (c) 2025 Accenture, All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Description:
+// Jenkins pipeline to destroy ABFS Cloud Spanner resources.
+// - DESTROY_ACTION controls the target: BUCKET or INSTANCE
+// - BUCKET requires: ABFS_DB_BUCKET_NAME (gs:// bucket to delete)
+// - INSTANCE requires: ABFS_DB_NAME (Spanner instance to delete)
+// The script uses strict mode and validates inputs before performing deletions.
+
+pipeline {
+
+  agent none
+
+  environment {
+
+    // Define Pod Template in environment so we can override storageClassName.
+    def kubernetesPodTemplate = """
+      apiVersion: v1
+      kind: Pod
+      spec:
+        hostname: jenkins-abfs-spanner-destroy-pod
+        serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}
+        containers:
+        - name: abfs-spanner-destroy
+          image: ${CLOUD_REGION}-docker.pkg.dev/${CLOUD_PROJECT}/${INFRA_DOCKER_ARTIFACT_PATH_NAME}:${INFRA_IMAGE_TAG}
+          imagePullPolicy: Always
+          command:
+          - sleep
+          args:
+          - 5h
+          tty: true
+    """.stripIndent()
+  }
+
+
+
+  stages {
+    stage ('Start Instance') {
+      agent { kubernetes { yaml kubernetesPodTemplate } }
+      stages {
+        stage ('Destroy') {
+          steps {
+            script {
+              currentBuild.description = "Action: ${env.DESTROY_ACTION}" + "<br/>" + "$BUILD_USER"
+            }
+            container(name: 'abfs-spanner-destroy') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  cd ./workloads/android/pipelines/environment/abfs/server_administration/destroy_spanner_instance/
+                  DESTROY_ACTION=${DESTROY_ACTION} \
+                  ABFS_DB_BUCKET_NAME=${ABFS_DB_BUCKET_NAME} \
+                  ABFS_DB_NAME=${ABFS_DB_NAME} \
+                  ./destroy_spanner_instance.sh
+                '''
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
