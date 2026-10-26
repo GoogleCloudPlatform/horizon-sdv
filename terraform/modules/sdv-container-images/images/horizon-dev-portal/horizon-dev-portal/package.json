@@ -49,6 +49,7 @@
   "overrides": {
     "react-is": "19.3.0-canary-fef12a01-20260413",
     "postcss": "^8.5.26",
-    "nanoid": "^6.0.1"
+    "nanoid": "^6.0.1",
+    "source-map-js": "^1.2.2"
   }
 }

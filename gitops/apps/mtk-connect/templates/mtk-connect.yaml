@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -61,7 +61,8 @@ data:
           {"source": "^/portal", "target": "http://127.0.0.1:8083"},
           {"source": "^/get-agent", "target": "http://127.0.0.1:8087/get-agent", "authenticated": false},
           {"source": "^/get-tunnel", "target": "http://127.0.0.1:8087/get-tunnel", "authenticated": false},
-          {"source": "^/get-guacd", "target": "http://127.0.0.1:8087/get-guacd", "authenticated": false}
+          {"source": "^/get-guacd", "target": "http://127.0.0.1:8087/get-guacd", "authenticated": false},
+          {"source": "^/get-cli", "target": "http://127.0.0.1:8087/get-cli", "authenticated": false}
         ],
         "schema": {
           "enabled": false

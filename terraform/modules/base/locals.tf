@@ -28,8 +28,8 @@ locals {
 
     "storage-gcs-module-app" = {
       directory      = "storage-gcs-module"
-      build_version  = "1.0.0"
-      deploy_version = "1.0.0"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"
@@ -38,8 +38,8 @@ locals {
     }
     "gerrit-post" = {
       directory      = "gerrit"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "mtk-connect-post" = {
       directory      = "mtk-connect"
@@ -116,18 +116,18 @@ locals {
     }
     "module-manager-app" = {
       directory      = "module-manager"
-      build_version  = "0.3.3"
-      deploy_version = "0.3.3"
+      build_version  = "0.3.4"
+      deploy_version = "0.3.4"
     }
     "workflow-namespace-drain-app" = {
       directory      = "workflow-namespace-drain"
-      build_version  = "1.0.0"
-      deploy_version = "1.0.0"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     "horizon-api-app" = {
       directory      = "horizon-api"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "kcc-webhook-cert-monitor" = {
       directory      = "kcc-webhook-cert-monitor"
