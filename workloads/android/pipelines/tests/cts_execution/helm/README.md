@@ -60,7 +60,7 @@ Same DAG pattern as **`cvd-launcher`**: **`prepare-gemini-on-*`** → **`gemini-
 | **`prepare-gemini-on-failure`** / **`prepare-gemini-on-success`** | **`prepare-gemini-cts`** | **`gemini_argo_prepare_staging.sh`** with **`GEMINI_PREPARE_MODE=cts`** (Phase 0 suite file mirror + CVD unzip). |
 | **`gemini-ai-review-on-*`** | **`gemini-review`** | **`run_ai_review.sh`**; post-hook **`cts_execution/hooks/review-post-cts.sh`**. |
 
-Success-path steps require **`geminiAnalyseOnSuccess`** (Helm default **`spec.geminiAnalyseOnSuccess`**; webhook **`body.geminiAnalyseOnSuccess`**). Shared script and GCE driver docs: [`../../README.md`](../../README.md), **`cvd-launcher` chart README** for PVC/MTK skip/resource knobs and **single GCS upload** when Gemini is on (**`spec.geminiStagingStorageSize`**, **`spec.geminiPodResources`**, **`spec.geminiAiExecutionTimeoutMinutes`**).
+Success-path steps require **`geminiAnalyseOnSuccess`** (Helm default **`spec.geminiAnalyseOnSuccess`**; webhook **`body.geminiAnalyseOnSuccess`**). Shared script and GCE driver docs: [`../../README.md`](../../README.md), **`cvd-launcher` chart README** for PVC/MTK skip/resource knobs and **single GCS upload** when Gemini is on (**`spec.geminiStagingStorageSize`**, **`spec.geminiPodResources`**, **`spec.geminiAiExecutionTimeoutHours`**).
 
 **Gemini uploads (Argo):** **`gemini-review`** **`storageBucketDestination`** = **`{{tasks.compute-test-results-staging-uri.outputs.parameters.resolvedStagingUri}}/gemini-ai-review`** (same **`…-aaos/…/CTS_Execution_Workflows/<timestamp>_<workflow.name>/`** prefix as test staging). Jenkins **`cts_execution/groovy/job.groovy`** uses copyArtifacts paths under **`…-aaos/Android/Tests/CTS_Execution`** when not using this chart.
 

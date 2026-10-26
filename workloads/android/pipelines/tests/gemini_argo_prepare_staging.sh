@@ -46,7 +46,6 @@ readonly MTK_FAILED_META="${CVD_ARGO_ARTIFACT_ROOT}/.meta/mtk_connect_stage_fail
 # gemini-test-results PVC is always mounted at /workspace/test-results (not ${WORKSPACE}/test-results).
 readonly GEMINI_TEST_RESULTS_DIR="${GEMINI_TEST_RESULTS_DIR:-/workspace/test-results}"
 readonly GEMINI_CVD_LOGS_DIR="${GEMINI_TEST_RESULTS_DIR}/cvd"
-readonly GEMINI_CTS_RESULTS_DIR="${GEMINI_TEST_RESULTS_DIR}/cts"
 
 # -----------------------------------------------------------------------------
 # MTK skip (no gemini-review)
@@ -133,28 +132,6 @@ function _gemini_unpack_cuttlefish_zips() {
   shopt -u nullglob
 }
 
-function _gemini_unpack_cts_zips() {
-  mkdir -p "${GEMINI_CTS_RESULTS_DIR}"
-  shopt -s nullglob
-  local zip_path
-  for zip_path in "${GEMINI_TEST_RESULTS_DIR}"/android-cts-results/*.zip "${GEMINI_TEST_RESULTS_DIR}"/*.zip; do
-    if [[ -f "${zip_path}" && "$(basename "${zip_path}")" != cuttlefish_logs* ]]; then
-      echo "[gemini] unzip ${zip_path} → ${GEMINI_CTS_RESULTS_DIR}/" >&2
-      unzip -q -o "${zip_path}" -d "${GEMINI_CTS_RESULTS_DIR}" 2>/dev/null \
-        || echo "[gemini] WARN: unzip failed: ${zip_path}" >&2
-    fi
-  done
-  local d
-  for d in "${GEMINI_CTS_RESULTS_DIR}"/*; do
-    if [[ -d "${d}" ]] && { [[ -f "${d}/test_result.xml" ]] || [[ -f "${d}/invocation_summary.txt" ]]; }; then
-      echo "[gemini] hoisting CTS session artifacts from ${d} → ${GEMINI_CTS_RESULTS_DIR}/" >&2
-      find "${d}" -mindepth 1 -maxdepth 1 -exec mv -f {} "${GEMINI_CTS_RESULTS_DIR}/" \; 2>/dev/null || true
-      rmdir "${d}" 2>/dev/null || true
-    fi
-  done
-  shopt -u nullglob
-}
-
 # -----------------------------------------------------------------------------
 # Staged log inventory (stderr diagnostics)
 # -----------------------------------------------------------------------------
@@ -164,9 +141,7 @@ function _gemini_has_cts_phase0_artifacts() {
   [[ -f "${GEMINI_TEST_RESULTS_DIR}/invocation_summary.txt" ]] \
     || [[ -f "${GEMINI_TEST_RESULTS_DIR}/test_result_failures_suite.html" ]] \
     || [[ -f "${GEMINI_TEST_RESULTS_DIR}/android-cts-results/invocation_summary.txt" ]] \
-    || [[ -f "${GEMINI_TEST_RESULTS_DIR}/android-cts-results-html/test_result_failures_suite.html" ]] \
-    || [[ -f "${GEMINI_CTS_RESULTS_DIR}/invocation_summary.txt" ]] \
-    || [[ -f "${GEMINI_CTS_RESULTS_DIR}/test_result.xml" ]]
+    || [[ -f "${GEMINI_TEST_RESULTS_DIR}/android-cts-results-html/test_result_failures_suite.html" ]]
 }
 
 function _gemini_report_log_inventory() {
@@ -219,11 +194,6 @@ function _gemini_mirror_cts_phase0_files() {
     cp -f "${GEMINI_TEST_RESULTS_DIR}/android-cts-results/invocation_summary.txt" \
       "${GEMINI_TEST_RESULTS_DIR}/invocation_summary.txt"
     mirrored=true
-  elif [[ -f "${GEMINI_CTS_RESULTS_DIR}/invocation_summary.txt" ]] \
-    && [[ ! -f "${GEMINI_TEST_RESULTS_DIR}/invocation_summary.txt" ]]; then
-    cp -f "${GEMINI_CTS_RESULTS_DIR}/invocation_summary.txt" \
-      "${GEMINI_TEST_RESULTS_DIR}/invocation_summary.txt"
-    mirrored=true
   fi
 
   if [[ -f "${GEMINI_TEST_RESULTS_DIR}/android-cts-results-html/test_result_failures_suite.html" ]] \
@@ -248,13 +218,11 @@ function gemini_prepare_staging_main() {
   _gemini_copy_vm_bundle
   _gemini_unpack_cuttlefish_zips
   if [[ "${GEMINI_PREPARE_MODE:-cvd}" == "cts" ]]; then
-    _gemini_unpack_cts_zips
     _gemini_mirror_cts_phase0_files
   fi
   if ! _gemini_report_log_inventory; then
     _gemini_unpack_cuttlefish_zips
     if [[ "${GEMINI_PREPARE_MODE:-cvd}" == "cts" ]]; then
-      _gemini_unpack_cts_zips
       _gemini_mirror_cts_phase0_files
     fi
     _gemini_report_log_inventory || _gemini_skip_review_no_logs

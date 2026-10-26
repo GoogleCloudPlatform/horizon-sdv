@@ -173,13 +173,10 @@ Use this to specify settings such as the [Gemini model](https://ai.google.dev/ge
 `--debug` to include debug output.
 Note: Prompts are piped via `stdin` and output is redirected to a JSON file.
 
-### `AI_REVIEW_RUNTIME`
+### `GEMINI_AI_EXECUTION_TIMEOUT`
 
-`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. The AAOS Builder Helm chart sets `aiReviewRuntime` to `agy`, and the review template falls back to `agy` when that value is empty. Antigravity uses the skills under `workloads/common/agentic-ai/antigravity/skills/` and does not read the sequenced prompt files. `gemini-cli` runs those prompts.
-
-### `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES`
-
-Maximum duration in minutes before the review is terminated. Jenkins choices are `60`, `45`, `30`, `20`, `10`, `90`, and `120` (first choice `60`). When unset, `run_ai_review.sh` uses 60 minutes. The Helm chart sets `geminiAiExecutionTimeoutMinutes` to `60`.
+AI Execution Timeout (Hours)
+Set the maximum duration for the Gemini AI assistant.
 
 * Prevents jobs from hanging indefinitely.
 * Automatically terminates runaway processes to save build resources.

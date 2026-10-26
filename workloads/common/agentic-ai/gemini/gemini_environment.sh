@@ -34,7 +34,6 @@
 #   GEMINI_PROMPT_FILE_3   Step 3 prompt (optional). Path or base64.
 #   GEMINI_COMMAND_LINE    Full CLI invocation (default: gemini --yolo --output-format json).
 #                          To pin model: add --model <name> (e.g. --model gemini-3.8-flash).
-#   GEMINI_MODEL           Model name for Antigravity (agy) and gemini-cli (e.g. gemini-3.8-flash).
 #   GEMINI_CLI_VERSION     If set, gemini_initialise.sh installs/upgrades to this version.
 #   GEMINI_OUTPUT_FILE_NAME  JSON output file (default: headless_output_<timestamp>.json).
 #   GEMINI_ARTIFACT_PATH   Dir for analysis output (default: gemini-assist).
@@ -78,8 +77,6 @@ GEMINI_ARTIFACT_FILES_WILDCARD=${GEMINI_ARTIFACT_FILES_WILDCARD:-"gemini*.md"}
 GEMINI_ADDITIONAL_ARTIFACTS=${GEMINI_ADDITIONAL_ARTIFACTS:-}
 GEMINI_PREVIEW_FEATURES=${GEMINI_PREVIEW_FEATURES:-false}
 GEMINI_LOCATION_GLOBAL=${GEMINI_LOCATION_GLOBAL:-false}
-GEMINI_MODEL=${GEMINI_MODEL:-}
-export GEMINI_MODEL
 GEMINI_SKILLS_YAML=${GEMINI_SKILLS_YAML:-}
 
 # Workspace and artifact storage paths
@@ -205,7 +202,6 @@ case "$0" in
         VARIABLES+="
         GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
         GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION}
-        GEMINI_MODEL=${GEMINI_MODEL}
         "
         ;;
     *initialise.sh)
