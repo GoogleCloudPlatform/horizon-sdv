@@ -107,7 +107,7 @@ The build/soong fix ABFS needs (Soong runs `soong_build` in a sandbox where the 
 | `android-14*`, `android-15.0.0_r4` | nothing |
 | `android-15*` (tested: android-15.0.0_r36) | build/soong cherry-picks 3619490, 3619491, 3619492 |
 | `android-16*` (tested: android-16.0.0_r3) | `sed` on `ui/build/soong.go` so `TOP` and `LOG_DIR` are passed to `soong_build` as sandbox paths |
-| branch names (`android-latest-release`, `main`, custom) | taken from the release config in the lunch target: `*bp1a*` cherry-picks, `*bp3a*`/`*bp4a*` sed, otherwise nothing |
+| branch names (`android-latest-release`, `main`, custom) | nothing; the revision carries no Android version, so add the fix through this parameter if the build needs it |
 
 Anything set here runs after the automatic fix. This is a single command line, so use of logical operators to execute subsequent commands is essential.
 

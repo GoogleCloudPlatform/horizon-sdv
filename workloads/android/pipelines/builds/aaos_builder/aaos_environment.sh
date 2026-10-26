@@ -575,8 +575,8 @@ fi
 #   - Android 16: pass TOP and LOG_DIR through sandboxPath in
 #     ui/build/soong.go; without it soong_build panics with
 #     "open /abfs/out/soong/.temp/rawN: read-only file system".
-# Branch names (android-latest-release, main, custom) carry no version, so for
-# those the release config in the lunch target (bp1a, bp3a, bp4a) is used.
+# Branch names (android-latest-release, main, custom) carry no version, so
+# nothing is applied for them; use POST_REPO_COMMAND to add the fix by hand.
 if [[ "${ABFS_BUILDER}" == "true" ]]; then
     ABFS_SOONG_FIX="none"
     case "${AAOS_REVISION}" in
@@ -590,11 +590,7 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
             ABFS_SOONG_FIX="sed"
             ;;
         *)
-            case "${AAOS_LUNCH_TARGET}" in
-                *bp1a*) ABFS_SOONG_FIX="cherry-pick" ;;
-                *bp3a*|*bp4a*) ABFS_SOONG_FIX="sed" ;;
-            esac
-            echo "ABFS: AAOS_REVISION ${AAOS_REVISION} carries no Android version, build/soong fix '${ABFS_SOONG_FIX}' taken from lunch target ${AAOS_LUNCH_TARGET}"
+            echo "ABFS: AAOS_REVISION ${AAOS_REVISION} carries no Android version, no build/soong fix applied automatically; add it with POST_REPO_COMMAND if the build needs it"
             ;;
     esac
     case "${ABFS_SOONG_FIX}" in
