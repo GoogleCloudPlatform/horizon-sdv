@@ -67,7 +67,10 @@ func init() {
 		rootCmd.SilenceErrors = true
 		horizon.SetDebugEnabled(horizon.IsDebug())
 
-		if cmd.Name() == "history" {
+		// Skip history itself and Cobra's hidden __complete command,
+		// otherwise completion would append a line on every tab press
+		// (Name() is  __complete for the __completeNoDesc aliases too)
+		if cmd.Name() == "history" || cmd.Name() == cobra.ShellCompRequestCmd {
 			return
 		}
 

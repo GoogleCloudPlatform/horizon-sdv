@@ -23,6 +23,7 @@ import (
 )
 
 func NewHistoryCmd() *cobra.Command {
+	var month string
 	var historyCmd = &cobra.Command{
 		Use:   "history [n]",
 		Short: "Show recent CLI invocations",
@@ -36,7 +37,7 @@ func NewHistoryCmd() *cobra.Command {
 					return err
 				}
 			}
-			entries, err := horizon.ReadInvocations(n)
+			entries, err := horizon.ReadInvocationsForMonth(n, month)
 			if err != nil {
 				return err
 			}
@@ -54,6 +55,7 @@ func NewHistoryCmd() *cobra.Command {
 			return nil
 		},
 	}
+	historyCmd.Flags().StringVar(&month, "month", "", fmt.Sprintf("Read YYYY-MM instead of the current UTC month (within the %d-month retention period)", horizon.HistoryRetentionMonths))
 
 	return historyCmd
 }

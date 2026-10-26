@@ -67,12 +67,7 @@ func migrateToTimeBased(path string) error {
 		return nil // No migration needed
 	}
 
-	dir := filepath.Dir(path)
-	base := filepath.Base(path)
-	ext := filepath.Ext(base)
-	nameWithoutExt := strings.TrimSuffix(base, ext)
-	currentMonth := time.Now().Format("2006-01")
-	currentMonthFile := filepath.Join(dir, nameWithoutExt+"-"+currentMonth+ext)
+	currentMonthFile := monthHistoryPath(path, time.Now().UTC())
 
 	// If current month file already exists, don't migrate
 	if _, err := os.Stat(currentMonthFile); err == nil {
@@ -204,13 +199,7 @@ func appendInvocation(path string, argv []string, at time.Time) error {
 		return err
 	}
 
-	// Determine the target file (current month)
-	dir := filepath.Dir(path)
-	base := filepath.Base(path)
-	ext := filepath.Ext(base)
-	nameWithoutExt := strings.TrimSuffix(base, ext)
-	currentMonth := at.Format("2006-01")
-	currentMonthFile := filepath.Join(dir, nameWithoutExt+"-"+currentMonth+ext)
+	currentMonthFile := monthHistoryPath(path, at)
 
 	// Apply rotation strategies to the target file
 	if err := rotateBySize(currentMonthFile); err != nil {
@@ -240,25 +229,72 @@ func appendInvocation(path string, argv []string, at time.Time) error {
 	return err
 }
 
+// ReadInvocations returns the newest n entries from the current UTC month.
 func ReadInvocations(n int) ([]HistoryEntry, error) {
+	return ReadInvocationsForMonth(n, "")
+}
+
+// ReadInvocationsForMonth returns the newest n entries from month (YYYY-MM).
+// An empty month selects the current UTC month. month must fall within
+// HistoryRetentionMonths, counting the current month.
+func ReadInvocationsForMonth(n int, month string) ([]HistoryEntry, error) {
 	path, err := CliHistoryFilePath()
 	if err != nil {
 		return nil, err
 	}
-	// Read from the current month's file
+	return readMonthInvocations(path, n, month, time.Now().UTC())
+}
+
+func monthHistoryPath(path string, at time.Time) string {
 	dir := filepath.Dir(path)
 	base := filepath.Base(path)
 	ext := filepath.Ext(base)
-	nameWithoutExt := strings.TrimSuffix(base, ext)
-	currentMonth := time.Now().Format("2006-01")
-	currentMonthFile := filepath.Join(dir, nameWithoutExt+"-"+currentMonth+ext)
+	name := strings.TrimSuffix(base, ext)
+	return filepath.Join(dir, name+"-"+at.UTC().Format("2006-01")+ext)
+}
 
-	// If the current month file exists, read from it; otherwise read from the default file
-	if _, err := os.Stat(currentMonthFile); err == nil {
-		return readInvocations(currentMonthFile, n)
+func resolveHistoryMonth(month string, now time.Time) (time.Time, error) {
+	now = now.UTC()
+	current := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	month = strings.TrimSpace(month)
+	if month == "" {
+		return current, nil
 	}
-	// Fall back to the default file if month file doesn't exist
-	return readInvocations(path, n)
+	parsed, err := time.ParseInLocation("2006-01", month, time.UTC)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("history month must be YYYY-MM")
+	}
+	if parsed.After(current) {
+		return time.Time{}, fmt.Errorf("history month %s is in the future", month)
+	}
+	oldest := current.AddDate(0, 1-HistoryRetentionMonths, 0)
+	if parsed.Before(oldest) {
+		return time.Time{}, fmt.Errorf("history month %s is outside the %d-month retention period (%s through %s)",
+			month, HistoryRetentionMonths, oldest.Format("2006-01"), current.Format("2006-01"))
+	}
+	return parsed, nil
+}
+
+func readMonthInvocations(path string, n int, month string, now time.Time) ([]HistoryEntry, error) {
+	selected, err := resolveHistoryMonth(month, now)
+	if err != nil {
+		return nil, err
+	}
+	monthFile := monthHistoryPath(path, selected)
+	if _, err := os.Stat(monthFile); err == nil {
+		return readInvocations(monthFile, n)
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	current, err := resolveHistoryMonth("", now)
+	if err != nil {
+		return nil, err
+	}
+	// Unmigrated history.json belongs to the current month only.
+	if selected.Equal(current) {
+		return readInvocations(path, n)
+	}
+	return []HistoryEntry{}, nil
 }
 
 func readInvocations(path string, n int) ([]HistoryEntry, error) {
@@ -360,6 +396,10 @@ func isSecretFlag(s string) bool {
 	// Inline workflow parameters may embed credentials. Keep the flag and redact the value.
 	if name == "params-json" {
 		return true
+	}
+	// A page token is a list cursor, not a credential.
+	if name == "page-token" || name == "page_token" {
+		return false
 	}
 	for _, part := range strings.FieldsFunc(name, func(r rune) bool {
 		return r == '-' || r == '_'

@@ -2,6 +2,7 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
 //	http://www.apache.org/licenses/LICENSE-2.0
 //
@@ -32,6 +33,7 @@ import (
 
 	"github.com/acn-horizon-sdv/horizon-api/internal/auth"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -188,7 +190,7 @@ func (s *Server) artifactsCRBucketNames(ctx context.Context) ([]string, error) {
 		Kind:    "GCSBucketList",
 	})
 	if err := s.opt.K8sClient.List(ctx, &crList, client.InNamespace(s.opt.GCSBucketsNS)); err != nil {
-		if apierrors.IsNotFound(err) || apierrors.IsUnauthorized(err) {
+		if apierrors.IsNotFound(err) || apierrors.IsUnauthorized(err) || meta.IsNoMatchError(err) {
 			return nil, nil
 		}
 		return nil, err

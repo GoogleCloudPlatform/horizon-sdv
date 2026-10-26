@@ -654,7 +654,9 @@ horizon.exe workflow download-artifact $env:WF_NAME "<artifact-name>" -o ./artif
 
 #### History
 
-Each command is appended to `~/.config/horizon/history-YYYY-MM.json` (the `history` command itself is not recorded, so the list stays useful for repeat and audit). Values of secret flags (for example `--client-secret`) and JWT-like tokens are stored as `***`.
+Each command is appended to `~/.config/horizon/history-YYYY-MM.json` (the `history` command itself is not recorded, so the list stays useful for repeat and audit). Files are kept for 3 months. Values of secret flags (for example `--client-secret`) and JWT-like tokens are stored as `***`. Pagination cursors such as `--page-token` are kept.
+
+`horizon history` reads the current UTC month. Pass `--month YYYY-MM` to read another retained month (the current UTC month and the two before it). A month outside that window is rejected.
 
 Show the last 10 invocations (default):
 
@@ -666,6 +668,13 @@ Show more (up to 100):
 
 ```bash
 horizon history 25
+```
+
+Read a previous retained month:
+
+```bash
+horizon history --month 2026-09
+horizon history 25 --month 2026-08
 ```
 
 JSON array of `{timestamp, command}` objects:

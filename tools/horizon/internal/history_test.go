@@ -42,6 +42,8 @@ func TestRedactArgs(t *testing.T) {
 		`--params-json={"password":"hunter2"}`,
 		"--params-json=",
 		"--params-json", "--wait",
+		"--page-token", "token1",
+		"--page-token=token2",
 	}
 	got := RedactArgs(in)
 	if in[2] != "s3cret" {
@@ -62,6 +64,8 @@ func TestRedactArgs(t *testing.T) {
 		"--params-json=" + redactedValue,
 		"--params-json=",
 		"--params-json", "--wait",
+		"--page-token", "token1",
+		"--page-token=token2",
 	}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("got %#v\nwant %#v", got, want)
@@ -80,6 +84,9 @@ func TestSecretAndFlagHeuristics(t *testing.T) {
 	}
 	if isSecretFlag("params-json") || isSecretFlag("--params-file") || isSecretFlag("--params-json-file") {
 		t.Fatal("non-flag or unrelated params flags classified as secrets")
+	}
+	if isSecretFlag("--page-token") || isSecretFlag("--page_token") || isSecretFlag("--Page-Token") {
+		t.Fatal("page token classified as secret")
 	}
 	if !looksLikeFlag("--foo") || !looksLikeFlag("-n") {
 		t.Fatal("expected flag")
@@ -153,6 +160,84 @@ func TestParamsJSONRedactedInHistory(t *testing.T) {
 	want := ProgName() + " workflow submit --module sample --params-json " + redactedValue + " --params-json=" + redactedValue + " --wait"
 	if entries[0].Command != want {
 		t.Fatalf("command = %q\nwant %q", entries[0].Command, want)
+	}
+}
+
+func TestResolveHistoryMonth(t *testing.T) {
+	now := time.Date(2026, 10, 1, 0, 30, 0, 0, time.FixedZone("CET", 3600))
+	got, err := resolveHistoryMonth("", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Format("2006-01") != "2026-09" {
+		t.Fatalf("current UTC month = %s", got.Format("2006-01"))
+	}
+	got, err = resolveHistoryMonth(" 2026-08 ", now)
+	if err != nil || got.Format("2006-01") != "2026-08" {
+		t.Fatalf("retained month = %s %v", got.Format("2006-01"), err)
+	}
+	got, err = resolveHistoryMonth("2026-07", now)
+	if err != nil || got.Format("2006-01") != "2026-07" {
+		t.Fatalf("oldest retained = %s %v", got.Format("2006-01"), err)
+	}
+	for _, month := range []string{"2026-06", "2026-10", "2026-9", "October"} {
+		if _, err := resolveHistoryMonth(month, now); err == nil {
+			t.Fatalf("expected error for %q", month)
+		}
+	}
+}
+
+func TestReadMonthInvocations(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history.json")
+	now := time.Date(2026, 10, 1, 8, 0, 0, 0, time.UTC)
+	files := map[string]string{
+		"history.json":         "legacy",
+		"history-2026-08.json": "aug",
+		"history-2026-09.json": "sep",
+		"history-2026-10.json": "oct",
+	}
+	for name, command := range files {
+		entry := HistoryEntry{Timestamp: "2026-10-01T00:00:00Z", Command: command}
+		if err := writeInvocations(filepath.Join(dir, name), []HistoryEntry{entry}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	current, err := readMonthInvocations(path, 10, "", now)
+	if err != nil || len(current) != 1 || current[0].Command != "oct" {
+		t.Fatalf("current = %#v %v", current, err)
+	}
+	prev, err := readMonthInvocations(path, 10, "2026-09", now)
+	if err != nil || len(prev) != 1 || prev[0].Command != "sep" {
+		t.Fatalf("previous = %#v %v", prev, err)
+	}
+	oldest, err := readMonthInvocations(path, 1, "2026-08", now)
+	if err != nil || len(oldest) != 1 || oldest[0].Command != "aug" {
+		t.Fatalf("oldest = %#v %v", oldest, err)
+	}
+	if _, err := readMonthInvocations(path, 10, "2026-07", now); err == nil {
+		t.Fatal("expected retention error")
+	}
+
+	if err := os.Remove(filepath.Join(dir, "history-2026-09.json")); err != nil {
+		t.Fatal(err)
+	}
+	missing, err := readMonthInvocations(path, 10, "2026-09", now)
+	if err != nil || len(missing) != 0 {
+		t.Fatalf("missing previous month = %#v %v", missing, err)
+	}
+
+	if err := os.Remove(filepath.Join(dir, "history-2026-10.json")); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := readMonthInvocations(path, 10, "", now)
+	if err != nil || len(legacy) != 1 || legacy[0].Command != "legacy" {
+		t.Fatalf("legacy fallback = %#v %v", legacy, err)
+	}
+	explicitCurrent, err := readMonthInvocations(path, 10, "2026-10", now)
+	if err != nil || len(explicitCurrent) != 1 || explicitCurrent[0].Command != "legacy" {
+		t.Fatalf("explicit current fallback = %#v %v", explicitCurrent, err)
 	}
 }
 
