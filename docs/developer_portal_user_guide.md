@@ -31,15 +31,16 @@ limitations under the License. -->
       - [Auto-disable](#auto-disable-1)
     - [How the three modules differ (summary)](#how-the-three-modules-differ-summary)
     - [Change git ref in developer portal](#change-git-ref-in-developer-portal)
-  - [Workflows via Developer Portal](#workflows-via-developer-portal)
+  - [Tools](#tools)
+    - [Horizon CLI](#horizon-cli)
+    - [Horizon API](#horizon-api)
+  - [Open Argo Workflows from Developer Portal](#open-workflows-from-developer-portal)
+  - [Submit Workflows via Developer Portal](#submit-workflows-via-developer-portal)
     - [Submit](#submit)
     - [History](#history)
     - [How to abort/delete workflows](#how-to-abortdelete-workflows)
     - [Hello-world application](#hello-world-application)
-  - [Tools](#tools)
-    - [Horizon CLI](#horizon-cli)
-    - [Horizon API](#horizon-api)
-  - [Workflows via Horizon CLI](#workflows-via-horizon-cli)
+  - [Submit Workflows via Horizon CLI](#submit-workflows-via-horizon-cli)
     - [Installation](#installation)
       - [Download from Developer Portal (recommended)](#download-from-developer-portal-recommended)
       - [Contributor: build from source](#contributor-build-from-source)
@@ -111,7 +112,7 @@ The sidebar shows these entries before any module is enabled:
 - Tools
 - Administration
 
-The Landing Page provides a simple and clear home page for the Horizon SDV project with developer (Gerrit, Jenkins, MTK Connect, MCP Gateway Registry) and admin (Keycloak, Argo CD, Headlamp, Grafana) applications as cards opening cluster paths in a new tab.
+The Landing Page provides a simple and clear home page for the Horizon SDV project with developer (Gerrit, Jenkins, MTK Connect, MCP Gateway Registry) and admin (Keycloak, Argo CD, Argo Workflows, Headlamp, Grafana) applications as cards opening cluster paths in a new tab.
 
 **Tools** has two tabs: **Horizon CLI** (download the `horizon` binary) and **Horizon API** (Swagger UI for this cluster). See [Tools](#tools).
 
@@ -171,7 +172,11 @@ Auto-disable of modules is optional. By default - the modules do not get disable
 
 Git reference can be easily changed for the modules. It can be done from Administration tab in Modules section. After the change the Target Revision for this particular app should be aligned automatically in ArgoCD.
 
-### Workflows via Developer Portal
+### Open Workflows from Developer Portal
+
+Argo Workflows can be accessed directly from the Developer Portal through a dedicated application tile. The tile provides a convenient entry point to the Argo Workflows UI, allowing users to open it directly from the Developer Portal.
+
+### Submit Workflows via Developer Portal
 
 #### Submit
 
@@ -285,7 +290,7 @@ Templates that are not exposed (for example `sample-hard-smoke-test`) do not app
 
 The same document is also served directly at `https://<your-horizon-domain>/horizon-api/swagger` (`openapi.json` is next to it). If the embedded page stays blank, the browser could not load the Swagger UI assets; use that direct URL.
 
-### Workflows via Horizon CLI
+### Submit Workflows via Horizon CLI
 
 Replace placeholder values (marked with `<...>`) with your environment-specific values before running.
 
