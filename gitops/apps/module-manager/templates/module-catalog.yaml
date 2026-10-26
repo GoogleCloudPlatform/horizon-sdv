@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Accenture, All Rights Reserved.
+# Copyright (c) 2024-2026 Accenture, All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,11 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+#
 # Singleton ModuleCatalog CR — module list is defined here (not in values.yaml).
 # overviewServiceNamespace is the source of truth for Module Manager and for parent Helm overviewNamespace (injected by MM).
-# Workloads: parent module charts (mod-workloads-*) deploy to the same namespace as Module Manager (.Values.namespace),
-# so overview Services live there—not in {prefix}workflows (that namespace is for child Argo Applications only).
+# Workloads: parent module charts (mod-workloads-*) deploy to the same namespace as Module Manager (.Values.namespace), so overview Services live there—not in {prefix}workflows (that namespace is for child Argo Applications only).
 apiVersion: horizon-sdv.io/v1alpha1
 kind: ModuleCatalog
 metadata:
@@ -51,7 +50,7 @@ spec:
       overviewServiceNamespace: sample-data-overview
       hardDependencies:
         - storage-gcs
-      # GCSBucket CR reconciled by storage-gcs-module operator; CR deletion empties and deletes the GCP bucket.
+      # GCSBucket CR uses deletionPolicy: Delete so disable empties and deletes the GCP bucket.
     - name: sample
       path: gitops/modules/sample-module
       overviewPath: portal/overview.html
@@ -85,35 +84,3 @@ spec:
       overviewServiceNamespace: {{ .Values.namespace | quote }}
       hardDependencies:
         - workloads-common
-    - name: abfs-data
-      path: gitops/modules/abfs-data-module
-      overviewPath: portal/overview.html
-      overviewService: mod-abfs-data-overview
-      overviewServiceNamespace: abfs-data-overview
-      # Owns ABFS persistent data (license SA + Secret, Spanner, GCS, license workflows). Do not auto-disable when unused.
-      autoDisableWhenUnused: false
-    - name: abfs-service-module
-      path: gitops/modules/abfs-service-module
-      overviewPath: portal/overview.html
-      overviewService: mod-abfs-service-module-overview
-      overviewServiceNamespace: abfs
-    - name: abfs-client-ubuntu
-      path: gitops/modules/abfs-client-module-ubuntu
-      overviewPath: portal/overview.html
-      overviewService: mod-abfs-client-module-ubuntu-overview
-      overviewServiceNamespace: abfs-client-module-ubuntu-overview
-      hardDependencies:
-        - workloads-android
-        - abfs-service-module
-# Implementation of abfs-client-cos was not yet tested,
-# due to lack of availability of gke >= 1.36
-# (that is expected to contain casfs 0.1.14)
-# in stable update channel for the cluster.
-#    - name: abfs-client-cos
-#      path: gitops/modules/abfs-client-module-cos
-#      overviewPath: portal/overview.html
-#      overviewService: mod-abfs-client-module-cos-overview
-#      overviewServiceNamespace: abfs-client-module-cos-overview
-#      hardDependencies:
-#        - workloads-android
-#        - abfs-service-module

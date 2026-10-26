@@ -127,13 +127,6 @@ git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/
       trim(true)
     }
 
-    stringParam {
-      name('AAOS_PARALLEL_BUILD_JOBS')
-      defaultValue('16')
-      description('''<p>Parallel build jobs (-j). Default: 16. Empty lets the build system decide. If the ABFS cacheman socket gets overloaded during the build, the value may be too high.</p>''')
-      trim(true)
-    }
-
     choiceParam {
       name('INSTANCE_RETENTION_TIME')
       description('''<p>Time in minutes to retain the instance after build completion.<br/>
@@ -184,14 +177,14 @@ git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/
     stringParam {
       name('ABFS_VERSION')
       defaultValue("${ABFS_VERSION}")
-      description('''<p>ABFS version, e.g. 0.1.14</p>''')
+      description('''<p>ABFS version, e.g. 0.0.33-2-ge59ffbc</p>''')
       trim(true)
     }
 
     stringParam {
       name('ABFS_CASFS_VERSION')
       defaultValue("${ABFS_CASFS_VERSION}")
-      description('''<p>ABFS CASFS version, if differs from ABFS version, e.g. 0.1.14</p>''')
+      description('''<p>ABFS CASFS version, if differs from ABFS version, e.g. 0.0.33-10-g654e659</p>''')
       trim(true)
     }
 
@@ -203,26 +196,9 @@ git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/
     }
 
     stringParam {
-      name('ABFS_SERVER')
-      defaultValue("${ABFS_SERVER}")
-      description('''<p>ABFS server endpoint (<code>host:port</code>) passed to <code>abfs config -w</code>.
-      <br>Build pods run in the <code>jenkins</code> namespace, so the ABFS server Service needs its
-      fully qualified name, e.g. abfs-server.abfs.svc.cluster.local:50051. Use the internal load
-      balancer IP:port if the ABFS server is outside this cluster.</p>''')
-      trim(true)
-    }
-
-    stringParam {
-      name('ABFS_CLIENT_FLAGS')
-      defaultValue('--disable-tls=true --auth-type none')
-      description('''<p>Flags passed to the ABFS client commands. Change this to test session encryption or authentication.</p>''')
-      trim(true)
-    }
-
-    stringParam {
       name('UPLOADER_MANIFEST_SERVER')
       defaultValue("${UPLOADER_MANIFEST_SERVER}")
-      description('''<p>Gerrit/Git repo manifest server. Must match the uploader pusher ConfigMap seed.</p>''')
+      description('''<p>Gerrit manifest server.</p>''')
       trim(true)
     }
 

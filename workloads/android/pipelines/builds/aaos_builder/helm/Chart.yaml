@@ -13,11 +13,10 @@
 # limitations under the License.
 #
 # Description:
-# Helm chart metadata for the AAOS builder workflow (and its ABFS variant, values-abfs.yaml).
-
+# Helm chart metadata for the AAOS builder workflow.
 apiVersion: v2
 name: aaos-builder
-description: Helm chart for AAOS builder workflow + sample CR; values-abfs.yaml renders the ABFS builder
+description: Helm chart for AAOS builder workflow + sample CR
 type: application
 version: 0.1.0
 appVersion: "1.0"

@@ -15,12 +15,6 @@ pipelineJob('Android/Environment/ABFS/Docker Image Template') {
   description("""
     <br/><h3 style="margin-bottom: 10px;">Container Image Builder</h3>
     <p>This job builds the container image that serves as a dependency for ABFS build jobs.</p>
-    <h4 style="margin-bottom: 10px;">Ubuntu vs COS templates</h4>
-    <p>Enable one or both template flavors:</p>
-    <ul>
-      <li><b>Ubuntu</b> — for ABFS client builds on Ubuntu client pools where CASFS is loaded on the node. Default tag <code>latest</code>.</li>
-      <li><b>COS</b> — for ABFS client builds on COS client pools where CASFS is embedded in the node image (GKE ≥ 1.36). Default tag <code>cos-latest</code>. Seed <code>ABFS_COS_IMAGE_REF</code> (<code>${ABFS_COS_IMAGE_REF}</code>) is the GCE COS node family — printed on the COS build.</li>
-    </ul>
     <h4 style="margin-bottom: 10px;">Image Configuration</h4>
     <p>The Dockerfile specifies the installed packages and tools required by these jobs.</p>
     <h4 style="margin-bottom: 10px;">Pushing Changes to the Registry</h4>
@@ -32,33 +26,16 @@ pipelineJob('Android/Environment/ABFS/Docker Image Template') {
     <p>This job need only be run once, or when there are updates to be applied based on Dockerfile changes..</p>
     <br/><div style="border-top: 1px solid #ccc; width: 100%;"></div><br/>""")
 
-  environmentVariables {
-    env('ABFS_COS_IMAGE_REF', '${ABFS_COS_IMAGE_REF}')
-  }
-
   parameters {
     booleanParam {
       name('NO_PUSH')
       defaultValue(true)
       description('''<p>Build only, do not push to registry.</p>''')
     }
-
-    separator {
-      name('Template flavor (Ubuntu / COS)')
-      sectionHeader('Template flavor (Ubuntu / COS)')
-      sectionHeaderStyle("${HEADER_STYLE}")
-      separatorStyle("${SEPARATOR_STYLE}")
-    }
-
-    booleanParam {
-      name('ENABLE_UBUNTU_TEMPLATE')
-      defaultValue(true)
-      description('''<p>Build the <b>Ubuntu</b> ABFS builder image for Ubuntu client pools where CASFS is loaded on the node.</p>''')
-    }
     stringParam {
-      name('IMAGE_TAG_UBUNTU')
+      name('IMAGE_TAG')
       defaultValue('latest')
-      description('''<p><b>Mandatory:</b> Registry image tag for the builder image for Ubuntu build node pool.</p>''')
+      description('''<p><b>Mandatory:</b> Image tag for the builder image.</p>''')
       trim(true)
     }
     stringParam {
@@ -69,61 +46,16 @@ pipelineJob('Android/Environment/ABFS/Docker Image Template') {
             <li>ubuntu:jammy-20251203</li></ul>''')
       trim(true)
     }
-
-    booleanParam {
-      name('ENABLE_COS_TEMPLATE')
-      defaultValue(true)
-      description('''<p>Build the <b>COS</b> ABFS builder image for COS client pools where CASFS is embedded in the node image (GKE ≥ 1.36).</p>''')
-    }
-    stringParam {
-      name('IMAGE_TAG_COS')
-      defaultValue('cos-latest')
-      description('''<p><b>Mandatory:</b> Registry image tag for the builder image for COS build node pool. Default <code>cos-latest</code> (does not overwrite Ubuntu <code>latest</code>).</p>''')
-      trim(true)
-    }
-    stringParam {
-      name('COS_LINUX_DISTRIBUTION')
-      defaultValue('ubuntu:22.04')
-      description('''<p>Define the Linux distribution to use for the COS-tagged image, e.g.</p></br>
-        <ul><li>ubuntu:22.04</li>
-            <li>ubuntu:jammy-20251203</li></ul>''')
-      trim(true)
-    }
-
-    separator {
-      name('ABFS apt / version alignment')
-      sectionHeader('ABFS apt / version alignment')
-      sectionHeaderStyle("${HEADER_STYLE}")
-      separatorStyle("${SEPARATOR_STYLE}")
-    }
-
-    stringParam {
-      name('ABFS_REPOSITORY')
-      defaultValue("${ABFS_REPOSITORY}")
-      description('''<p>ABFS Artifact Registry apt repository name from Seed Workloads (e.g. <code>abfs-apt-alpha-public</code>).
-        Used to compose <code>ABFS_DISTRIBUTION_REGISTRY</code> when that override is left empty.
-        Update Seed <code>ABFS_REPOSITORY</code> when Google publishes a new ABFS apt channel.</p>''')
-      trim(true)
-    }
-    stringParam {
-      name('ABFS_VERSION')
-      defaultValue("${ABFS_VERSION}")
-      description('''<p>ABFS client version from Seed (informational for this image build).
-        The image enables ABFS apt transport + <code>kmod</code>; <code>abfs-client</code> / CASFS packages are installed at AAOS ABFS Builder runtime using this Seed value.</p>''')
-      trim(true)
-    }
     stringParam {
       name('GOOGLE_DISTRIBUTION_REGISTRY')
       defaultValue('http://packages.cloud.google.com/apt apt-transport-artifact-registry-stable main')
-      description('''<p>Google distribution registry URL and component (apt-transport-artifact-registry).</p>''')
+      description('''<p>Google distribution registry URL and component.</p>''')
       trim(true)
     }
     stringParam {
       name('ABFS_DISTRIBUTION_REGISTRY')
-      defaultValue('')
-      description('''<p>Optional full ABFS apt sources line. Leave empty to use
-        <code>ar+https://us-apt.pkg.dev/projects/abfs-binaries ${ABFS_REPOSITORY} main</code>.
-        Set only to override the composed default.</p>''')
+      defaultValue('ar+https://us-apt.pkg.dev/projects/abfs-binaries ${ABFS_REPOSITORY} main')
+      description('''<p>ABFS distribution registry URL and component.</p>''')
       trim(true)
     }
     stringParam {
@@ -131,12 +63,6 @@ pipelineJob('Android/Environment/ABFS/Docker Image Template') {
       defaultValue("${NODEJS_VERSION}")
       description('''<p>NodeJS version.<br/>
         This is installed using <i>nvm</i> on the instance template to be compatible with other tooling.</p>''')
-      trim(true)
-    }
-    stringParam {
-      name('PACKER_VERSION')
-      defaultValue('1.15.0')
-      description('''<p>Version of <a target="_blank" href="https://github.com/hashicorp/packer/releases">Packer</a> to install in the builder image (same Dockerfile as Android Docker Image Template).<br/>Use a pinned version (recommended) or <code>latest</code>.</p>''')
       trim(true)
     }
     separator {

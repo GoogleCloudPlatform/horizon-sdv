@@ -11,11 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+#
 # Description:
 # ClusterWorkflowTemplate for shared docker image builds.
 # Argo Events: Sensor webhook-common-docker-image-build (templates/sensors.yaml). Horizon: horizon-sdv.io/expose / module labels on metadata.
-
 apiVersion: argoproj.io/v1alpha1
 kind: ClusterWorkflowTemplate
 metadata:
@@ -180,21 +179,17 @@ spec:
               exit 1
             fi
             cd "${CONTEXT_ROOT}"
-            # One build-arg per line of BUILD_ARGS. Collected as positional parameters so
-            # values containing spaces (e.g. apt source lines) reach buildctl intact.
-            set --
-            while IFS= read -r line; do
-              if [ -n "$(printf '%s' "$line" | tr -d '[:space:]')" ]; then
-                set -- "$@" --opt "build-arg:${line}"
+            formatted_build_args=""
+            formatted_build_args=$(printf "%b" "${BUILD_ARGS}" | while IFS= read -r line; do
+              if [ -n "$(echo "$line" | tr -d '[:space:]')" ]; then
+                printf " --opt build-arg:%s" "$line"
               fi
-            done <<EOF
-            $(printf "%b" "${BUILD_ARGS}")
-            EOF
+            done)
             buildctl build \
               --frontend=dockerfile.v0 \
               --local=dockerfile="${DOCKERFILE_ROOT}" \
               --local context="${CONTEXT_ROOT}" \
-              "$@" \
+              ${formatted_build_args} \
               --opt platform="${PLATFORM}" \
               --registry-auth-tlscontext host="${REGISTRY}",insecure="${REGISTRY_AUTH_INSECURE}" \
               --output="type=image,name=${DESTINATION}:${IMAGE_TAG},push=${PUSH}"

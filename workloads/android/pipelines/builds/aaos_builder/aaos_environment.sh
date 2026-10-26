@@ -100,11 +100,6 @@ ABFS_BUILDER=${ABFS_BUILDER:-false}
 ABFS_CACHED_BUILD=${ABFS_CACHED_BUILD:-false}
 ABFS_CACHEMAN_DIRECTORY=${ABFS_CACHEMAN_DIRECTORY:-}
 ABFS_MOUNT_POINT="abfs"
-# ABFS server endpoint for 'abfs config -w'. Build pods run in the jenkins
-# namespace, where the short Service name abfs-server does not resolve, so
-# default to the FQDN of the Service in the abfs namespace.
-ABFS_SERVER=${ABFS_SERVER:-abfs-server.abfs.svc.cluster.local:50051}
-ABFS_SERVER=$(echo "${ABFS_SERVER}" | xargs)
 UPLOADER_MANIFEST_SERVER=${UPLOADER_MANIFEST_SERVER:-android.googlesource.com}
 
 # Google Repo Sync parallel jobs value
@@ -640,8 +635,6 @@ case "$0" in
             AAOS_CLEAN=${AAOS_CLEAN}
             ABFS_CACHED_BUILD=${ABFS_CACHED_BUILD}
             ABFS_CMD_FLAGS=${ABFS_CMD_FLAGS}
-            ABFS_SERVER=${ABFS_SERVER}
-            ABFS_CLIENT_FLAGS=${ABFS_CLIENT_FLAGS}
 
             UPLOADER_MANIFEST_SERVER=${UPLOADER_MANIFEST_SERVER}
 
@@ -762,7 +755,6 @@ function create_workspace() {
         if [[ "${ABFS_CACHED_BUILD}" == "false" ]]; then
             sudo mkdir -p "/${ABFS_MOUNT_POINT}"
             sudo chown builder:builder "/${ABFS_MOUNT_POINT}"
-            sudo chmod 0755 "/${ABFS_MOUNT_POINT}"
         fi
     fi
     cd "${WORKSPACE}" || true
@@ -777,7 +769,6 @@ function create_workspace() {
         fi
     fi
 }
-
 
 function recreate_workspace() {
     remove_directory "${WORKSPACE}"

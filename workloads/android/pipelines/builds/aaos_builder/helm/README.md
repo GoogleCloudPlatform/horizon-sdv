@@ -17,17 +17,10 @@ limitations under the License. -->
 This chart installs the AAOS builder Argo WorkflowTemplate. Run workflows with
 `argo submit --from workflowtemplate/aaos-builder -n <namespace>` or via Argo CD.
 
-The same chart also renders the ABFS builder (**`aaos-builder-abfs`**) when installed with
-`-f values-abfs.yaml` (`variant: abfs`). That variant builds from the ABFS mount in one pod
-(`templates/workflow/_abfs-build.tpl`) instead of the **init**, **build**, **gemini-review** and
-**storage** steps, and adds the ABFS parameters to the WorkflowTemplate and its Sensor.
-**`workloads-android`** deploys both, as two sources of the same chart.
-
 ## What’s in this chart
 
 - `Chart.yaml`: Helm chart metadata (no subchart dependencies).
 - `values.yaml`: Default values; update this for configuration.
-- `values-abfs.yaml`: ABFS builder variant, layered on `values.yaml`.
 - `templates/workflow/workflowtemplates.yaml`: Argo WorkflowTemplate wrapper for the AAOS build pipeline.
 - `templates/workflow/_templates.tpl`: Aggregates all split workflow templates (include order matches the list below).
 - `templates/workflow/_main.tpl`: Main DAG task graph (depends / `when:` wiring; includes **`gemini-review`** when Gemini is enabled).
@@ -40,7 +33,6 @@ The same chart also renders the ABFS builder (**`aaos-builder-abfs`**) when inst
 - `templates/workflow/_gemini-review.tpl`: **gemini-review** step — inline container that runs **`workloads/common/agentic-ai/gemini/run_ai_review.sh`** (mounts, **`GEMINI_*`** / hooks); **pod affinity** via **`aaos-builder.podAffinitySameWorkflow`**.
 - `templates/workflow/_storage.tpl`: **storage** / artifact template; **pod affinity** via **`aaos-builder.podAffinitySameWorkflow`**.
 - `templates/workflow/_fail-workflow.tpl`: **fail-if-build-failed** — marks the workflow failed after **storage** when the build step did not succeed.
-- `templates/workflow/_abfs-build.tpl`: **abfs-build** (ABFS variant only) — initialise, build, AI review and storage in one pod on the ABFS mount.
 - `templates/_env.tpl`: Shared Helm env helpers used in the WorkflowTemplate.
 - `templates/_helpers.tpl`: Shared Helm helpers including **`aaos-builder.podAffinitySameWorkflow`** (same-node scheduling for steps that share RWO / cache volumes with sibling workflow pods).
 - `README.md`: This document.
