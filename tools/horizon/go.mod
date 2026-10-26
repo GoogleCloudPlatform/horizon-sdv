@@ -14,11 +14,13 @@
 
 module github.com/horizon-sdv/horizon
 
-go 1.22
+go 1.27.0
 
-require golang.org/x/term v0.28.0
+toolchain go1.27.2
 
 require (
-	golang.org/x/sys v0.29.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	golang.org/x/term v0.47.0
+	gopkg.in/yaml.v3 v3.0.1
 )
+
+require golang.org/x/sys v0.49.0 // indirect
