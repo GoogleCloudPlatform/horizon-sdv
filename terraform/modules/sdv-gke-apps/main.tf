@@ -479,6 +479,9 @@ resource "kubectl_manifest" "argocd_application" {
               nginx:
                 image: nginx
                 tag: "${var.common_nginx_version}"
+              versions:
+                components:
+                  ${indent(18, trimspace(yamlencode(var.component_versions)))}
               containerImages:
                 kccWebhookCertMonitor: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/kcc-webhook-cert-monitor:${var.images["kcc-webhook-cert-monitor"].version}
                 horizondevelopmentportal: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/horizon-dev-portal:${var.images["horizon-dev-portal"].version}

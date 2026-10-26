@@ -68,6 +68,7 @@ Horizon SDV is designed to simplify the deployment and management of Android wor
   - Section #6e - Error creating SslPolicy [link](#section-6e---error-creating-sslpolicy)
   - Section #6f - Homepage not reachable after deployment [link](#section-6f---homepage-not-reachable-after-deployment)
   - Section #6g - Jenkins cannot run pipeline as admin [link](#section-6g---jenkins-cannot-run-pipeline-as-admin)
+  - Section #6h - Terraform cannot find versions.yaml [link](#section-6h---terraform-cannot-find-versionsyaml)
 
 ## Technologies
 Technologies being used to provision the infrastructure along with the required applications for the GKE cluster.
@@ -748,6 +749,8 @@ This section details how to sign in to and use cluster applications, including t
 ### Section #4a - Horizon Developer Portal
 The site root (`https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/`) redirects to the Horizon Developer Portal at `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/developer-portal/`. Use the Developer Portal for module administration and workflows; open other cluster apps via the direct URLs in the sections below. See also the [Developer Portal user guide](developer_portal_user_guide.md).
 
+After you sign in, every Developer Portal screen shows the Horizon version in a small tag at the bottom right (`Horizon <version>`). The value comes from `versions.yaml` in the repository root, and the tag is not shown if no version is set. The sign-in page does not show it.
+
 ### Section #4b - Argo CD
 Argo CD is the GitOps tool being used with a git repository as the "source of truth" where the desired state of Kubernetes applications have been configured. 
 It ensures the Kubernetes Cluster (GKE) always matches that desired state. Here, Argo CD is configured to automatically sync so, no user intervention is usually required.  
@@ -1066,3 +1069,17 @@ If you cannot run pipelines as admin and see an error about insufficient permiss
    2. Click **Add**.
    3. Check the box for `developers`.
 4. Click **Save** at the bottom of the page.
+
+### Section #6h - Terraform cannot find versions.yaml
+
+Terraform fails during plan or apply with an error similar to:
+
+> Invalid function argument ... no file exists at ".../versions.yaml"
+
+`versions.yaml` in the repository root defines the Horizon version, and Terraform reads it on every run. The deployment clones the branch set in `scm_repo_branch` from `scm_repo_url`, so the file must exist on that branch, not only in your local working copy.
+
+1. Check that `versions.yaml` exists in the repository root and defines `components.core`.
+2. Commit and push the file to the branch set in `scm_repo_branch` in `terraform.tfvars`.
+3. Run the deployment script again.
+
+If you run the deployment from a local checkout instead of the container, the file must be present at the root of that checkout.

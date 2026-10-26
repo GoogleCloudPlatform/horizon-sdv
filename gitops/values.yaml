@@ -44,6 +44,12 @@ config:
     argo_workflows:
       version: "0.47.4"
 
+  # Horizon platform component versions. Set by Terraform from the repo-root versions.yaml
+  # (config.versions.components); empty here so templates render without Terraform.
+  versions:
+    components:
+      core: ""
+
   # Developer Portal (SPA + proxy): Gateway path, Keycloak, in-cluster URL overrides — not a chart version.
   horizonDevelopmentPortal:
     # HTTP path prefix (Gateway HTTPRoute, Keycloak redirect URIs, portal ConfigMap PUBLIC_PATH).

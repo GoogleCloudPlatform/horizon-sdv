@@ -32,6 +32,8 @@ spec:
 
     helm:
       values: |
+        image:
+          tag: {{ .Values.config.versions.components.core | quote }}
         config:
           namespacePrefix: {{ .Values.config.namespacePrefix | quote }}
           gitops:
@@ -39,6 +41,7 @@ spec:
           domain: {{ .Values.config.domain | quote }}
           publicPath: {{ .Values.config.horizonDevelopmentPortal.publicPath | quote }}
           publicBaseUrl: "https://{{ .Values.config.domain }}"
+          horizonVersion: {{ .Values.config.versions.components.core | quote }}
           keycloakRealm: {{ .Values.config.horizonDevelopmentPortal.keycloakRealm | quote }}
           keycloakHttpPathPrefix: {{ .Values.config.horizonDevelopmentPortal.keycloakHttpPathPrefix | quote }}
           oidcIssuerUrl: "https://{{ .Values.config.domain }}{{ .Values.config.horizonDevelopmentPortal.keycloakHttpPathPrefix }}/realms/{{ .Values.config.horizonDevelopmentPortal.keycloakRealm }}"

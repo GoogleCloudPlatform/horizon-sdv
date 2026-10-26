@@ -102,7 +102,7 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("GET /config.js", func(w http.ResponseWriter, r *http.Request) {
-		serveConfigJS(w, env("PUBLIC_BASE_URL", ""), normalizePublicPath(env("PUBLIC_PATH", "")), env("KEYCLOAK_TOKEN_PATH", "/auth/realms/horizon/protocol/openid-connect/token"), env("KEYCLOAK_CLIENT_ID", "horizon-dev-portal"), ciID)
+		serveConfigJS(w, env("PUBLIC_BASE_URL", ""), normalizePublicPath(env("PUBLIC_PATH", "")), env("KEYCLOAK_TOKEN_PATH", "/auth/realms/horizon/protocol/openid-connect/token"), env("KEYCLOAK_CLIENT_ID", "horizon-dev-portal"), ciID, env("HORIZON_VERSION", ""))
 	})
 	mux.Handle("/api/mm/", newMMProxy(mmURL, verifier))
 	mux.Handle("/api/horizon/", newHorizonProxy(haURL, ci))
@@ -182,7 +182,7 @@ func htmlEscapeAttr(s string) string {
 	return s
 }
 
-func serveConfigJS(w http.ResponseWriter, publicBase, publicPath, keycloakTokenPath, clientID, horizonApiOAuthClientID string) {
+func serveConfigJS(w http.ResponseWriter, publicBase, publicPath, keycloakTokenPath, clientID, horizonApiOAuthClientID, horizonVersion string) {
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	cfg := map[string]string{
@@ -193,6 +193,9 @@ func serveConfigJS(w http.ResponseWriter, publicBase, publicPath, keycloakTokenP
 	}
 	if strings.TrimSpace(horizonApiOAuthClientID) != "" {
 		cfg["horizonApiOAuthClientId"] = strings.TrimSpace(horizonApiOAuthClientID)
+	}
+	if strings.TrimSpace(horizonVersion) != "" {
+		cfg["horizonVersion"] = strings.TrimSpace(horizonVersion)
 	}
 	payload, err := json.Marshal(cfg)
 	if err != nil {

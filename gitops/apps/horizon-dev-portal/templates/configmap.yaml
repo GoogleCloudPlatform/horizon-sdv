@@ -25,6 +25,7 @@ data:
   MODULE_MANAGER_BASE_URL: {{ .Values.config.moduleManagerBaseUrl | quote }}
   HORIZON_API_BASE_URL: {{ .Values.config.horizonApiBaseUrl | quote }}
   PUBLIC_BASE_URL: {{ .Values.config.publicBaseUrl | quote }}
+  HORIZON_VERSION: {{ .Values.config.horizonVersion | quote }}
   # HTTP path prefix where the SPA is mounted (no trailing slash); must match Gateway and Keycloak redirect URIs.
   PUBLIC_PATH: {{ .Values.config.publicPath | quote }}
   KEYCLOAK_TOKEN_PATH: {{ .Values.config.keycloakTokenPath | quote }}

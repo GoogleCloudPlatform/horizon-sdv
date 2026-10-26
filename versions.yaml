@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Horizon platform version(s). Single source of truth for the release number.
+#
+# Terraform is the only reader of this file (yamldecode in terraform/modules/base).
+# Helm charts under gitops/ cannot read files outside their own directory, so they
+# receive the value through the Terraform-injected Argo CD values, not from here.
+#
+# components.core is also used as the Developer Portal image tag (locals.tf), as the
+# horizon CLI version, and as the version shown in the portal UI. The portal image is
+# rebuilt and re-tagged when this value changes, so bump it (e.g. RC.3 -> RC.4) for each
+# build that must roll out. Other image tags stay in terraform/modules/base/locals.tf.
+
+components:
+  # The core component is the Horizon platform release itself.
+  # restrictions:
+  #   - no spaces, because the version is passed inside the -ldflags string
+  #   - must be a valid Docker tag: letters, digits, "_", "." and "-" only (no "+"),
+  #     not starting with "." or "-", at most 128 characters
+  core: "4.3.9"

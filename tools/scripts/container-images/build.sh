@@ -34,6 +34,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 IMAGES_DIR="${REPO_ROOT}/terraform/modules/sdv-container-images/images"
 TFVARS_FILE="${REPO_ROOT}/terraform/env/terraform.tfvars"
 LOCALS_FILE="${REPO_ROOT}/terraform/modules/base/locals.tf"
+VERSIONS_FILE="${REPO_ROOT}/versions.yaml"
 ENV_MAIN_FILE="${REPO_ROOT}/terraform/env/main.tf"
 
 # ---------------------------------------------------------------------------
@@ -250,12 +251,30 @@ declare -A IMAGE_VERSIONS=()
 declare -A IMAGE_BUILD_ARGS=()
 IMAGE_NAMES=()
 
+# Horizon core version from versions.yaml (components.core). Terraform reads the same
+# file (local.core_version in locals.tf), so locals.tf references to it are resolved here.
+CORE_VERSION=""
+
+read_core_version() {
+  if [[ ! -f "$VERSIONS_FILE" ]]; then
+    log_err "versions.yaml not found at: ${VERSIONS_FILE}"
+    exit 1
+  fi
+  CORE_VERSION="$(sed -n 's/^[[:space:]]*core:[[:space:]]*"\{0,1\}\([^"#[:space:]]*\)"\{0,1\}.*/\1/p' "$VERSIONS_FILE" | head -n 1)"
+  if [[ -z "$CORE_VERSION" ]]; then
+    log_err "Could not read components.core from ${VERSIONS_FILE}."
+    exit 1
+  fi
+}
+
 parse_image_catalog() {
   if [[ ! -f "$LOCALS_FILE" ]]; then
     log_err "locals.tf not found at: ${LOCALS_FILE}"
     log_err "Cannot determine image definitions. Ensure the Terraform codebase is intact."
     exit 1
   fi
+
+  read_core_version
 
   # Pass 1: extract simple local variable assignments for resolving build_arg references
   # (e.g.  common_nginx_version = "1.28.1-alpine3.23")
@@ -355,6 +374,17 @@ parse_image_catalog() {
     # Parse build_version
     if [[ "$line" =~ build_version[[:space:]]*=[[:space:]]*\"([^\"]*)\" ]]; then
       cur_ver="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ build_version[[:space:]]*=[[:space:]]*local\.([a-z_][a-z0-9_]*) ]]; then
+      # build_version = local.<name>: core_version comes from versions.yaml, others from simple locals
+      local ver_ref="${BASH_REMATCH[1]}"
+      if [[ "$ver_ref" == "core_version" ]]; then
+        cur_ver="$CORE_VERSION"
+      else
+        cur_ver="${local_vars[$ver_ref]:-}"
+      fi
+      if [[ -z "$cur_ver" ]]; then
+        log_warn "Could not resolve local.${ver_ref} for build_version of image '${cur_image}'"
+      fi
     fi
   done < "$LOCALS_FILE"
 
@@ -447,6 +477,13 @@ build_image() {
   local version="${IMAGE_VERSIONS[$name]}"
   local build_args_raw="${IMAGE_BUILD_ARGS[$name]:-}"
   local registry_host="${GCP_REGION}-docker.pkg.dev"
+
+  # The portal embeds the horizon CLI; stamp it with the core version, as Terraform does
+  # (terraform/modules/base/main.tf passes HORIZON_CLI_VERSION = local.core_version).
+  if [[ "$name" == "horizon-dev-portal" ]]; then
+    [[ -n "$build_args_raw" ]] && build_args_raw+=","
+    build_args_raw+="HORIZON_CLI_VERSION=${CORE_VERSION}"
+  fi
   local full_image="${registry_host}/${GCP_PROJECT}/${REGISTRY_ID}/${name}:${version}"
   local context_dir="${IMAGES_DIR}/${directory}/${name}"
   local dockerfile_path=""
