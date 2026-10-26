@@ -244,22 +244,14 @@ The job uses prompt files from the repository only; there is no Jenkins paramete
 
 Cuttlefish/CVD line-number grep guidance (example failure buckets, log paths, and substrings, plus what to do when the failure is non-obvious) is under `skills.yaml` → `global_constraints` → **“CVD errors — what to do”**. That block is aligned with [CVD Launcher](../cvd_launcher.md#gemini-prompts-and-ai-review) and applies on this job’s **CVD-only** triage path when Tradefed suite artifacts are missing.
 
-For AI Review, the shared library copies artifacts from the current build using the **CTS Execution** filter: `**/*.zip`, `**/invocation_summary.txt`, `**/test_result*.html`, plus the shared patterns `**/wifi*.log`, `**/cvd*.log`, `**/cts*.txt`, and `**/cuttlefish*.zip`. Before review, those zips are unpacked under `test-results/cvd` (Cuttlefish) and `test-results/cts` (CTS results). A session directory that contains `test_result.xml` or `invocation_summary.txt` is hoisted, and `invocation_summary.txt` is copied to `test-results/` when it is not already there. The canonical filter list lives with **`cvdPipeline`** / **`aiReview`** in `workloads/common/jenkins/shared-libraries/cvd-pipeline-shared-library/vars/` (see that README for implementation pointers).
+For AI Review, the shared library copies artifacts from the current build using the **CTS Execution** filter: `android-cts-results/**`, `android-cts-results-html/**`, plus shared Cuttlefish-oriented patterns (`**/wifi*.log`, `**/cvd*.log`, `**/cts_execution_parameters.txt`, `**/cuttlefish_logs*.zip`). The canonical filter list lives with **`cvdPipeline`** / **`aiReview`** in `workloads/common/jenkins/shared-libraries/cvd-pipeline-shared-library/vars/` (see that README for implementation pointers).
 
 ### `GEMINI_COMMAND_LINE`
 
 Interface for the headless [gemini-cli](https://geminicli.com/docs/cli/headless/).
 Use this to specify settings such as the [Gemini model](https://ai.google.dev/gemini-api/docs/models) etc, e.g.
 `--debug` to include debug output.
-Note: Prompts are piped via `stdin` and output is redirected to a JSON file. Antigravity does not read this parameter.
-
-### `AI_REVIEW_RUNTIME`
-
-`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. The CTS Execution Helm chart sets `aiReviewRuntime` to `agy`. Antigravity uses the skills under `workloads/common/agentic-ai/antigravity/skills` and ignores the sequenced prompt files. Before analysis it writes `test-results/cts_module_summary.txt` from the suite HTML so the agent does not open the full report.
-
-### `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES`
-
-Maximum duration in minutes before the review is terminated. Jenkins choices are `60`, `45`, `30`, `20`, `10`, `90`, and `120` (first choice `60`). When unset, `run_ai_review.sh` uses 60 minutes. The Helm chart sets `geminiAiExecutionTimeoutMinutes` to `60`.
+Note: Prompts are piped via `stdin` and output is redirected to a JSON file.
 
 ## Example Usage <a name="examples"></a>
 
