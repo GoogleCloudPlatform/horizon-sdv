@@ -13,39 +13,33 @@
 // limitations under the License.
 //
 import { Box, Tab, Tabs, Typography } from '@mui/material';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-
-const TOOL_TABS = [
-  { name: 'Horizon CLI', value: 'horizonCli', path: '/tools/horizon-cli' },
-  { name: 'Horizon API', value: 'horizonApi', path: '/tools/horizon-api' },
-] as const;
+import { useState } from 'react';
+import HorizonCliTab from './tools/HorizonCliTab.tsx';
 
 export function ToolsPage() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const tab =
-    TOOL_TABS.find((item) => location.pathname === item.path)?.value ?? TOOL_TABS[0].value;
+  const TOOL_APPLICATIONS = [
+    {
+      name: 'Horizon CLI',
+      value: 'horizonCli',
+      jsx: <HorizonCliTab />,
+    },
+  ];
+
+  const [tab, setTab] = useState(TOOL_APPLICATIONS[0].value);
+
+  const currentTab = TOOL_APPLICATIONS.find((app) => app.value === tab) || TOOL_APPLICATIONS[0];
 
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
         Tools
       </Typography>
-      <Tabs
-        value={tab}
-        onChange={(_, value: (typeof TOOL_TABS)[number]['value']) => {
-          const next = TOOL_TABS.find((item) => item.value === value);
-          if (next) {
-            navigate(next.path);
-          }
-        }}
-        sx={{ mb: 2 }}
-      >
-        {TOOL_TABS.map((item) => (
-          <Tab key={item.value} label={item.name} value={item.value} />
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+        {TOOL_APPLICATIONS.map((app) => (
+          <Tab key={app.value} label={app.name} value={app.value} />
         ))}
       </Tabs>
-      <Outlet />
+      {currentTab.jsx}
     </Box>
   );
 }
