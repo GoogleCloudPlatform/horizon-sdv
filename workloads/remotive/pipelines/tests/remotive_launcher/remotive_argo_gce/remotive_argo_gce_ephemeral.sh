@@ -85,8 +85,8 @@ function write_job_env_for_vm() {
     CLOUD_PROJECT CLOUD_ZONE CLOUD_REGION HORIZON_DOMAIN
     BUILD_NUMBER JOB_NAME BUILD_USER BUILD_USER_ID
     TOPOLOGY_NAME TOPOLOGY_DOWNLOAD_URL REMOTIVE_LAUNCHER_FILE RUN_TOPOLOGY_TESTS REMOTIVE_KEEP_ALIVE_TIME
-    REMOTIVE_CLOUD_ORGANIZATION
-    MTK_CONNECT_PUBLIC MTK_CONNECT_TUNNEL_PORT
+    REMOTIVE_CLOUD_AUTH_TOKEN REMOTIVE_CLOUD_ORGANIZATION
+    MTK_CONNECT_USERNAME MTK_CONNECT_PASSWORD MTK_CONNECT_PUBLIC MTK_CONNECT_TUNNEL_PORT
     STORAGE_LABELS REMOTIVE_TEST_RESULTS_STAGING_URI
     REMOTIVE_ARGO_APP_SERIAL_DEV
   )
@@ -188,12 +188,6 @@ spec:
       value: "${REMOTIVE_ARGO_VM_NAME}"
     - key: remotive-argo-app-serial-dev
       value: "${REMOTIVE_ARGO_APP_SERIAL_DEV}"
-    - key: mtk-connect-username-b64
-      value: "$(printf '%s' "${MTK_CONNECT_USERNAME:-}" | base64 | tr -d '\n')"
-    - key: mtk-connect-password-b64
-      value: "$(printf '%s' "${MTK_CONNECT_PASSWORD:-}" | base64 | tr -d '\n')"
-    - key: remotive-cloud-auth-token-b64
-      value: "$(printf '%s' "${REMOTIVE_CLOUD_AUTH_TOKEN:-}" | base64 | tr -d '\n')"
   metadataStartupScript: |
 $(printf '%s\n' "${startup}" | sed 's/^/    /')
   serviceAccount:
