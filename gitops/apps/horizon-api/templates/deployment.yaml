@@ -82,7 +82,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: storage-gcs-module-api-token
-                  key: token
+                  key: horizon-api
                   optional: true
             - name: ARTIFACTS_MODULE_CA_FILE
               value: /etc/storage-gcs/ca.crt

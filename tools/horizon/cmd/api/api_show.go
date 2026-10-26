@@ -43,7 +43,10 @@ func NewApiShowCmd() *cobra.Command {
 				return err
 			}
 
-			cfg, _ := horizon.LoadConfig()
+			_, cfg, err := horizon.LoadAPIClient()
+			if err != nil {
+				return err
+			}
 			apiBase := horizon.ExampleAPIBase(cfg)
 
 			if horizon.IsJSON() {

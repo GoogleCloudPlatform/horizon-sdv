@@ -29,11 +29,7 @@ func NewApiRefreshCmd() *cobra.Command {
 		Long:  "Fetch the latest OpenAPI specification from the Horizon API and cache it locally. This updates the embedded OpenAPI snapshot with live data from {api}/openapi.json.",
 		Args:  cobra.NoArgs,
 		RunE: func(cobraCmd *cobra.Command, args []string) error {
-			cfg, err := horizon.LoadConfig()
-			if err != nil {
-				return err
-			}
-			c, err := horizon.NewClient(cfg)
+			c, _, err := horizon.LoadAPIClient()
 			if err != nil {
 				return err
 			}
