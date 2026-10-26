@@ -214,7 +214,15 @@ The job uses the prompt file from the repository only; there is no Jenkins param
 Interface for the headless [gemini-cli](https://geminicli.com/docs/cli/headless/).
 Use this to specify settings such as the [Gemini model](https://ai.google.dev/gemini-api/docs/models) etc, e.g.
 `--debug` to include debug output.
-Note: Prompts are piped via `stdin` and output is redirected to a JSON file.
+Note: Prompts are piped via `stdin` and output is redirected to a JSON file. Antigravity does not read this parameter.
+
+### `AI_REVIEW_RUNTIME`
+
+`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. This job has no Argo workflow.
+
+### `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES`
+
+Maximum duration in minutes before the review is terminated. Jenkins choices are `60`, `45`, `30`, `20`, `10`, `90`, and `120` (first choice `60`). When unset, `run_ai_review.sh` uses 60 minutes.
 
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 

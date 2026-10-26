@@ -185,8 +185,9 @@ The prompt files themselves are **not** exposed as Jenkins parameters in any of 
 - Select `Build with Parameters`.
 - In the `Agentic AI: Configuration (Experimental)` section:
     - Confirm `ENABLE_GEMINI_AI_ASSISTANT` is **checked** (it is not always on by default).
-    - Optionally edit `GEMINI_COMMAND_LINE` (e.g. to pin a different model).
-    - For the AAOS jobs, optionally raise `GEMINI_AI_EXECUTION_TIMEOUT` for very large analyses.
+    - Leave `AI_REVIEW_RUNTIME` on `agy` (the default) or choose `gemini-cli` for the sequenced CLI. Argo charts also default to `agy`.
+    - Optionally edit `GEMINI_COMMAND_LINE` when using `gemini-cli` (e.g. to pin a different model). Antigravity uses `GEMINI_MODEL`.
+    - Optionally change `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES` (choices start at 60). The runner uses 60 minutes when the variable is unset.
 - Configure the rest of the job parameters as required.
 - Click `Build`.
 
