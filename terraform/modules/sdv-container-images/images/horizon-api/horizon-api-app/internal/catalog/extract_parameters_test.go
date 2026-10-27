@@ -15,6 +15,7 @@
 package catalog
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/acn-horizon-sdv/horizon-api/internal/workflow"
