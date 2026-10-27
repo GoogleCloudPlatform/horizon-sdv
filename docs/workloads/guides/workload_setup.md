@@ -469,9 +469,9 @@ At least one Cuttlefish Instance Template should be created for each architectur
 | Job | Parameters |
 | --- | --- |
 |  `CF Instance Template`| `ANDROID_CUTTLEFISH_REVISION` = `main` |
-| `CF Instance Template` | `ANDROID_CUTTLEFISH_REVISION` =  latest tag/branch (e.g. `v1.41.0`) |
+| `CF Instance Template` | `ANDROID_CUTTLEFISH_REVISION` =  latest tag/branch (e.g. `v1.55.3`) |
 | `CF Instance Template ARM64` | `ANDROID_CUTTLEFISH_REVISION` = `main` |
-| `CF Instance Template ARM64` | `ANDROID_CUTTLEFISH_REVISION` =  latest tag/branch (e.g. `v1.41.0`) |
+| `CF Instance Template ARM64` | `ANDROID_CUTTLEFISH_REVISION` =  latest tag/branch (e.g. `v1.55.3`) |
 
 _Note: the default naming mechanism can be used_
 
@@ -482,9 +482,9 @@ _Note: the default naming mechanism can be used_
 - Select `Compute Engine` → `Instance Templates`
 - Verify that the required templates have been created.
   - `instance-template-cuttlefish-vm-main`
-  - `instance-template-cuttlefish-vm-v1410`
+  - `instance-template-cuttlefish-vm-v1553`
   - `instance-template-cuttlefish-vm-main-arm64`
-  - `instance-template-cuttlefish-vm-v1410-arm64`
+  - `instance-template-cuttlefish-vm-v1553-arm64`
 
 <hr width="25%"></details>
 

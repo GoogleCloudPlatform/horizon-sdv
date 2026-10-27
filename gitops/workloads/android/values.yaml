@@ -20,7 +20,7 @@
 #   global/instanceTemplates/instance-template-cuttlefish-vm-<versionTag>
 #   ...-main-arm64 and ...-<versionTag>-arm64
 # Keep versionTag aligned with gitops/workloads/values-jenkins.yaml
-# config.workloads.android.cuttlefish.tag (sanitized Cuttlefish revision, e.g. v1410).
+# config.workloads.android.cuttlefish.tag (sanitized Cuttlefish revision, e.g. v1553).
 
 config:
   namespacePrefix: ""

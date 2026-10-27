@@ -27,9 +27,9 @@ pipelineJob('Android/Environment/Development Test Instance') {
       defaultValue("${JENKINS_GCE_CLOUD_LABEL}")
       description('''<p>The Jenkins GCE Clouds label for the VM instance template, e.g.<br/></p>
         <ul>
-          <li>cuttlefish-vm-v1410</li>
+          <li>cuttlefish-vm-v1553</li>
           <li>cuttlefish-vm-main</li>
-          <li>cuttlefish-vm-v1410-arm64</li>
+          <li>cuttlefish-vm-v1553-arm64</li>
           <li>cuttlefish-vm-main-arm64</li>
         </ul>''')
       trim(true)

@@ -74,8 +74,7 @@ spec:
         value: "https://github.com/google/android-cuttlefish.git"
         description: "android-cuttlefish repository URL."
       - name: cuttlefishPostCommand
-        value: ""
-        description: "Optional command to run in cuttlefish repo after checkout."
+        value: "grep -q rust.toolchain base/cvd/toolchain/rust.MODULE.bazel || printf '\\nrust = use_extension(\\042@rules_rust//rust:extensions.bzl\\042, \\042rust\\042)\\nrust.toolchain(edition = \\0422021\\042, versions = [\\0421.89.0\\042])\\n' >> base/cvd/toolchain/rust.MODULE.bazel"
       - name: cuttlefishInstanceName
         value: ""
         description: "Template name prefix (empty: derive from revision)."

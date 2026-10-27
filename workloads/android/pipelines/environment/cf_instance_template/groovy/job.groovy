@@ -86,10 +86,10 @@ the repo credentials, i.e.
       defaultValue('')
       description('''<p>The branch/tag version of Android Cuttlefish to use, e.g.</p>
         <ul>
-          <li>v1.41.0</li>
+          <li>v1.55.3</li>
           <li>main</li>
           <li>horizon/main</li>
-          <li>horizon/v1.41.0</li>
+          <li>horizon/v1.55.3</li>
         </ul>
         <p>Mandatory for instance creation, not applicable for deletion if <code>CUTTLEFISH_INSTANCE_NAME</code> is defined.</p>
         <p>Reference: <a href="https://github.com/google/android-cuttlefish.git" target="_blank">android-cuttlefish.git</a></p>''')
@@ -99,9 +99,9 @@ the repo credentials, i.e.
     stringParam {
       name('CUTTLEFISH_INSTANCE_NAME')
       defaultValue('')
-      description('''<p>Optional parameter to define the unique name used for the instance template, e.g.  <i>cuttlefish-vm-instance-test-v1410</i><br/>
+      description('''<p>Optional parameter to define the unique name used for the instance template, e.g.  <i>cuttlefish-vm-instance-test-v1553</i><br/>
         Name must start with <i>cuttlefish-vm</i>, refer to docs for details on regex requirements for name.<br/>
-        Default: The name will be automatically derived from <code>ANDROID_CUTTLEFISH_REVISION</code>, e.g.  <i>cuttlefish-vm-v410</i><br/><br/></p>''')
+        Default: The name will be automatically derived from <code>ANDROID_CUTTLEFISH_REVISION</code>, e.g.  <i>cuttlefish-vm-v1553</i><br/><br/></p>''')
       trim(true)
     }
 
@@ -139,7 +139,7 @@ the repo credentials, i.e.
 
     stringParam {
       name('ANDROID_CUTTLEFISH_POST_COMMAND')
-      defaultValue('')
+      defaultValue('grep -q rust.toolchain base/cvd/toolchain/rust.MODULE.bazel || printf \'\\nrust = use_extension(\\042@rules_rust//rust:extensions.bzl\\042, \\042rust\\042)\\nrust.toolchain(edition = \\0422021\\042, versions = [\\0421.89.0\\042])\\n\' >> base/cvd/toolchain/rust.MODULE.bazel')
       description('''<p>Command to run in the <code>ANDROID_CUTTLEFISH_REPO_URL</code> repository</a> to workaround issues etc,  e.g.
         <ul><li>Cherry pick: <code>git cherry-pick b3e4bd9</code></li>
             <li>Checkout commit: <code>git checkout 655de58f</code></li></ul></p>''')

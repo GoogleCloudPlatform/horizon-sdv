@@ -255,9 +255,9 @@ If you use a **private** repository, set **`REPO_USERNAME`** and **`REPO_PASSWOR
 This defines the branch/tag to use from `ANDROID_CUTTLEFISH_REPO_URL`, e.g.
 
 - `main` - the main working branch of `android-cuttlefish`
-- `v1.41.0` - the latest tagged version.
+- `v1.55.3` - the latest tagged version.
 - `horizon/main` - a private repository fork of `main`
-- `horizon/v1.41.0` - a private fork of tag `v1.41.0`
+- `horizon/v1.55.3` - a private fork of tag `v1.55.3`
 
 User may define any valid version so long as that version contains `tools/buildutils/build_packages.sh` which is a dependency for these scripts.
 

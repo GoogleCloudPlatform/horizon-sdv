@@ -32,7 +32,7 @@
 # From command line, such as Google Cloud Shell, create templates for all
 # versions of android-cuttlefish host tools/packages:
 #
-#  CUTTLEFISH_REVISION=v1.41.0 ./cf_create_instance_template.sh && \
+#  CUTTLEFISH_REVISION=v1.55.3 ./cf_create_instance_template.sh && \
 #  CUTTLEFISH_REVISION=main ./cf_create_instance_template.sh
 #
 # The following environment variables can be set from the shell, Jenkins, or Argo.
@@ -111,7 +111,7 @@ BOOT_DISK_TYPE=${BOOT_DISK_TYPE:-pd-balanced}
 CURL_UPDATE_COMMAND=${CURL_UPDATE_COMMAND:-}
 CUTTLEFISH_INSTANCE_NAME=${CUTTLEFISH_INSTANCE_NAME:-cuttlefish-vm}
 CUTTLEFISH_INSTANCE_NAME=$(echo "${CUTTLEFISH_INSTANCE_NAME}" | awk '{print tolower($0)}' | xargs)
-CUTTLEFISH_REVISION=${CUTTLEFISH_REVISION:-v1.41.0}
+CUTTLEFISH_REVISION=${CUTTLEFISH_REVISION:-v1.55.3}
 CUTTLEFISH_REVISION=$(echo "${CUTTLEFISH_REVISION}" | xargs)
 CUTTLEFISH_URL=${CUTTLEFISH_URL:-https://github.com/google/android-cuttlefish.git}
 CUTTLEFISH_URL=$(echo "${CUTTLEFISH_URL}" | xargs)
