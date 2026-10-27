@@ -50,7 +50,8 @@ uploaderConfig:
     - name: AndroidLatest
       branch: android-latest-release
       active: false
-    # AndroidCustom starts as the current active branch so a later input can edit it in place.
+    # AndroidCustom starts with no repo in the ConfigMap. branch is only the form default.
     - name: AndroidCustom
       branch: android-15.0.0_r36
       active: false
+      storeRepo: false
