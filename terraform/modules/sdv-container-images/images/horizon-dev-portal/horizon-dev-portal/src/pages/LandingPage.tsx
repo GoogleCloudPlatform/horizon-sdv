@@ -28,7 +28,8 @@ import {
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import {
   ACCENTURE_LOGO_SRC,
-  ARGOCD_LOGO_SRC,
+  ARGO_CD_LOGO_SRC,
+  ARGO_WORKFLOWS_LOGO_SRC,
   GERRIT_LOGO_SRC,
   GRAFANA_LOGO_SRC,
   HEADLAMP_DARK_LOGO_SRC,
@@ -136,7 +137,7 @@ export function LandingPage() {
         <Avatar
           alt="Argo CD logo"
           variant="square"
-          src={ARGOCD_LOGO_SRC}
+          src={ARGO_CD_LOGO_SRC}
           sx={{ width: 54, height: 54 }}
         />
       ),
@@ -174,7 +175,22 @@ export function LandingPage() {
       action: 'Open',
       href: '/grafana',
     },
-  ];
+    {
+      // as icon is the same as Argo CD, we use the same logo
+      icon: (
+        <Avatar
+          alt="Argo Workflows logo"
+          variant="square"
+          src={ARGO_WORKFLOWS_LOGO_SRC}
+          sx={{ width: 54, height: 54 }}
+        />
+      ),
+      title: 'Argo Workflows',
+      description: 'Open source container-native workflow engine',
+      action: 'Open',
+      href: '/workflows/workflows/argo-workflows',
+    },
+];
 
   return (
     <Box>

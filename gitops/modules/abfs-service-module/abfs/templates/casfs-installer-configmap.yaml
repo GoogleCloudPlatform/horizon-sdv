@@ -1,0 +1,67 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if eq .Values.casfs.provider "daemonset" }}
+# Loader script for the casfs installer DaemonSet (Ubuntu nodes). Builds the casfs
+# kernel module from source against the running node's kernel headers and loads it —
+# robust to GKE kernel bumps (no dependency on a prebuilt per-kernel artifact).
+# Override with casfs.daemonset.script. See casfs-installer-daemonset.yaml + docs/02 §1b.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: abfs-casfs-installer
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    app.kubernetes.io/name: abfs
+    app.kubernetes.io/component: casfs-installer
+data:
+  install.sh: |
+    {{- if .Values.casfs.daemonset.script }}
+    {{- .Values.casfs.daemonset.script | nindent 4 }}
+    {{- else }}
+    #!/usr/bin/env bash
+    # Build + load casfs for the node's running kernel, then idle. Idempotent.
+    set -euo pipefail
+    log() { echo "[casfs-installer] $*"; }
+    KVER="$(uname -r)"
+    if [ -d /sys/module/casfs ]; then
+      log "casfs already loaded (kernel ${KVER}); nothing to do"
+      exec sleep infinity
+    fi
+    log "fetching casfs source ${CASFS_SOURCE_URL}"
+    gcloud storage cp "${CASFS_SOURCE_URL}" /host/tmp/casfs-src.tar.gz
+    log "building + loading casfs for kernel ${KVER} (host toolchain)"
+    chroot /host /bin/bash -euo pipefail -c '
+      export DEBIAN_FRONTEND=noninteractive
+      KVER="$(uname -r)"
+      if ! command -v gcc >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -qq build-essential
+      fi
+      rm -rf /tmp/casfs-build && mkdir -p /tmp/casfs-build
+      tar xf /tmp/casfs-src.tar.gz -C /tmp/casfs-build --strip-components=1
+      cd /tmp/casfs-build
+      make ko KERNEL_RELEASE="${KVER}"
+      install -D -m 0644 casfs.ko "/lib/modules/${KVER}/kernel/fs/casfs/casfs.ko"
+      depmod "${KVER}"
+      modprobe casfs
+    '
+    if [ -d /sys/module/casfs ]; then
+      log "casfs loaded successfully on kernel ${KVER}"
+    else
+      log "ERROR: casfs did not load on kernel ${KVER}" >&2
+      exit 1
+    fi
+    exec sleep infinity
+    {{- end }}
+{{- end }}

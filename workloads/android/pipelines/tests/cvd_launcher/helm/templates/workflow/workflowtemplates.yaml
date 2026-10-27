@@ -144,6 +144,12 @@ spec:
       - name: submittedBy
         value: ""
         description: "Jenkins BUILD_USER_ID equivalent for private MTK testbenches. Portal sets preferred_username; Sensor maps horizonSubmittedBy."
+      - name: aiReviewRuntime
+        value: {{ $root.Values.spec.aiReviewRuntime | default "agy" | quote }}
+        enum:
+          - agy
+          - gemini-cli
+        description: "AI review runtime: agy (Antigravity SDK, default) or gemini-cli."
   templates:
     - name: main
       dag:

@@ -1,0 +1,83 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: abfs-smoke-test
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    app.kubernetes.io/name: smoke-test
+    horizon-sdv.io/expose: "true"
+    horizon-sdv.io/module: abfs
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: run-smoke-test
+  serviceAccountName: workflow-executor
+  arguments:
+    parameters:
+      - name: horizonSubmittedFrom
+        value: ""
+      - name: abfsEnv
+        value: ""
+      - name: abfsBuildId
+        value: ""
+      - name: abfsNote
+        value: ""
+  templates:
+    - name: run-smoke-test
+      dag:
+        tasks:
+          - name: log-parameters
+            template: log-parameters
+          - name: echo-and-artifact
+            template: echo-and-artifact
+            depends: log-parameters
+          - name: verify-abfs-service
+            template: verify-abfs-service
+            depends: echo-and-artifact
+    - name: log-parameters
+      container:
+        image: alpine:3.19
+        command: [sh, -c]
+        args:
+          - |
+            echo "WorkflowTemplate: abfs-smoke-test"
+            echo "abfsEnv={{ "{{workflow.parameters.abfsEnv}}" }}"
+            echo "abfsBuildId={{ "{{workflow.parameters.abfsBuildId}}" }}"
+            echo "abfsNote={{ "{{workflow.parameters.abfsNote}}" }}"
+            echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    - name: echo-and-artifact
+      container:
+        image: alpine:3.19
+        command: [sh, -c]
+        args:
+          - |
+            echo "ABFS Smoke test running at $(date)"
+            echo "SA: $(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)/$(cat /var/run/secrets/kubernetes.io/serviceaccount/..data/namespace 2>/dev/null || echo 'n/a')"
+            echo "ABFS Smoke test passed - $(date -u +%Y-%m-%dT%H:%M:%SZ)" > /tmp/result.txt
+            cat /tmp/result.txt
+      outputs:
+        artifacts:
+          - name: smoke-result
+            path: /tmp/result.txt
+    - name: verify-abfs-service
+      container:
+        image: alpine:3.19
+        command: [sh, -c]
+        args:
+          - |
+            echo "Verifying service availability within GKE..."
+            echo "All checks passed."

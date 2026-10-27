@@ -17,10 +17,17 @@ limitations under the License. -->
 This chart installs the AAOS builder Argo WorkflowTemplate. Run workflows with
 `argo submit --from workflowtemplate/aaos-builder -n <namespace>` or via Argo CD.
 
+The same chart also renders the ABFS builder (**`aaos-builder-abfs`**) when installed with
+`-f values-abfs.yaml` (`variant: abfs`). That variant builds from the ABFS mount in one pod
+(`templates/workflow/_abfs-build.tpl`) instead of the **init**, **build**, **gemini-review** and
+**storage** steps, and adds the ABFS parameters to the WorkflowTemplate and its Sensor.
+**`workloads-android`** deploys both, as two sources of the same chart.
+
 ## What’s in this chart
 
 - `Chart.yaml`: Helm chart metadata (no subchart dependencies).
 - `values.yaml`: Default values; update this for configuration.
+- `values-abfs.yaml`: ABFS builder variant, layered on `values.yaml`.
 - `templates/workflow/workflowtemplates.yaml`: Argo WorkflowTemplate wrapper for the AAOS build pipeline.
 - `templates/workflow/_templates.tpl`: Aggregates all split workflow templates (include order matches the list below).
 - `templates/workflow/_main.tpl`: Main DAG task graph (depends / `when:` wiring; includes **`gemini-review`** when Gemini is enabled).
@@ -33,6 +40,7 @@ This chart installs the AAOS builder Argo WorkflowTemplate. Run workflows with
 - `templates/workflow/_gemini-review.tpl`: **gemini-review** step — inline container that runs **`workloads/common/agentic-ai/gemini/run_ai_review.sh`** (mounts, **`GEMINI_*`** / hooks); **pod affinity** via **`aaos-builder.podAffinitySameWorkflow`**.
 - `templates/workflow/_storage.tpl`: **storage** / artifact template; **pod affinity** via **`aaos-builder.podAffinitySameWorkflow`**.
 - `templates/workflow/_fail-workflow.tpl`: **fail-if-build-failed** — marks the workflow failed after **storage** when the build step did not succeed.
+- `templates/workflow/_abfs-build.tpl`: **abfs-build** (ABFS variant only) — initialise, build, AI review and storage in one pod on the ABFS mount.
 - `templates/_env.tpl`: Shared Helm env helpers used in the WorkflowTemplate.
 - `templates/_helpers.tpl`: Shared Helm helpers including **`aaos-builder.podAffinitySameWorkflow`** (same-node scheduling for steps that share RWO / cache volumes with sibling workflow pods).
 - `README.md`: This document.
@@ -313,7 +321,7 @@ use the local repo mount. Remote git artifact checkouts do not share a PVC, so
 - `spec.forceImageBuild`: `true` to always rebuild the builder image
 - `spec.parallelSyncJobs`: Repo sync parallelism
 - `spec.enableGeminiAiAssistant`: `"true"` / `"false"` — enables **gemini-review** on build failure (WorkflowTemplate default parameter)
-- `spec.geminiSkillsYaml`: **required** path to `skills.yaml` for the **gemini-review** step (`GEMINI_SKILLS_YAML`)
+- `spec.geminiSkillsYaml`: path to `skills.yaml` (`GEMINI_SKILLS_YAML`). Required and read only when `spec.aiReviewRuntime` is `gemini-cli`. Omit it when the runtime is `agy`.
 - `spec.manifestUrl`: Manifest URL for repo init
 - `spec.pipelineRepoUrl`: Pipeline repo URL
 - `spec.pipelineRepoRevision`: Pipeline repo revision
@@ -359,10 +367,12 @@ This chart sets **`podGcStrategy`** on the WorkflowTemplate (default in `values.
 
 ## AI review (Gemini)
 
-When a build fails and `spec.enableGeminiAiAssistant` is enabled, the workflow runs an **inline** **`gemini-review`** container template (`templates/workflow/_gemini-review.tpl`). It mounts the same workflow volumes as **build**, sets **`GEMINI_*`** / **`CLOUD_*`** from **`spec`** (prompts, **`skills.yaml`**, CLI / timeout / Vertex flags — same knobs as the **build** step’s Gemini env), and executes **`workloads/common/agentic-ai/gemini/run_ai_review.sh`**. **AAOS-only** staging (**`/aaos-cache/aaos_builds`**, hook profile **`aaos`**, hooks under **`aaos_builder/hooks/`**) is encoded in that template; other pipelines reuse **`run_ai_review.sh`** with different **`GEMINI_ANALYSIS_PATH`** / **`GEMINI_HOOK_*`** env only.
+When a build fails and `spec.enableGeminiAiAssistant` is enabled, the workflow runs an **inline** **`gemini-review`** container template (`templates/workflow/_gemini-review.tpl`). It mounts the same workflow volumes as **build**, sets **`GEMINI_*`** / **`CLOUD_*`** from **`spec`**, and executes **`workloads/common/agentic-ai/gemini/run_ai_review.sh`**. **AAOS-only** staging (**`/aaos-cache/aaos_builds`**, hook profile **`aaos`**, hooks under **`aaos_builder/hooks/`**) is encoded in that template; other pipelines reuse **`run_ai_review.sh`** with different **`GEMINI_ANALYSIS_PATH`** / **`GEMINI_HOOK_*`** env only.
 
-- **`spec.geminiPromptFile`** / **`spec.geminiPromptFile2`** / **`spec.geminiPromptFile3`** — Sequenced prompts for **gemini-review** (defaults under `prompt/sequenced/` in this chart).
-- **`spec.geminiSkillsYaml`** — **Required for gemini-review.** Path to `skills.yaml`; rewritten for local mounts like the prompts.
+- **`spec.aiReviewRuntime`** — `agy` (chart default) or `gemini-cli`. The review template falls back to `agy` when this value is empty.
+- **`spec.geminiAiExecutionTimeoutMinutes`** — Review timeout in minutes. Chart default `60`. Used by both runtimes.
+- **`spec.geminiPromptFile`** / **`spec.geminiPromptFile2`** / **`spec.geminiPromptFile3`** — Sequenced prompts. The pod receives them either way. **`gemini-cli`** is the only runtime that reads them. Antigravity ignores them and uses `workloads/common/agentic-ai/antigravity/skills/`.
+- **`spec.geminiSkillsYaml`** — Path to `skills.yaml`. Set this only when the runtime is **`gemini-cli`**. The review template then requires it and passes **`GEMINI_SKILLS_YAML`**. With the default runtime **`agy`**, the variable is not set and the value may be empty.
 
 ## Test / Verify
 

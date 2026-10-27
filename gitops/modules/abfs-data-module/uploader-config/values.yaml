@@ -1,0 +1,56 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Helm-owned uploader manifest table. Parent Application sets the namespaces.
+
+horizonNamespace: horizon
+workflowNamespace: workflows
+eventsNamespace: argo-events
+jobServiceAccountName: workflow-executor-elevated
+cloudSdkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based
+uploaderConfigMapName: abfs-uploader-config
+abfsNamespace: abfs
+uploaderStatefulSetName: abfs-gerrit-uploader
+# Job that uploader pod 0 creates to write the new ABFS ref (abfs-service
+# uploader-statefulset SYNC_JOB_NAME). The workflow waits for it.
+pusherSyncJobName: abfs-pusher-config-sync
+# Upper bound for the reseed: sync Job plus uploader rollout. Pod 0 itself
+# waits up to 90 min for the sync Job.
+syncTimeoutSeconds: 5400
+
+uploaderConfig:
+  manifestUrl: https://android.googlesource.com/platform/manifest
+  manifestFile: default.xml
+  fetchRefSpec:
+    - refs/*:refs/*
+    - ^refs/changes/*/meta
+    - ^refs/changes/*/robot-comments
+    - ^refs/cache-automerge/*
+  entries:
+    - name: Android14_r30
+      branch: android-14.0.0_r30
+      active: false
+    - name: Android15_r36  # current active branch
+      branch: android-15.0.0_r36
+      active: true
+    - name: Android16_r3
+      branch: android-16.0.0_r3
+      active: false
+    - name: AndroidLatest
+      branch: android-latest-release
+      active: false
+    # AndroidCustom starts as the current active branch so a later input can edit it in place.
+    - name: AndroidCustom
+      branch: android-15.0.0_r36
+      active: false

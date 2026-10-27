@@ -363,11 +363,11 @@ def call(Map config = [:]) {
 
 // AI Review copyArtifacts: shared non-CTS patterns (CVD Launcher preset). CTS Execution adds CTS result trees only.
 def aiReviewCopyArtifactsFilterCvdCommon() {
-  '**/wifi*.log,**/cvd*.log,**/cts_execution_parameters.txt,**/cuttlefish_logs*.zip'
+  '**/wifi*.log,**/cvd*.log,**/cts*.txt,**/cuttlefish*.zip'
 }
 
 def aiReviewCopyArtifactsFilterCtsExecution() {
-  'android-cts-results/**,android-cts-results-html/**,' + aiReviewCopyArtifactsFilterCvdCommon()
+  '**/*.zip,**/invocation_summary.txt,**/test_result*.html,' + aiReviewCopyArtifactsFilterCvdCommon()
 }
 
 // Default sequenced prompts + skills: CTS preset → cts_execution/prompt/sequenced; CVD preset → cvd_launcher/prompt/sequenced.
@@ -411,22 +411,23 @@ def runCvdGeminiAiReview(Map cfg = [:]) {
     def promptBase = "${env.WORKSPACE}/${promptDir}"
     sh """
     set +x
-    export GEMINI_ARTIFACTS_COMMAND='unzip -q -o "\${WORKSPACE}/test-results/cuttlefish_logs-\${BUILD_NUMBER}.zip" -d "\${WORKSPACE}/test-results/cvd" 2>/dev/null || true'
+    export GEMINI_ARTIFACTS_COMMAND='mkdir -p "\${WORKSPACE}/test-results/cvd" "\${WORKSPACE}/test-results/cts" 2>/dev/null || true; for z in "\${WORKSPACE}"/test-results/cuttlefish*.zip "\${WORKSPACE}"/cuttlefish*.zip; do if [ -f "\$z" ]; then echo "[cvdPipeline] Unpacking \$z -> test-results/cvd/"; unzip -q -o "\$z" -d "\${WORKSPACE}/test-results/cvd" 2>/dev/null || true; fi; done; for z in "\${WORKSPACE}"/test-results/android-cts-results/*.zip "\${WORKSPACE}"/android-cts-results/*.zip "\${WORKSPACE}"/test-results/*.zip; do if [ -f "\$z" ] && [[ "\$(basename "\$z")" != cuttlefish* ]]; then echo "[cvdPipeline] Unpacking \$z -> test-results/cts/"; unzip -q -o "\$z" -d "\${WORKSPACE}/test-results/cts" 2>/dev/null || true; for d in "\${WORKSPACE}"/test-results/cts/*; do if [ -d "\$d" ] && { [ -f "\$d/test_result.xml" ] || [ -f "\$d/invocation_summary.txt" ]; }; then echo "[cvdPipeline] Hoisting CTS session artifacts from \$d -> test-results/cts/"; find "\$d" -mindepth 1 -maxdepth 1 -exec mv -f {} "\${WORKSPACE}/test-results/cts/" \\; 2>/dev/null || true; rmdir "\$d" 2>/dev/null || true; fi; done; fi; done; if [ -f "\${WORKSPACE}/test-results/cts/invocation_summary.txt" ] && [ ! -f "\${WORKSPACE}/test-results/invocation_summary.txt" ]; then cp -f "\${WORKSPACE}/test-results/cts/invocation_summary.txt" "\${WORKSPACE}/test-results/invocation_summary.txt"; fi'
     export PIPELINE_REPO_ROOT="\${WORKSPACE}"
     export GEMINI_ANALYSIS_PATH="\${WORKSPACE}"
-    export AI_REVIEW_RUNTIME="\${AI_REVIEW_RUNTIME:-gemini-cli}"
+    export AI_REVIEW_RUNTIME="\${AI_REVIEW_RUNTIME:-agy}"
     export GEMINI_SKIP_MOVE_ARTIFACTS=1
-    export GEMINI_AI_EXECUTION_TIMEOUT_HOURS=2
+    export GEMINI_AI_EXECUTION_TIMEOUT_MINUTES="\${GEMINI_AI_EXECUTION_TIMEOUT_MINUTES:-60}"
     export GEMINI_PREVIEW_FEATURES="\${GEMINI_PREVIEW_FEATURES}"
     [ "\${GEMINI_LOCATION_GLOBAL}" = "true" ] && export GOOGLE_CLOUD_LOCATION="global" || export GOOGLE_CLOUD_LOCATION="\${CLOUD_REGION}"
     export GOOGLE_CLOUD_PROJECT="\${CLOUD_PROJECT}"
+    export GEMINI_MODEL="\${GEMINI_MODEL:-}"
     export GEMINI_COMMAND_LINE="\${GEMINI_COMMAND_LINE}"
     export GEMINI_ADDITIONAL_ARTIFACTS="\${WORKSPACE}/test-results/"
     CTS_PROMPT_DIR='${promptBase}'
     export GEMINI_PROMPT_FILE="\${CTS_PROMPT_DIR}/step1_triage.txt"
     export GEMINI_PROMPT_FILE_2="\${CTS_PROMPT_DIR}/step2_rca.txt"
     export GEMINI_PROMPT_FILE_3="\${CTS_PROMPT_DIR}/step3_fixes.txt"
-    export GEMINI_POST_REVIEW_COMMAND='rm -rf "\${WORKSPACE}/test-results/cvd" 2>/dev/null || true; export GEMINI_ARTIFACT_ROOT_NAME="\${ANDROID_BUILD_BUCKET_ROOT_NAME}"; export GEMINI_ARTIFACT_STORAGE_SOLUTION="\${CTS_ARTIFACT_STORAGE_SOLUTION}"; export STORAGE_LABELS="\${STORAGE_LABELS}"; "\${WORKSPACE}/workloads/common/agentic-ai/gemini/gemini_storage.sh"; find . -type f -name "headless*.json" -size 0 -delete'
+    export GEMINI_POST_REVIEW_COMMAND='rm -rf "\${WORKSPACE}/test-results/cvd" "\${WORKSPACE}/test-results/cts" 2>/dev/null || true; export GEMINI_ARTIFACT_ROOT_NAME="\${ANDROID_BUILD_BUCKET_ROOT_NAME}"; export GEMINI_ARTIFACT_STORAGE_SOLUTION="\${CTS_ARTIFACT_STORAGE_SOLUTION}"; export STORAGE_LABELS="\${STORAGE_LABELS}"; "\${WORKSPACE}/workloads/common/agentic-ai/gemini/gemini_storage.sh"; find . -type f -name "headless*.json" -size 0 -delete'
     "\${WORKSPACE}"/workloads/common/agentic-ai/gemini/run_ai_review.sh
   """.stripIndent()
   }

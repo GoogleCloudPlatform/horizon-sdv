@@ -31,14 +31,19 @@ limitations under the License. -->
       - [Auto-disable](#auto-disable-1)
     - [How the three modules differ (summary)](#how-the-three-modules-differ-summary)
     - [Change git ref in developer portal](#change-git-ref-in-developer-portal)
-  - [Workflows via Developer Portal](#workflows-via-developer-portal)
-    - [Submit](#submit-workflow)
-    - [History](#history-workflow)
-    - [How to abort/delete workflows](#how-to-abortdelete-workflows)
-    - [Hello-world application](#hello-world-application)
-  - [Workflows via Horizon CLI](#workflows-via-horizon-cli)
+  - [Open Argo Workflows from Developer Portal](#open-workflows-from-developer-portal)
+  - [Operate Workflows via Developer Portal](#operate-workflows-via-developer-portal)
+    - [Submit Workflow via Portal](#submit-workflow-via-portal)
+    - [History Workflow via Portal](#history-workflow-via-portal)
+    - [How to abort/delete workflow via Portal](#how-to-abortdelete-workflow-via-portal)
+    - [Hello-world application via Portal](#hello-world-application-via-portal)
+  - [Tools](#tools)
+    - [Horizon CLI](#horizon-cli)
+    - [Horizon API](#horizon-api)
+  - [Operate Workflows via Horizon CLI](#operate-workflows-via-horizon-cli)
     - [Installation](#installation)
-      - [Prerequisite](#prerequisite)
+      - [Download from Developer Portal (recommended)](#download-from-developer-portal-recommended)
+      - [Contributor: build from source](#contributor-build-from-source)
       - [Build the binary](#build-the-binary)
       - [Move to PATH](#move-to-path)
       - [Verify installation](#verify-installation)
@@ -84,7 +89,7 @@ limitations under the License. -->
 
 #### Description
 
-Developer portal is a proxy to Horizon and Module Manager internal services. Users can discover modules, submit workflows and navigate platform views in one UI.
+Developer portal is a proxy to Horizon and Module Manager internal services. Users can discover modules, submit workflows, download the Horizon CLI, browse the Horizon API, and navigate platform views in one UI.
 
 **Modules:**
 
@@ -103,13 +108,16 @@ Currently there are 5 modules available:
 
 #### Browsing
 
-There are 3 tabs available by default:
+The sidebar shows these entries before any module is enabled:
 
 - Welcome
-- Landing
+- Landing page
+- Tools
 - Administration
 
-The Landing Page provides a simple and clear home page for the Horizon SDV project with developer (Gerrit, Jenkins, MTK Connect, MCP Gateway Registry) and admin (Keycloak, Argo CD, Headlamp, Grafana) applications as cards opening cluster paths in a new tab.
+The Landing Page provides a simple and clear home page for the Horizon SDV project with developer (Gerrit, Jenkins, MTK Connect, MCP Gateway Registry) and admin (Keycloak, Argo CD, Argo Workflows, Headlamp, Grafana) applications as cards opening cluster paths in a new tab.
+
+**Tools** has two tabs: **Horizon CLI** (download the `horizon` binary) and **Horizon API** (Swagger UI for this cluster). See [Tools](#tools).
 
 In Administration tab the modules can be enabled/disabled; if the module is enabled it should be listed with the other tabs.
 
@@ -167,9 +175,13 @@ Auto-disable of modules is optional. By default - the modules do not get disable
 
 Git reference can be easily changed for the modules. It can be done from Administration tab in Modules section. After the change the Target Revision for this particular app should be aligned automatically in ArgoCD.
 
-### Workflows via Developer Portal
+### Open Workflows from Developer Portal
 
-#### Submit Workflow
+Argo Workflows can be accessed directly from the Developer Portal through a dedicated application tile. The tile provides a convenient entry point to the Argo Workflows UI, allowing users to open it directly from the Developer Portal.
+
+### Operate Workflows via Developer Portal
+
+#### Submit Workflow via Portal
 
 The module must be enabled to run the workflow.
 
@@ -186,7 +198,7 @@ Currently there are 2 workflows available: _sample-smoke-test_ and _sample-smoke
 
 After the module is run it can be found in "Running Workflow" tab. To open the running workflow and see the details, click on the name of the workflow. From here it is possible to view logs, download artifacts or move to GCS.
 
-#### History Workflow
+#### History Workflow via Portal
 
 When the workflow is completed it is moved to "History" tab, where all the details can be found. The workflow will be visible there for 1 day.
 
@@ -194,20 +206,94 @@ The details of the available workflows can be also found in "Argo Workflows" →
 
 The artifacts can also be located and downloaded from GCP "Cloud Storage" → "Buckets" → "*-argo-workflows".
 
-#### How to abort/delete workflows
+#### How to abort/delete workflow via Portal
 
 To abort/deleve a workflow, open the running workflow in Developer Portal and press “Abort” on top-right corner. “Abort” button should change to “Delete”, status should be shown as “Aborted”. Workflow can be found in History tab with correct status.
 
 To delete the workflow, go to history tab, open the details of workflow and press “Delete”.
 
-#### Hello-world application
+#### Hello-world application via Portal
 
 _Hello World_ application can be found in "Developer Portal" → "sample tab" → "Applications", where it can be opened directly. It should show _SOFT_FEATURE_ENABLED_SAMPLE_SOFT_ flag with a correct value:
 
 - true — if sample-soft is enabled
 - false — if sample-soft is disabled
 
-### Workflows via Horizon CLI
+### Tools
+
+Sign in to Developer Portal (`https://<your-horizon-domain>/developer-portal/`) and open **Tools** in the sidebar, or Welcome → **Tools**.
+
+The page opens on **Horizon CLI** (`/developer-portal/tools/horizon-cli`). Switch to **Horizon API** (`/developer-portal/tools/horizon-api`) for the API reference.
+
+#### Horizon CLI
+
+Download a ready-to-run `horizon` binary built for this cluster. A Go toolchain is not required.
+
+The tab shows:
+
+- **Version** and, directly under it, the **build date** (`DD/MM/YYYY`).
+- A **Download for** button for the operating system and architecture detected in this browser. That row is highlighted in the table. If the exact architecture is not published, the button uses another binary for the same operating system when one exists.
+- A table of every published binary: operating system, architecture, size, SHA-256 (copy), and a download named `horizon` or `horizon.exe`.
+
+Published platforms:
+
+| OS | Arch | File |
+| --- | --- | --- |
+| linux | amd64 | `horizon` |
+| linux | arm64 | `horizon` |
+| darwin (macOS) | arm64 | `horizon` |
+| windows | amd64 | `horizon.exe` |
+
+If this environment has no CLI binaries, the tab shows an error and no download table.
+
+**Install**
+
+1. Download the binary for your OS and architecture.
+2. Compare the file checksum with the SHA-256 on that row (use the copy button).
+3. Put the binary on `PATH`, using the commands shown on the tab.
+4. Verify with `horizon version`.
+
+Checksum:
+
+- Linux: `sha256sum horizon`
+- macOS: `shasum -a 256 horizon`
+- Windows (PowerShell): `Get-FileHash .\horizon.exe -Algorithm SHA256`
+
+Linux:
+
+```bash
+chmod +x horizon && sudo mv horizon /usr/local/bin/
+```
+
+macOS (Apple Silicon / arm64). Remove the quarantine attribute so Gatekeeper does not block this unsigned binary:
+
+```bash
+chmod +x horizon
+xattr -d com.apple.quarantine horizon
+sudo mv horizon /usr/local/bin/
+```
+
+Windows: `horizon.exe` is not digitally signed. SmartScreen may warn before the first run. Move the file onto your `PATH` the same way as a source build. See [Move to PATH](#move-to-path).
+
+**Expected:** `horizon <version> (built <DD/MM/YYYY>)` matches the version and build date on the tab.
+
+Workflow commands after install are in [Workflows via Horizon CLI](#workflows-via-horizon-cli). Building from the repository is in [Contributor: build from source](#contributor-build-from-source).
+
+#### Horizon API
+
+The **Horizon API** tab embeds Swagger UI for this cluster. The document is built from the live catalog: each exposed workflow template is a submit operation, next to the shared catalog and workflow lifecycle operations.
+
+Templates that are not exposed (for example `sample-hard-smoke-test`) do not appear. See [Expose label (catalog and portal links)](#expose-label-catalog-and-portal-links). With no enabled module exposing workflows, the catalog is empty and there are no submit operations.
+
+**Try it out** calls `https://<your-horizon-domain>/horizon-api/`. Those requests need a Keycloak access token for the `horizon` realm:
+
+1. Sign in with the CLI: [Log in via device flow](#log-in-via-device-flow).
+2. In Swagger UI, click **Authorize**, select **bearerAuth**, and paste the `access_token` value from the CLI token file (`~/.config/horizon/token.json` on Linux and macOS, `%USERPROFILE%\.config\horizon\token.json` on Windows).
+3. Execute the operation. Optional submit header `X-Horizon-Submitted-From` is `api` by default. `developer-portal` and `horizon-cli` are the other accepted values.
+
+The same document is also served directly at `https://<your-horizon-domain>/horizon-api/swagger` (`openapi.json` is next to it). If the embedded page stays blank, the browser could not load the Swagger UI assets; use that direct URL.
+
+### Operate Workflows via Horizon CLI
 
 Replace placeholder values (marked with `<...>`) with your environment-specific values before running.
 
@@ -215,29 +301,17 @@ Replace placeholder values (marked with `<...>`) with your environment-specific 
 
 ##### Download from Developer Portal (recommended)
 
-Sign in to Developer Portal (`https://<your-horizon-domain>/developer-portal/`) and open **Tools** in the sidebar (or Welcome → Tools).
-
-1. Download the binary for your OS and architecture.
-2. Linux: `chmod +x horizon` and move it to your `PATH` (e.g.: `sudo mv horizon /usr/local/bin/horizon`).
-3. macOS (Apple Silicon / arm64): `chmod +x horizon`, remove the quarantine attribute (`xattr -d com.apple.quarantine horizon`) to avoid macOS Gatekeeper warnings for the unsigned binary, and move it to your `PATH` (e.g.: `sudo mv horizon /usr/local/bin/horizon`).
-4. Windows: keep `horizon.exe` on your `PATH`. Windows SmartScreen may warn because the file is unsigned.
-5. Verify:
-
-```bash
-horizon version
-```
-
-**Expected:** The version and the build date match the values displayed on the Tools page. The build date is displayed directly below the version.
+Use **Tools → Horizon CLI**. Download, checksum, install, and the expected `horizon version` line are in [Horizon CLI](#horizon-cli).
 
 ##### Contributor: build from source
 
-Go [1.22+](https://go.dev/dl/) must be installed. Verify with:
+Go [1.27+](https://go.dev/dl/) must be installed. Verify with:
 
 ```bash
 go version
 ```
 
-**Expected:** Output shows `go1.22` or higher.
+**Expected:** Output shows `go1.27` or higher.
 
 ##### Build the binary
 
@@ -451,7 +525,7 @@ horizon catalog get -j
 
 **Expected:** Valid JSON with an `"entries"` array containing objects with `"module"`, `"templateName"`, and `"parameters"` fields.
 
-#### Workflow Submit with Submitted-From Label
+#### Workflow with Submitted-From Label
 
 ##### Preconditions
 

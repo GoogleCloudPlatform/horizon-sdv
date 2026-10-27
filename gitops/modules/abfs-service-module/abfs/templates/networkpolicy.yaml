@@ -1,0 +1,109 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if and .Values.networkPolicy.enabled (include "abfs.licensed" .) }}
+# In-cluster network policies for the ABFS components. Egress defaults to open (ABFS
+# reaches Spanner, GCS, Gerrit, Artifact Registry); supply networkPolicy.extraEgress
+# to replace the open rule with a tighter allow-list. Ingress is scoped per component.
+{{- $egress := .Values.networkPolicy.extraEgress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: abfs-server
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.server.selectorLabels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "abfs.server.selectorLabels" . | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # gRPC from uploaders, in-cluster clients, the internal LB, and health checks.
+    # Left unscoped on the port so the internal L4 LB health checks are not blocked.
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.server.service.port }}
+  egress:
+    {{- if $egress }}
+    {{- toYaml $egress | nindent 4 }}
+    {{- else }}
+    - {}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: abfs-uploader
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.uploader.selectorLabels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "abfs.uploader.selectorLabels" . | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.pusher.defaults.port }}
+  egress:
+    {{- if $egress }}
+    {{- toYaml $egress | nindent 4 }}
+    {{- else }}
+    - {}
+    {{- end }}
+{{- if .Values.ui.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: abfs-ui
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.ui.selectorLabels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "abfs.ui.selectorLabels" . | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # Browser / API access to the UI port.
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.ui.port }}
+  egress:
+    # UI reaches the server (50051) and each uploader (8086).
+    {{- if $egress }}
+    {{- toYaml $egress | nindent 4 }}
+    {{- else }}
+    - {}
+    {{- end }}
+{{- end }}
+{{- end }}

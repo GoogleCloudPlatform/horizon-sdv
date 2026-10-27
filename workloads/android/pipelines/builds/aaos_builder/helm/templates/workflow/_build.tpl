@@ -59,8 +59,8 @@ Dependencies: requires init and compute-vars output.
         value: {{ .Values.spec.geminiLocationGlobal | quote }}
       - name: GEMINI_COMMAND_LINE
         value: {{ include "aaos-builder.geminiCommandLineResolved" . | quote }}
-      - name: GEMINI_AI_EXECUTION_TIMEOUT_HOURS
-        value: {{ .Values.spec.geminiAiExecutionTimeoutHours | quote }}
+      - name: GEMINI_AI_EXECUTION_TIMEOUT_MINUTES
+        value: {{ .Values.spec.geminiAiExecutionTimeoutMinutes | default "60" | quote }}
     resources:
       # Build step sizing for c2d-highcpu-112 (leave headroom for system/Argo).
       limits:

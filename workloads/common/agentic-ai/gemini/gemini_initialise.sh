@@ -58,7 +58,7 @@ function gemini_install() {
 # --- Remove previous run artifacts so each run starts clean ---
 function gemini_cleanup() {
     echo -e "${GREEN}Cleaning up old artifacts...${NC}"
-    rm -rf "${GEMINI_ARTIFACT_PATH}"
+    rm -rf "${GEMINI_ARTIFACT_PATH}" traces
     rm -rf .gemini
     rm -f step*.*
     rm -f gemini-client-error.zip

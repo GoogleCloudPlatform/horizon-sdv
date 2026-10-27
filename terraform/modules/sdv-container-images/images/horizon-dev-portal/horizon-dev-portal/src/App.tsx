@@ -64,6 +64,8 @@ import { HORIZON_LOGO_SRC, READY_MODULES_REFRESH_EVENT } from './constants';
 import { getRouterBasename } from './utils/publicPath';
 import * as React from 'react';
 import { ToolsPage } from './pages/ToolsPage.tsx';
+import HorizonCliTab from './pages/tools/HorizonCliTab.tsx';
+import HorizonApiTab from './pages/tools/HorizonApiTab.tsx';
 
 const drawerWidth = 260;
 
@@ -178,7 +180,7 @@ function ShellLayout() {
         <ListItemButton
           component={Link}
           to="/tools"
-          selected={location.pathname === '/tools'}
+          selected={location.pathname === '/tools' || location.pathname.startsWith('/tools/')}
           onClick={() => isMobile && setMobileOpen(false)}
         >
           <ListItemIcon>
@@ -342,7 +344,11 @@ export default function App() {
           >
             <Route path="/" element={<LandingPage />} />
             <Route path="/welcome" element={<WelcomePage />} />
-            <Route path="/tools" element={<ToolsPage />} />
+            <Route path="/tools" element={<ToolsPage />}>
+              <Route index element={<Navigate to="horizon-cli" replace />} />
+              <Route path="horizon-cli" element={<HorizonCliTab />} />
+              <Route path="horizon-api" element={<HorizonApiTab />} />
+            </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="modules" replace />} />
               <Route path="modules" element={<ModulesTab />} />

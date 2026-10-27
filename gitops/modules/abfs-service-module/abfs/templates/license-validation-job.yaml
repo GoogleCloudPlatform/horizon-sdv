@@ -1,0 +1,74 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if and .Values.licensed .Values.license.validation.enabled }}
+# `licensed: true` expresses desired state; this hook is the Secret-presence
+# gate. It runs before Sync and blocks server/uploader/UI apply when the Secret
+# is absent or empty. The ABFS binary remains the authority for entitlement.
+# abfs-data-module owns the Secret; this chart only reads it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: abfs-license-validate
+  namespace: {{ .Values.license.validation.namespace }}
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: license-validation
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    metadata:
+      labels:
+        {{- include "abfs.labels" . | nindent 8 }}
+        app.kubernetes.io/component: license-validation
+    spec:
+      serviceAccountName: {{ .Values.license.validation.serviceAccountName }}
+      restartPolicy: Never
+      containers:
+        - name: validate
+          image: {{ .Values.license.validation.image | quote }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            {{- toYaml .Values.restrictedSecurityContext | nindent 12 }}
+          env:
+            - name: LICENSE_NAMESPACE
+              value: {{ .Values.license.secretNamespace | quote }}
+            - name: LICENSE_SECRET
+              value: {{ .Values.license.secretName | quote }}
+          command: ["/bin/bash", "-euo", "pipefail", "-c"]
+          args:
+            - |
+              if ! command -v kubectl >/dev/null 2>&1; then
+                echo "Installing kubectl (gcloud components)..."
+                gcloud components install kubectl --quiet
+              fi
+              encoded="$(kubectl get secret "${LICENSE_SECRET}" \
+                -n "${LICENSE_NAMESPACE}" \
+                -o jsonpath='{.data.license}' 2>/dev/null || true)"
+              if [[ -z "${encoded}" ]]; then
+                echo "ERROR: ${LICENSE_NAMESPACE}/${LICENSE_SECRET} is missing or data.license is empty" >&2
+                exit 1
+              fi
+              decoded="$(printf '%s' "${encoded}" | base64 -d 2>/dev/null || true)"
+              if [[ -z "${decoded}" ]]; then
+                echo "ERROR: ${LICENSE_NAMESPACE}/${LICENSE_SECRET} data.license does not decode to a non-empty payload" >&2
+                exit 1
+              fi
+              echo "Licence payload present; ABFS remains the authority for entitlement."
+{{- end }}

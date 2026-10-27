@@ -195,14 +195,6 @@ module "sdv_gke_cluster" {
   build_node_pool_min_node_count = var.sdv_build_node_pool_min_node_count
   build_node_pool_max_node_count = var.sdv_build_node_pool_max_node_count
 
-  # ABFS build node pool configuration
-  abfs_build_node_pool_name           = var.sdv_abfs_build_node_pool_name
-  abfs_build_node_pool_node_count     = var.sdv_abfs_build_node_pool_node_count
-  abfs_build_node_pool_machine_type   = var.sdv_abfs_build_node_pool_machine_type
-  abfs_build_node_pool_min_node_count = var.sdv_abfs_build_node_pool_min_node_count
-  abfs_build_node_pool_max_node_count = var.sdv_abfs_build_node_pool_max_node_count
-  abfs_build_node_pool_version        = var.sdv_abfs_build_node_pool_version
-
   maintenance_recurring_window_start_time = var.sdv_cluster_maintenance_recurring_window_start_time
   maintenance_recurring_window_end_time   = var.sdv_cluster_maintenance_recurring_window_end_time
   maintenance_recurring_window_recurrence = var.sdv_cluster_maintenance_recurring_window_recurrence
@@ -247,6 +239,11 @@ module "sdv_gke_apps" {
   gcp_backend_bucket         = var.gcp_backend_bucket_name
   gcp_registry_id            = var.sdv_artifact_registry_repository_id
   gcp_storage_location       = var.sdv_location
+  gcp_compute_sa_email       = var.sdv_gcp_compute_sa_email
+  cluster_node_locations     = var.sdv_cluster_node_locations
+  cluster_release_channel    = var.sdv_cluster_release_channel
+  # CASFS-pinned GKE node version for abfs-client-module-ubuntu KCC ContainerNodePool
+  abfs_build_node_pool_version = var.sdv_abfs_build_node_pool_version
 
   # SCM configuration
   scm_type        = var.scm_type

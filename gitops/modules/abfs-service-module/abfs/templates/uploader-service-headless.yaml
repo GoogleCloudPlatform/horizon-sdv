@@ -1,0 +1,41 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if include "abfs.licensed" . }}
+# Headless Service backing the uploader StatefulSet — provides stable per-pod DNS
+# (<namePrefix>-<ordinal>.<namePrefix>.<ns>.svc.cluster.local).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "abfs.uploader.name" . }}
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    {{- include "abfs.uploader.selectorLabels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  clusterIP: None
+  # Resolve DNS for pods that aren't Ready yet so the initContainer gate / UI proxy
+  # can reach pods during rollout.
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "abfs.uploader.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: pusher
+      port: {{ .Values.pusher.defaults.port }}
+      targetPort: {{ .Values.pusher.defaults.port }}
+      protocol: TCP
+{{- end }}

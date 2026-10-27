@@ -14,6 +14,7 @@
 
 // Description:
 // This pipeline builds the ABFS builder Docker image using BuildKit.
+// Optional Ubuntu and/or COS-tagged templates in one run.
 //
 // References:
 //   * https://github.com/moby/buildkit
@@ -26,7 +27,6 @@ pipeline {
   agent none
 
   environment {
-    // Update latest tag.
     REGISTRY="${env.CLOUD_REGION}-docker.pkg.dev"
     DESTINATION="${REGISTRY}/${env.CLOUD_PROJECT}/${env.ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}"
     PUSH="${NO_PUSH == "true" ? "false" : "true"}"
@@ -55,11 +55,26 @@ pipeline {
     stage ('Start instance'){
       agent { kubernetes { yaml kubernetesPodTemplate } }
       stages {
-        stage ('Docker Credentials'){
+        stage ('Validate template selection'){
           steps {
             script {
-              currentBuild.description = "NO_PUSH=${env.NO_PUSH}" + "<br>" + "$BUILD_USER"
+              if (env.ENABLE_UBUNTU_TEMPLATE != 'true' && env.ENABLE_COS_TEMPLATE != 'true') {
+                error('Enable at least one of ENABLE_UBUNTU_TEMPLATE or ENABLE_COS_TEMPLATE.')
+              }
+              currentBuild.description =
+                "NO_PUSH=${env.NO_PUSH}" + "<br>" +
+                "UBUNTU=${env.ENABLE_UBUNTU_TEMPLATE}/${env.IMAGE_TAG_UBUNTU}" + "<br>" +
+                "COS=${env.ENABLE_COS_TEMPLATE}/${env.IMAGE_TAG_COS}" + "<br>" +
+                "ABFS_REPOSITORY=${env.ABFS_REPOSITORY}" + "<br>" +
+                "ABFS_VERSION=${env.ABFS_VERSION}" + "<br>" +
+                "ABFS_COS_IMAGE_REF=${env.ABFS_COS_IMAGE_REF}" + "<br>" +
+                "$BUILD_USER"
             }
+          }
+        }
+
+        stage ('Docker Credentials'){
+          steps {
             container(name: 'buildkit') {
               catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                 sh '''
@@ -74,30 +89,35 @@ pipeline {
           }
         }
 
-        stage ('Build Docker Image'){
-          when { expression { env.IMAGE_TAG } }
+        stage ('Build Ubuntu template'){
+          when { expression { env.ENABLE_UBUNTU_TEMPLATE == 'true' } }
           steps {
             container(name: 'buildkit') {
               catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                 sh '''
-                  cd "${WORKSPACE}/workloads/android/pipelines/environment/docker_image_template/";
-                  buildctl build \
-                   --frontend=dockerfile.v0 \
-                   --local=dockerfile=. \
-                   --local context=. \
-                   --opt build-arg:ABFS="true" \
-                   --opt build-arg:LINUX_DISTRIBUTION=${LINUX_DISTRIBUTION} \
-                   --opt build-arg:NODEJS_VERSION=${NODEJS_VERSION} \
-                   --opt build-arg:GOOGLE_DISTRIBUTION_REGISTRY="${GOOGLE_DISTRIBUTION_REGISTRY}" \
-                   --opt build-arg:ABFS_DISTRIBUTION_REGISTRY="${ABFS_DISTRIBUTION_REGISTRY}" \
-                   --opt build-arg:GCLOUD_CLI_VERSION="${GCLOUD_CLI_VERSION}" \
-                   --opt build-arg:KUBECTL_VERSION="${KUBECTL_VERSION}" \
-                   --opt build-arg:ENABLE_GEMINI_AI_ASSISTANT="${ENABLE_GEMINI_AI_ASSISTANT}" \
-                   --opt build-arg:GEMINI_CLI_VERSION="${GEMINI_CLI_VERSION}" \
-                   --opt build-arg:ANTIGRAVITY_SDK_VERSION="${ANTIGRAVITY_SDK_VERSION}" \
-                   --opt platform=linux/amd64 \
-                   --registry-auth-tlscontext host=${REGISTRY},insecure=true \
-                   --output=type=image,name=${DESTINATION}:${IMAGE_TAG},push=${PUSH}
+                  set -euo pipefail
+                  export TEMPLATE_FLAVOR=ubuntu
+                  export EFFECTIVE_IMAGE_TAG="${IMAGE_TAG_UBUNTU}"
+                  export EFFECTIVE_LINUX_DISTRIBUTION="${LINUX_DISTRIBUTION}"
+                  ./workloads/android/pipelines/environment/abfs/docker_image_template/build_abfs_image.sh
+                '''
+              }
+            }
+          }
+        }
+
+        stage ('Build COS template'){
+          when { expression { env.ENABLE_COS_TEMPLATE == 'true' } }
+          steps {
+            container(name: 'buildkit') {
+              catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                sh '''
+                  set -euo pipefail
+                  export TEMPLATE_FLAVOR=cos
+                  export EFFECTIVE_IMAGE_TAG="${IMAGE_TAG_COS}"
+                  export EFFECTIVE_LINUX_DISTRIBUTION="${COS_LINUX_DISTRIBUTION}"
+                  echo "ABFS_COS_IMAGE_REF (Seed GCE COS node family, not Docker FROM)=${ABFS_COS_IMAGE_REF:-}"
+                  ./workloads/android/pipelines/environment/abfs/docker_image_template/build_abfs_image.sh
                 '''
               }
             }

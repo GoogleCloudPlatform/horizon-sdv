@@ -132,7 +132,11 @@ Description:
           - name: WORKSPACE
             value: "/workspace"
           - name: AI_REVIEW_RUNTIME
-            value: {{ $root.Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+            value: '{{ "{{" }}workflow.parameters.aiReviewRuntime{{ "}}" }}'
+          - name: JOB_NAME
+            value: '{{ "{{" }}workflow.name{{ "}}" }}'
+          - name: BUILD_NUMBER
+            value: '{{ "{{" }}workflow.uid{{ "}}" }}'
           - name: GEMINI_ANALYSIS_PATH
             value: "/workspace/test-results"
           - name: ANALYSIS_WORKING_DIRECTORY
@@ -153,8 +157,8 @@ Description:
             value: {{ $root.Values.spec.geminiPreviewFeatures | default "true" | quote }}
           - name: GEMINI_COMMAND_LINE
             value: {{ include "cvd-launcher.geminiCommandLineResolved" $root | quote }}
-          - name: GEMINI_AI_EXECUTION_TIMEOUT_HOURS
-            value: {{ $root.Values.spec.geminiAiExecutionTimeoutHours | default "2" | quote }}
+          - name: GEMINI_AI_EXECUTION_TIMEOUT_MINUTES
+            value: {{ $root.Values.spec.geminiAiExecutionTimeoutMinutes | default "60" | quote }}
           - name: GEMINI_STEP2_PRIOR_CONTEXT_BYTES
             value: {{ $root.Values.spec.geminiStep2PriorContextBytes | default "131072" | quote }}
           - name: GEMINI_ADDITIONAL_ARTIFACTS

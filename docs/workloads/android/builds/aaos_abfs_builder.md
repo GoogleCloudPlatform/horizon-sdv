@@ -113,6 +113,12 @@ Optional parameter that allows the user to override the default target make comm
 
 This is a single command line, so use of logical operators to execute subsequent commands is essential.
 
+### `AAOS_PARALLEL_BUILD_JOBS`
+
+Optional parameter that allows the user to override the number of parallel build jobs.
+
+Default: 16. Empty lets the build system decide. If the ABFS cacheman socket gets overloaded during the build, the value may be too high.
+
 ### `AAOS_GERRIT_MANIFEST_URL`
 
 Optional for fetching a patch set from Gerrit.
@@ -152,6 +158,20 @@ Note: this can change, so the `Seed Workloads` job supports this parameter to al
 ### `ABFS_REPOSITORY`
 
 The ABFS aptitude repository to fetch the ABFS client artifacts, e.g. abfs-apt-alpha-public.
+
+### `ABFS_SERVER`
+
+The ABFS server endpoint (`host:port`) passed to `abfs config -w` during initialisation, default `abfs-server.abfs.svc.cluster.local:50051`.
+
+Build pods run in the `jenkins` namespace, so the ABFS server Service in the `abfs` namespace must be addressed by its fully qualified name.
+
+Note: this can change, so the `Seed Workloads` job supports this parameter to allow it to be replaced across all jobs.
+
+### `ABFS_CLIENT_FLAGS`
+
+Flags passed to the ABFS client commands. Default `--disable-tls=true --auth-type none`.
+
+Change this on an ABFS build to test session encryption or authentication.
 
 ### `UPLOADER_MANIFEST_SERVER`
 
@@ -194,7 +214,15 @@ The job uses the prompt file from the repository only; there is no Jenkins param
 Interface for the headless [gemini-cli](https://geminicli.com/docs/cli/headless/).
 Use this to specify settings such as the [Gemini model](https://ai.google.dev/gemini-api/docs/models) etc, e.g.
 `--debug` to include debug output.
-Note: Prompts are piped via `stdin` and output is redirected to a JSON file.
+Note: Prompts are piped via `stdin` and output is redirected to a JSON file. Antigravity does not read this parameter.
+
+### `AI_REVIEW_RUNTIME`
+
+`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. This job has no Argo workflow.
+
+### `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES`
+
+Maximum duration in minutes before the review is terminated. Jenkins choices are `60`, `45`, `30`, `20`, `10`, `90`, and `120` (first choice `60`). When unset, `run_ai_review.sh` uses 60 minutes.
 
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 

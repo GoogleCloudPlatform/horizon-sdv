@@ -37,3 +37,19 @@ func TestValidateParamsRejectsInjectedSampleSoftEnabled(t *testing.T) {
 		t.Fatalf("expected unknown parameter error, got %v", err)
 	}
 }
+
+func TestValidateParamsRejectsValueOutsideEnum(t *testing.T) {
+	t.Parallel()
+	ent := catalog.Entry{
+		Parameters: []catalog.Parameter{
+			{Name: "selection", Default: "Android15", Enum: []string{"Android14", "Android15", "Custom"}},
+		},
+	}
+	err := validateParams(ent, map[string]string{"selection": "Android99"})
+	if err == nil || !strings.Contains(err.Error(), "must be one of") {
+		t.Fatalf("expected enum error, got %v", err)
+	}
+	if err := validateParams(ent, map[string]string{"selection": "Custom"}); err != nil {
+		t.Fatalf("accepted enum value: %v", err)
+	}
+}

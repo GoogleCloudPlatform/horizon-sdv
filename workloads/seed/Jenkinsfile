@@ -135,13 +135,13 @@ pipeline {
     )
 
     string(name: 'ABFS_VERSION',
-           defaultValue: "0.0.33-2-ge59ffbc",
-           description: '''<p>ABFS version, e.g. 0.0.33-2-ge59ffbc, 0.1.2-15-gfaf00af1</p>''',
+           defaultValue: "0.1.14",
+           description: '''<p>ABFS version, e.g. 0.0.33-2-ge59ffbc, 0.1.14</p>''',
            trim: true)
 
     string(name: 'ABFS_CASFS_VERSION',
-           defaultValue: "0.0.33-30-g64ff253",
-           description: '''<p>ABFS CASFS version may differ from ABFS_VERSION, e.g. 0.0.33-30-g64ff253</p>''',
+           defaultValue: "0.1.14",
+           description: '''<p>ABFS CASFS version may differ from ABFS_VERSION, e.g. 0.1.14</p>''',
            trim: true)
 
     string(name: 'ABFS_COS_IMAGE_REF',
@@ -154,9 +154,16 @@ pipeline {
            description: '''<p>ABFS aptitude repository, e.g. abfs-apt-alpha-public. </p>''',
            trim: true)
 
+    string(name: 'ABFS_SERVER',
+           defaultValue: "abfs-server.abfs.svc.cluster.local:50051",
+           description: '''<p>ABFS server endpoint (<code>host:port</code>) used by the build pods.
+             <br>Build pods run in the <code>jenkins</code> namespace, so the in-cluster ABFS server Service
+             requires its fully qualified name (<code>abfs-server.&lt;namespace&gt;.svc.cluster.local</code>).</p>''',
+           trim: true)
+
     string(name: 'UPLOADER_MANIFEST_SERVER',
            defaultValue: "android.googlesource.com",
-           description: '''<p>Gerrit manifest server f.</p>''',
+           description: '''<p>Gerrit/Git repo manifest server. Must match the uploader pusher ConfigMap seed.</p>''',
            trim: true)
 
     separator(
@@ -278,6 +285,7 @@ pipeline {
                   ['${ABFS_CASFS_VERSION}', "${ABFS_CASFS_VERSION}" ],
                   ['${ABFS_COS_IMAGE_REF}', "${ABFS_COS_IMAGE_REF}" ],
                   ['${ABFS_REPOSITORY}', "${ABFS_REPOSITORY}" ],
+                  ['${ABFS_SERVER}', "${ABFS_SERVER}" ],
                   ['${ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}', "${ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME}"],
                   ['${GCLOUD_CLI_VERSION}', "${GCLOUD_CLI_VERSION}"],
                   ['${KUBECTL_VERSION}', "${KUBECTL_VERSION}"],

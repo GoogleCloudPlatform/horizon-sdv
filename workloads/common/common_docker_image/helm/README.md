@@ -23,7 +23,6 @@ This template **does not clone Git**; it expects a **`source`** input artifact a
 Thin wrapper charts are provided for convenience:
 - `workloads/android/pipelines/environment/docker_image_template/helm`
 - `workloads/android/pipelines/environment/abfs/docker_image_template/helm`
-- `workloads/android/pipelines/environment/abfs/docker_infra_template/helm`
 - `workloads/android/pipelines/environment/mirror/docker_image_template/helm`
 - `workloads/openbsw/pipelines/environment/docker_image_template/helm`
 
@@ -51,13 +50,10 @@ argo submit --from clusterworkflowtemplate/common-docker-image-build -n workflow
 ```
 
 ```bash
+# ABFS builder image: same Dockerfile dir as AAOS; set ABFS=true (and ABFS apt build-args) via buildArgs.
+# Prefer the abfs-builder-runtime-image WorkflowTemplate wrapper chart rather than calling this CWT directly.
 argo submit --from clusterworkflowtemplate/common-docker-image-build -n workflows \
-  -p dockerfileDir=workloads/android/pipelines/environment/abfs/docker_image_template \
-```
-
-```bash
-argo submit --from clusterworkflowtemplate/common-docker-image-build -n workflows \
-  -p dockerfileDir=workloads/android/pipelines/environment/abfs/docker_infra_template \
+  -p dockerfileDir=workloads/android/pipelines/environment/docker_image_template \
 ```
 
 ```bash

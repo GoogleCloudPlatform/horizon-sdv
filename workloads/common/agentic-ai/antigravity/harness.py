@@ -54,7 +54,7 @@ def _read_text(path: str | None, *, max_bytes: int) -> str:
 def _artifact_inventory(
     workspace: Path,
     *,
-    max_entries: int = 200,
+    max_entries: int = 80,
 ) -> list[str]:
     """Return a bounded test-results inventory without reading file content.
 
@@ -65,8 +65,15 @@ def _artifact_inventory(
     if not root.is_dir():
         return []
 
-    relevant_suffixes = {".html", ".json", ".log", ".txt", ".xml", ".zip"}
-    excluded_dirs = {".git", ".repo", "out"}
+    relevant_suffixes = {".json", ".log", ".txt", ".xml", ".zip"}
+    excluded_dirs = {".git", ".repo", "out", "target", "node_modules", ".gemini"}
+    excluded_names = {
+        "logo.png",
+        "compatibility_result.css",
+        "diff.css",
+        "package.json",
+        "package-lock.json",
+    }
     entries: list[str] = []
 
     for current, dirs, files in os.walk(root):
@@ -76,6 +83,8 @@ def _artifact_inventory(
             if name not in excluded_dirs and not name.startswith("out_")
         ]
         for name in sorted(files):
+            if name in excluded_names:
+                continue
             path = Path(current) / name
             if path.suffix.lower() not in relevant_suffixes and name != "logcat":
                 continue
@@ -163,6 +172,16 @@ def build_trace_identity(
     session_id = (f"session-{uuid.uuid4().hex[:12]}")
 
     return trace_id, workflow_id, session_id
+def _preprocess_cts_artifacts(workspace: Path) -> None:
+    """Extract compact module failure rankings and metrics from CTS HTML reports if present."""
+    try:
+        from cts_html_parser import generate_cts_summary
+
+        summary = generate_cts_summary(workspace)
+        if summary and summary.is_file():
+            LOG.info("Pre-processed CTS HTML report into %s", summary)
+    except Exception as exc:
+        LOG.warning("Failed to pre-process CTS HTML report: %s", exc)
 
 
 def build_failure_context(args: argparse.Namespace) -> str:
@@ -183,7 +202,7 @@ def build_failure_context(args: argparse.Namespace) -> str:
 
     log_text = _read_text(
         getattr(args, "log_file", None),
-        max_bytes=getattr(args, "seed_log_bytes", 64 * 1024),
+        max_bytes=getattr(args, "seed_log_bytes", 16 * 1024),
     )
     if log_text:
         parts.append("\nSeed failure log (bounded tail):\n" + log_text)
@@ -196,6 +215,7 @@ def build_failure_context(args: argparse.Namespace) -> str:
         )
 
     workspace = Path(args.workspace or os.getenv("WORKSPACE", os.getcwd())).resolve()
+    _preprocess_cts_artifacts(workspace)
     inventory = _artifact_inventory(workspace)
     if inventory:
         parts.append("\nAvailable staged artifacts:\n" + "\n".join(inventory))
@@ -250,7 +270,16 @@ async def _run(args: argparse.Namespace) -> int:
         markdown = Path(args.markdown_output)
         markdown.parent.mkdir(parents=True, exist_ok=True)
         markdown.write_text(render_markdown(payload), encoding="utf-8")
-        LOG.info("markdown analysis written to %s ""(trace_id=%s)",markdown, trace_id)
+        LOG.info("markdown analysis written to %s (trace_id=%s)", markdown, trace_id)
+
+        cts_summary = workspace / "test-results" / "cts_module_summary.txt"
+        target_summary = markdown.parent / cts_summary.name
+        if cts_summary.is_file() and not target_summary.is_file():
+            try:
+                target_summary.write_text(cts_summary.read_text(encoding="utf-8"), encoding="utf-8")
+                LOG.info("Copied CTS summary into %s", target_summary)
+            except Exception as copy_exc:
+                LOG.warning("Failed to copy CTS summary to %s: %s", target_summary, copy_exc)
 
     LOG.info(
         "Horizon Antigravity AI review completed: "
@@ -260,6 +289,8 @@ async def _run(args: argparse.Namespace) -> int:
         session_id,
     )
 
+    # Analysis success is separate from original build success/failure.
+    # Returning 0 lets ARGO/Jenkins publish the RCA artifact reliably.
     return 0
 
 
@@ -278,7 +309,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--seed-log-bytes",
         type=int,
-        default=64 * 1024,
+        default=16 * 1024,
         help="Maximum bytes copied from the tail of --log-file into the initial prompt",
     )
     p.add_argument(
@@ -325,6 +356,8 @@ def render_markdown(payload: dict[str, Any]) -> str:
                 f"- **Assumption:** {assumption}"
             )
     findings = payload.get("findings") or []
+    has_finding_fixes = False
+
     if findings:
         sections.extend(["", "## Findings"])
         for finding in findings:
@@ -338,15 +371,24 @@ def render_markdown(payload: dict[str, Any]) -> str:
                     f"- **Root cause:** {finding.get('root_cause', '')}",
                 ]
             )
+            # Safe evidence formatting (supports dict or string)
             for item in finding.get("evidence") or []:
-                location = f" ({item['location']})" if item.get("location") else ""
-                sections.append(
-                    f"- **Evidence:** `{item['source']}`{location}: {item['detail']}"
-                )
+                if isinstance(item, dict):
+                    source = item.get("source") or "unknown"
+                    location = f" ({item['location']})" if item.get("location") else ""
+                    detail = item.get("detail") or ""
+                    sections.append(
+                        f"- **Evidence:** `{source}`{location}: {detail}"
+                    )
+                elif isinstance(item, str) and item.strip():
+                    sections.append(f"- **Evidence:** {item.strip()}")
+
+            # Per-finding recommended fixes
             fixes = finding.get("recommended_fix") or []
             if isinstance(fixes, dict):
                 fixes = [fixes]
             for fix in fixes:
+                has_finding_fixes = True
                 sections.extend(["", "### Recommended Fix", str(fix.get("summary", ""))])
                 for label, values in (
                     ("Files", fix.get("files") or []),
@@ -355,8 +397,49 @@ def render_markdown(payload: dict[str, Any]) -> str:
                     ("Verification", fix.get("verification") or []),
                 ):
                     if values:
-                        sections.extend(["", f"#### {label}", *[f"- `{item}`" for item in values]])
-   
+                        sections.extend(["", f"#### {label}", *[f"- `{item}`" if label != "Verification" else f"- {item}" for item in values]])
+
+    # Top-level Evidence
+    top_level_evidence = list(payload.get("evidence") or [])
+    evidence_lines: list[str] = []
+    for item in top_level_evidence:
+        if isinstance(item, dict):
+            source = item.get("source") or "unknown"
+            location = f" ({item['location']})" if item.get("location") else ""
+            detail = item.get("detail") or ""
+            evidence_lines.append(f"- `{source}`{location}: {detail}")
+        elif isinstance(item, str) and item.strip():
+            evidence_lines.append(f"- {item.strip()}")
+    if evidence_lines:
+        sections.extend(["", "## Evidence", *evidence_lines])
+    elif not findings:
+        sections.extend(["", "## Evidence", "- No supporting evidence was returned."])
+
+    # Top-level Recommended Fix (one object; a list is accepted from older output)
+    global_fix = payload.get("recommended_fix") or {}
+    if isinstance(global_fix, list):
+        dicts = [item for item in global_fix if isinstance(item, dict)]
+        global_fix = dicts[0] if dicts else {}
+    if isinstance(global_fix, str) and global_fix.strip():
+        global_fix = {"summary": global_fix.strip()}
+
+    if global_fix and (not has_finding_fixes or not findings):
+        summary = str(global_fix.get("summary", "")).strip()
+        if summary:
+            sections.extend(["", "## Recommended Fix", summary])
+            files = global_fix.get("files") or []
+            commands = global_fix.get("commands") or []
+            patches = global_fix.get("patches") or []
+            verification = global_fix.get("verification") or []
+            if files:
+                sections.extend(["", "### Files", *[f"- `{item}`" for item in files]])
+            if commands:
+                sections.extend(["", "### Suggested Commands", *[f"- `{item}`" for item in commands]])
+            if patches:
+                sections.extend(["", "### Suggested Patches", *[f"- `{item}`" for item in patches]])
+            if verification:
+                sections.extend(["", "### Verification", *[f"- {item}" for item in verification]])
+
     sections.append("")
     return "\n".join(sections)
 

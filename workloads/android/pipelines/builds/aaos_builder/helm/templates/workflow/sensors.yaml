@@ -13,10 +13,19 @@
 # limitations under the License.
 #
 # Argo Events Sensor for this chart's WorkflowTemplate (same EventSource `webhook` / `workflow-dispatch`).
+{{- /*
+ABFS variant: its extra parameters follow parallelSyncJobs (index 10), in the same order as in
+workflowtemplates.yaml, so each one maps to spec.arguments.parameters.<11 + position>.
+aiReviewRuntime is appended after that list (index 11 + len of the ABFS list; 11 when the list is empty).
+*/}}
+{{- $abfsParams := list }}
+{{- if eq (include "aaos-builder.isAbfs" .) "true" }}
+{{- $abfsParams = list "abfsServer" "abfsCachedBuild" "abfsVersion" "abfsCasfsVersion" "abfsRepository" "uploaderManifestServer" "gerritTopic" "overrideMakeCommand" "abfsCleanCache" "abfsCachemanTimeout" "postRepoCommand" "aaosParallelBuildJobs" }}
+{{- end }}
 apiVersion: argoproj.io/v1alpha1
 kind: Sensor
 metadata:
-  name: webhook-aaos-builder
+  name: webhook-{{ .Values.workflowTemplateName }}
   namespace: {{ .Values.namespacePrefix }}argo-events
   annotations:
     argocd.argoproj.io/sync-wave: "9"
@@ -32,11 +41,14 @@ spec:
         data:
           - path: body.workflowTemplateName
             type: string
+            # Argo Events matches string filters as regular expressions, so an
+            # unanchored "aaos-builder" also matches "aaos-builder-abfs" and
+            # "aaos-builder-runtime-image" and starts this build for those too.
             value:
-              - {{ .Values.workflowTemplateName | quote }}
+              - {{ printf "^%s$" .Values.workflowTemplateName | quote }}
   triggers:
     - template:
-        name: submit-aaos-builder
+        name: submit-{{ .Values.workflowTemplateName }}
         argoWorkflow:
           operation: submit
           source:
@@ -44,7 +56,7 @@ spec:
               apiVersion: argoproj.io/v1alpha1
               kind: Workflow
               metadata:
-                generateName: webhook-aaos-builder-
+                generateName: webhook-{{ .Values.workflowTemplateName }}-
                 namespace: {{ include "aaos-builder.workflowNamespace" . | quote }}
               spec:
                 workflowTemplateRef:
@@ -62,6 +74,11 @@ spec:
                     - name: storageLabels
                     - name: enableGeminiAiAssistant
                     - name: parallelSyncJobs
+{{- range $abfsParams }}
+                    - name: {{ . }}
+{{- end }}
+                    - name: aiReviewRuntime
+                      value: {{ .Values.spec.aiReviewRuntime | default "agy" | quote }}
           parameters:
             - src:
                 dependencyName: webhook-dep
@@ -115,3 +132,14 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.parallelSyncJobs
               dest: spec.arguments.parameters.10.value
+{{- range $i, $p := $abfsParams }}
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.{{ $p }}
+              dest: spec.arguments.parameters.{{ add 11 $i }}.value
+{{- end }}
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.aiReviewRuntime
+                value: {{ .Values.spec.aiReviewRuntime | default "agy" | quote }}
+              dest: spec.arguments.parameters.{{ add 11 (len $abfsParams) }}.value
