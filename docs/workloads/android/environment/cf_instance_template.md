@@ -311,6 +311,8 @@ Required if using a private repository defined in `ANDROID_CUTTLEFISH_REPO_URL`.
 ### `ANDROID_CUTTLEFISH_POST_COMMAND`
 
 Command to run in the `ANDROID_CUTTLEFISH_REPO_URL` defined repo. e.g.
+- To pin Rust version if not already pinned:
+  - `grep -q rust.toolchain base/cvd/toolchain/rust.MODULE.bazel || printf \'\\nrust = use_extension(\\042@rules_rust//rust:extensions.bzl\\042, \\042rust\\042)\\nrust.toolchain(edition = \\0422021\\042, versions = [\\0421.89.0\\042])\\n\' >> base/cvd/toolchain/rust.MODULE.bazel`
 - To fix the netsimd build issues with cxxbridge:
   - `git cherry-pick 78b66377`
 - Replace stale repos cuttlefish may be using, such as old kernel.org repos that have been deleted:

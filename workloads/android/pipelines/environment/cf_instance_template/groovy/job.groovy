@@ -141,7 +141,9 @@ the repo credentials, i.e.
       name('ANDROID_CUTTLEFISH_POST_COMMAND')
       defaultValue('grep -q rust.toolchain base/cvd/toolchain/rust.MODULE.bazel || printf \'\\nrust = use_extension(\\042@rules_rust//rust:extensions.bzl\\042, \\042rust\\042)\\nrust.toolchain(edition = \\0422021\\042, versions = [\\0421.89.0\\042])\\n\' >> base/cvd/toolchain/rust.MODULE.bazel')
       description('''<p>Command to run in the <code>ANDROID_CUTTLEFISH_REPO_URL</code> repository</a> to workaround issues etc,  e.g.
-        <ul><li>Cherry pick: <code>git cherry-pick b3e4bd9</code></li>
+        <ul>
+          <li>Pin Rust version: <code>grep -q rust.toolchain base/cvd/toolchain/rust.MODULE.bazel || printf \'\\nrust = use_extension(\\042@rules_rust//rust:extensions.bzl\\042, \\042rust\\042)\\nrust.toolchain(edition = \\0422021\\042, versions = [\\0421.89.0\\042])\\n\' >> base/cvd/toolchain/rust.MODULE.bazel</code></li>
+          <li>Cherry pick: <code>git cherry-pick b3e4bd9</code></li>
             <li>Checkout commit: <code>git checkout 655de58f</code></li></ul></p>''')
       trim(true)
     }
