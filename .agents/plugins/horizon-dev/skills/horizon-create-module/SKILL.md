@@ -9,7 +9,8 @@ description: >-
   and registration in the Module Manager catalog (ModuleCatalog CR) with Developer Portal integration.
 ---
 
-<!-- Copyright (c) 2026 Accenture and Google LLC, All Rights Reserved.
+<!-- Copyright 2026 Google LLC
+Modifications Copyright (c) 2026 Accenture, All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
