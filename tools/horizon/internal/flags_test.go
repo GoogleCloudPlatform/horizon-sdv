@@ -69,3 +69,29 @@ func TestLoadAPIClientRequiresConfig(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestLoadAPIClientAppliesAPIFlagBeforeURLCheck(t *testing.T) {
+	isolateConfigEnv(t)
+	oldAPI, oldDomain := FlagAPI, FlagDomain
+	t.Cleanup(func() {
+		FlagAPI, FlagDomain = oldAPI, oldDomain
+	})
+	FlagAPI = "https://cli.example/horizon-api/"
+	FlagDomain = ""
+	_, _, err := LoadAPIClient()
+	if err == nil || !strings.Contains(err.Error(), "not authenticated") || strings.Contains(err.Error(), "HORIZON_API_BASE_URL") {
+		t.Fatalf("err = %v", err)
+	}
+
+	t.Setenv("HORIZON_ACCESS_TOKEN", "test-token")
+	c, cfg, err := LoadAPIClient()
+	if err != nil {
+		t.Fatalf("LoadAPIClient: %v", err)
+	}
+	if cfg.BaseURL != "https://cli.example/horizon-api" {
+		t.Fatalf("BaseURL = %q", cfg.BaseURL)
+	}
+	if c == nil || c.bearer != "test-token" {
+		t.Fatalf("client = %#v", c)
+	}
+}

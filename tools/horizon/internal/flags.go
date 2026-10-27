@@ -42,7 +42,7 @@ func LoadAPIClient() (*Client, *Config, error) {
 }
 
 func LoadAPIClientWith(module, template string) (*Client, *Config, error) {
-	cfg, err := LoadConfig()
+	cfg, err := loadConfigDraft()
 	if err != nil {
 		return nil, nil, err
 	}

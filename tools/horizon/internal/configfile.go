@@ -129,6 +129,15 @@ func mergeFileIntoConfig(cfg *Config, fc *fileConfig) {
 
 // LoadConfig reads defaults, optional ~/.config/horizon/config.yaml, then environment (env overrides file).
 func LoadConfig() (*Config, error) {
+	cfg, err := loadConfigDraft()
+	if err != nil {
+		return nil, err
+	}
+	return finalizeConfig(cfg)
+}
+
+// loadConfigDraft reads file and env. URL checks happen after CLI flags.
+func loadConfigDraft() (*Config, error) {
 	path, _ := HorizonConfigFilePath()
 	var fc *fileConfig
 	if path != "" {
@@ -138,7 +147,10 @@ func LoadConfig() (*Config, error) {
 			return nil, err
 		}
 	}
-	return buildConfig(fc)
+	cfg := defaultConfig()
+	mergeFileIntoConfig(cfg, fc)
+	mergeEnvIntoConfig(cfg)
+	return cfg, nil
 }
 
 // LoadConfigRelaxed is for auth login: Keycloak URL is required; Horizon API base URL is optional.
@@ -175,13 +187,6 @@ func finalizeConfigRelaxed(cfg *Config) (*Config, error) {
 		return nil, fmt.Errorf("Keycloak URL unknown: set KEYCLOAK_BASE or HORIZON_DOMAIN, or domain in ~/.config/horizon/config.yaml, or pass --domain (e.g. %s auth login --device --domain horizon.example.com)", ProgName())
 	}
 	return cfg, nil
-}
-
-func buildConfig(fc *fileConfig) (*Config, error) {
-	cfg := defaultConfig()
-	mergeFileIntoConfig(cfg, fc)
-	mergeEnvIntoConfig(cfg)
-	return finalizeConfig(cfg)
 }
 
 func defaultConfig() *Config {
