@@ -76,7 +76,7 @@ spec:
                     - name: storageLabels
                     - name: submittedBy
                     - name: aiReviewRuntime
-                      value: {{ $root.Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+                      value: {{ $root.Values.spec.aiReviewRuntime | default "agy" | quote }}
           parameters:
             - src:
                 dependencyName: webhook-dep
@@ -166,5 +166,5 @@ spec:
             - src:
                 dependencyName: webhook-dep
                 dataKey: body.aiReviewRuntime
-                value: {{ $root.Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+                value: {{ $root.Values.spec.aiReviewRuntime | default "agy" | quote }}
               dest: spec.arguments.parameters.18.value

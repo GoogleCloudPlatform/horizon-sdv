@@ -67,6 +67,8 @@ currentBuild.currentResult.
         value: "{{ "{{workflow.parameters.manifestName}}" }}"
       # AI review. Prompt and skills paths in values start with /workspace;
       # the script below maps them onto the pipeline checkout of this pod.
+      - name: AI_REVIEW_RUNTIME
+        value: '{{ "{{" }}workflow.parameters.aiReviewRuntime{{ "}}" }}'
       - name: GEMINI_PROMPT_FILE
         value: {{ .Values.spec.geminiPromptFile | quote }}
       - name: GEMINI_PROMPT_FILE_2
@@ -81,8 +83,8 @@ currentBuild.currentResult.
         value: {{ .Values.spec.geminiPreviewFeatures | quote }}
       - name: GEMINI_COMMAND_LINE
         value: {{ include "aaos-builder.geminiCommandLineResolved" . | quote }}
-      - name: GEMINI_AI_EXECUTION_TIMEOUT_HOURS
-        value: {{ .Values.spec.geminiAiExecutionTimeoutHours | quote }}
+      - name: GEMINI_AI_EXECUTION_TIMEOUT_MINUTES
+        value: {{ .Values.spec.geminiAiExecutionTimeoutMinutes | default "60" | quote }}
       - name: GEMINI_STEP2_PRIOR_CONTEXT_BYTES
         value: "131072"
       # The ABFS workspace: /aaos-cache/abfs when cached, /abfs when not

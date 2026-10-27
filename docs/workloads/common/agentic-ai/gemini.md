@@ -14,7 +14,7 @@ limitations under the License. -->
 
 # Gemini CLI integration
 
-Scripts and environment for running the [Gemini CLI](https://geminicli.com/docs/cli/headless/) in headless mode (e.g. from Jenkins or Argo). Used by the AAOS Builder AI review step and the Gemini AI Assistant utility.
+Scripts and environment for running the [Gemini CLI](https://geminicli.com/docs/cli/headless/) in headless mode (e.g. from Jenkins or Argo). Used by the AAOS Builder AI review step and the Gemini AI Assistant utility. The shared entrypoint `run_ai_review.sh` starts Antigravity when `AI_REVIEW_RUNTIME` is `agy` or unset, which is the default. See [Antigravity AI review](../../../../workloads/common/agentic-ai/antigravity/README.md).
 
 ## Argo Workflows and Jenkins
 
@@ -37,8 +37,8 @@ Scripts and environment for running the [Gemini CLI](https://geminicli.com/docs/
 | `gemini_environment.sh` | Sets and exports variables (prompt file, command line, artifact path, preview/location). Source this before other scripts. |
 | `gemini_initialise.sh` | Cleans artifacts, installs/upgrades gemini-cli, writes `.gemini/settings.json`. If skills.yaml is found (`GEMINI_SKILLS_YAML` or `skills.yaml` next to prompt path), runs `gemini_skills_from_yaml.py` to populate `.gemini/skills/`. Skills file is always named `skills.yaml`. In Jenkins / `CI=true` / Argo workflow runs, copies every `*.toml` under `gemini/policies/` into `.gemini/policies/` (see [Workspace policy files](#workspace-policy-files-toml)). |
 | `gemini_analysis.sh` | One prompt → single run. Two or three prompts → **sequenced**: **one Gemini CLI invocation per step**, each with its own JSON output file (`headless_output_stepN_<timestamp>_<random>.json`). Prior-step context is file-based (`stepN_output.md`). Step 3 includes **both** `step1_output.md` and `step2_output.md` when present (optional byte caps). Set `GEMINI_PROMPT_FILE` (step 1), optionally `GEMINI_PROMPT_FILE_2` and `GEMINI_PROMPT_FILE_3`. Default when unset: AAOS three-step. Requires `jq` for extraction. See [Sequenced analysis](#sequenced-analysis). |
-| `run_ai_review.sh` | **Shared runner:** reads **`GEMINI_*`**, **`CLOUD_*`**, repo root (**`PIPELINE_REPO_ROOT`** / **`WORKSPACE`** / **`REPO_ROOT`**), optional hooks, **`gemini_initialise.sh`** + **`gemini_analysis.sh`**, optional **`move_gemini_artifacts`**, client-error zip handling. |
-| `workloads/android/pipelines/tests/gemini_argo_prepare_staging.sh` | **Argo only (CVD/CTS):** merge ephemeral VM artifacts into **`/workspace/test-results`** on the **`gemini-test-results`** PVC before **`gemini-review`**. Set **`GEMINI_PREPARE_MODE`** to **`cvd`** or **`cts`**. Invoked from **`prepare-gemini-cvd`** / **`prepare-gemini-cts`** in chart **`_gemini.tpl`**. |
+| `run_ai_review.sh` | **Shared runner:** reads **`GEMINI_*`**, **`CLOUD_*`**, **`AI_REVIEW_RUNTIME`**, and the repo root (**`PIPELINE_REPO_ROOT`** / **`WORKSPACE`** / **`REPO_ROOT`**). **`agy`** (default when unset) runs **`run_agy_ai_review.sh`**. **`gemini-cli`** runs **`gemini_initialise.sh`** + **`gemini_analysis.sh`**. Then optional **`move_gemini_artifacts`** and client-error zip handling. |
+| `workloads/android/pipelines/tests/gemini_argo_prepare_staging.sh` | **Argo only (CVD/CTS):** merge ephemeral VM artifacts into **`/workspace/test-results`** on the **`gemini-test-results`** PVC before **`gemini-review`**. Set **`GEMINI_PREPARE_MODE`** to **`cvd`** or **`cts`**. Both modes unpack Cuttlefish zips under **`test-results/cvd`**. **`cts`** also unpacks CTS result zips under **`test-results/cts`**, hoists a session directory that contains **`test_result.xml`** or **`invocation_summary.txt`**, and mirrors **`invocation_summary.txt`** to **`test-results/`** when it is not already there. Invoked from **`prepare-gemini-cvd`** / **`prepare-gemini-cts`** in chart **`_gemini.tpl`**. |
 | `review-pre-<profile>.sh`, `review-post-<profile>.sh` | Optional hooks under **`${REPO_ROOT}/${GEMINI_HOOK_DIR}`** when **`GEMINI_HOOK_DIR`** is set. **`run_ai_review.sh`** dispatches by **`GEMINI_HOOK_PROFILE`**. **AAOS** uses profile **`aaos`**; **CVD/CTS Argo** use **`cvd`** / **`cts`** (**`review-post-*.sh`** under **`cvd_launcher/hooks`** and **`cts_execution/hooks`** runs **`gemini_storage.sh`** after analysis). |
 
 ## Key environment variables
@@ -50,14 +50,16 @@ Scripts and environment for running the [Gemini CLI](https://geminicli.com/docs/
 - **GEMINI_POST_REVIEW_COMMAND** – Optional snippet **`eval`**’d after move / empty JSON cleanup, before **`gemini-client-error.zip`** handling (e.g. **`gemini_storage.sh`** for CTS).
 - **GEMINI_SKIP_MOVE_ARTIFACTS** – Set to **`1`** to skip **`move_gemini_artifacts`** when outputs are already under **`WORKSPACE`** (Argo CVD/CTS set this after **`gemini_argo_prepare_staging.sh`**).
 - **GEMINI_PREPARE_MODE** – **`cvd`** or **`cts`** for **`gemini_argo_prepare_staging.sh`** only (Argo prepare step).
-- **GEMINI_AI_EXECUTION_TIMEOUT_HOURS** – Hours for **`gemini_analysis.sh`**; falls back to **`GEMINI_AI_EXECUTION_TIMEOUT`** or **`2`**.
+- **AI_REVIEW_RUNTIME** – **`agy`** (default) or **`gemini-cli`**. Jenkins parameters list **`agy`** first. Argo charts set **`spec.aiReviewRuntime`** to **`agy`**, and the AAOS, CTS, and CVD templates fall back to **`agy`** when that value is empty. CTS and CVD **`gemini-review`** pods also set **`JOB_NAME`** to the workflow name and **`BUILD_NUMBER`** to the workflow UID.
+- **GEMINI_AI_EXECUTION_TIMEOUT_MINUTES** – Minutes for **`run_ai_review.sh`**. Default **`60`** when unset. **`timeout`** uses that value with **`--kill-after=1m`**. Jenkins choices are **`60`**, **`45`**, **`30`**, **`20`**, **`10`**, **`90`**, and **`120`**.
+- **GEMINI_MODEL** – Model name for Antigravity and for jobs that inject **`--model`**. Empty means the runtime default.
 - **GEMINI_AAOS_LOG_TAIL_MODE** – **`tail`** (default) or **`fullcopy`** for **`aaos-build.log`** → **`aaos-build.log.tail`** in **`review-pre-aaos.sh`** (ABFS uses **`fullcopy`**).
-- **GEMINI_PROMPT_FILE** – Step 1 prompt file path or base64-encoded content.
-- **GEMINI_PROMPT_FILE_2** – Optional step 2 prompt; required only for sequenced (two or three steps).
-- **GEMINI_PROMPT_FILE_3** – Optional step 3 prompt (do not reorder).
+- **GEMINI_PROMPT_FILE** – Step 1 prompt file path or base64-encoded content. Read only when **`AI_REVIEW_RUNTIME`** is **`gemini-cli`**. Antigravity ignores it.
+- **GEMINI_PROMPT_FILE_2** – Optional step 2 prompt; required only for sequenced CLI runs (two or three steps). Ignored by Antigravity.
+- **GEMINI_PROMPT_FILE_3** – Optional step 3 prompt (do not reorder). Ignored by Antigravity.
 - **GEMINI_COMMAND_LINE** – Full CLI invocation (e.g. `gemini --yolo --output-format json`). To pin the model and avoid auto-routing to preview-only models, add `--model <model name>` (e.g. `--model gemini-3.8-flash`).
 - **GEMINI_PREVIEW_FEATURES**, **GEMINI_LOCATION_GLOBAL** – Passed into `.gemini/settings.json` and location.
-- **GEMINI_SKILLS_YAML** – Optional path to `skills.yaml`. When set, `gemini_initialise.sh` converts it to `.gemini/skills/*/SKILL.md` (requires Python PyYAML). The skills file is always named `skills.yaml`.
+- **GEMINI_SKILLS_YAML** – Path to `skills.yaml`. Set only when **`AI_REVIEW_RUNTIME`** is **`gemini-cli`**: `gemini_initialise.sh` converts it to `.gemini/skills/*/SKILL.md` (requires Python PyYAML). The AAOS Helm review template requires `spec.geminiSkillsYaml` and exports this variable only for that runtime. Antigravity does not receive it and uses `workloads/common/agentic-ai/antigravity/skills/`.
 - **GEMINI_ARTIFACT_PATH** – Directory for analysis output (default `gemini-assist`).
 - **GEMINI_OUTPUT_FILE_NAME** – JSON path for the CLI’s `--output-format json` sink. In **sequenced** runs, `gemini_analysis.sh` **overwrites** this per step with `headless_output_stepN_*.json`; do not rely on a single global name across steps.
 - **GEMINI_STEP2_PRIOR_CONTEXT_BYTES** – If set to a positive integer, maximum bytes of `step1_output.md` appended into the **step 2** composed prompt (`head -c`). Unset or `0` = append full step 1 text. Some jobs set `131072` to limit prompt size.

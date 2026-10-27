@@ -78,7 +78,7 @@ spec:
                     - name: {{ . }}
 {{- end }}
                     - name: aiReviewRuntime
-                      value: {{ .Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+                      value: {{ .Values.spec.aiReviewRuntime | default "agy" | quote }}
           parameters:
             - src:
                 dependencyName: webhook-dep
@@ -141,5 +141,5 @@ spec:
             - src:
                 dependencyName: webhook-dep
                 dataKey: body.aiReviewRuntime
-                value: {{ .Values.spec.aiReviewRuntime | default "gemini-cli" | quote }}
+                value: {{ .Values.spec.aiReviewRuntime | default "agy" | quote }}
               dest: spec.arguments.parameters.{{ add 11 (len $abfsParams) }}.value

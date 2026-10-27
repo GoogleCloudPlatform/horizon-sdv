@@ -79,15 +79,15 @@ spec:
   # Model/command: non-empty geminiModel builds gemini --model <name> --yolo --output-format json for gemini-review;
   # if geminiModel is empty, geminiCommandLine is passed through unchanged.
   enableGeminiAiAssistant: "true"
-  # AI review execution runtime: gemini-cli (default) or agy.
-  aiReviewRuntime: "gemini-cli"
+  # AI review execution runtime: agy (chart default) or gemini-cli.
+  aiReviewRuntime: "agy"
   geminiModel: "gemini-3.8-flash"
   geminiAnalyseOnSuccess: "false"
   geminiCommandLine: "gemini --yolo --output-format json"
   geminiPreviewFeatures: "true"
   geminiLocationGlobal: "true"
   geminiStagingStorageSize: "5Gi"
-  geminiAiExecutionTimeoutHours: "2"
+  geminiAiExecutionTimeoutMinutes: "60"
   # Bucket name only (no gs://) for gemini_storage.sh final Gemini outputs. If empty and cloudProject is set, defaults to "<cloudProject>-aaos".
   # workflow.parameters.storageBucketDestination defaults to parent gs://<cloudProject>-aaos/Android/Tests/<androidTestsWorkflowArtifactFolder>; DAG step compute-test-results-staging-uri appends /<YYYY-MM-DD-HHMMSS>_<workflow.name> (aaos-builder parity).
   geminiArtifactRootName: ""
