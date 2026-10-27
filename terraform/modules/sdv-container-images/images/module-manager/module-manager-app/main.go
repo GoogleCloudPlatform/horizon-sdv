@@ -210,7 +210,7 @@ func main() {
 	}
 
 	// REST API server (runs in goroutine, uses the same client and stores).
-	apiHandler := api.NewHandler(mgr.GetClient(), apiReader, stateStore, catalogStore, namespace, argocdNamespace, argocdProject, repoURL, targetRevision, moduleConfig)
+	apiHandler := api.NewHandler(mgr.GetClient(), apiReader, stateStore, catalogStore, namespace, argocdNamespace, argocdProject, repoURL, targetRevision, moduleConfig, rootAppNameList)
 	srv := &http.Server{Addr: apiAddr, Handler: apiHandler.Routes(), ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {

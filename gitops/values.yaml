@@ -65,9 +65,11 @@ config:
     horizonApiInternalBaseUrl: ""
     moduleManagerInternalBaseUrl: ""
 
-  # Config Connector configuration (templates/config-connector.yaml).
+  # Config Connector (webhook monitor in templates/config-connector-init.yaml;
+  # cluster-mode ConfigConnector CR in gitops/apps/configconnector-operator).
   configConnector:
-    # Cluster-mode KCC: no per-namespace ConfigConnectorContext (see ConfigConnector CR in config-connector.yaml).
+    # Cluster-mode KCC: no per-namespace ConfigConnectorContext
+    # (see ConfigConnector CR in gitops/apps/configconnector-operator).
     # Legacy list retained for docs / future namespaced-mode only; not rendered by Helm today.
     namespaces:
       - gcp

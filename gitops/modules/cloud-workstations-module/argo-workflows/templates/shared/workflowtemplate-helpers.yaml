@@ -1,0 +1,156 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Internal steps shared by the Cloud Workstations WorkflowTemplates (not listed in the Portal).
+# Call them with templateRef (name: cws-helpers). They run as the calling Workflow's ServiceAccount
+# (workflow-executor) and only touch Horizon CRs in the resourceNamespace; no GCP calls.
+#
+# create-and-wait-ready
+#   inputs: manifest (JSON of one WorkstationConfig or Workstation, group workstations.horizon-sdv.io),
+#           timeoutSeconds (default readyTimeoutSeconds)
+#   Forces metadata.namespace, runs a server-side dry run, then creates the object. Never overwrites:
+#   an existing name fails with AlreadyExists. Waits until Ready=True for the current generation.
+#
+# patch-and-wait-ready
+#   inputs: kind (workstationconfig or workstation), name, patch (JSON merge patch touching only spec),
+#           timeoutSeconds (default readyTimeoutSeconds)
+#   Dry-runs, patches, then waits until Ready=True for the new generation.
+#
+# delete-and-wait-gone
+#   inputs: kind (workstationconfig or workstation), name, timeoutSeconds (default deleteTimeoutSeconds)
+#   Deletes (missing objects are fine) and waits until the object is gone.
+#   A WorkstationConfig with child Workstations never finishes deleting: callers must check first.
+#
+# Every step fails fast when the controller reports phase Failed for the current generation,
+# and prints the final phase and conditions to the step log.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-helpers
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+    horizon-sdv.io/expose: "false"
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  templates:
+    - name: create-and-wait-ready
+      inputs:
+        parameters:
+          - name: manifest
+          - name: timeoutSeconds
+            value: {{ .Values.readyTimeoutSeconds | quote }}
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: MANIFEST
+            value: "{{ "{{inputs.parameters.manifest}}" }}"
+          - name: TIMEOUT_SECONDS
+            value: "{{ "{{inputs.parameters.timeoutSeconds}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws.shellLib" . | nindent 12 }}
+
+            check_timeout "$TIMEOUT_SECONDS"
+            jq -e 'type == "object"' >/dev/null <<<"$MANIFEST" 2>/dev/null || fail "manifest is not a JSON object"
+            api_version=$(jq -r '.apiVersion // ""' <<<"$MANIFEST")
+            kind=$(jq -r '.kind // ""' <<<"$MANIFEST")
+            name=$(jq -r '.metadata.name // ""' <<<"$MANIFEST")
+            [[ "$api_version" == workstations.horizon-sdv.io/* ]] || fail "apiVersion must be workstations.horizon-sdv.io/*, got '$api_version'"
+            case "$kind" in
+              WorkstationConfig) resource=$(resource_for workstationconfig) ;;
+              Workstation) resource=$(resource_for workstation) ;;
+              *) fail "kind must be WorkstationConfig or Workstation, got '$kind'" ;;
+            esac
+            [[ -n "$name" ]] || fail "metadata.name is required"
+            manifest=$(jq --arg ns "$CWS_NAMESPACE" '.metadata.namespace = $ns' <<<"$MANIFEST")
+
+            echo "Validating $kind $name in $CWS_NAMESPACE (server-side dry run)"
+            kubectl create --dry-run=server -o name -f - <<<"$manifest"
+            echo "Creating $kind $name"
+            kubectl create -o name -f - <<<"$manifest"
+            wait_ready "$resource" "$name" "$TIMEOUT_SECONDS"
+
+    - name: patch-and-wait-ready
+      inputs:
+        parameters:
+          - name: kind
+          - name: name
+          - name: patch
+          - name: timeoutSeconds
+            value: {{ .Values.readyTimeoutSeconds | quote }}
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: KIND
+            value: "{{ "{{inputs.parameters.kind}}" }}"
+          - name: NAME
+            value: "{{ "{{inputs.parameters.name}}" }}"
+          - name: PATCH
+            value: "{{ "{{inputs.parameters.patch}}" }}"
+          - name: TIMEOUT_SECONDS
+            value: "{{ "{{inputs.parameters.timeoutSeconds}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws.shellLib" . | nindent 12 }}
+
+            check_timeout "$TIMEOUT_SECONDS"
+            resource=$(resource_for "$KIND")
+            [[ -n "$NAME" ]] || fail "name is required"
+            jq -e 'type == "object" and (keys - ["spec"] | length == 0)' >/dev/null <<<"$PATCH" 2>/dev/null \
+              || fail "patch must be a JSON object that only contains spec"
+
+            echo "Validating patch of $KIND $NAME in $CWS_NAMESPACE (server-side dry run)"
+            kubectl patch "$resource" "$NAME" -n "$CWS_NAMESPACE" --type=merge -p "$PATCH" --dry-run=server -o name
+            echo "Patching $KIND $NAME"
+            kubectl patch "$resource" "$NAME" -n "$CWS_NAMESPACE" --type=merge -p "$PATCH" -o name
+            wait_ready "$resource" "$NAME" "$TIMEOUT_SECONDS"
+
+    - name: delete-and-wait-gone
+      inputs:
+        parameters:
+          - name: kind
+          - name: name
+          - name: timeoutSeconds
+            value: {{ .Values.deleteTimeoutSeconds | quote }}
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: KIND
+            value: "{{ "{{inputs.parameters.kind}}" }}"
+          - name: NAME
+            value: "{{ "{{inputs.parameters.name}}" }}"
+          - name: TIMEOUT_SECONDS
+            value: "{{ "{{inputs.parameters.timeoutSeconds}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws.shellLib" . | nindent 12 }}
+
+            check_timeout "$TIMEOUT_SECONDS"
+            resource=$(resource_for "$KIND")
+            [[ -n "$NAME" ]] || fail "name is required"
+
+            echo "Deleting $KIND $NAME in $CWS_NAMESPACE"
+            kubectl delete "$resource" "$NAME" -n "$CWS_NAMESPACE" --ignore-not-found --wait=false
+            wait_gone "$resource" "$NAME" "$TIMEOUT_SECONDS"

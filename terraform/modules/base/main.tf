@@ -55,6 +55,35 @@ module "sdv_wi" {
   ]
 }
 
+# Start and stop for the Cloud Workstations start and stop workflows. The controller never holds these.
+resource "google_project_iam_custom_role" "cws_workstation_power" {
+  project     = data.google_project.project.project_id
+  role_id     = "horizonCloudWorkstationsPower"
+  title       = "Horizon Cloud Workstations start and stop"
+  description = "Start and stop workstations and poll the resulting long-running operation"
+  permissions = [
+    "workstations.operations.get",
+    "workstations.workstations.start",
+    "workstations.workstations.stop",
+  ]
+}
+
+resource "google_project_iam_member" "cws_workstation_power" {
+  project = data.google_project.project.project_id
+  role    = google_project_iam_custom_role.cws_workstation_power.id
+  member  = "serviceAccount:gke-cws-workstation-power-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
+
+  # Start and stop only apply to workstations in the Horizon cluster. Operation names are
+  # projects/PROJECT/locations/REGION/operations/ID, so polling cannot be limited to that cluster.
+  condition {
+    title       = "horizon_workstation_cluster"
+    description = "Start and stop only workstations in horizon-sdv-ws-cluster. Operation reads stay in this region."
+    expression  = "resource.name.startsWith(\"projects/${data.google_project.project.project_id}/locations/${var.sdv_region}/workstationClusters/horizon-sdv-ws-cluster/\") || resource.name.startsWith(\"projects/${data.google_project.project.project_id}/locations/${var.sdv_region}/operations/\")"
+  }
+
+  depends_on = [module.sdv_wi]
+}
+
 # IAM conditions cannot restrict storage.buckets.create; this is create-only (no object access).
 resource "google_project_iam_custom_role" "storage_gcs_bucket_creator" {
   project     = data.google_project.project.project_id
@@ -74,18 +103,51 @@ resource "google_project_iam_member" "storage_gcs_bucket_creator" {
   depends_on = [module.sdv_wi]
 }
 
+# Posture and IAM for the Cloud Workstations controller. Create, delete, start, and stop stay off this role.
+resource "google_project_iam_custom_role" "cws_module_controller" {
+  project     = data.google_project.project.project_id
+  role_id     = "horizonCloudWorkstationsController"
+  title       = "Horizon Cloud Workstations controller"
+  description = "Get and patch workstation config posture, and get or set IAM policy on configs and workstations"
+  permissions = [
+    "workstations.workstationConfigs.get",
+    "workstations.workstationConfigs.update",
+    "workstations.workstationConfigs.getIamPolicy",
+    "workstations.workstationConfigs.setIamPolicy",
+    "workstations.workstations.getIamPolicy",
+    "workstations.workstations.setIamPolicy",
+  ]
+}
+
+resource "google_project_iam_member" "cws_module_controller" {
+  project = data.google_project.project.project_id
+  role    = google_project_iam_custom_role.cws_module_controller.id
+  member  = "serviceAccount:gke-cws-module-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
+
+  depends_on = [module.sdv_wi]
+}
+
+# Permit the controller to attach only the module-owned host identity to workstation VMs. (cloud-workstations module)
+resource "google_service_account_iam_member" "cws_module_host_sa_user" {
+  service_account_id = "projects/${data.google_project.project.project_id}/serviceAccounts/gke-cws-host-vm-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:gke-cws-module-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
+
+  depends_on = [module.sdv_wi]
+}
+
 module "sdv_network" {
   source = "../sdv-network"
 
-  network                     = var.sdv_network
-  create_internet_egress_route = true
-  subnetwork           = var.sdv_subnetwork
-  region               = var.sdv_region
-  router_name          = var.sdv_network_egress_router_name
-  pods_range           = var.pods_range
-  services_range       = var.services_range
-  enable_arm64_dedicated_subnet         = var.enable_arm64_dedicated_subnet
-  arm64_region         = var.arm64_region
+  network                             = var.sdv_network
+  create_internet_egress_route        = true
+  subnetwork                          = var.sdv_subnetwork
+  region                              = var.sdv_region
+  router_name                         = var.sdv_network_egress_router_name
+  pods_range                          = var.pods_range
+  services_range                      = var.services_range
+  enable_arm64_dedicated_subnet       = var.enable_arm64_dedicated_subnet
+  arm64_region                        = var.arm64_region
   arm64_subnetwork                    = var.arm64_subnetwork
   arm64_pods_range                    = var.arm64_pods_range
   arm64_services_range                = var.arm64_services_range
@@ -119,8 +181,8 @@ module "sdv_container_images" {
 
   images = {
     for name, image in local.images : name => {
-      directory       = image.directory
-      version         = image.build_version
+      directory = image.directory
+      version   = image.build_version
       build_args = merge(
         try(image.build_args, {}),
         name == "horizon-dev-portal" ? { HORIZON_CLI_VERSION = local.horizon_core_version } : {}
@@ -232,16 +294,16 @@ module "sdv_gke_apps" {
     kubectl    = kubectl
   }
 
-  gcp_project_id             = var.sdv_project
-  gcp_cloud_region           = var.sdv_region
-  sdv_cluster_name           = var.sdv_cluster_name
-  gcp_cloud_zone             = var.sdv_zone
-  gcp_backend_bucket         = var.gcp_backend_bucket_name
-  gcp_registry_id            = var.sdv_artifact_registry_repository_id
-  gcp_storage_location       = var.sdv_location
-  gcp_compute_sa_email       = var.sdv_gcp_compute_sa_email
-  cluster_node_locations     = var.sdv_cluster_node_locations
-  cluster_release_channel    = var.sdv_cluster_release_channel
+  gcp_project_id          = var.sdv_project
+  gcp_cloud_region        = var.sdv_region
+  sdv_cluster_name        = var.sdv_cluster_name
+  gcp_cloud_zone          = var.sdv_zone
+  gcp_backend_bucket      = var.gcp_backend_bucket_name
+  gcp_registry_id         = var.sdv_artifact_registry_repository_id
+  gcp_storage_location    = var.sdv_location
+  gcp_compute_sa_email    = var.sdv_gcp_compute_sa_email
+  cluster_node_locations  = var.sdv_cluster_node_locations
+  cluster_release_channel = var.sdv_cluster_release_channel
   # CASFS-pinned GKE node version for abfs-client-module-ubuntu KCC ContainerNodePool
   abfs_build_node_pool_version = var.sdv_abfs_build_node_pool_version
 
@@ -276,13 +338,16 @@ module "sdv_gke_apps" {
   # Horizon platform component versions from the repo-root versions.yaml.
   component_versions = local.versions.components
 
-  enable_arm64_dedicated_subnet       = var.enable_arm64_dedicated_subnet
-  arm64_region       = var.arm64_region
-  arm64_zone         = var.arm64_zone
-  arm64_subnetwork   = var.arm64_subnetwork
-  primary_subnetwork = var.sdv_subnetwork
-  nodes_range        = var.nodes_range
-  arm64_nodes_range  = var.arm64_nodes_range
+  enable_arm64_dedicated_subnet = var.enable_arm64_dedicated_subnet
+  arm64_region                  = var.arm64_region
+  arm64_zone                    = var.arm64_zone
+  arm64_subnetwork              = var.arm64_subnetwork
+  primary_subnetwork            = var.sdv_subnetwork
+  sdv_network                   = var.sdv_network
+  nodes_range                   = var.nodes_range
+  arm64_nodes_range             = var.arm64_nodes_range
+
+  connect_gateway_url = local.connect_gateway_url
 }
 
 module "sdv_certificate_manager" {
@@ -547,9 +612,9 @@ resource "google_compute_firewall" "allow_internal_egress" {
   }
 
   destination_ranges = concat(
-    ["10.0.0.0/8"],                                 # Internal VPC ranges
-    [var.pods_range],                               # GKE pods range
-    [var.services_range],                           # GKE services range
+    ["10.0.0.0/8"],                                                  # Internal VPC ranges
+    [var.pods_range],                                                # GKE pods range
+    [var.services_range],                                            # GKE services range
     var.enable_arm64_dedicated_subnet ? [var.arm64_pods_range] : [], # ARM64 pods range if enabled
     var.enable_arm64_dedicated_subnet ? [var.arm64_services_range] : []
   )

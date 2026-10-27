@@ -1,0 +1,156 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workstations.workstations.horizon-sdv.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  group: workstations.horizon-sdv.io
+  scope: Namespaced
+  names:
+    plural: workstations
+    singular: workstation
+    kind: Workstation
+    shortNames:
+      - ws
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              description: WorkstationSpec defines the desired state of an individual workstation.
+              x-kubernetes-validations:
+                - rule: "!has(oldSelf.resourceID) || (has(self.resourceID) && self.resourceID == oldSelf.resourceID)"
+                  message: resourceID is immutable once set
+              properties:
+                configRef:
+                  type: object
+                  description: Reference to the parent Horizon WorkstationConfig. (KCC-owned via parentRef)
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: configRef is immutable
+                  properties:
+                    name:
+                      type: string
+                      description: Name of the WorkstationConfig in the same namespace.
+                  required:
+                    - name
+                displayName:
+                  type: string
+                  description: Human-readable name for the workstation. (KCC-owned)
+                resourceID:
+                  type: string
+                  description: Immutable GCP resource ID for the workstation. (KCC-owned)
+                labels:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Client-specified labels on the workstation. (KCC-owned)
+                annotations:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Client-specified annotations on the workstation. (KCC-owned)
+
+                # =========================================================================
+                # API-owned fields: Actuated by the Workstations API client.
+                # Never written to Config Connector (KCC) objects.
+                # Power is not a spec field. Start and stop are one-shot workflows.
+                # =========================================================================
+                users:
+                  type: array
+                  x-kubernetes-list-type: set
+                  items:
+                    type: string
+                    pattern: "^(user:|group:|serviceAccount:|domain:|principal://|principalSet://).+"
+                  description: |
+                    API-owned: List of IAM member principals (e.g. user:alice@example.com)
+                    granted workstations.user on this individual workstation.
+                    Actuated via Workstations setIamPolicy.
+                    An omitted or empty list removes every unconditional roles/workstations.user
+                    member, including members granted outside Horizon. Other roles and conditional
+                    bindings are left unchanged.
+              required:
+                - configRef
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+              properties:
+                phase:
+                  type: string
+                  description: Current lifecycle phase of the workstation (Pending, Ready, Failed, Deleting).
+                host:
+                  type: string
+                  description: Hostname or IP of the running workstation.
+                state:
+                  type: string
+                  description: Workstation state copied from Config Connector observedState. Read-only.
+                externalRef:
+                  type: string
+                  description: GCP resource name copied from the Config Connector object.
+                observedGeneration:
+                  type: integer
+                  format: int64
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                        minimum: 0
+                        description: Generation of the workstation when this condition was set.
+                    required:
+                      - type
+                      - status
+                kcc:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Projected Config Connector observed state and status.
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Config
+          type: string
+          jsonPath: .spec.configRef.name
+        - name: Host
+          type: string
+          jsonPath: .status.host
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+

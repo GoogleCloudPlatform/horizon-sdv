@@ -12,8 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Cluster-mode Config Connector (`ConfigConnector` CR) is platform GitOps on the main environment only (below).
-# Do not create ConfigConnectorContext when mode is cluster — the operator rejects CCC as unnecessary.
+# Discovery RBAC and webhook cert monitor for Config Connector (platform GitOps).
+# Cluster-mode ConfigConnector CR lives in gitops/apps/configconnector-operator
+# (same Application as the ConfigConnector CRD). Main environment only for that CR
+# because the operator Application is gated on isSubEnvironment.
+# The operator is Git-pinned, not the GKE add-on.
+# Do not create ConfigConnectorContext when mode is cluster: the operator rejects CCC as unnecessary.
 # configconnector-operator-cnrm-discovery grants the operator read access to CNRM API groups (e.g. edgenetwork).
 # Ref: https://cloud.google.com/config-connector/docs/how-to/install-upgrade-uninstall
 
@@ -54,23 +58,6 @@ subjects:
   - kind: ServiceAccount
     name: configconnector-operator
     namespace: configconnector-operator-system
-{{- if not (default false .Values.config.isSubEnvironment) }}
----
-# Cluster-mode Config Connector (GKE add-on). Uses gke-config-connector-sa from Terraform WI (env sa11).
-apiVersion: core.cnrm.cloud.google.com/v1beta1
-kind: ConfigConnector
-metadata:
-  name: configconnector.core.cnrm.cloud.google.com
-  labels:
-    app.kubernetes.io/name: horizon-sdv
-    app.kubernetes.io/component: config-connector
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-spec:
-  mode: cluster
-  googleServiceAccount: gke-config-connector-sa@{{ .Values.config.projectID }}.iam.gserviceaccount.com
-  stateIntoSpec: Absent
-{{- end }}
 ---
 # Centralized KCC webhook TLS monitor:
 # periodically verifies that the certificate served by cnrm-validating-webhook

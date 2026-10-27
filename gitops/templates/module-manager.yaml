@@ -57,6 +57,12 @@ spec:
           {{- $abfsPool := default dict .Values.config.abfsBuildNodePool }}
           abfsBuildNodePool:
             version: {{ $abfsPool.version | default "" | quote }}
+          {{- with .Values.config.cloudWorkstations }}
+          cloudWorkstations:
+            clusterId: {{ .clusterId | quote }}
+            network: {{ .network | quote }}
+            subnetwork: {{ .subnetwork | quote }}
+          {{- end }}
           {{- with .Values.config.probeSourceCIDRs }}
           probeSourceCIDRs:
             {{- range . }}
@@ -65,6 +71,7 @@ spec:
           {{- end }}
           containerImages:
             storageGcsModule: {{ .Values.config.containerImages.storageGcsModule | quote }}
+            cloudWorkstationsModule: {{ .Values.config.containerImages.cloudWorkstationsModule | quote }}
           scm:
             authMethod: {{ .Values.scm.authMethod | quote }}
           workloads:

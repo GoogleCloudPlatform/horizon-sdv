@@ -102,7 +102,7 @@ webhookWorkflowParameters:
 kcc:
   instanceTemplates:
     enabled: true
-    # Horizon platform uses cluster-mode Config Connector (gitops/templates/config-connector.yaml).
+    # Horizon platform uses cluster-mode Config Connector (gitops/apps/configconnector-operator).
     # Per-namespace ConfigConnectorContext is rejected in cluster mode and marks workloads-android Degraded.
     # Set true only for namespaced-mode Config Connector installs.
     createConfigConnectorContext: false

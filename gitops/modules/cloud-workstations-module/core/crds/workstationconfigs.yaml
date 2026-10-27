@@ -1,0 +1,385 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workstationconfigs.workstations.horizon-sdv.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  group: workstations.horizon-sdv.io
+  scope: Namespaced
+  names:
+    plural: workstationconfigs
+    singular: workstationconfig
+    kind: WorkstationConfig
+    shortNames:
+      - wscfg
+      - wsconfig
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              description: WorkstationConfigSpec defines configuration for workstations created from this config.
+              x-kubernetes-validations:
+                - rule: "!has(oldSelf.resourceID) || (has(self.resourceID) && self.resourceID == oldSelf.resourceID)"
+                  message: resourceID is immutable once set
+              properties:
+                clusterRef:
+                  type: object
+                  description: Reference to the parent Horizon WorkstationCluster. (KCC-owned via parentRef)
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: clusterRef is immutable
+                  properties:
+                    name:
+                      type: string
+                      description: Name of the WorkstationCluster in the same namespace.
+                  required:
+                    - name
+                displayName:
+                  type: string
+                  description: Human-readable name for the workstation config. (KCC-owned)
+                idleTimeout:
+                  type: string
+                  description: Duration after which inactive workstations automatically shut down (e.g. 7200s). (KCC-owned)
+                runningTimeout:
+                  type: string
+                  description: Duration after which running workstations automatically shut down (e.g. 43200s). (KCC-owned)
+                replicaZones:
+                  type: array
+                  items:
+                    type: string
+                  description: Zones within the cluster region where workstations can run. (KCC-owned)
+                container:
+                  type: object
+                  description: Container runtime configuration for workstations. (KCC-owned)
+                  properties:
+                    image:
+                      type: string
+                      description: Container image URI to run on workstation startup.
+                    command:
+                      type: array
+                      items:
+                        type: string
+                      description: Container entrypoint command.
+                    args:
+                      type: array
+                      items:
+                        type: string
+                      description: Container entrypoint arguments.
+                    env:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                        required:
+                          - name
+                      description: Environment variables passed to the container.
+                    runAsUser:
+                      type: integer
+                      description: User ID (UID) under which the container runs.
+                    workingDir:
+                      type: string
+                      description: Working directory inside the container.
+                host:
+                  type: object
+                  description: Host VM configuration for workstation Compute Engine instances. (KCC-owned)
+                  properties:
+                    gceInstance:
+                      type: object
+                      properties:
+                        machineType:
+                          type: string
+                          description: Compute Engine machine type (e.g. e2-standard-4, n2d-standard-8).
+                        bootDiskSizeGB:
+                          type: integer
+                          description: Size of the boot disk in GB.
+                        serviceAccountScopes:
+                          type: array
+                          items:
+                            type: string
+                          description: OAuth scopes for the host VM service account.
+                        disablePublicIPAddresses:
+                          type: boolean
+                          description: Whether to disable public IP addresses on workstation VMs.
+                        enableNestedVirtualization:
+                          type: boolean
+                          description: Whether to enable nested virtualization for VM-in-VM workloads (e.g. Android emulators).
+                        poolSize:
+                          type: integer
+                          default: 0
+                          description: Number of pre-warmed host VMs kept ready for rapid startup. Defaults to 0 so no host VM is pre-warmed.
+                        tags:
+                          type: array
+                          items:
+                            type: string
+                          description: Network tags applied to the host VM instances.
+                        shieldedInstanceConfig:
+                          type: object
+                          properties:
+                            enableIntegrityMonitoring:
+                              type: boolean
+                            enableSecureBoot:
+                              type: boolean
+                            enableVTPM:
+                              type: boolean
+                        confidentialInstanceConfig:
+                          type: object
+                          properties:
+                            enableConfidentialCompute:
+                              type: boolean
+                persistentDirectories:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      mountPath:
+                        type: string
+                      gcePD:
+                        type: object
+                        properties:
+                          diskType:
+                            type: string
+                          fsType:
+                            type: string
+                          reclaimPolicy:
+                            type: string
+                          sizeGB:
+                            type: integer
+                          sourceSnapshot:
+                            type: string
+                    required:
+                      - mountPath
+                  description: Persistent disk directories mounted into workstations. (KCC-owned)
+                readinessChecks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      path:
+                        type: string
+                      port:
+                        type: integer
+                    required:
+                      - path
+                      - port
+                  description: Readiness probes checking workstation port/path health. (KCC-owned)
+                encryptionKey:
+                  type: object
+                  description: Customer-managed encryption key (CMEK) configuration. (KCC-owned)
+                  properties:
+                    kmsCryptoKeyRef:
+                      type: object
+                      properties:
+                        external:
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                    serviceAccountRef:
+                      type: object
+                      properties:
+                        external:
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                resourceID:
+                  type: string
+                  description: Immutable GCP resource ID for the workstation config. (KCC-owned)
+                labels:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Client-specified labels on the config. (KCC-owned)
+                annotations:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Client-specified annotations on the config. (KCC-owned)
+
+                # =========================================================================
+                # API-owned fields: Actuated by the Workstations API client.
+                # Never written to Config Connector (KCC) objects.
+                # =========================================================================
+                disableSsh:
+                  type: boolean
+                  default: true
+                  description: |
+                    API-owned: When true, disables direct SSH access to workstations.
+                    Defaults to true matching hardened Terraform posture.
+                    Actuated via the Workstations API.
+                allowedPorts:
+                  type: array
+                  minItems: 1
+                  x-kubernetes-validations:
+                    - rule: "self.all(p, p.first <= p.last && ((p.first == 22 && p.last == 22) || (p.first == 80 && p.last == 80) || (p.first >= 1024 && p.last <= 65535)))"
+                      message: each allowed port range must have first <= last and be 22, 80, or within 1024-65535
+                  items:
+                    type: object
+                    properties:
+                      first:
+                        type: integer
+                        description: Starting port of the allowed range.
+                      last:
+                        type: integer
+                        description: Ending port of the allowed range.
+                    required:
+                      - first
+                      - last
+                  default:
+                    - first: 80
+                      last: 80
+                    - first: 1024
+                      last: 65535
+                  description: |
+                    API-owned: Port ranges permitted through the workstation gateway.
+                    Defaults to port 80 and 1024-65535 matching hardened Terraform posture.
+                    Actuated via the Workstations API.
+                ephemeralDirectories:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      mountPath:
+                        type: string
+                      gcePD:
+                        type: object
+                        x-kubernetes-validations:
+                          - rule: "!(has(self.sourceSnapshot) && has(self.sourceImage))"
+                            message: sourceSnapshot and sourceImage are mutually exclusive
+                          - rule: "!(has(self.readOnly) && self.readOnly && !has(self.sourceSnapshot))"
+                            message: readOnly requires sourceSnapshot
+                          - rule: "!(has(self.sourceSnapshot) && (!has(self.readOnly) || !self.readOnly))"
+                            message: sourceSnapshot requires readOnly
+                        properties:
+                          diskType:
+                            type: string
+                          sourceSnapshot:
+                            type: string
+                          sourceImage:
+                            type: string
+                          readOnly:
+                            type: boolean
+                    required:
+                      - mountPath
+                  description: |
+                    API-owned: Ephemeral directories mounted into the workstation.
+                    Actuated via the Workstations API.
+                admins:
+                  type: array
+                  x-kubernetes-list-type: set
+                  items:
+                    type: string
+                    pattern: "^(user:|group:|serviceAccount:|domain:|principal://|principalSet://).+"
+                  description: |
+                    API-owned: List of IAM member principals (e.g. user:alice@example.com)
+                    granted workstations.admin on this config.
+                    Actuated via Workstations setIamPolicy.
+                    An omitted or empty list removes every unconditional roles/workstations.admin
+                    member, including members granted outside Horizon. Other roles and conditional
+                    bindings are left unchanged.
+              required:
+                - clusterRef
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+              properties:
+                phase:
+                  type: string
+                  description: Current lifecycle phase of the config (Pending, Ready, Failed, Deleting).
+                externalRef:
+                  type: string
+                  description: GCP resource name copied from the Config Connector object.
+                posture:
+                  type: object
+                  description: API-owned posture last read back from the Workstations API.
+                  properties:
+                    disableSsh:
+                      type: boolean
+                    allowedPorts:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          first:
+                            type: integer
+                          last:
+                            type: integer
+                    ephemeralDirectories:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                observedGeneration:
+                  type: integer
+                  format: int64
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                        minimum: 0
+                        description: Generation of the config when this condition was set.
+                    required:
+                      - type
+                      - status
+                kcc:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Projected Config Connector observed state and status.
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Cluster
+          type: string
+          jsonPath: .spec.clusterRef.name
+        - name: MachineType
+          type: string
+          jsonPath: .spec.host.gceInstance.machineType
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+

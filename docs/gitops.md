@@ -33,6 +33,8 @@ limitations under the License. -->
     - [Zookeeper](#zookeeper)
     - [MongoDB](#mongodb)
     - [Gerrit Operator](#gerrit-operator)
+    - [Config Connector operator](#config-connector-operator)
+    - [Gerrit MCP Server](#gerrit-mcp-server)
     - [External Secrets](#external-secrets)
     - [External DNS](#external-dns)
     - [OAuth2 Proxy](#oauth-proxy)
@@ -290,6 +292,9 @@ A direct dependency for MTK Connect, functioning as a NoSQL database that stores
 ### Gerrit Operator
 A management tool designed to simplify the installation and configuration of Gerrit.
 
+### Config Connector operator
+Deploys Config Connector as a Git-pinned operator (`gitops/apps/configconnector-operator/`) instead of the GKE add-on, which stays disabled. The cluster-mode `ConfigConnector` CR is in that same chart (same sync as its CRD). Discovery RBAC and the webhook monitor stay in `gitops/templates/config-connector-init.yaml`. See `gitops/apps/configconnector-operator/README.md` for cutover and rollback.
+
 ### External Secrets
 While not directly visible in ArgoCD, External Secrets plays a crucial role in synchronizing secrets between GCP Secret Manager and Kubernetes Secrets.
 
@@ -318,4 +323,4 @@ A collection of scripts that handle application-specific configurations when sta
 ## Config Connector webhook reliability
 
 Config Connector webhook TLS verification is centralized via CronJob in
-`gitops/templates/config-connector.yaml`, while module charts keep ordered sync waves.
+`gitops/templates/config-connector-init.yaml`, while module charts keep ordered sync waves.

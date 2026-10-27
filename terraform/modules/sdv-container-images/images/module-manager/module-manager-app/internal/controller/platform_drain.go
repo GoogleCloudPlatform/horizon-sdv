@@ -20,6 +20,7 @@ import (
 	"os"
 	"sort"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,6 +30,23 @@ import (
 
 // PlatformDrainFinalizer blocks root horizon-sdv Application deletion until module apps are drained.
 const PlatformDrainFinalizer = "horizon-sdv.io/module-manager-platform-drain"
+
+// PlatformDrainGateName is the ConfigMap the root Application renders in its highest sync wave, in the
+// Argo CD namespace (gitops/templates/platform-drain-gate.yaml). Argo CD deletes it before any other wave
+// and does not continue while PlatformDrainGateFinalizer is set.
+const PlatformDrainGateName = "platform-drain-gate"
+
+// PlatformDrainGateFinalizer is set on the drain gate in Git and removed by Module Manager after the drain.
+const PlatformDrainGateFinalizer = "horizon-sdv.io/platform-drain-gate"
+
+// platformDrainGateEscapeHatch returns the manual command that releases a stuck drain gate.
+func platformDrainGateEscapeHatch(namespace string) string {
+	return fmt.Sprintf(
+		`kubectl -n %s patch configmap %s --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'`,
+		namespace,
+		PlatformDrainGateName,
+	)
+}
 
 // APIGroupLister is the narrow interface from k8s.io/client-go/discovery used by the KCC
 // finalizer stripper. Using a narrow interface here keeps the production code testable
@@ -59,10 +77,29 @@ type PlatformDrainer struct {
 	ArgoCDProject   string
 }
 
-// DrainAllEnabledModules deletes module Applications in safe order (dependents before dependencies),
-// then strips KCC finalizers in destination namespaces so that KCC-managed resources do not block
-// namespace termination during platform destroy.
+// DrainAllEnabledModules disables every enabled module, then strips KCC finalizers in destination
+// namespaces so that KCC-managed resources do not block namespace termination during platform destroy.
+// The fallback without a drain gate uses this path because Config Connector may already be gone.
 func (p *PlatformDrainer) DrainAllEnabledModules(ctx context.Context) error {
+	if err := p.disableAllEnabledModules(ctx, true); err != nil {
+		return err
+	}
+	// After all parent Applications have been deleted, proactively strip KCC finalizers in
+	// module destination namespaces so that KCC-managed resources (e.g. PubSubTopic) do not
+	// block namespace termination when KCC has lost GCP authentication.
+	return p.StripKCCFinalizersInNamespaces(ctx, p.platformDrainNamespaces(ctx))
+}
+
+// DisableAllEnabledModules disables every enabled module, dependents before the modules they
+// hard-depend on. The drain gate holds Argo CD's cascade while this runs, so Config Connector is
+// healthy: nothing strips its finalizers, and GCP resources are deleted as in a Portal disable.
+func (p *PlatformDrainer) DisableAllEnabledModules(ctx context.Context) error {
+	return p.disableAllEnabledModules(ctx, false)
+}
+
+// disableAllEnabledModules loops until no module is enabled. bestEffort lets a stuck
+// Cloud Workstations drain strip Config Connector finalizers instead of failing.
+func (p *PlatformDrainer) disableAllEnabledModules(ctx context.Context, bestEffort bool) error {
 	for {
 		state, err := p.StateStore.Get(ctx)
 		if err != nil {
@@ -73,7 +110,7 @@ func (p *PlatformDrainer) DrainAllEnabledModules(ctx context.Context) error {
 			enabledSet[id] = true
 		}
 		if len(state.EnabledModules) == 0 {
-			break
+			return nil
 		}
 		idToName := make(map[string]string)
 		for n, id := range state.ModuleIDs {
@@ -89,7 +126,7 @@ func (p *PlatformDrainer) DrainAllEnabledModules(ctx context.Context) error {
 
 		var next string
 		for _, name := range candidates {
-			if p.allHardDepsDisabledOrAbsent(ctx, name, enabledSet, state) {
+			if p.noEnabledDependents(ctx, name, enabledSet, state) {
 				next = name
 				break
 			}
@@ -97,46 +134,51 @@ func (p *PlatformDrainer) DrainAllEnabledModules(ctx context.Context) error {
 		if next == "" {
 			return fmt.Errorf("platform drain: no module eligible to disable (cycle or state mismatch)")
 		}
-		if err := p.disableOne(ctx, next); err != nil {
+		if err := p.disableOne(ctx, next, bestEffort); err != nil {
 			return err
 		}
 	}
+}
 
-	// After all parent Applications have been deleted, proactively strip KCC finalizers in
-	// module destination namespaces so that KCC-managed resources (e.g. PubSubTopic) do not
-	// block namespace termination when KCC has lost GCP authentication.
+// platformDrainNamespaces is the set of namespaces whose stuck Config Connector objects can block
+// platform destruction. cloud-workstations is appended explicitly: the parent Application's destination
+// is the module-manager namespace, and the core child Application may already be gone.
+func (p *PlatformDrainer) platformDrainNamespaces(ctx context.Context) []string {
 	nss := p.ManagedDestinationNamespaces(ctx, p.ArgoCDNamespace)
 	// Module-owned KCC namespaces are not Application destinations (workflows publish the CRs there), so they
 	// are not discovered above; add remotive-topology's namespace explicitly (absent namespaces list nothing).
 	nss = appendNamespaceOnce(nss, NamespacePrefixFromModuleConfig(os.Getenv("MODULE_CONFIG"))+remotiveKCCNamespaceSuffix)
-	return p.StripKCCFinalizersInNamespaces(ctx, nss)
+	nss = appendNamespaceOnce(nss, cloudWorkstationsNamespace)
+	return nss
 }
 
-func (p *PlatformDrainer) allHardDepsDisabledOrAbsent(ctx context.Context, moduleName string, enabledSet map[string]bool, state *State) bool {
-	hard := p.hardDepsForModule(ctx, moduleName)
-	for _, dep := range hard {
-		depID := state.ModuleIDs[dep]
-		if depID != "" && enabledSet[depID] {
-			return false
+// noEnabledDependents reports whether any still-enabled module lists moduleName as a hard dependency.
+// Eligible modules are the ones nothing enabled still needs, so dependents are drained first.
+func (p *PlatformDrainer) noEnabledDependents(ctx context.Context, moduleName string, enabledSet map[string]bool, state *State) bool {
+	entries, _ := p.CatalogStore.List(ctx)
+	for i := range entries {
+		depID := state.ModuleIDs[entries[i].Name]
+		if depID == "" || !enabledSet[depID] {
+			continue
+		}
+		for _, hard := range entries[i].HardDependencies {
+			if hard == moduleName {
+				return false
+			}
 		}
 	}
 	return true
 }
 
-func (p *PlatformDrainer) hardDepsForModule(ctx context.Context, moduleName string) []string {
-	entries, _ := p.CatalogStore.List(ctx)
-	for i := range entries {
-		if entries[i].Name == moduleName {
-			return append([]string(nil), entries[i].HardDependencies...)
-		}
-	}
-	return nil
-}
-
 // disableOne removes one enabled module during platform drain. Unlike PerformModuleDisable (REST/Portal
 // single-module disable), it deletes the parent mod-* Application before updating ModuleManagerState—ordering
 // is optimized for whole-platform teardown, not per-module Portal UX.
-func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string) error {
+func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string, bestEffort bool) error {
+	// Per module, not for the whole drain, so a long Cloud Workstations teardown does not
+	// hold the API lock across every other module.
+	ModuleOpsMutex.Lock()
+	defer ModuleOpsMutex.Unlock()
+
 	state, err := p.StateStore.Get(ctx)
 	if err != nil {
 		return err
@@ -150,9 +192,27 @@ func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string) err
 		return nil
 	}
 
+	if err := pauseCloudWorkstationsCoreForDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); err != nil {
+		return err
+	}
+	drainCloudWorkstations := DrainCloudWorkstationsModule
+	if bestEffort {
+		drainCloudWorkstations = DrainCloudWorkstationsForPlatformTeardown
+	}
+	if err := drainCloudWorkstations(ctx, p.Client, moduleName); err != nil {
+		return err
+	}
+	if err := completeCloudWorkstationsCoreDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); err != nil {
+		return err
+	}
+
 	if err := TeardownPrefixedModuleChildApplication(ctx, p.Client, p.ArgoCDNamespace, os.Getenv("MODULE_CONFIG"), moduleName); err != nil {
 		return err
 	}
+
+	// Teardown sets skip-reconcile on prefixed parents so Git cannot recreate the child.
+	// Clear it before the parent delete, matching PerformModuleDisable. Leaving it set freezes mod-*.
+	clearParentSkipReconcileIfPrefixedModule(ctx, p.Client, p.ArgoCDNamespace, moduleName)
 
 	appName := ApplicationName(moduleName)
 	app := &unstructured.Unstructured{}
@@ -160,8 +220,6 @@ func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string) err
 	app.SetNamespace(p.ArgoCDNamespace)
 	app.SetName(appName)
 	if err := p.Client.Delete(ctx, app); err != nil && !errors.IsNotFound(err) {
-		// Teardown may have set skip-reconcile on mod-*; clear so the cluster is not left with a frozen parent
-		// if delete fails (platform drain does not update state until after delete).
 		clearParentSkipReconcileIfPrefixedModule(ctx, p.Client, p.ArgoCDNamespace, moduleName)
 		return err
 	}
@@ -249,4 +307,44 @@ func (p *PlatformDrainer) RemovePlatformDrainFinalizer(ctx context.Context, ns, 
 	}
 	app.SetFinalizers(kept)
 	return p.Client.Update(ctx, app)
+}
+
+// PlatformDrainGatePresent reports whether the drain gate still carries PlatformDrainGateFinalizer.
+// It reads through APIReader because the manager cache does not cover ConfigMaps in the Argo CD namespace.
+func (p *PlatformDrainer) PlatformDrainGatePresent(ctx context.Context) (bool, error) {
+	cm := &corev1.ConfigMap{}
+	err := p.APIReader.Get(ctx, client.ObjectKey{Namespace: p.ArgoCDNamespace, Name: PlatformDrainGateName}, cm)
+	if errors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, f := range cm.GetFinalizers() {
+		if f == PlatformDrainGateFinalizer {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ReleasePlatformDrainGate removes PlatformDrainGateFinalizer so Argo CD continues deleting the root
+// Application's resources.
+func (p *PlatformDrainer) ReleasePlatformDrainGate(ctx context.Context) error {
+	cm := &corev1.ConfigMap{}
+	if err := p.APIReader.Get(ctx, client.ObjectKey{Namespace: p.ArgoCDNamespace, Name: PlatformDrainGateName}, cm); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	finalizers := cm.GetFinalizers()
+	var kept []string
+	for _, f := range finalizers {
+		if f != PlatformDrainGateFinalizer {
+			kept = append(kept, f)
+		}
+	}
+	if len(kept) == len(finalizers) {
+		return nil
+	}
+	cm.SetFinalizers(kept)
+	return client.IgnoreNotFound(p.Client.Update(ctx, cm))
 }

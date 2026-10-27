@@ -1,0 +1,154 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workstationclusters.workstations.horizon-sdv.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  group: workstations.horizon-sdv.io
+  scope: Namespaced
+  names:
+    plural: workstationclusters
+    singular: workstationcluster
+    kind: WorkstationCluster
+    shortNames:
+      - wsc
+      - wscluster
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              description: WorkstationClusterSpec defines the desired state of a WorkstationCluster.
+              x-kubernetes-validations:
+                - rule: "!has(oldSelf.resourceID) || (has(self.resourceID) && self.resourceID == oldSelf.resourceID)"
+                  message: resourceID is immutable once set
+              properties:
+                project:
+                  type: string
+                  description: The GCP project ID that owns the workstation cluster.
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: project is immutable
+                location:
+                  type: string
+                  description: The GCP region where the workstation cluster is located (e.g. us-central1).
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: location is immutable
+                network:
+                  type: string
+                  description: VPC network reference or self-link for workstation VMs.
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: network is immutable
+                subnetwork:
+                  type: string
+                  description: VPC subnetwork reference or self-link for workstation VMs.
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: subnetwork is immutable
+                displayName:
+                  type: string
+                  description: Human-readable name for the workstation cluster.
+                resourceID:
+                  type: string
+                  description: The immutable GCP resource ID for the workstation cluster.
+                privateClusterConfig:
+                  type: object
+                  description: Configuration for private workstation clusters.
+                  properties:
+                    enablePrivateEndpoint:
+                      type: boolean
+                      description: Whether workstations should be accessed via Private Service Connect.
+                    allowedProjects:
+                      type: array
+                      items:
+                        type: string
+                      description: Additional GCP projects allowed to connect via Private Service Connect.
+                labels:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Client-specified labels on the cluster.
+                annotations:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Client-specified annotations on the cluster.
+              required:
+                - project
+                - location
+                - network
+                - subnetwork
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+              properties:
+                phase:
+                  type: string
+                  description: Current lifecycle phase of the cluster (Pending, Ready, Failed, Deleting).
+                observedGeneration:
+                  type: integer
+                  format: int64
+                  description: Generation of the resource observed by the controller.
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                        minimum: 0
+                        description: Generation of the cluster when this condition was set.
+                    required:
+                      - type
+                      - status
+                kcc:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Projected Config Connector observed state and status.
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Location
+          type: string
+          jsonPath: .spec.location
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+

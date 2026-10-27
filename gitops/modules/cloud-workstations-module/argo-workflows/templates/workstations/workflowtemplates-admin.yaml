@@ -1,0 +1,383 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Admin-family workstation WorkflowTemplates (Horizon catalog: exposed). Sensors: sensors.yaml.
+# Every step reads or writes Horizon CRs only, through cws-helpers (shared/workflowtemplate-helpers.yaml)
+# or kubectl on the module namespace. Config Connector and the Workstations API are the controller's job.
+# Admin and user families are an operations grouping: Horizon API authenticates the caller but does not
+# authorize per template, so any authenticated caller can submit these.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-admin-create-workstation
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "Create a Cloud Workstation from an existing WorkstationConfig and wait until it is Ready."
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  {{- include "cws-ws.workstationMutex" . | nindent 2 }}
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-admin-create-workstation") | nindent 4 }}
+  templates:
+    - name: main
+      steps:
+        - - name: build-manifest
+            template: build-manifest
+        - - name: create
+            templateRef:
+              name: cws-helpers
+              template: create-and-wait-ready
+            arguments:
+              parameters:
+                - name: manifest
+                  value: "{{ "{{steps.build-manifest.outputs.parameters.manifest}}" }}"
+        - - name: show
+            template: show
+    - name: build-manifest
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: WORKSTATION_NAME
+            value: "{{ "{{workflow.parameters.workstationId}}" }}"
+          - name: CONFIG_NAME
+            value: "{{ "{{workflow.parameters.configName}}" }}"
+          - name: DISPLAY_NAME
+            value: "{{ "{{workflow.parameters.displayName}}" }}"
+          - name: USERS
+            value: "{{ "{{workflow.parameters.users}}" }}"
+          - name: WORKFLOW_NAME
+            value: "{{ "{{workflow.name}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            name=$(resource_name workstationId "$WORKSTATION_NAME")
+            config=$(resource_name configName "$CONFIG_NAME")
+            display_name=$(trim "$DISPLAY_NAME")
+            users=$(principals_json "$USERS")
+
+            # configRef is immutable, so a wrong config means deleting and recreating the workstation.
+            cfg=$(require_cfg "$config")
+            # The controller leaves a Workstation Pending for as long as its config is deleting, and
+            # that Workstation then blocks the config delete. Fail before the Workstation is created.
+            deleting=$(jq -r '.metadata.deletionTimestamp // ""' <<<"$cfg")
+            [[ -z "$deleting" ]] || fail "workstation config '$config' is being deleted; choose a config that is not being deleted"
+            echo "Parent config $config: $(progress_line <<<"$cfg")"
+
+            jq -nc --arg name "$name" --arg config "$config" --arg displayName "$display_name" \
+              --argjson users "$users" --arg wf "$WORKFLOW_NAME" '
+              {
+                apiVersion: "workstations.horizon-sdv.io/v1alpha1",
+                kind: "Workstation",
+                metadata: {
+                  name: $name,
+                  annotations: {"horizon-sdv.io/created-by-workflow": $wf }
+                },
+                spec: (
+                  {configRef: {name: $config } }
+                  + (if $displayName != "" then {displayName: $displayName } else {} end)
+                  + (if ($users | length) > 0 then {users: $users } else {} end)
+                )
+              }' > /tmp/manifest.json
+            echo "Manifest:"
+            jq . /tmp/manifest.json
+      outputs:
+        parameters:
+          - name: manifest
+            valueFrom:
+              path: /tmp/manifest.json
+    - name: show
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: WORKSTATION_NAME
+            value: "{{ "{{workflow.parameters.workstationId}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            ws=$(require_ws "$(trim "$WORKSTATION_NAME")") || exit 1
+            print_workstation "$ws"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-admin-delete-workstation
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "Fetch a Cloud Workstation by workstationId and delete it after confirmDelete is set to true. Waits until it is gone from GCP."
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  {{- include "cws-ws.workstationMutex" . | nindent 2 }}
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-admin-delete-workstation") | nindent 4 }}
+  templates:
+    - name: main
+      steps:
+        - - name: confirm
+            template: confirm
+        - - name: delete
+            templateRef:
+              name: cws-helpers
+              template: delete-and-wait-gone
+            arguments:
+              parameters:
+                - name: kind
+                  value: workstation
+                - name: name
+                  value: "{{ "{{steps.confirm.outputs.parameters.name}}" }}"
+    - name: confirm
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: WORKSTATION_NAME
+            value: "{{ "{{workflow.parameters.workstationId}}" }}"
+          - name: CONFIRM_DELETE
+            value: "{{ "{{workflow.parameters.confirmDelete}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            name=$(resource_name workstationId "$WORKSTATION_NAME")
+            confirm=$(trim "$CONFIRM_DELETE")
+            case "$confirm" in
+              true) ;;
+              false) fail "deletion is not confirmed; set confirmDelete to true to delete workstation '$name'. This cannot be undone" ;;
+              *) fail "confirmDelete must be true or false, got '$confirm'" ;;
+            esac
+
+            # require_ws must not run inside $(): fail only exits that subshell, and this step
+            # would still publish the name. Delete would then report a missing workstation as deleted.
+            ws=$(require_ws "$name") || exit 1
+            echo "Deleting this workstation:"
+            print_workstation "$ws"
+            printf '%s' "$name" > /tmp/name
+      outputs:
+        parameters:
+          - name: name
+            valueFrom:
+              path: /tmp/name
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-admin-get-workstation
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "Show a Cloud Workstation with its Horizon status, state, URL and users."
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-admin-get-workstation") | nindent 4 }}
+  templates:
+    - name: main
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: WORKSTATION_NAME
+            value: "{{ "{{workflow.parameters.workstationId}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            json=$(require_ws "$(resource_name workstationId "$WORKSTATION_NAME")")
+            print_workstation "$json"
+            print_status <<<"$json"
+            echo
+            echo "Full spec and status:"
+            jq '{spec, status}' <<<"$json"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-admin-list-workstations
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "List Cloud Workstations, optionally filtered by name, user or config."
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-admin-list-workstations") | nindent 4 }}
+  templates:
+    - name: main
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: NAME_REGEX
+            value: "{{ "{{workflow.parameters.nameRegex}}" }}"
+          - name: USER_REGEX
+            value: "{{ "{{workflow.parameters.userRegex}}" }}"
+          - name: CONFIG_REGEX
+            value: "{{ "{{workflow.parameters.configRegex}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            kubectl get "$WS_RES" -n "$CWS_NAMESPACE" -o json \
+              | jq -r --arg n "$(trim "$NAME_REGEX")" --arg u "$(trim "$USER_REGEX")" --arg c "$(trim "$CONFIG_REGEX")" '
+                  def matches($re): $re == "" or $re == ".*" or test($re);
+                  [.items[]
+                    | select(.metadata.name | matches($n))
+                    | select(.spec.configRef.name | matches($c))
+                    | select(($u == "" or $u == ".*") or ((.spec.users // [])
+                        | any(test($u) or (sub("^[a-zA-Z]+:"; "") | test($u)))))]
+                  | if length == 0 then "No workstations match."
+                    else
+                      (["NAME", "CONFIG", "PHASE", "STATE", "USERS"] | @tsv),
+                      (.[] | [.metadata.name, .spec.configRef.name, (.status.phase // "-"),
+                              (.status.state // "-"),
+                              ((.spec.users // []) | if length == 0 then "-" else join(",") end)] | @tsv)
+                    end' \
+              | awk -F '\t' 'NF < 5 { print; next } { printf "%-32s %-28s %-10s %-16s %s\n", $1, $2, $3, $4, $5 }'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-admin-add-workstation-users
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "Add users to a Cloud Workstation (spec.users) and wait until the IAM binding is applied."
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  {{- include "cws-ws.workstationMutex" . | nindent 2 }}
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-admin-add-workstation-users") | nindent 4 }}
+  templates:
+    - name: main
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: WORKSTATION_NAME
+            value: "{{ "{{workflow.parameters.workstationId}}" }}"
+          - name: USERS
+            value: "{{ "{{workflow.parameters.users}}" }}"
+          - name: TIMEOUT_SECONDS
+            value: {{ .Values.readyTimeoutSeconds | quote }}
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            check_timeout "$TIMEOUT_SECONDS"
+            name=$(resource_name workstationId "$WORKSTATION_NAME")
+            users=$(principals_json "$USERS")
+            [[ "$(jq 'length' <<<"$users")" -gt 0 ]] || fail "users is required"
+
+            # The controller grants all spec.users in one IAM call, so an earlier rejected user
+            # would fail this run too. Stop before changing anything.
+            ws=$(require_ws "$name")
+            if [[ "$(ready_state <<<"$ws")" == failed ]]; then
+              print_status <<<"$ws"
+              fail "workstation '$name' is already Failed (see the conditions above). If the error is InvalidArgument, a current user is not a valid Google account or group: remove it with cws-admin-remove-workstation-users, then add again"
+            fi
+
+            update_users "$name" add "$users"
+            if [[ "$USERS_CHANGED" == true ]]; then
+              # The controller withholds grants with reason WaitingForConfig until the parent config is Ready.
+              # wait_ready exits on failure, so it runs in a subshell to allow the rollback below.
+              if ! ( wait_ready "$WS_RES" "$name" "$TIMEOUT_SECONDS" ); then
+                [[ "$(ready_state <<<"$(require_ws "$name")")" == failed ]] || exit 1
+                added=$(jq -r 'join(", ")' <<<"$USERS_ADDED")
+                echo "Google rejected the IAM update; removing the users this run added: $added"
+                update_users "$name" remove "$USERS_ADDED"
+                ( wait_ready "$WS_RES" "$name" "$TIMEOUT_SECONDS" ) \
+                  || fail "removed $added but workstation '$name' is still failing; check the other users in spec.users"
+                fail "could not grant access to $added: each user must be an existing Google account, group or service account. They were removed again and workstation '$name' is Ready"
+              fi
+            fi
+            ws=$(require_ws "$name") || exit 1
+            print_workstation "$ws"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-admin-remove-workstation-users
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "Remove users from a Cloud Workstation (spec.users) and wait until the IAM binding is removed."
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  {{- include "cws-ws.workstationMutex" . | nindent 2 }}
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-admin-remove-workstation-users") | nindent 4 }}
+  templates:
+    - name: main
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: WORKSTATION_NAME
+            value: "{{ "{{workflow.parameters.workstationId}}" }}"
+          - name: USERS
+            value: "{{ "{{workflow.parameters.users}}" }}"
+          - name: TIMEOUT_SECONDS
+            value: {{ .Values.readyTimeoutSeconds | quote }}
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            check_timeout "$TIMEOUT_SECONDS"
+            name=$(resource_name workstationId "$WORKSTATION_NAME")
+            users=$(principals_json "$USERS")
+            [[ "$(jq 'length' <<<"$users")" -gt 0 ]] || fail "users is required"
+
+            update_users "$name" remove "$users"
+            if [[ "$USERS_CHANGED" == true ]]; then
+              wait_ready "$WS_RES" "$name" "$TIMEOUT_SECONDS"
+            fi
+            ws=$(require_ws "$name") || exit 1
+            print_workstation "$ws"

@@ -1,0 +1,482 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Image-build WorkflowTemplate (cws-image-build).
+# Each Docker build delegates to ClusterWorkflowTemplate common-docker-image-build.
+# GNOME and Code OSS copy common-utils into the build context first.
+# Build pods use the shared template defaults (4Gi BuildKit). No extra BuildKit and no resource override.
+# GNOME, Android Studio, and ASFP pass androidPool=true to common-docker-image-build (android node pool).
+# Other steps stay on the default pool.
+# After a push (dryRun=false), summarize-digests records image@sha256 URIs.
+# Argo Events: templates/images/sensors.yaml.
+
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: "cws-image-build"
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+    app.kubernetes.io/name: cws-image-build
+    horizon-sdv.io/expose: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: build-images
+  archiveLogs: true
+  serviceAccountName: workflow-executor
+  # One cws-image-build at a time (Jenkins blockOn workstation image jobs). Same imageTag
+  # must not push in parallel or summarize-digests can read another run's digest.
+  synchronization:
+    mutexes:
+      - name: cws-image-build
+  arguments:
+    parameters:
+{{- include "cws.imageArguments" . | nindent 6 }}
+  templates:
+    - name: build-images
+      outputs:
+        parameters:
+          - name: environmentDigestUri
+            valueFrom:
+              parameter: '{{ "{{" }}tasks.summarize-digests.outputs.parameters.environmentImage{{ "}}" }}'
+          - name: preflightDigestUri
+            valueFrom:
+              parameter: '{{ "{{" }}tasks.summarize-digests.outputs.parameters.preflightImage{{ "}}" }}'
+          - name: gnomeDigestUri
+            valueFrom:
+              parameter: '{{ "{{" }}tasks.summarize-digests.outputs.parameters.gnomeImage{{ "}}" }}'
+          - name: codeOssDigestUri
+            valueFrom:
+              parameter: '{{ "{{" }}tasks.summarize-digests.outputs.parameters.codeOssImage{{ "}}" }}'
+          - name: androidStudioDigestUri
+            valueFrom:
+              parameter: '{{ "{{" }}tasks.summarize-digests.outputs.parameters.androidStudioImage{{ "}}" }}'
+          - name: asfpDigestUri
+            valueFrom:
+              parameter: '{{ "{{" }}tasks.summarize-digests.outputs.parameters.asfpImage{{ "}}" }}'
+          - name: imageDigestSummary
+            valueFrom:
+              parameter: '{{ "{{" }}tasks.summarize-digests.outputs.parameters.summary{{ "}}" }}'
+      dag:
+        tasks:
+{{- if eq (include "cws.pipelineGitCredsEnabled" . | trim) "true" }}
+          - name: prepare-pipeline-git-creds
+            templateRef:
+              name: prepare-pipeline-git-creds
+              template: prepare-pipeline-git-creds
+              clusterScope: true
+            arguments:
+              parameters:
+                - name: scmAuthMethod
+                  value: {{ include "cws.scmAuthMethod" . | trim | quote }}
+                - name: pipelineStaticGitSecretName
+                  value: "workflow-pipeline-git-creds"
+                - name: horizonSubmittedFrom
+                  value: '{{ "{{" }}workflow.parameters.horizonSubmittedFrom{{ "}}" }}'
+{{- end }}
+          - name: validate
+            template: validate
+{{- if eq (include "cws.pipelineGitCredsEnabled" . | trim) "true" }}
+            depends: prepare-pipeline-git-creds.Succeeded
+{{- end }}
+          - name: build-environment
+            templateRef:
+              name: common-docker-image-build
+              template: build
+              clusterScope: true
+            depends: validate.Succeeded
+            when: "'{{ "{{" }}workflow.parameters.buildEnvironmentImage{{ "}}" }}' == 'true'"
+            arguments:
+              artifacts:
+{{- include "cws.gitSourceArtifact" . | nindent 16 }}
+              parameters:
+{{- include "cws.commonBuildParams" . | nindent 16 }}
+                - name: dockerArtifactPathName
+                  value: {{ .Values.images.environment.dockerArtifactPathName | quote }}
+                - name: dockerfileDir
+                  value: {{ .Values.images.environment.dockerfileDir | quote }}
+          - name: build-preflight
+            templateRef:
+              name: common-docker-image-build
+              template: build
+              clusterScope: true
+            depends: validate.Succeeded
+            when: "'{{ "{{" }}workflow.parameters.buildPreflight{{ "}}" }}' == 'true'"
+            arguments:
+              artifacts:
+{{- include "cws.gitSourceArtifact" . | nindent 16 }}
+              parameters:
+{{- include "cws.commonBuildParams" . | nindent 16 }}
+                - name: dockerArtifactPathName
+                  value: {{ .Values.images.preflight.dockerArtifactPathName | quote }}
+                - name: dockerfileDir
+                  value: {{ .Values.images.preflight.dockerfileDir | quote }}
+                - name: buildArgs
+                  value: |
+                    PREFLIGHT_WEB_REPO=
+                    PREFLIGHT_WEB_DIR=
+          - name: stage-gnome
+            template: stage-image-context
+            depends: validate.Succeeded
+            when: "'{{ "{{" }}workflow.parameters.buildGnome{{ "}}" }}' == 'true'"
+            arguments:
+              parameters:
+                - name: imageDir
+                  value: {{ .Values.images.gnome.dockerfileDir | quote }}
+              artifacts:
+{{- include "cws.gitRepoArtifact" . | nindent 16 }}
+          - name: build-gnome
+            templateRef:
+              name: common-docker-image-build
+              template: build
+              clusterScope: true
+            depends: "(stage-gnome.Succeeded || stage-gnome.Skipped) && (build-preflight.Succeeded || build-preflight.Skipped)"
+            when: "'{{ "{{" }}workflow.parameters.buildGnome{{ "}}" }}' == 'true'"
+            arguments:
+              artifacts:
+                - name: source
+                  from: '{{ "{{" }}tasks.stage-gnome.outputs.artifacts.context{{ "}}" }}'
+              parameters:
+{{- include "cws.commonBuildParams" . | nindent 16 }}
+                - name: dockerArtifactPathName
+                  value: {{ .Values.images.gnome.dockerArtifactPathName | quote }}
+                - name: dockerfileDir
+                  value: "."
+                - name: androidPool
+                  value: "true"
+                - name: buildArgs
+                  value: |
+                    BASE_IMAGE={{ "{{" }}tasks.validate.outputs.parameters.preflightUri{{ "}}" }}
+                    HORIZON_DOMAIN={{ include "cws.horizonDomain" . }}
+                    GOOGLE_CLOUD_PROJECT={{ include "cws.cloudProject" . }}
+                    GCP_REGION={{ include "cws.cloudRegion" . }}
+                    CWS_BASE_IMAGE_TAG={{ .Values.images.gnome.cwsBaseImageTag }}
+                    INSTALL_ANTIGRAVITY_AGENT={{ "{{" }}workflow.parameters.installAntigravityAgent{{ "}}" }}
+                    ANTIGRAVITY_2_VERSION={{ .Values.buildDefaults.antigravity2Version }}
+                    ANTIGRAVITY_2_TARBALL_URL={{ .Values.buildDefaults.antigravity2TarballUrl }}
+                    ANTIGRAVITY_2_TARBALL_SHA256={{ .Values.buildDefaults.antigravity2TarballSha256 }}
+          - name: stage-code-oss
+            template: stage-image-context
+            depends: validate.Succeeded
+            when: "'{{ "{{" }}workflow.parameters.buildCodeOss{{ "}}" }}' == 'true'"
+            arguments:
+              parameters:
+                - name: imageDir
+                  value: {{ .Values.images.codeOss.dockerfileDir | quote }}
+              artifacts:
+{{- include "cws.gitRepoArtifact" . | nindent 16 }}
+          - name: build-code-oss
+            templateRef:
+              name: common-docker-image-build
+              template: build
+              clusterScope: true
+            depends: "(stage-code-oss.Succeeded || stage-code-oss.Skipped)"
+            when: "'{{ "{{" }}workflow.parameters.buildCodeOss{{ "}}" }}' == 'true'"
+            arguments:
+              artifacts:
+                - name: source
+                  from: '{{ "{{" }}tasks.stage-code-oss.outputs.artifacts.context{{ "}}" }}'
+              parameters:
+{{- include "cws.commonBuildParams" . | nindent 16 }}
+                - name: dockerArtifactPathName
+                  value: {{ .Values.images.codeOss.dockerArtifactPathName | quote }}
+                - name: dockerfileDir
+                  value: "."
+                - name: buildArgs
+                  value: |
+                    HORIZON_DOMAIN={{ include "cws.horizonDomain" . }}
+                    GOOGLE_CLOUD_PROJECT={{ include "cws.cloudProject" . }}
+                    ANTIGRAVITY_CLI_VERSION={{ .Values.buildDefaults.antigravityCliVersion }}
+                    ANTIGRAVITY_CLI_TARBALL_URL={{ .Values.buildDefaults.antigravityCliTarballUrl }}
+                    ANTIGRAVITY_CLI_SHA256={{ .Values.buildDefaults.antigravityCliSha256 }}
+          - name: build-android-studio
+            templateRef:
+              name: common-docker-image-build
+              template: build
+              clusterScope: true
+            depends: "(build-gnome.Succeeded || build-gnome.Skipped || build-gnome.Omitted)"
+            when: "'{{ "{{" }}workflow.parameters.buildAndroidStudio{{ "}}" }}' == 'true' && ('{{ "{{" }}workflow.parameters.buildGnome{{ "}}" }}' != 'true' || '{{ "{{" }}tasks.build-gnome.status{{ "}}" }}' == 'Succeeded')"
+            arguments:
+              artifacts:
+{{- include "cws.gitSourceArtifact" . | nindent 16 }}
+              parameters:
+{{- include "cws.commonBuildParams" . | nindent 16 }}
+                - name: dockerArtifactPathName
+                  value: {{ .Values.images.androidStudio.dockerArtifactPathName | quote }}
+                - name: dockerfileDir
+                  value: {{ .Values.images.androidStudio.dockerfileDir | quote }}
+                - name: androidPool
+                  value: "true"
+                - name: buildArgs
+                  value: |
+                    BASE_IMAGE={{ "{{" }}tasks.validate.outputs.parameters.gnomeUri{{ "}}" }}
+          - name: build-asfp
+            templateRef:
+              name: common-docker-image-build
+              template: build
+              clusterScope: true
+            depends: "(build-gnome.Succeeded || build-gnome.Skipped || build-gnome.Omitted)"
+            when: "'{{ "{{" }}workflow.parameters.buildAsfp{{ "}}" }}' == 'true' && ('{{ "{{" }}workflow.parameters.buildGnome{{ "}}" }}' != 'true' || '{{ "{{" }}tasks.build-gnome.status{{ "}}" }}' == 'Succeeded')"
+            arguments:
+              artifacts:
+{{- include "cws.gitSourceArtifact" . | nindent 16 }}
+              parameters:
+{{- include "cws.commonBuildParams" . | nindent 16 }}
+                - name: dockerArtifactPathName
+                  value: {{ .Values.images.asfp.dockerArtifactPathName | quote }}
+                - name: dockerfileDir
+                  value: {{ .Values.images.asfp.dockerfileDir | quote }}
+                - name: androidPool
+                  value: "true"
+                - name: buildArgs
+                  value: |
+                    BASE_IMAGE={{ "{{" }}tasks.validate.outputs.parameters.gnomeUri{{ "}}" }}
+                    HORIZON_DOMAIN={{ include "cws.horizonDomain" . }}
+                    GOOGLE_CLOUD_PROJECT={{ include "cws.cloudProject" . }}
+                    GCP_REGION={{ include "cws.cloudRegion" . }}
+          - name: summarize-digests
+            template: summarize-digests
+            depends: "(build-environment.Succeeded || build-environment.Skipped || build-environment.Omitted) && (build-preflight.Succeeded || build-preflight.Skipped || build-preflight.Omitted) && (build-gnome.Succeeded || build-gnome.Skipped || build-gnome.Omitted) && (build-code-oss.Succeeded || build-code-oss.Skipped || build-code-oss.Omitted) && (build-android-studio.Succeeded || build-android-studio.Skipped || build-android-studio.Omitted) && (build-asfp.Succeeded || build-asfp.Skipped || build-asfp.Omitted)"
+
+    - name: validate
+      outputs:
+        parameters:
+          - name: preflightUri
+            valueFrom:
+              path: /tmp/preflight-uri
+          - name: gnomeUri
+            valueFrom:
+              path: /tmp/gnome-uri
+      container:
+        image: alpine:3.20
+        command: [sh, -eu, -c]
+        {{- include "cws.nonRootSecurityContext" . | nindent 8 }}
+        env:
+          - name: IMAGE_TAG
+            value: '{{ "{{" }}workflow.parameters.imageTag{{ "}}" }}'
+          - name: DRY_RUN
+            value: '{{ "{{" }}workflow.parameters.dryRun{{ "}}" }}'
+          - name: BUILD_ENVIRONMENT
+            value: '{{ "{{" }}workflow.parameters.buildEnvironmentImage{{ "}}" }}'
+          - name: BUILD_PREFLIGHT
+            value: '{{ "{{" }}workflow.parameters.buildPreflight{{ "}}" }}'
+          - name: PREFLIGHT_IMAGE
+            value: '{{ "{{" }}workflow.parameters.preflightImage{{ "}}" }}'
+          - name: BUILD_GNOME
+            value: '{{ "{{" }}workflow.parameters.buildGnome{{ "}}" }}'
+          - name: GNOME_IMAGE
+            value: '{{ "{{" }}workflow.parameters.gnomeImage{{ "}}" }}'
+          - name: BUILD_CODE_OSS
+            value: '{{ "{{" }}workflow.parameters.buildCodeOss{{ "}}" }}'
+          - name: BUILD_ANDROID_STUDIO
+            value: '{{ "{{" }}workflow.parameters.buildAndroidStudio{{ "}}" }}'
+          - name: BUILD_ASFP
+            value: '{{ "{{" }}workflow.parameters.buildAsfp{{ "}}" }}'
+          - name: PREFLIGHT_BUILT
+            value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.preflight.dockerArtifactPathName "tag" "") | quote }}
+          - name: GNOME_BUILT
+            value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.gnome.dockerArtifactPathName "tag" "") | quote }}
+        args:
+          - |
+            on() { case "$1" in true|True|TRUE) return 0 ;; *) return 1 ;; esac; }
+            # Portal marks optional URI fields required; testers type "-".
+            blank() { case "$(printf '%s' "$1" | tr -d '[:space:]')" in ''|-) return 0 ;; *) return 1 ;; esac; }
+            blank "$PREFLIGHT_IMAGE" && PREFLIGHT_IMAGE=
+            blank "$GNOME_IMAGE" && GNOME_IMAGE=
+            any=false
+            on "$BUILD_ENVIRONMENT" && any=true
+            on "$BUILD_PREFLIGHT" && any=true
+            on "$BUILD_GNOME" && any=true
+            on "$BUILD_CODE_OSS" && any=true
+            on "$BUILD_ANDROID_STUDIO" && any=true
+            on "$BUILD_ASFP" && any=true
+            if [ "$any" != true ]; then
+              echo "ERROR: select at least one image to build" >&2
+              exit 1
+            fi
+            if [ -z "$IMAGE_TAG" ]; then
+              echo "ERROR: imageTag is required" >&2
+              exit 1
+            fi
+            child=false
+            on "$BUILD_ANDROID_STUDIO" && child=true
+            on "$BUILD_ASFP" && child=true
+            if on "$BUILD_GNOME" && ! on "$BUILD_PREFLIGHT" && [ -z "$PREFLIGHT_IMAGE" ]; then
+              echo "ERROR: preflightImage is required when buildPreflight is false and buildGnome is true" >&2
+              exit 1
+            fi
+            if [ "$child" = true ] && ! on "$BUILD_GNOME" && [ -z "$GNOME_IMAGE" ]; then
+              echo "ERROR: gnomeImage is required when buildGnome is false and Android Studio or ASFP is enabled" >&2
+              exit 1
+            fi
+            if on "$DRY_RUN"; then
+              if on "$BUILD_PREFLIGHT" && on "$BUILD_GNOME"; then
+                echo "ERROR: dryRun=true cannot build GNOME in the same run as preflight; GNOME pulls BASE_IMAGE from the registry and this run does not push" >&2
+                exit 1
+              fi
+              if on "$BUILD_GNOME" && [ "$child" = true ]; then
+                echo "ERROR: dryRun=true cannot build Android Studio or ASFP in the same run as GNOME; those images pull BASE_IMAGE from the registry and this run does not push" >&2
+                exit 1
+              fi
+            fi
+            if on "$BUILD_PREFLIGHT"; then
+              printf '%s%s\n' "$PREFLIGHT_BUILT" "$IMAGE_TAG" > /tmp/preflight-uri
+            else
+              printf '%s\n' "$PREFLIGHT_IMAGE" > /tmp/preflight-uri
+            fi
+            if on "$BUILD_GNOME"; then
+              printf '%s%s\n' "$GNOME_BUILT" "$IMAGE_TAG" > /tmp/gnome-uri
+            else
+              printf '%s\n' "$GNOME_IMAGE" > /tmp/gnome-uri
+            fi
+            echo "preflightUri=$(cat /tmp/preflight-uri)"
+            echo "gnomeUri=$(cat /tmp/gnome-uri)"
+
+    - name: stage-image-context
+      # /out is the output artifact. nobody cannot mkdir it on /. Mount a writable volume.
+      volumes:
+        - name: context-out
+          emptyDir: {}
+      inputs:
+        parameters:
+          - name: imageDir
+        artifacts:
+          - name: repo
+            path: /src
+      outputs:
+        artifacts:
+          - name: context
+            path: /out
+      container:
+        image: alpine:3.20
+        command: [sh, -eu, -c]
+        {{- include "cws.nonRootSecurityContext" . | nindent 8 }}
+        volumeMounts:
+          - name: context-out
+            mountPath: /out
+        env:
+          - name: IMAGE_DIR
+            value: '{{ "{{" }}inputs.parameters.imageDir{{ "}}" }}'
+          - name: UTILS_DIR
+            value: {{ .Values.images.commonUtilsDir | quote }}
+        args:
+          - |
+            mkdir -p /out /out/common-utils
+            # Follow symlinks. common-utils/antigravity/README.md points at
+            # docs/... outside this folder; Argo artifact init rejects that (exit 64).
+            tar -C "/src/${IMAGE_DIR}" -chf - . | tar -C /out -xf -
+            tar -C "/src/${UTILS_DIR}" -chf - . | tar -C /out/common-utils -xf -
+            test -d /out/common-utils
+            test ! -L /out/common-utils/antigravity/README.md
+            echo "staged ${IMAGE_DIR} with common-utils"
+
+    - name: summarize-digests
+      outputs:
+        parameters:
+          - name: environmentImage
+            valueFrom:
+              path: /tmp/environment
+          - name: preflightImage
+            valueFrom:
+              path: /tmp/preflight
+          - name: gnomeImage
+            valueFrom:
+              path: /tmp/gnome
+          - name: codeOssImage
+            valueFrom:
+              path: /tmp/code-oss
+          - name: androidStudioImage
+            valueFrom:
+              path: /tmp/android-studio
+          - name: asfpImage
+            valueFrom:
+              path: /tmp/asfp
+          - name: summary
+            valueFrom:
+              path: /tmp/summary
+      container:
+        image: {{ .Values.images.digest.image | quote }}
+        command: [bash, -c]
+        env:
+          - name: DRY_RUN
+            value: '{{ "{{" }}workflow.parameters.dryRun{{ "}}" }}'
+          - name: IMAGE_TAG
+            value: '{{ "{{" }}workflow.parameters.imageTag{{ "}}" }}'
+          - name: BUILD_ENVIRONMENT
+            value: '{{ "{{" }}workflow.parameters.buildEnvironmentImage{{ "}}" }}'
+          - name: BUILD_PREFLIGHT
+            value: '{{ "{{" }}workflow.parameters.buildPreflight{{ "}}" }}'
+          - name: BUILD_GNOME
+            value: '{{ "{{" }}workflow.parameters.buildGnome{{ "}}" }}'
+          - name: BUILD_CODE_OSS
+            value: '{{ "{{" }}workflow.parameters.buildCodeOss{{ "}}" }}'
+          - name: BUILD_ANDROID_STUDIO
+            value: '{{ "{{" }}workflow.parameters.buildAndroidStudio{{ "}}" }}'
+          - name: BUILD_ASFP
+            value: '{{ "{{" }}workflow.parameters.buildAsfp{{ "}}" }}'
+          - name: ENV_REF
+            value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.environment.dockerArtifactPathName "tag" "") | quote }}
+          - name: PREFLIGHT_REF
+            value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.preflight.dockerArtifactPathName "tag" "") | quote }}
+          - name: GNOME_REF
+            value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.gnome.dockerArtifactPathName "tag" "") | quote }}
+          - name: CODE_OSS_REF
+            value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.codeOss.dockerArtifactPathName "tag" "") | quote }}
+          - name: ANDROID_STUDIO_REF
+            value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.androidStudio.dockerArtifactPathName "tag" "") | quote }}
+          - name: ASFP_REF
+            value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.asfp.dockerArtifactPathName "tag" "") | quote }}
+        args:
+          - |
+            set -euo pipefail
+            on() { case "$1" in true|True|TRUE) return 0 ;; *) return 1 ;; esac; }
+            describe() {
+              local label=$1 prefix=$2 build=$3 out=$4
+              local ref="${prefix}${IMAGE_TAG}"
+              if ! on "$build"; then
+                printf '%s\n' "(skipped)" > "$out"
+                echo "${label}=(skipped)"
+                return 0
+              fi
+              if on "$DRY_RUN"; then
+                printf '%s\n' "(not pushed; dryRun=true)" > "$out"
+                echo "${label}=(not pushed; dryRun=true) tag=${ref}"
+                return 0
+              fi
+              digest=$(gcloud artifacts docker images describe "$ref" --format='get(image_summary.digest)')
+              if [ -z "$digest" ]; then
+                echo "ERROR: no digest for ${ref}" >&2
+                exit 1
+              fi
+              prefix_no_colon="${prefix%:}"
+              uri="${prefix_no_colon}@${digest}"
+              printf '%s\n' "$uri" > "$out"
+              echo "${label}=${uri}"
+            }
+            describe environment "$ENV_REF" "$BUILD_ENVIRONMENT" /tmp/environment
+            describe preflight "$PREFLIGHT_REF" "$BUILD_PREFLIGHT" /tmp/preflight
+            describe gnome "$GNOME_REF" "$BUILD_GNOME" /tmp/gnome
+            describe code-oss "$CODE_OSS_REF" "$BUILD_CODE_OSS" /tmp/code-oss
+            describe android-studio "$ANDROID_STUDIO_REF" "$BUILD_ANDROID_STUDIO" /tmp/android-studio
+            describe asfp "$ASFP_REF" "$BUILD_ASFP" /tmp/asfp
+            {
+              echo "=== Image URIs for create-config / update-config containerImage ==="
+              echo "environment=$(cat /tmp/environment)"
+              echo "preflight=$(cat /tmp/preflight)"
+              echo "gnome=$(cat /tmp/gnome)"
+              echo "code-oss=$(cat /tmp/code-oss)"
+              echo "android-studio=$(cat /tmp/android-studio)"
+              echo "asfp=$(cat /tmp/asfp)"
+            } | tee /tmp/summary

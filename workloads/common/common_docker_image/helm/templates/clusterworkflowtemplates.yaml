@@ -56,6 +56,12 @@ spec:
             value: linux/amd64
           - name: registryAuthInsecure
             value: "true"
+          # Optional. When "true", schedule this build on the android node pool.
+          # Default "false" keeps Android / Remotive / other callers on the default pool.
+          - name: androidPool
+            value: "false"
+      # Applied only when androidPool=true. Empty "{}" leaves scheduling unchanged.
+      podSpecPatch: '{{ "{{=" }}inputs.parameters.androidPool == "true" ? "nodeSelector:\n  workloadLabel: android\ntolerations:\n- key: workloadType\n  operator: Equal\n  value: android\n  effect: NoSchedule" : "{}"{{ "}}" }}'
       # moby/buildkit defaults start buildkitd as the main process; this template overrides the primary
       # container command for credentials + buildctl, so buildkitd runs in a sidecar with the image default
       # and shares /run/buildkit via emptyDir (no inline buildkitd start or socket polling in the script).

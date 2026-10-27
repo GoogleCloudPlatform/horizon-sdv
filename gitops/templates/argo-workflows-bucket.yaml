@@ -6,6 +6,8 @@
 {{- if not (default false .Values.config.isSubEnvironment) }}
 # GCS artifact bucket for Argo Workflows (controller artifactRepository in argo-workflows.yaml).
 # Sync wave 5 — before the argo-workflows Application (wave 6).
+# SkipDryRunOnMissingResource: greenfield parent sync runs before the Git-pinned
+# operator has installed storage.cnrm CRDs.
 # Ownership moved from Terraform module.sdv_gcs_argo_workflows; abandon so CR delete does not wipe GCP data.
 apiVersion: storage.cnrm.cloud.google.com/v1beta1
 kind: StorageBucket
@@ -14,6 +16,7 @@ metadata:
   namespace: {{ .Values.config.namespacePrefix }}horizon
   annotations:
     argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     cnrm.cloud.google.com/project-id: {{ .Values.config.projectID | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
   labels:

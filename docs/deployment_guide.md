@@ -355,6 +355,11 @@ Steps to start the Terraform workflow.
 > [!Note]
 > GCE Disks or other GCE resources provisioned by the GKE cluster will not be automatically removed while running
 > deployment script with `--destroy` or `-d` flag as they are not managed by Terraform. A manual cleanup is required.
+>
+> Terraform waits up to 120 minutes for the root Argo CD Application to be deleted. The platform drain gate disables
+> enabled modules before the rest of the cascade. If the wait is stuck, check the `module-manager` logs. To give up on
+> the drain, run:
+> `kubectl -n <prefix>argocd patch configmap platform-drain-gate --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'`
 
 **Linux Native deployment:**
 > [!Important]
@@ -365,6 +370,7 @@ Steps to start the Terraform workflow.
    2. [Terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
    3. Docker - [Linux](https://docs.docker.com/engine/install/)
    4. [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/install-sdk)
+   5. curl
 2. Navigate to `tools/scripts/deployment`
 3. Provisioning can be done by running `./deploy.sh [options]` (Requires all above-mentioned tools to be installed on the machine).
 >**Options :**
@@ -378,6 +384,11 @@ Steps to start the Terraform workflow.
 > [!Note]
 > GCE Disks or other GCE resources provisioned by the GKE cluster will not be automatically removed while running
 > deployment script with `--destroy` or `-d` flag as they are not managed by Terraform. A manual cleanup is required.
+>
+> Terraform waits up to 120 minutes for the root Argo CD Application to be deleted. The platform drain gate disables
+> enabled modules before the rest of the cascade. If the wait is stuck, check the `module-manager` logs. To give up on
+> the drain, run:
+> `kubectl -n <prefix>argocd patch configmap platform-drain-gate --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'`
 
 ### Section #2e - Update the Horizon version
 

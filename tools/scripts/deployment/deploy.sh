@@ -188,6 +188,11 @@ check_requirements() {
     log_err "Google Cloud SDK not found."
     exit 1
   fi
+
+  if ! command -v curl &>/dev/null; then
+    log_err "curl not found."
+    exit 1
+  fi
 }
 
 #  Authentication

@@ -1,0 +1,293 @@
+<!-- Copyright (c) 2026 Accenture, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cloud-workstations</title>
+    <style>
+      :root {
+        --bg: #f8f9fa;
+        --paper: #ffffff;
+        --text: #202124;
+        --muted: #5f6368;
+        --primary: #1a73e8;
+        --border: #e8eaed;
+        --hero-end: rgba(26, 115, 232, 0.08);
+        --hero-start: rgba(66, 133, 244, 0.22);
+        --callout-bg: #e8f0fe;
+        --callout-border: #d2e3fc;
+        --warn-bg: #fef7e0;
+        --warn-border: #fde293;
+        --warn-text: #b06000;
+        --code-bg: #f1f3f4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #202124;
+          --paper: #292a2d;
+          --text: #e8eaed;
+          --muted: #9aa0a6;
+          --primary: #8ab4f8;
+          --border: #3c4043;
+          --hero-end: rgba(26, 115, 232, 0.12);
+          --hero-start: rgba(66, 133, 244, 0.28);
+          --callout-bg: rgba(26, 115, 232, 0.14);
+          --callout-border: rgba(138, 180, 248, 0.28);
+          --warn-bg: rgba(251, 188, 4, 0.12);
+          --warn-border: rgba(251, 188, 4, 0.28);
+          --warn-text: #fdd663;
+          --code-bg: #3c4043;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+      body {
+        font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+        padding: 1.1rem clamp(0.9rem, 2.4vw, 1.5rem) 1.4rem;
+        overflow-wrap: anywhere;
+      }
+      .wrap {
+        width: 100%;
+        margin: 0 auto;
+      }
+      .hero {
+        margin: 0 0 1.1rem;
+        padding: 1rem;
+        border-radius: 8px;
+        background: linear-gradient(
+          135deg,
+          var(--hero-start) 0%,
+          var(--hero-end) 45%,
+          var(--paper) 100%
+        );
+      }
+      .overline {
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 0.35rem;
+      }
+      .badge {
+        display: inline-block;
+        margin: 0 0 0.45rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--warn-text);
+        background: var(--warn-bg);
+        border: 1px solid var(--warn-border);
+      }
+      .banner {
+        margin: 0 0 0.85rem;
+      }
+      h1 {
+        font-size: clamp(1.35rem, 2.5vw, 1.7rem);
+        font-weight: 700;
+        margin: 0 0 0.45rem;
+        line-height: 1.2;
+      }
+      .lead {
+        font-size: 0.95rem;
+        color: var(--muted);
+        margin: 0;
+        max-width: fit-content;
+      }
+      .grid {
+        display: grid;
+        gap: 0.85rem;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+      }
+      .card {
+        background: var(--paper);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.1rem 1.05rem;
+        box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+      }
+      .card h2 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--primary);
+      }
+      .card p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+      .card p + p,
+      .card p + ul,
+      .card ul + p,
+      .card .callout,
+      .card .warn {
+        margin-top: 0.7rem;
+      }
+      ul {
+        margin: 0.35rem 0 0;
+        padding-left: 1.15rem;
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      li {
+        margin-bottom: 0.4rem;
+      }
+      li:last-child {
+        margin-bottom: 0;
+      }
+      .callout,
+      .warn {
+        padding: 0.65rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.8125rem;
+        color: var(--text);
+      }
+      .callout {
+        background: var(--callout-bg);
+        border: 1px solid var(--callout-border);
+      }
+      .warn {
+        background: var(--warn-bg);
+        border: 1px solid var(--warn-border);
+        color: var(--warn-text);
+      }
+      .callout strong,
+      .warn strong {
+        display: block;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 0.2rem;
+      }
+      .callout strong {
+        color: var(--primary);
+      }
+      .warn strong {
+        color: var(--warn-text);
+      }
+      .warn p {
+        margin: 0;
+        color: inherit;
+      }
+      .warn p + p {
+        margin-top: 0.45rem;
+      }
+      code {
+        font-size: 0.84em;
+        color: var(--text);
+        background: var(--code-bg);
+        padding: 0.08em 0.32em;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <p class="overline">Horizon module</p>
+        <p class="badge">Experimental</p>
+        <h1>cloud-workstations</h1>
+        <p class="lead">
+          Automated, declarative lifecycle management for Google Cloud Workstations
+          development environments directly from Horizon. Workflow submit is not
+          limited by role yet.
+        </p>
+      </header>
+
+      <div class="warn banner">
+        <strong>Experimental</strong>
+        <p>
+          Any signed-in user can run every Cloud Workstations workflow, including
+          create, delete, and changing who can use a workstation. The Portal does
+          not separate admin and user actions. Your own workstation workflows only
+          show and start workstations that list your signed-in username. Access on
+          the workstation in Google Cloud still follows the users and admins set on it.
+        </p>
+      </div>
+
+      <div class="grid">
+        <article class="card">
+          <h2>Functionality</h2>
+          <p>
+            Provides self-service creation, configuration, and runtime control of Cloud Workstations on Google Cloud Platform:
+          </p>
+          <ul>
+            <li>
+              <strong>Workstation Lifecycle:</strong> Create, start, stop, and delete workstations on demand.
+            </li>
+            <li>
+              <strong>Custom Configurations:</strong> Manage machine types, container images, persistent home directories, and security posture.
+            </li>
+            <li>
+              <strong>Developer Experience:</strong> Access web-based IDEs and terminal environments securely through the browser or local tooling.
+            </li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Dependencies</h2>
+          <p>
+            <code>cloud-workstations</code> requires <strong><code>workloads-common</code></strong> as a hard dependency.
+          </p>
+          <ul>
+            <li>
+              <code>workloads-common</code> must be enabled first to provide the required container-image build templates and credential workflows.
+            </li>
+            <li>
+              Module Manager will reject disabling <code>workloads-common</code> while <code>cloud-workstations</code> is active.
+            </li>
+            <li>
+              Before any other workflow, run <code>cws-image-build</code> once per environment with <code>buildEnvironmentImage=true</code>, <code>imageTag=latest</code>, and every other image off. Until then, the other workflows stay Pending.
+            </li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Disable Behavior</h2>
+          <p>
+            When this module is disabled in Module Manager, an automated teardown is executed:
+          </p>
+          <ul>
+            <li>
+              All active workstations and workstation configurations are terminated and deleted.
+            </li>
+            <li>
+              The underlying <strong>Cloud Workstations (CWS) cluster</strong> in Google Cloud is deleted along with the module's Kubernetes namespaces.
+            </li>
+          </ul>
+          <div class="warn">
+            <strong>Resource Deletion Warning</strong>
+            Disabling the module deletes the CWS cluster and any non-persistent workstation data. Ensure code and artifacts are committed and pushed before turning off the module.
+          </div>
+        </article>
+      </div>
+    </div>
+  </body>
+</html>
+
