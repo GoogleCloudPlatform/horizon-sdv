@@ -97,6 +97,23 @@ sudo chown -R "$(id -un):$(id -gn)" "${REMOTE_STAGING}"
 
 # shellcheck disable=SC1091
 set -a && source /tmp/remotive-argo-job-env.sh && set +a
+_metadata_b64() {
+  curl -fsS -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/attributes/${1}" 2>/dev/null || true
+}
+_user="$(_metadata_b64 mtk-connect-username-b64)"
+_pass="$(_metadata_b64 mtk-connect-password-b64)"
+_token="$(_metadata_b64 remotive-cloud-auth-token-b64)"
+if [[ -n "${_user}" && -n "${_pass}" ]]; then
+  MTK_CONNECT_USERNAME="$(printf '%s' "${_user}" | base64 -d)"
+  MTK_CONNECT_PASSWORD="$(printf '%s' "${_pass}" | base64 -d)"
+  export MTK_CONNECT_USERNAME MTK_CONNECT_PASSWORD
+fi
+if [[ -n "${_token}" ]]; then
+  REMOTIVE_CLOUD_AUTH_TOKEN="$(printf '%s' "${_token}" | base64 -d)"
+  export REMOTIVE_CLOUD_AUTH_TOKEN
+fi
+unset _user _pass _token
 _remotive_argo_ensure_home
 
 export WORKSPACE="${REMOTE_STAGING}"
