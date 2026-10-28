@@ -37,9 +37,9 @@ Three sample modules show how [hard and soft dependencies](01_overview.md#how-mo
 |  | sample-hard | sample-soft | sample |
 |---|---|---|---|
 | **Dependency type** | Hard dep *target* | Soft dep *target* | Parent with both |
-| **Required for sample?** | Yes | No | — |
-| **Auto-enabled with sample?** | Yes | No | — |
-| **Can be disabled while sample is on?** | No. The API returns `409` with `hardDependents: ["sample"]`, and the portal shows *"Cannot disable: required by: sample"*. | Yes | — |
+| **Required for sample?** | Yes | No | n/a |
+| **Auto-enabled with sample?** | Yes | No | n/a |
+| **Can be disabled while sample is on?** | No. The API returns `409` with `hardDependents: ["sample"]`, and the portal shows *"Cannot disable: required by: sample"*. | Yes | n/a |
 | **Horizon-exposed workflows** | No (`sample-hard-smoke-test` is internal) | No | Yes (`sample-smoke-test`, `sample-smoke-test-alt`) |
 | **When unused** | Auto-disabled when `sample` is disabled | Auto-disabled when `sample` is disabled | Stays while you want the app |
 
@@ -93,7 +93,7 @@ Edit `gitops/modules/example-module/Chart.yaml`: set `name` to `example-module` 
 
 In `gitops/modules/example-module/values.yaml`:
 
-- Keep `moduleName: ""` — Module Manager sets it on enable.
+- Keep `moduleName: ""`, because Module Manager sets it on enable.
 - Set `overviewServiceName: mod-example-overview`.
 - Set `overviewNamespace` and any hello-world namespace (for example `example-module-hello`) so they match where those workloads actually run.
 - Leave `repo.url` / `repo.revision` as placeholders; the parent Application fills them.
@@ -216,8 +216,8 @@ Open the run from **Running Workflows** and press **Abort** in the top-right cor
 
 *Hello World* application can be found in **sample → Applications** in the Developer Portal sidebar, where **Open** opens it in a new tab. It should show *SOFT_FEATURE_ENABLED_SAMPLE_SOFT* flag with a correct value:
 
-- true — if sample-soft is enabled
-- false — if sample-soft is disabled
+- `true` if sample-soft is enabled
+- `false` if sample-soft is disabled
 
 ## Workflows via Horizon CLI
 
