@@ -302,13 +302,13 @@ git clone <REPOSITORY_URL>
       - `scm_username`: Username (use `git` for GitHub PAT, actual username for Gerrit/GitLab)
       - `scm_password`: Password or token (GitHub PAT, Gerrit HTTP password, GitLab token, etc.)
     - If using `app` authentication (GitHub only):
-      - `sdv_github_app_id`: GitHub App ID from [Section #1c - Create and Install GitHub Application](#section-1c---create-and-install-github-application).
+      - `sdv_github_app_id`: GitHub App ID from [Section #5c - Create and Install GitHub Application](#section-5c---create-and-install-github-application).
       - `sdv_github_app_install_id`: 
          - Navigate to Organization Settings, GitHub Apps and click on "Configure".
          - Once in the GitHub App configuration page, the `GH_INSTALLATION_ID` is present in the URL of the page as below,
          - `https://github.com/organizations/<GH-ORG-NAME>/settings/installations/<INSTALLATION_ID>`
          - Enter the value of `<INSTALLATION_ID>`
-       - `sdv_github_app_private_key`: GitHub App Private key downloaded from [Section #1c - Create and Install GitHub Application](#section-1c---create-and-install-github-application). Paste the content between `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----`.
+       - `sdv_github_app_private_key`: GitHub App Private key downloaded from [Section #5c - Create and Install GitHub Application](#section-5c---create-and-install-github-application). Paste the content between `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----`.
     - If using `none` authentication (public repos):
       - No credentials needed - simply provide the repository URL and branch
   - Required Admin Secrets
