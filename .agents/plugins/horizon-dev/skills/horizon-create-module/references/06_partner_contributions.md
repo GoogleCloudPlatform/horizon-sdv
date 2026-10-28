@@ -46,7 +46,9 @@ Every contribution to Horizon SDV must adhere to these foundational principles:
 ## 2. Git Workflow & Collaboration Rules
 
 ### Branch Naming & Targets
-Follow `docs/contributing.md` and `docs/branching_strategy.md`.
+Follow `docs/contributing.md` and `docs/branching_strategy.md`. In summary:
+- **Branch Names**: Must use `contrib/feature/<title>` or `contrib/fix/<title>` (e.g. `contrib/feature/PartnerVendorRunner`, `contrib/fix/CvdAcceleratorTimeout`). For multi-part changes, separate the part with `__` (e.g. `contrib/feature/PartnerVendorRunner__Docs`); a second `/` is not allowed.
+- **Target Branch**: All Pull Requests must be raised against **`main`**, from a branch created from an up-to-date `main`. All commits must be signed.
 
 ### Contributor License Agreement (CLA)
 Contributions must be accompanied by a signed Google CLA.
@@ -103,6 +105,8 @@ When opening your Pull Request:
 
 - [ ] I have signed the Google Contributor License Agreement (CLA).
 - [ ] My branch and pull request follow `docs/contributing.md` and `docs/branching_strategy.md`.
+- [ ] My PR branch is named `contrib/feature/<title>` or `contrib/fix/<title>` and targets branch **`main`**.
+- [ ] All my commits are signed.
 - [ ] My module is placed directly in **`gitops/modules/<module-name>/`**, and all other files follow the locations in `docs/contributing.md`.
 - [ ] All code and Helm manifests in `gitops/modules/<module-name>/` are licensed under **Apache 2.0**.
 - [ ] Partner content and any non-Apache 2.0 dependencies follow `docs/contributing.md`.
