@@ -142,16 +142,14 @@ horizon --help
 
 **Expected:** `horizon <version> (built <DD/MM/YYYY>)` matches the version and build date on the Tools tab, and the usage text starts with:
 
-```
-horizon — Horizon API CLI
-
-Usage:
-  horizon config <init|get|set> ...
-  horizon auth <login|logout|refresh|whoami> [flags]
-  horizon catalog get [--output text|json] [flags]   (default output: text)
-  horizon version [--output text|json]
-  horizon workflow <submit|wait|logs|abort|delete|show|list|get|running|history|download-artifact> ... [flags]
-```
+<blockquote><samp>horizon — Horizon API CLI<br>
+<br>
+Usage:<br>
+&nbsp;&nbsp;horizon config &lt;init|get|set&gt; ...<br>
+&nbsp;&nbsp;horizon auth &lt;login|logout|refresh|whoami&gt; [flags]<br>
+&nbsp;&nbsp;horizon catalog get [--output text|json] [flags]&nbsp;&nbsp;&nbsp;(default output: text)<br>
+&nbsp;&nbsp;horizon version [--output text|json]<br>
+&nbsp;&nbsp;horizon workflow &lt;submit|wait|logs|abort|delete|show|list|get|running|history|download-artifact&gt; ... [flags]</samp></blockquote>
 
 ## Quick Start
 
@@ -170,10 +168,8 @@ horizon auth login --device --write-config
 
 The CLI prints a verification URL. Open it in a browser and sign in with your Horizon user. On success it prints:
 
-```
-Logged in. Token saved to ~/.config/horizon/token.json
-Wrote defaults to ~/.config/horizon/config.yaml
-```
+<blockquote><samp>Logged in. Token saved to ~/.config/horizon/token.json<br>
+Wrote defaults to ~/.config/horizon/config.yaml</samp></blockquote>
 
 `--write-config` saves the domain, so later sessions don't need `HORIZON_DOMAIN`. Check that the API accepts the token:
 
@@ -181,13 +177,11 @@ Wrote defaults to ~/.config/horizon/config.yaml
 horizon auth whoami
 ```
 
-```
-JWT claims (unverified):
-  sub: <uuid>
-  preferred_username: <your-username>
-  exp: <timestamp> (valid for ...)
-Horizon API catalog: OK (<N> bytes)
-```
+<blockquote><samp>JWT claims (unverified):<br>
+&nbsp;&nbsp;sub: &lt;uuid&gt;<br>
+&nbsp;&nbsp;preferred_username: &lt;your-username&gt;<br>
+&nbsp;&nbsp;exp: &lt;timestamp&gt; (valid for ...)<br>
+Horizon API catalog: OK (&lt;N&gt; bytes)</samp></blockquote>
 
 ### 2. Find the template
 
@@ -195,15 +189,13 @@ Horizon API catalog: OK (<N> bytes)
 horizon catalog get
 ```
 
-```
-Catalog (<N> entries)
-
-sample / sample-smoke-test
-  parameters:
-  - sampleEnv
-  - sampleBuildId
-  ...
-```
+<blockquote><samp>Catalog (&lt;N&gt; entries)<br>
+<br>
+sample / sample-smoke-test<br>
+&nbsp;&nbsp;parameters:<br>
+&nbsp;&nbsp;- sampleEnv<br>
+&nbsp;&nbsp;- sampleBuildId<br>
+&nbsp;&nbsp;...</samp></blockquote>
 
 If `sample / sample-smoke-test` is missing, check that the `sample` module is enabled and READY.
 
@@ -218,11 +210,9 @@ horizon workflow submit \
 
 The CLI checks the parameters against the catalog, submits the run and waits until the workflow appears. It then prints the generated name:
 
-```
-module=sample
-template=sample-smoke-test
-workflowName=<generated-workflow-name>
-```
+<blockquote><samp>module=sample<br>
+template=sample-smoke-test<br>
+workflowName=&lt;generated-workflow-name&gt;</samp></blockquote>
 
 Keep the name for the next steps:
 
@@ -262,9 +252,7 @@ Or print a time-limited signed URL that another tool or person can use:
 horizon workflow download-artifact --generate-signed-url "$WF_NAME" smoke-result
 ```
 
-```
-signed-url: https://storage.googleapis.com/...
-```
+<blockquote><samp>signed-url: https://storage.googleapis.com/...</samp></blockquote>
 
 Flags go before the workflow and artifact names. If several steps produced an artifact with the same name, the CLI picks the last one and prints a note; see [`horizon workflow download-artifact`](#horizon-workflow-download-artifact).
 
@@ -358,7 +346,7 @@ Prints the CLI version and build date. Add `--output json` for machine-readable 
 
 Lists every template you can submit, grouped by module, with each parameter's name, default value and description. Only templates from enabled modules that are marked as exposed appear. If a template you expect is missing, check in **Administration → Modules** that its module is enabled and ready.
 
-Add `--output json` to get the raw catalog, which is useful for scripts. Add `--raw` as well for compact one-line JSON.
+For scripts, `horizon catalog get --output json` prints the catalog as indented JSON, and `horizon catalog get --output json --raw` prints it compact on one line. `--raw` only works together with `--output json`; on its own it fails, because the default output is text.
 
 ### `horizon workflow submit`
 
@@ -477,14 +465,10 @@ Test-Path "$HOME\.config\horizon"
 **Expected:**
 
 - Linux/macOS:
-```
-ls: cannot access '/home/<user>/.config/horizon/': No such file or directory
-```
+<blockquote><samp>ls: cannot access '/home/&lt;user&gt;/.config/horizon/': No such file or directory</samp></blockquote>
 - Windows:
-```
-False
-False
-```
+<blockquote><samp>False<br>
+False</samp></blockquote>
 
 ## Appendix: Build from source
 

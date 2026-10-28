@@ -50,7 +50,7 @@ Module Manager is internal to the cluster. The Developer Portal reaches it throu
 | `GET /modules/{idOrName}` | One module. |
 | `GET /modules/{idOrName}/status` | Argo CD sync and health of the module's Applications; the portal derives the status chip from it. |
 | `GET /modules/{idOrName}/overview` | The module's overview HTML, fetched from its overview Service. `404` if the catalog has no overview Service for the module. |
-| `POST /modules/{idOrName}/enable` | Enable, with hard dependencies first. An optional `targetRevision` in the body pins the module. |
+| `POST /modules/{idOrName}/enable` | Enable, with hard dependencies first. An optional `targetRevision` in the body pins the module. `409` "platform teardown in progress" while the root Argo CD Application is being deleted. |
 | `DELETE /modules/{idOrName}/disable` | Disable. `409` with `hardDependents` if an enabled module requires it. |
 | `PUT /modules/{idOrName}/target-revision` | Pin an enabled module to a ref. Body: `{"targetRevision": "<ref>"}`. |
 | `DELETE /modules/{idOrName}/target-revision` | Reset the module to the platform branch. |

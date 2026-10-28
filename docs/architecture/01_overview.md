@@ -25,7 +25,43 @@ This page explains the ideas you need before you work with modules. The pages in
 5. [How to create a new module](05_creating-modules.md) is a step-by-step guide to building one.
 6. [Interfaces](06_interfaces.md) is a reference for the Horizon API and Module Manager endpoints and the soft-feature contract.
 
-![Component overview](images/module-architecture-component-overview.png)
+```mermaid
+flowchart TB
+    user([User / browser])
+    cli([horizon CLI])
+    subgraph portal[Developer Portal]
+        spa[SPA UI] --> proxy[Go proxy]
+    end
+    keycloak[(Keycloak / OIDC)]
+    api["Horizon API<br/>/api/v1 :8082"]
+    mm["Module Manager<br/>API :8082 + controller"]
+    subgraph crds[Module Manager CRDs]
+        state["ModuleManagerState CR<br/>enabledModules, revisions"]
+        catalog["ModuleCatalog CR<br/>modules, deps, apps"]
+    end
+    events["Argo Events<br/>EventSource + Sensor"]
+    wf["Argo Workflows<br/>WorkflowTemplates + Workflows"]
+    argocd["Argo CD<br/>app-of-apps"]
+    git[("GitOps repo<br/>gitops/modules/*")]
+    gcs[(GCS artifact bucket)]
+
+    user --> spa
+    proxy -- token --> keycloak
+    proxy -- "catalog, submit, logs" --> api
+    cli --> api
+    proxy -- "enable/disable, list" --> mm
+    api -- "reads enabled modules" --> state
+    api -- "webhook POST" --> events
+    events -- "create Workflow" --> wf
+    api -- "logs / status" --> wf
+    api -- "signed URLs" --> gcs
+    wf -- artifacts --> gcs
+    mm -- "updates state" --> state
+    mm -- "reads catalog" --> catalog
+    mm -- "create/delete Application" --> argocd
+    argocd -- sync --> git
+    argocd -- "deploy module workloads" --> wf
+```
 
 The diagram shows the moving parts. You reach the platform through the Developer Portal, the Horizon CLI or the Horizon API, and you sign in through Keycloak each time. Module Manager holds the module records. Argo CD deploys whatever Module Manager enables. Argo Events and Argo Workflows run the workflows that modules expose, and their artifacts land in a GCS bucket.
 
