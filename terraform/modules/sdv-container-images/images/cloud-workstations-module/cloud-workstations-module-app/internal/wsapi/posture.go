@@ -30,6 +30,9 @@ const (
 	MaskDisableSSH           = "host.gce_instance.disable_ssh"
 	MaskAllowedPorts         = "allowed_ports"
 	MaskEphemeralDirectories = "ephemeral_directories"
+
+	// serverDefaultEphemeralDiskType is the disk type Google fills when the user leaves it unset.
+	serverDefaultEphemeralDiskType = "pd-standard"
 )
 
 // Posture is the API-owned workstation configuration slice.
@@ -39,8 +42,9 @@ type Posture struct {
 	EphemeralDirectories []EphemeralDirectory
 }
 
-// EphemeralDirectory is one ephemeral mount. Nil disk fields are unset and are
-// not compared with server-filled defaults such as pd-standard.
+// EphemeralDirectory is one ephemeral mount. A nil disk type matches an empty
+// value or pd-standard. A nil snapshot or source image matches only an empty
+// value. A nil read-only flag matches only false.
 type EphemeralDirectory struct {
 	MountPath      string
 	DiskType       *string
@@ -87,7 +91,8 @@ func DesiredPosture(spec wsv1alpha1.WorkstationConfigSpec) Posture {
 }
 
 // PostureMatches reports whether the live config already has the desired posture.
-// Ports are compared as a set. Ephemeral disk fields the user left unset are ignored.
+// Ports are compared as a set. A cleared ephemeral disk field is drift unless
+// the live value is the empty or server default described on EphemeralDirectory.
 func PostureMatches(live *pb.WorkstationConfig, desired Posture) bool {
 	if live == nil || live.GetHost().GetGceInstance().GetDisableSsh() != desired.DisableSsh {
 		return false
@@ -219,19 +224,41 @@ func ephemeralEqual(live []*pb.WorkstationConfig_EphemeralDirectory, desired []E
 		if !ok {
 			return false
 		}
-		disk := got.GetGcePd()
-		if want.DiskType != nil && (disk == nil || disk.GetDiskType() != *want.DiskType) {
-			return false
+		var liveType, liveSnapshot, liveImage string
+		var liveReadOnly bool
+		if disk := got.GetGcePd(); disk != nil {
+			liveType = disk.GetDiskType()
+			liveSnapshot = disk.GetSourceSnapshot()
+			liveImage = disk.GetSourceImage()
+			liveReadOnly = disk.GetReadOnly()
 		}
-		if want.SourceSnapshot != nil && (disk == nil || disk.GetSourceSnapshot() != *want.SourceSnapshot) {
-			return false
-		}
-		if want.SourceImage != nil && (disk == nil || disk.GetSourceImage() != *want.SourceImage) {
-			return false
-		}
-		if want.ReadOnly != nil && (disk == nil || disk.GetReadOnly() != *want.ReadOnly) {
+		if !diskTypeMatches(want.DiskType, liveType) ||
+			!optionalStringMatches(want.SourceSnapshot, liveSnapshot) ||
+			!optionalStringMatches(want.SourceImage, liveImage) ||
+			!readOnlyMatches(want.ReadOnly, liveReadOnly) {
 			return false
 		}
 	}
 	return true
+}
+
+func diskTypeMatches(want *string, live string) bool {
+	if want == nil {
+		return live == "" || live == serverDefaultEphemeralDiskType
+	}
+	return live == *want
+}
+
+func optionalStringMatches(want *string, live string) bool {
+	if want == nil {
+		return live == ""
+	}
+	return live == *want
+}
+
+func readOnlyMatches(want *bool, live bool) bool {
+	if want == nil {
+		return !live
+	}
+	return live == *want
 }

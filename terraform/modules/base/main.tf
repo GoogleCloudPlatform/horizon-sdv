@@ -124,14 +124,35 @@ resource "google_project_iam_member" "cws_module_controller" {
   role    = google_project_iam_custom_role.cws_module_controller.id
   member  = "serviceAccount:gke-cws-module-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
 
+  # Keep the cluster id aligned with terraform/modules/sdv-gke-apps/main.tf (clusterId) and cws_workstation_power.
+  # Config and workstation names are under this cluster, so one prefix covers get, update, and IAM.
+  condition {
+    title       = "horizon_workstation_cluster"
+    description = "Posture and IAM only for horizon-sdv-ws-cluster in this region."
+    expression  = "resource.name.startsWith(\"projects/${data.google_project.project.project_id}/locations/${var.sdv_region}/workstationClusters/horizon-sdv-ws-cluster/\")"
+  }
+
   depends_on = [module.sdv_wi]
 }
 
-# Permit the controller to attach only the module-owned host identity to workstation VMs. (cloud-workstations module)
-resource "google_service_account_iam_member" "cws_module_host_sa_user" {
+# Ensure service-<number>@gcp-sa-workstations.iam.gserviceaccount.com exists.
+resource "google_project_service_identity" "workstations" {
+  provider = google-beta
+  project  = data.google_project.project.project_id
+  service  = "workstations.googleapis.com"
+
+  depends_on = [module.sdv_apis]
+}
+
+# Both identities create or run the VM. The module controller only patches posture and IAM.
+resource "google_service_account_iam_member" "cws_host_sa_user" {
+  for_each = {
+    config_connector   = "serviceAccount:gke-config-connector-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
+    workstations_agent = "serviceAccount:${google_project_service_identity.workstations.email}"
+  }
   service_account_id = "projects/${data.google_project.project.project_id}/serviceAccounts/gke-cws-host-vm-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
   role               = "roles/iam.serviceAccountUser"
-  member             = "serviceAccount:gke-cws-module-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
+  member             = each.value
 
   depends_on = [module.sdv_wi]
 }

@@ -200,6 +200,9 @@ func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string, bes
 		drainCloudWorkstations = DrainCloudWorkstationsForPlatformTeardown
 	}
 	if err := drainCloudWorkstations(ctx, p.Client, moduleName); err != nil {
+		if resumeErr := resumeCloudWorkstationsCoreAfterFailedDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); resumeErr != nil {
+			return fmt.Errorf("%w; resume: %v", err, resumeErr)
+		}
 		return err
 	}
 	if err := completeCloudWorkstationsCoreDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); err != nil {

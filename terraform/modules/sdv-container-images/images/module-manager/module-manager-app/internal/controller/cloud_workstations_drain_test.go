@@ -342,11 +342,11 @@ func TestPerformModuleDisable_CloudWorkstationsDrainFailureLeavesModuleEnabled(t
 	if !ok {
 		t.Fatal("core Application must remain when the drain fails")
 	}
-	if core.GetAnnotations()[argoCDSkipReconcileAnnotationKey] != "true" {
-		t.Errorf("core Application must stay paused after a drain failure, got annotations %v", core.GetAnnotations())
+	if _, found := core.GetAnnotations()[argoCDSkipReconcileAnnotationKey]; found {
+		t.Errorf("core Application skip-reconcile must be cleared after a drain failure, got annotations %v", core.GetAnnotations())
 	}
 	if selfHeal, found, err := unstructured.NestedBool(core.Object, "spec", "syncPolicy", "automated", "selfHeal"); err != nil || !found || !selfHeal {
-		t.Errorf("core Application selfHeal must stay true while paused (selfHeal=%v, found=%v, err=%v)", selfHeal, found, err)
+		t.Errorf("core Application selfHeal must stay true after a failed drain (selfHeal=%v, found=%v, err=%v)", selfHeal, found, err)
 	}
 	if crd, ok := cwsExists2(t, c, cwsCRDGVK, "", cloudWorkstationsHorizonCRDNames[2]); !ok || crd.GetDeletionTimestamp() != nil {
 		t.Error("CRDs must not be touched when the drain fails")

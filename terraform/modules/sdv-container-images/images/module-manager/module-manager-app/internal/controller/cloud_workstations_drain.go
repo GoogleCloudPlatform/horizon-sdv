@@ -52,6 +52,18 @@ func pauseCloudWorkstationsCoreForDrain(ctx context.Context, c client.Client, ar
 	return nil
 }
 
+// resumeCloudWorkstationsCoreAfterFailedDrain clears the pause after a drain error.
+// selfHeal is still set to true, so Argo CD manages the core Application again. The module is still enabled.
+func resumeCloudWorkstationsCoreAfterFailedDrain(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
+	if moduleName != cloudWorkstationsModuleName {
+		return nil
+	}
+	if err := setArgoCDApplicationSkipReconcile(ctx, c, argocdNamespace, cloudWorkstationsCoreAppName, false); err != nil {
+		return fmt.Errorf("resume Cloud Workstations core Application after failed drain: %w", err)
+	}
+	return nil
+}
+
 // completeCloudWorkstationsCoreDrain turns self-heal off before resuming reconciliation. This allows the
 // parent Application deletion to prune the core Application without recreating the drained cluster.
 func completeCloudWorkstationsCoreDrain(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {

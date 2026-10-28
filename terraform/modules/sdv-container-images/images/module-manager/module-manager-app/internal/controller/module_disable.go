@@ -82,6 +82,9 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 		return fmt.Errorf("perform module disable: %w", err)
 	}
 	if err := DrainCloudWorkstationsModule(ctx, c, moduleName); err != nil {
+		if resumeErr := resumeCloudWorkstationsCoreAfterFailedDrain(ctx, c, argocdNamespace, moduleName); resumeErr != nil {
+			return fmt.Errorf("perform module disable: drain cloud-workstations CRs: %w; resume: %v", err, resumeErr)
+		}
 		return fmt.Errorf("perform module disable: drain cloud-workstations CRs: %w", err)
 	}
 	if err := completeCloudWorkstationsCoreDrain(ctx, c, argocdNamespace, moduleName); err != nil {

@@ -135,6 +135,39 @@ func TestPostureMatchesIgnoresServerDiskDefaultAndPortOrder(t *testing.T) {
 	}
 }
 
+func TestPostureMatchesClearedEphemeralFieldsAreDrift(t *testing.T) {
+	desired := DesiredPosture(wsv1alpha1.WorkstationConfigSpec{
+		EphemeralDirectories: []wsv1alpha1.EphemeralDirectory{{MountPath: "/tmp"}},
+	})
+	base := &pb.WorkstationConfig{
+		Host: &pb.WorkstationConfig_Host{Config: &pb.WorkstationConfig_Host_GceInstance_{
+			GceInstance: &pb.WorkstationConfig_Host_GceInstance{DisableSsh: true},
+		}},
+		AllowedPorts: []*pb.WorkstationConfig_PortRange{{First: 80, Last: 80}, {First: 1024, Last: 65535}},
+	}
+	cases := []struct {
+		name string
+		disk *pb.WorkstationConfig_EphemeralDirectory_GcePersistentDisk
+	}{
+		{name: "snapshot", disk: &pb.WorkstationConfig_EphemeralDirectory_GcePersistentDisk{DiskType: "pd-standard", SourceSnapshot: "snap"}},
+		{name: "source image", disk: &pb.WorkstationConfig_EphemeralDirectory_GcePersistentDisk{DiskType: "pd-standard", SourceImage: "image"}},
+		{name: "non-default disk type", disk: &pb.WorkstationConfig_EphemeralDirectory_GcePersistentDisk{DiskType: "pd-ssd"}},
+		{name: "read only", disk: &pb.WorkstationConfig_EphemeralDirectory_GcePersistentDisk{DiskType: "pd-standard", ReadOnly: true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			live := proto.Clone(base).(*pb.WorkstationConfig)
+			live.EphemeralDirectories = []*pb.WorkstationConfig_EphemeralDirectory{{
+				MountPath:     "/tmp",
+				DirectoryType: &pb.WorkstationConfig_EphemeralDirectory_GcePd{GcePd: tc.disk},
+			}}
+			if PostureMatches(live, desired) {
+				t.Fatal("cleared ephemeral field was treated as in sync")
+			}
+		})
+	}
+}
+
 func posturePathAllowed(path string) bool {
 	switch path {
 	case "name", "etag", "host", "host.gce_instance", "host.gce_instance.disable_ssh", "allowed_ports", "ephemeral_directories":
