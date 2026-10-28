@@ -915,11 +915,12 @@ function workflowParamInputProps(
       );
     }
   }
-  if (p.description && p.description.length > 72) {
+  const visibleDescription = visibleParamDescription(p.description);
+  if (visibleDescription && visibleDescription.length > 72) {
     adornments.push(
       <Tooltip
         key="help"
-        title={p.description}
+        title={visibleDescription}
         placement="left"
         slotProps={{
           tooltip: { sx: { maxWidth: 320, whiteSpace: 'normal' } },
@@ -961,6 +962,8 @@ function isCustomChoice(choice: string): boolean {
   return dropdownLabel(choice) === 'AndroidCustom';
 }
 
+const PREDEFINED_TEMPLATE_MARKER = '# predefined-template';
+
 function replaceYamlScalar(text: string, key: string, next: string): string {
   return text.replace(
     new RegExp(`^(\\s*(?:-\\s*)?${key}:\\s*)(?:"[^"]*"|'[^']*'|\\S+)`, 'm'),
@@ -968,7 +971,22 @@ function replaceYamlScalar(text: string, key: string, next: string): string {
   );
 }
 
-/** Fill `name` and `branch` in a YAML template from a `Name (detail)` choice. */
+/** Returns only the help sentence before # predefined-template in workflow parameter description.*/
+function visibleParamDescription(description?: string): string | undefined {
+  const text = description?.split(PREDEFINED_TEMPLATE_MARKER)[0]?.trim();
+  return text || undefined;
+}
+
+/** Predefined repo block rendered into the workflow parameter from uploader values. */
+function predefinedTemplate(description?: string): string {
+  const at = description?.indexOf(PREDEFINED_TEMPLATE_MARKER) ?? -1;
+  if (at < 0) {
+    return '';
+  }
+  return description!.slice(at + PREDEFINED_TEMPLATE_MARKER.length).trim();
+}
+
+/** Fill `name` and `branch` in the predefined template. url, file, and fetch-ref-spec stay as rendered. */
 function configForChoice(template: string, choice: string): string {
   const parsed = dropdownChoice(choice);
   if (!parsed) {
@@ -978,7 +996,7 @@ function configForChoice(template: string, choice: string): string {
 }
 
 function workflowParamHelperText(p: { description?: string }): string | undefined {
-  const desc = p.description?.trim();
+  const desc = visibleParamDescription(p.description);
   return desc && desc.length <= 72 ? desc : undefined;
 }
 
@@ -1099,7 +1117,10 @@ function SubmitDialog({
               choiceOptions.some((option) => isCustomChoice(option)) &&
               !isCustomChoice(chosen) &&
               (p.default ?? value).includes('\n');
-            const shown = readOnlyConfig ? configForChoice(p.default ?? value, chosen) : value;
+            const template = predefinedTemplate(p.description);
+            const shown = readOnlyConfig
+              ? configForChoice(template, chosen) || (p.default ?? value)
+              : value;
             const yaml = isYamlWorkflowParam(shown || (p.default ?? ''));
             return (
               <TextField

@@ -54,12 +54,20 @@ spec:
       - CreateNamespace=true
       - RespectIgnoreDifferences=true
     automated: {}
-  # A later selection workflow patches data.table. Ignore drift so sync does
-  # not put the first-enable Android15 row back.
+  # A selection writes the ConfigMap table and the Configuration value.
+  # Ignore both so a dropdown submit stays Synced and does not revert the saved repo.
   ignoreDifferences:
     - kind: ConfigMap
       name: abfs-uploader-config
       namespace: {{ .Values.config.namespacePrefix }}horizon
       jsonPointers:
         - /data
+    - group: argoproj.io
+      kind: WorkflowTemplate
+      name: abfs-uploader-config-select
+      namespace: {{ .Values.config.namespacePrefix }}workflows
+      jsonPointers:
+        - /spec/arguments/parameters/1/value
+      jqPathExpressions:
+        - '.spec.arguments.parameters[] | select(.name == "Configuration") | .value'
 {{- end }}
