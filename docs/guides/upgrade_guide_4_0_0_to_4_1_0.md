@@ -223,7 +223,7 @@ Open Argo CD: `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/argocd` (admin credentials:
 2. For each enabled module, check its status:
    - **Following platform** — already aligned to the platform Git ref (`scm_repo_branch` / 4.1.0 branch). No action.
    - **Pinned** — expected for modules enabled under 4.0.0 (legacy pin) and for modules you intentionally pinned.
-3. For each module that should track the platform but shows **Pinned** on an old ref, use **Reset to platform branch** (see [How to create a new module](../architecture/creating-modules.md#change-git-ref-in-developer-portal)). Leave genuinely intentional pins as-is.
+3. For each module that should track the platform but shows **Pinned** on an old ref, use **Reset to platform branch** (see [How to create a new module](../architecture/05_creating-modules.md#change-git-ref-in-developer-portal)). Leave genuinely intentional pins as-is.
 4. In Argo CD, confirm module child Applications (e.g. `mod-workloads-common`, `mod-workloads-android`) synced to the expected ref. If an unpinned module is still on the old ref after **`module-manager`** restarted, **Sync** that module's Argo Application manually.
 
 Skip modules your environment does not use.
@@ -327,4 +327,4 @@ Authoritative guides referenced by this upgrade. Use these for exact parameters,
 | Docker image templates — OpenBSW | [workloads/openbsw/environment/docker_image_template.md](../workloads/openbsw/environment/docker_image_template.md) |
 | Docker image templates — ABFS (where used) | [workloads/android/environment/abfs/docker_image_template.md](../workloads/android/environment/abfs/docker_image_template.md) |
 | Cuttlefish GCE instance templates | [workloads/android/environment/cf_instance_template.md](../workloads/android/environment/cf_instance_template.md) |
-| Platform modularization / Module Manager UI | [horizon-portal.md](../architecture/horizon-portal.md) |
+| Platform modularization / Module Manager UI | [02_horizon-portal.md](../architecture/02_horizon-portal.md) |

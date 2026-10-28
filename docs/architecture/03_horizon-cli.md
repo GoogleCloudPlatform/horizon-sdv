@@ -14,9 +14,9 @@ limitations under the License. -->
 
 # Horizon CLI
 
-The Horizon CLI (`horizon`) runs Horizon workflows from a terminal or a pipeline. It is a thin client for the Horizon API: every command maps to an API call, so the CLI sees the same catalog and the same runs as the [Developer Portal](horizon-portal.md). Use it when a script, a CI job or a person at a terminal needs to submit a workflow and collect its logs and artifacts without a browser.
+The Horizon CLI (`horizon`) runs Horizon workflows from a terminal or a pipeline. It is a thin client for the Horizon API: every command maps to an API call, so the CLI sees the same catalog and the same runs as the [Developer Portal](02_horizon-portal.md). Use it when a script, a CI job or a person at a terminal needs to submit a workflow and collect its logs and artifacts without a browser.
 
-The CLI only works with modules that are enabled and that expose workflow templates. To learn how modules expose templates, see [Horizon modules overview](overview.md) and [How to create a new module](creating-modules.md#expose-label-catalog-and-portal-links).
+The CLI only works with modules that are enabled and that expose workflow templates. To learn how modules expose templates, see [Horizon modules overview](01_overview.md) and [How to create a new module](05_creating-modules.md#expose-label-catalog-and-portal-links).
 
 Replace placeholder values (marked with `<...>`) with your environment-specific values before running any command on this page.
 
@@ -67,7 +67,7 @@ The CLI is built as part of every Horizon deployment, and the binaries are publi
 
 ### Download from the Developer Portal
 
-Sign in to the Developer Portal and open **Tools → Horizon CLI**. The page offers a ready-to-run binary built for your cluster, so you don't need a Go toolchain. It shows the CLI version and build date, a **Download for** button for the platform your browser runs on, and a table of every published binary with its SHA-256 checksum. The [Horizon Portal guide](horizon-portal.md#horizon-cli) describes the page itself.
+Sign in to the Developer Portal and open **Tools → Horizon CLI**. The page offers a ready-to-run binary built for your cluster, so you don't need a Go toolchain. It shows the CLI version and build date, a **Download for** button for the platform your browser runs on, and a table of every published binary with its SHA-256 checksum. The [Horizon Portal guide](02_horizon-portal.md#horizon-cli) describes the page itself.
 
 Published platforms:
 
@@ -105,6 +105,8 @@ Checksum:
   Get-FileHash .\horizon.exe -Algorithm SHA256
   ```
 
+### Move to PATH
+
 Linux:
 
 ```bash
@@ -119,54 +121,26 @@ xattr -d com.apple.quarantine horizon
 sudo mv horizon /usr/local/bin/
 ```
 
-Windows: `horizon.exe` is not digitally signed. SmartScreen may warn before the first run. Move the file onto your `PATH` as described in [Move to PATH](#move-to-path).
+Without `sudo`, move the binary to a directory on your `PATH` that you own instead, such as `~/go/bin/`.
 
-**Expected:** `horizon <version> (built <DD/MM/YYYY>)` matches the version and build date on the tab.
+Windows: `horizon.exe` is not digitally signed, so SmartScreen may warn before the first run. Create a directory for command-line tools, move the binary there and add it to `PATH` for the current PowerShell session:
 
-### Move to PATH
-- For Linux/macOS:
-```bash
-sudo mv horizon /usr/local/bin/
-```
-
-Or a user-local install can be used instead:
-
-```bash
-mv horizon ~/go/bin/
-```
-
-- For Windows:
-
-Create a directory for command-line tools, for example:
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\Tools
-```
-Move the binary:
-```powershell
 Move-Item .\horizon.exe C:\Tools\
-```
-Temporarily add C:\Tools to PATH for the current PowerShell session:
-```powershell
 $env:Path += ";C:\Tools"
 ```
-Note: This change applies only to the current PowerShell session. To make it permanent, add C:\Tools to your User PATH through Windows Environment Variables.
 
-From this point onward in the current PowerShell session, all examples can be executed as:
-```powershell
-horizon.exe <command>
-```
+To make the change permanent, add `C:\Tools` to your User PATH through Windows Environment Variables.
 
 ### Verify installation
-- Linux/macOS:
+
 ```bash
+horizon version
 horizon --help
 ```
-- Windows (in the current session, do not open a new tab):
-```powershell
-horizon.exe --help
-```
 
-**Expected:** Usage text is printed, starting with:
+**Expected:** `horizon <version> (built <DD/MM/YYYY>)` matches the version and build date on the Tools tab, and the usage text starts with:
 
 ```
 horizon — Horizon API CLI
@@ -181,81 +155,31 @@ Usage:
 
 ## Quick Start
 
-This walkthrough takes you from a freshly installed CLI to a finished run, following the [basic sequence of operations](#basic-sequence-of-operations). It uses the `sample` module's `sample-smoke-test` template, so enable the `sample` module in **Administration → Modules** first. The module is described in [How to create a new module](creating-modules.md#module-manager). The sections after the Quick Start explain each setting and command in detail.
+This walkthrough takes you from a freshly installed CLI to a finished run, following the [basic sequence of operations](#basic-sequence-of-operations). It uses the `sample` module's `sample-smoke-test` template, so enable the `sample` module in **Administration → Modules** first. The module is described in [How to create a new module](05_creating-modules.md#sample-modules-and-dependencies). The sections after the Quick Start explain each setting and command in detail.
 
-### Set your Horizon domain
+The commands are shown for a Linux or macOS shell. On Windows, run `horizon.exe` with the same arguments in PowerShell, set variables with `$env:NAME = "value"`, and use a backtick instead of `\` to continue a line.
 
-Before running any command, set your Horizon domain:
-- Linux/macOS:
+### 1. Sign in
+
+Set your Horizon domain, then sign in with the device flow:
+
 ```bash
 export HORIZON_DOMAIN="<your-horizon-domain>"
-```
-- Windows:
-```powershell
-$env:HORIZON_DOMAIN = "<your-horizon-domain>"
+horizon auth login --device --write-config
 ```
 
-Or use `--domain` on each command instead.
+The CLI prints a verification URL. Open it in a browser and sign in with your Horizon user. On success it prints:
 
-### Authentication and Catalog Access
-
-#### Preconditions
-
-- CLI installed (`horizon --help` works)
-- Keycloak client configured for the target domain
-
-#### Log in via device flow
-- Linux/macOS:
-```bash
-horizon auth login --device --domain "$HORIZON_DOMAIN" --write-config
 ```
-- Windows:
-```powershell
-horizon.exe auth login --device --domain $env:HORIZON_DOMAIN --write-config
-```
-
-A verification URL is printed to stderr. Open it in a browser and complete the sign-in.
-
-**Expected output (stderr):**
-
-- Linux/macOS:
-```
-Open this URL in a browser (sign in with your Horizon user):
-https://<domain>/auth/realms/horizon/...
-...
 Logged in. Token saved to ~/.config/horizon/token.json
-Wrote defaults to /home/<user>/.config/horizon/config.yaml
-```
-- Windows:
-```
-Logged in. Token saved to C:\Users\<user>\.config\horizon\token.json
-Wrote defaults to C:\Users\<user>\AppData\Roaming\horizon\config.yaml
+Wrote defaults to ~/.config/horizon/config.yaml
 ```
 
-#### Verify token was stored
-- Linux/macOS:
-```bash
-ls -la ~/.config/horizon/token.json
-```
-- Windows:
-```powershell
-Test-Path "$HOME\.config\horizon\token.json"
-```
-
-**Expected:**
-- Linux/macOS: the file is listed with permissions `-rw-------` (`0600`).
-- Windows:
-```
-True
-```
-
-#### Verify identity
+`--write-config` saves the domain, so later sessions don't need `HORIZON_DOMAIN`. Check that the API accepts the token:
 
 ```bash
 horizon auth whoami
 ```
-
-**Expected output (stdout):**
 
 ```
 JWT claims (unverified):
@@ -265,15 +189,11 @@ JWT claims (unverified):
 Horizon API catalog: OK (<N> bytes)
 ```
 
-The `Horizon API catalog: OK` line confirms the token is accepted by the API.
-
-#### List the catalog
+### 2. Find the template
 
 ```bash
 horizon catalog get
 ```
-
-**Expected output:** A list of available modules and templates with their parameters, e.g.:
 
 ```
 Catalog (<N> entries)
@@ -285,217 +205,87 @@ sample / sample-smoke-test
   ...
 ```
 
-#### Catalog as JSON (optional verification)
+If `sample / sample-smoke-test` is missing, check that the `sample` module is enabled and READY.
 
-```bash
-horizon catalog get --output json
-```
+### 3. Submit a run
 
-**Expected:** Valid JSON with an `"entries"` array containing objects with `"module"`, `"templateName"`, and `"parameters"` fields.
-
-### Workflow Submit with Submitted-From Label
-
-#### Preconditions
-
-- The user is authenticated.
-- A valid module, template, and parameters are known.
-- Adjust the `--module`, `--template`, and `--params-json` values below to match a template from your catalog.
-
-#### Submit a workflow
-
-- Linux/macOS:
 ```bash
 horizon workflow submit \
   --module sample \
   --template sample-smoke-test \
-  --params-json '{"sampleEnv":"cli-test","sampleBuildId":"tcli02-001","sampleNote":"test-run"}' \
-  --output json -q
-```
-- Windows:
-```powershell
-horizon.exe workflow submit `
-  --module sample `
-  --template sample-smoke-test `
-  --params-json '{"sampleEnv":"cli-test","sampleBuildId":"tcli02-001","sampleNote":"test-run"}' `
-  --output json -q
+  --params-json '{"sampleEnv":"cli-test","sampleBuildId":"cli-001","sampleNote":"quick start"}'
 ```
 
-**Expected output (stdout):** JSON containing the workflow name:
+The CLI checks the parameters against the catalog, submits the run and waits until the workflow appears. It then prints the generated name:
 
-```json
-{
-  "module": "sample",
-  "template": "sample-smoke-test",
-  "workflowName": "<generated-workflow-name>",
-  "submitResponse": { ... }
-}
+```
+module=sample
+template=sample-smoke-test
+workflowName=<generated-workflow-name>
 ```
 
-Save the workflow name:
+Keep the name for the next steps:
 
-- Linux/macOS:
 ```bash
 export WF_NAME="<generated-workflow-name>"
 ```
-- Windows:
-```powershell
-$env:WF_NAME = "<generated-workflow-name>"
-```
 
-#### Inspect the workflow for submitted-from
+### 4. Follow the run
 
-- Linux/macOS:
+Stream the logs until the run finishes, and exit with its result code:
+
 ```bash
-horizon workflow show "$WF_NAME" --output json | grep -i submittedFrom
-```
-- Windows:
-```powershell
-horizon.exe workflow show $env:WF_NAME --output json | Select-String "submittedFrom"
+horizon workflow wait --logs "$WF_NAME"
 ```
 
-**Expected output:** The JSON includes `"submittedFrom"` with value `"horizon-cli"`:
+Log lines have the form `[stage] [timestamp] [message]`, and the stream ends with `━━ log stream end ━━`. The command exits `0` when the run succeeds.
 
-```
-"submittedFrom": "horizon-cli",
-```
+### 5. Inspect the result
 
-This confirms the CLI sent the `X-Horizon-Submitted-From: horizon-cli` header and the `horizonSubmittedFrom` parameter.
-
-#### Verify via text output
-
-- Linux/macOS:
 ```bash
 horizon workflow show "$WF_NAME"
 ```
-- Windows:
-```powershell
-horizon.exe workflow show $env:WF_NAME
-```
 
-**Expected:** The summary block under "Workflow detail" includes a `"submittedFrom": "horizon-cli"` entry.
+The summary under `━━ Workflow detail ━━` shows the phase, the template and `"submittedFrom": "horizon-cli"`, which marks the run as started from the CLI. The `outputArtifact:` lines that follow list the run's artifacts; `sample-smoke-test` produces `smoke-result` and `smoke-test`.
 
-### Logs, Abort, and Artifact Download
+### 6. Collect an artifact
 
-#### Preconditions
+Download an artifact to a file:
 
-- A workflow submitted via the CLI exists (from the previous step, or submit a new one). 
-- `WF_NAME` is set.
-
-#### Stream logs
-
-- Linux/macOS:
 ```bash
-horizon workflow logs "$WF_NAME"
-```
-- Windows:
-```powershell
-horizon.exe workflow logs $env:WF_NAME
+horizon workflow download-artifact -o ./smoke-result.txt "$WF_NAME" smoke-result
 ```
 
-**Expected:** Log lines stream to stdout in the format `[stageName] [timestamp] [message]`. The stream ends with:
+Or print a time-limited signed URL that another tool or person can use:
 
-```
-━━ log stream end ━━
-```
-
-If the workflow has already completed, historical logs are printed (non-follow mode). If pods have not started yet, the CLI waits up to 60 seconds before opening the stream.
-
-#### Abort a running workflow
-
-Run this while the workflow is still active (phase is not Succeeded/Failed/Error/Aborted):
-
-- Linux/macOS:
 ```bash
-horizon workflow abort "$WF_NAME"
+horizon workflow download-artifact --generate-signed-url "$WF_NAME" smoke-result
 ```
-- Windows:
-```powershell
-horizon.exe workflow abort $env:WF_NAME
-```
-
-**Expected output (stderr):**
-
-```
-Aborting workflow <WF_NAME> via Horizon API ...
-```
-
-If the workflow has already reached a terminal phase, the command exits silently with code 0 (no error).
-
-Verify the abort took effect:
-
-- Linux/macOS:
-```bash
-horizon workflow show "$WF_NAME" --output json | grep '"phase"'
-```
-- Windows:
-```powershell
-horizon.exe workflow show $env:WF_NAME --output json | Select-String '"phase"'
-```
-
-**Expected:** `"phase": "Aborted"` (may take a few seconds to transition).
-
-#### Retrieve an artifact signed URL
-
-This requires a completed workflow that produced output artifacts. First check for available artifacts:
-
-- Linux/macOS:
-```bash
-horizon workflow show "$WF_NAME"
-```
-- Windows:
-```powershell
-horizon.exe workflow show $env:WF_NAME
-```
-
-Look for `outputArtifact:` lines in the output. If artifacts exist, generate a signed URL:
-
-- Linux/macOS:
-```bash
-horizon workflow download-artifact "$WF_NAME" "<artifact-name>" --generate-signed-url
-```
-- Windows:
-```powershell
-horizon.exe workflow download-artifact $env:WF_NAME "<artifact-name>" --generate-signed-url
-```
-Note: If several steps produced an artifact with this name, the CLI picks the last one and prints a note. Pass `--node-id` or `--template-name` to choose another. See [`horizon workflow download-artifact`](#horizon-workflow-download-artifact).
-
-**Expected output (stdout):**
 
 ```
 signed-url: https://storage.googleapis.com/...
 ```
 
-#### Download an artifact to a file (optional)
+Flags go before the workflow and artifact names. If several steps produced an artifact with the same name, the CLI picks the last one and prints a note; see [`horizon workflow download-artifact`](#horizon-workflow-download-artifact).
 
-- Linux/macOS:
+### 7. Abort a run
+
+To stop a run that's still going, submit another one and abort it while it runs:
+
 ```bash
-horizon workflow download-artifact "$WF_NAME" "<artifact-name>" -o ./artifact-output
-```
-- Windows:
-```powershell
-horizon.exe workflow download-artifact $env:WF_NAME "<artifact-name>" -o ./artifact-output
+horizon workflow abort "$WF_NAME"
+horizon workflow show --output json "$WF_NAME" | grep '"phase"'
 ```
 
-**Expected:** A progress bar on stderr followed by a completion message. The file `./artifact-output` is created with the artifact contents.
+The phase changes to `"Aborted"` within a few seconds. If the run has already finished, `abort` does nothing and exits `0`.
 
-### Cleanup
-
-After the work is done, optionally log out and remove local state:
+### 8. Sign out
 
 ```bash
 horizon auth logout
 ```
 
-**Expected output (stderr):**
-
-- Linux/macOS:
-```
-Removed ~/.config/horizon/token.json (if present).
-```
-- Windows:
-```
-Removed C:\Users\<user>\.config\horizon\token.json (if present).
-```
+This deletes the cached token. Run `horizon auth login` again to sign back in.
 
 ## Configuration and sign-in
 
@@ -526,7 +316,7 @@ The most useful environment variables are:
 
 - `horizon config init` creates a commented template file. Add `--force` to overwrite an existing one.
 - `horizon config set <key> <value>` sets one value. The keys are `domain`, `api_base_url`, `keycloak_base`, `keycloak_realm`, `module` and `template`.
-- `horizon config get [key]` prints the file, or one key from it. Add `--merged` to print the values the CLI actually uses after combining the file and the environment.
+- `horizon config get [key]` prints the file, or one key from it. Use `horizon config get --merged [key]` to print the values the CLI actually uses after combining the file and the environment.
 
 `horizon auth login --write-config` also writes the domain and Keycloak settings to this file for you.
 
@@ -548,6 +338,8 @@ There are two ways to sign in:
 ## Command reference
 
 Every command accepts `--domain HOST` and `--api URL` to target a cluster other than the configured one. `horizon ci ...` is an alias for `horizon workflow ...`, kept for existing pipelines.
+
+Put flags before positional arguments such as the workflow name, artifact name or config key. The CLI stops reading flags at the first positional argument, so a flag placed after it is ignored without an error: `horizon workflow show --output json "$WF_NAME"` prints JSON, but `horizon workflow show "$WF_NAME" --output json` prints text.
 
 ### `horizon version`
 
@@ -603,9 +395,11 @@ These commands find runs when you don't have a name:
 - **`running`** prints running workflows as JSON.
 - **`history`** prints finished workflows as JSON.
 
-All three take `--limit N`, which defaults to 50. `history` also takes `--phase` (for example, `--phase Failed,Error`) and `--continue <token>`, which fetches the next page.
+All three take `--limit N`, which defaults to 50. `list` and `history` also take `--phase` (for example, `--phase Failed,Error`) and `--continue <token>`, which fetches the next page. The two can't be combined in one request.
 
 Finished workflows are kept only for a limited time, after which they no longer appear in history. By default, successful runs are kept for one day and failed runs for three days.
+
+The lists include runs from every source (portal, API and CLI) that carry a `submittedFrom` value. The portal's **Workflows visibility** setting doesn't apply to them; to filter by source, read the `submittedFrom` field in the JSON output.
 
 ### `horizon workflow abort` and `delete`
 
@@ -721,10 +515,11 @@ Then put the binary on your `PATH` as described in [Move to PATH](#move-to-path)
 
 ### Alternative: install with `go install`
 
-From the repository root:
+The Go module lives in `tools/horizon`, so run this from that directory:
 
 ```bash
-go install ./tools/horizon
+cd tools/horizon
+go install .
 ```
 
 This places the binary in `$GOBIN` (defaults to `~/go/bin`). Ensure that directory is on your `PATH`.
