@@ -203,7 +203,7 @@ The portal image `4.3.0` contains prebuilt Horizon CLI binaries for Linux amd64,
 2. Download the binary for your platform and compare its SHA-256 with the value on the page.
 3. Run `horizon version`. The version and build date match the values on the Tools page.
 
-The binaries are not code-signed. On macOS remove the quarantine attribute before the first run (`xattr -d com.apple.quarantine horizon`). Windows SmartScreen may warn. Details: [horizon-cli.md](../architecture/horizon-cli.md#installation).
+The binaries are not code-signed. On macOS remove the quarantine attribute before the first run (`xattr -d com.apple.quarantine horizon`). Windows SmartScreen may warn. Details: [03_horizon-cli.md](../architecture/03_horizon-cli.md#installation).
 
 If **Tools** is missing from the sidebar, the running pod is still on `1.1.0`: restart `horizon-dev-portal` ([Section #3a](#section-3a---redeploy-platform-applications)).
 
@@ -284,7 +284,7 @@ Authoritative guides referenced by this upgrade. Use these for exact parameters,
 | Deployment workflow (greenfield)             | [deployment_guide.md](../deployment_guide.md)                                                  |
 | Other upgrade paths                          | [guides/README.md](README.md#upgrade-guides)                                                   |
 | Previous upgrade (4.1.0 to 4.2.0)            | [upgrade_guide_4_1_0_to_4_2_0.md](upgrade_guide_4_1_0_to_4_2_0.md)                             |
-| Developer Portal and Horizon CLI install     | [horizon-portal.md](../architecture/horizon-portal.md)                            |
+| Developer Portal and Horizon CLI install     | [02_horizon-portal.md](../architecture/02_horizon-portal.md)                            |
 | RemotiveTopology module                      | [workloads/remotive/README.md](../../workloads/remotive/README.md)                             |
 | Seed jobs and Jenkins parameters             | [workloads/seed.md](../workloads/seed.md)                                                      |
 | Cloud Workstation images                     | [workstation_images.md](../workloads/cloud-workstations/workstation_images.md)                 |

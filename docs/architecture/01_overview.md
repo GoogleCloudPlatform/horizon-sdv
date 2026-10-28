@@ -16,12 +16,13 @@ limitations under the License. -->
 
 Horizon is built from modules. A module is an independently deployable unit of the platform: a Helm chart that brings its own workloads, workflow templates, applications and overview page. You can turn a module on or off in a running cluster without touching the rest of the platform. Module Manager is the control plane that does this. It knows which modules exist, which are enabled and which Git ref each one runs from.
 
-This page explains the ideas you need before you work with modules. It then points you to the detailed guides:
+This page explains the ideas you need before you work with modules. The pages in this folder are numbered in reading order:
 
-- [Modularization Architecture](module-architecture.md) covers how the components interact.
-- [How to create a new module](creating-modules.md) is a step-by-step guide to building one.
-- The [Horizon Portal guide](horizon-portal.md) covers the portal and its tools.
-- [Horizon CLI](horizon-cli.md) covers installing the CLI and running workflows from a terminal or pipeline.
+1. This overview introduces modules, their dependencies and Module Manager.
+2. The [Horizon Portal guide](02_horizon-portal.md) covers the portal and its tools.
+3. [Horizon CLI](03_horizon-cli.md) covers installing the CLI and running workflows from a terminal or pipeline.
+4. [Modularization Architecture](04_module-architecture.md) covers how the components interact, and lists the APIs.
+5. [How to create a new module](05_creating-modules.md) is a step-by-step guide to building one.
 
 ![Component overview](images/module-architecture-component-overview.png)
 
@@ -44,15 +45,15 @@ Modules can build on each other, and the catalog records how tightly. Horizon di
 | Can you disable it while the parent is on? | No. Module Manager refuses. | Yes. The parent keeps running. |
 | Sample pair | `sample` requires `sample-hard` | `sample` can use `sample-soft` |
 
-When a soft dependency is enabled, the parent needs to find out so it can switch on the extra behavior. Module Manager passes that information to the parent's workloads as Helm values, as a ConfigMap, or both, depending on how the module is registered.
+When a soft dependency is enabled, the parent needs to find out so it can switch on the extra behavior. Module Manager passes that information to the parent's workloads as Helm values, as a ConfigMap, or both, depending on how the module is registered. The [soft-feature contract](04_module-architecture.md#soft-feature-contract) gives the value and key names.
 
-A module can also opt in to automatic cleanup. If its catalog entry sets `autoDisableWhenUnused`, Module Manager disables it once no enabled module depends on it. This is off unless the module asks for it.
+A module can also opt in to automatic cleanup. If its catalog entry sets `autoDisableWhenUnused`, Module Manager disables it when the last enabled module that depends on it, hard or soft, is disabled. This is off unless the module asks for it.
 
 ## What Module Manager does
 
 Module Manager keeps two records as Kubernetes custom resources. `ModuleCatalog` lists every module the cluster knows about, with its chart path and dependencies. `ModuleManagerState` records which modules are enabled and which Git ref each one uses. Enable, disable and pin all go through Module Manager, so these records are always the source of truth.
 
-When you enable a module, Module Manager enables its hard dependencies first, updates the state and creates the module's Argo CD application. When you disable a module, Module Manager checks whether another enabled module still requires it, and refuses if one does. Otherwise it drains the module's applications, including any cloud resources the module created through Config Connector, and then removes it from the enabled set.
+When you enable a module, Module Manager enables its hard dependencies first, updates the state and creates the module's Argo CD application. When you disable a module, Module Manager checks whether another enabled module still requires it, and refuses if one does. Otherwise it removes the module from the enabled set and deletes its Argo CD application, and Argo CD removes the workloads. For modules that create cloud resources through Config Connector, such as `workloads-android`, Module Manager waits until those resources are gone.
 
 Each module normally follows the cluster's platform branch. You can pin a single module to its own branch, tag or commit instead. Pinning is useful when you want to try a change to one module while the rest of the platform stays on the cluster default. Reset the module to the platform branch when you're done, and it follows the cluster default again, including on later platform upgrades.
 
@@ -70,7 +71,7 @@ All three routes below use the same catalog and the same Keycloak sign-in. Choos
 
 ### Horizon API
 
-The Horizon API is the contract the other routes are built on. Its Swagger page is generated from the live catalog, so it always shows exactly the templates that enabled modules expose. `GET /v1/catalog` returns only the templates you're allowed to run. Submitting a template starts a run, and you then follow that run through its status, logs and artifact downloads. You can also abort a run or look it up in history later. Every call needs a Keycloak access token for the `horizon` realm. The portal and the CLI call these same endpoints.
+The Horizon API is the contract the other routes are built on. The endpoints are listed in [Interfaces](04_module-architecture.md#horizon-api-endpoints). Its Swagger page is generated from the live catalog, so it always shows exactly the templates that enabled modules expose. `GET /v1/catalog` returns every template that enabled modules expose, with its parameters. Submitting a template starts a run, and you then follow that run through its status, logs and artifact downloads. You can also abort a run or look it up in history later. Every call needs a Keycloak access token for the `horizon` realm. The portal and the CLI call these same endpoints.
 
 ![Horizon API Swagger page, generated from the templates that enabled modules expose](images/overview-horizon-api-swagger.jpg)
 
@@ -86,7 +87,7 @@ The portal is also where operators manage modules. **Administration → Modules*
 
 ### Horizon CLI
 
-The Horizon CLI gives you the same workflows from a terminal. Download a ready-built binary for your cluster from **Tools → Horizon CLI** in the portal. `horizon catalog get` lists the same exposed templates as the API. `horizon workflow submit` starts a run, and `logs` and `download-artifact` follow it. `abort` and `history` cover runs you started from the terminal. You sign in with Keycloak, and each run is tagged as submitted from the CLI. Use the CLI from scripts and pipelines, and the portal when someone needs to see the screen. The [Horizon CLI](horizon-cli.md) guide covers installation, sign-in and every command.
+The Horizon CLI gives you the same workflows from a terminal. Download a ready-built binary for your cluster from **Tools → Horizon CLI** in the portal. `horizon catalog get` lists the same exposed templates as the API. `horizon workflow submit` starts a run, and `logs` and `download-artifact` follow it. `abort` and `history` cover runs you started from the terminal. You sign in with Keycloak, and each run is tagged as submitted from the CLI. Use the CLI from scripts and pipelines, and the portal when someone needs to see the screen. The [Horizon CLI](03_horizon-cli.md) guide covers installation, sign-in and every command.
 
 ![Tools, Horizon CLI download page in the Developer Portal](images/overview-horizon-cli-tools.jpg)
 
@@ -94,4 +95,4 @@ The Horizon CLI gives you the same workflows from a terminal. Download a ready-b
 
 Horizon doesn't discover modules automatically. To add one, you copy a sample chart into `gitops/modules/<name>`, starting from `sample-hard`, `sample` or `storage-gcs` depending on what you need. Next, add an entry to the `ModuleCatalog` that gives the module's name, chart path, overview service and dependencies. You then commit to the GitOps branch, sync `module-manager` so the catalog picks up the entry, and enable the module from **Administration → Modules**. The module's name must match everywhere it appears: the catalog, the module labels and the workflow Sensors. Module Manager supplies the repo URL and revision to your chart, so don't hard-code them.
 
-[How to create a new module](creating-modules.md) walks through each step, including the overview service, workflow templates, Sensors and a final checklist.
+[How to create a new module](05_creating-modules.md) walks through each step, including the overview service, workflow templates, Sensors and a final checklist.

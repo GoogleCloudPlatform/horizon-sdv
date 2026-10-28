@@ -218,7 +218,7 @@ Modules enabled under 4.1.0 are not orphaned. State stays in `**ModuleManagerSta
 2. Open **Landing**: `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/developer-portal/` (site root should redirect here). Confirm developer and admin app cards.
 3. For each enabled module:
   - **Following platform**: aligned to the platform Git ref. No action.
-  - **Pinned**: reset with **Reset to platform branch** if it should track 4.2.0 ([How to create a new module](../architecture/creating-modules.md#change-git-ref-in-developer-portal)). Leave intentional pins as-is.
+  - **Pinned**: reset with **Reset to platform branch** if it should track 4.2.0 ([How to create a new module](../architecture/05_creating-modules.md#change-git-ref-in-developer-portal)). Leave intentional pins as-is.
 4. In Argo CD, confirm `mod-*` Applications (for example `mod-workloads-common`, `mod-workloads-android`) target the 4.2.0 Git ref.
 
 If a module stays in **INSTALLATION IN PROGRESS**, **UNINSTALL IN PROGRESS**, or **DEPLOYMENT PENDING**, go to [Section #3b](#section-3b---stuck-modules-in-developer-portal). Do **not** disable the module to “clear KCC.”
@@ -360,7 +360,7 @@ Authoritative guides referenced by this upgrade. Use these for exact parameters,
 | Terraform variables                           | [terraform.md](../terraform.md)                                                                                                                                                                                                 |
 | Deployment workflow (greenfield)              | [deployment_guide.md](../deployment_guide.md)                                                                                                                                                                                   |
 | Other upgrade paths                           | [guides/README.md](README.md#upgrade-guides)                                                                                                                                                                                    |
-| Developer Portal (Landing, modules, git ref)  | [horizon-portal.md](../architecture/horizon-portal.md)                                                                                                                                                             |
+| Developer Portal (Landing, modules, git ref)  | [02_horizon-portal.md](../architecture/02_horizon-portal.md)                                                                                                                                                             |
 | Storage GCS module                            | [gitops/modules/storage-gcs-module/README.md](../../gitops/modules/storage-gcs-module/README.md)                                                                                                                                |
 | sample-data module                            | [gitops/modules/sample-data-module/README.md](../../gitops/modules/sample-data-module/README.md)                                                                                                                                |
 | Jenkins RBAC (**Manage and Assign Roles**)    | [Pipeline Guide - Role Based Strategy](../workloads/guides/pipeline_guide.md#rolebasedstrategy) [Deployment Guide - Jenkins access via Keycloak groups](../deployment_guide.md#section-3e---jenkins-access-via-keycloak-groups) |

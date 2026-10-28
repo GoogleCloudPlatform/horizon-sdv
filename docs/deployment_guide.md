@@ -746,7 +746,7 @@ After modules are enabled, run the Jenkins seed job and regenerate workload temp
 This section details how to sign in to and use cluster applications, including their functionalities within the cluster environment. When using sub-environments, each sub-environment has its own Developer Portal and application URLs at `https://<SUB_ENV_NAME>.<SUB_DOMAIN>.<HORIZON_DOMAIN>`. See the [Sub-Environment Deployment Guide – Accessing Sub-Environment Applications](guides/sub_environments/sub_environment_deployment_guide.md#accessing-sub-environment-applications) for the URL pattern and application list.
 
 ### Section #4a - Horizon Developer Portal
-The site root (`https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/`) redirects to the Horizon Developer Portal at `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/developer-portal/`. Use the Developer Portal for module administration and workflows; open other cluster apps via the direct URLs in the sections below. See also the [Horizon Portal guide](architecture/horizon-portal.md).
+The site root (`https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/`) redirects to the Horizon Developer Portal at `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/developer-portal/`. Use the Developer Portal for module administration and workflows; open other cluster apps via the direct URLs in the sections below. See also the [Horizon Portal guide](architecture/02_horizon-portal.md).
 
 ### Section #4b - Argo CD
 Argo CD is the GitOps tool being used with a git repository as the "source of truth" where the desired state of Kubernetes applications have been configured. 

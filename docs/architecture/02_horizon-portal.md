@@ -31,10 +31,6 @@ limitations under the License. -->
   - [Tools](#tools)
     - [Horizon CLI](#horizon-cli)
     - [Horizon API](#horizon-api)
-  - [Open Argo Workflows from Developer Portal](#open-workflows-from-developer-portal)
-  - [Submit Workflows via Developer Portal](#submit-workflows-via-developer-portal)
-  - [Submit Workflows via Horizon CLI](#submit-workflows-via-horizon-cli)
-  - [Expose label (catalog and portal links)](#expose-label-catalog-and-portal-links)
 
 ## Developer Portal
 
@@ -103,7 +99,7 @@ On each card you can:
 
 Do not reload or close the tab while an enable, disable, pin or reset is running. Reloading cancels the browser request, while the server may still apply all or part of the change, so the page can disagree with the cluster until the operation completes. The buttons are locked while an operation or a status change is in progress. When idle, the page refreshes status every few seconds and when you return to the tab.
 
-Module dependencies (hard and soft), the sample modules, and changing a module's git ref are described in more detail in [How to create a new module](creating-modules.md#module-manager).
+Hard and soft dependencies are explained in [Horizon modules overview](01_overview.md#how-modules-depend-on-each-other), the sample modules in [How to create a new module](05_creating-modules.md#sample-modules-and-dependencies), and what pinning does in the cluster in [Pinning and Resetting module Git refs](04_module-architecture.md#pinning-and-resetting-module-git-refs).
 
 #### Settings
 
@@ -116,7 +112,7 @@ Opening a module from the sidebar shows up to five tabs. The selected tab is par
 
 - **Overview**: the module's own overview page, served from inside the cluster and styled to match the portal theme. If the module has no overview configured, the tab says so.
 - **Applications**: one card per application the module exposes, each with an **Open** button that opens it in a new tab. Shown only if the module exposes applications.
-- **Workflow Templates**, **Running Workflows** and **History**: shown only if the module exposes workflow templates in the Horizon catalog. See [Expose label (catalog and portal links)](#expose-label-catalog-and-portal-links).
+- **Workflow Templates**, **Running Workflows** and **History**: shown only if the module exposes workflow templates in the Horizon catalog. See [Expose label (catalog and portal links)](05_creating-modules.md#expose-label-catalog-and-portal-links).
 
 #### Submit a workflow
 
@@ -137,7 +133,7 @@ Finished runs are removed from the cluster after 1 day if they succeeded and aft
 
 #### Workflow details, abort and delete
 
-The run dialog shows the template, run name, who submitted it and from where, and an **Open in Argo Workflows** link. The link is disabled once the run has been removed from the cluster. You can resize the dialog from its bottom-right corner; the size is remembered in this browser.
+The run dialog shows the template, run name, who submitted it and from where, and an **Open in Argo Workflows** link. Argo Workflows as a whole opens from its card on the Landing page. For a walk-through with the `sample` module, see [Workflows via Developer Portal](05_creating-modules.md#workflows-via-developer-portal). The link is disabled once the run has been removed from the cluster. You can resize the dialog from its bottom-right corner; the size is remembered in this browser.
 
 - **Abort** is shown while the run is in progress. After you confirm, the run stops gracefully, so it can take a moment to finish, and usually ends as *Aborted*.
 - **Delete** is shown once the run has finished, from either **Running Workflows** or **History**. After you confirm, the run and its artifacts are permanently removed. This can take a few minutes; the run shows *Deletion in progress* meanwhile.
@@ -149,14 +145,6 @@ The run dialog shows the template, run name, who submitted it and from where, an
 - The steps table lists each step with its phase and pod. **Show** streams that step's logs while it runs and loads the archived log from Cloud Storage once it has finished. **GCS** and **Download** in this table refer to the step's archived log.
 
 The log viewer keeps the number of lines set in **Max lines** (see [Settings](#settings)). When the limit is reached, the oldest lines are dropped.
-
-### Open Workflows from Developer Portal
-
-Argo Workflows can be opened from the **Argo Workflows** card on the Landing page, or for a single run from **Open in Argo Workflows** in the run dialog.
-
-### Submit Workflows via Developer Portal
-
-For a walk-through using the sample module, see [Workflows via Developer Portal](creating-modules.md#workflows-via-developer-portal).
 
 ### Tools
 
@@ -177,26 +165,18 @@ The tab shows:
 
 If this environment has no CLI binaries, the tab shows an error and no download table.
 
-The published platforms, checksum and install steps for each operating system, and everything you can do with the CLI once it's installed are in [Horizon CLI](horizon-cli.md#download-from-the-developer-portal).
+The published platforms, checksum and install steps for each operating system, and everything you can do with the CLI once it's installed are in [Horizon CLI](03_horizon-cli.md#download-from-the-developer-portal).
 
 #### Horizon API
 
 The **Horizon API** tab embeds Swagger UI for this cluster. The document is built from the live catalog: each exposed workflow template is a submit operation, next to the shared catalog and workflow lifecycle operations.
 
-Templates that are not exposed (for example `sample-hard-smoke-test`) do not appear. See [Expose label (catalog and portal links)](creating-modules.md#expose-label-catalog-and-portal-links). With no enabled module exposing workflows, the catalog is empty and there are no submit operations.
+Templates that are not exposed (for example `sample-hard-smoke-test`) do not appear. See [Expose label (catalog and portal links)](05_creating-modules.md#expose-label-catalog-and-portal-links). With no enabled module exposing workflows, the catalog is empty and there are no submit operations.
 
 **Try it out** calls `https://<your-horizon-domain>/horizon-api/`. Those requests need a Keycloak access token for the `horizon` realm:
 
-1. Sign in with the CLI: [Log in via device flow](horizon-cli.md#log-in-via-device-flow).
+1. Sign in with the CLI: [Sign in](03_horizon-cli.md#1-sign-in).
 2. In Swagger UI, click **Authorize**, select **bearerAuth**, and paste the `access_token` value from the CLI token file (`~/.config/horizon/token.json` on Linux and macOS, `%USERPROFILE%\.config\horizon\token.json` on Windows).
 3. Execute the operation. Optional submit header `X-Horizon-Submitted-From` is `api` by default. `developer-portal`, `horizon-cli` and `custom` are the other standard values; with `custom`, put your integration ID in `X-Horizon-Submitted-From-Detail`.
 
 The same document is also served directly at `https://<your-horizon-domain>/horizon-api/swagger` (`openapi.json` is next to it). Swagger UI loads its scripts and styles from `unpkg.com`. If the embedded page stays blank, your browser or network is probably blocking that site; use the direct URL, or `openapi.json` with a local OpenAPI viewer.
-
-### Submit Workflows via Horizon CLI
-
-Installing the CLI, signing in, the command reference and a worked example are in [Horizon CLI](horizon-cli.md).
-
-### Expose label (catalog and portal links)
-
-See [Expose label (catalog and portal links)](creating-modules.md#expose-label-catalog-and-portal-links).
