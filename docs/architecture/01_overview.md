@@ -21,8 +21,9 @@ This page explains the ideas you need before you work with modules. The pages in
 1. This overview introduces modules, their dependencies and Module Manager.
 2. The [Horizon Portal guide](02_horizon-portal.md) covers the portal and its tools.
 3. [Horizon CLI](03_horizon-cli.md) covers installing the CLI and running workflows from a terminal or pipeline.
-4. [Modularization Architecture](04_module-architecture.md) covers how the components interact, and lists the APIs.
+4. [Modularization Architecture](04_module-architecture.md) covers how the components interact.
 5. [How to create a new module](05_creating-modules.md) is a step-by-step guide to building one.
+6. [Interfaces](06_interfaces.md) is a reference for the Horizon API and Module Manager endpoints and the soft-feature contract.
 
 ![Component overview](images/module-architecture-component-overview.png)
 
@@ -45,7 +46,7 @@ Modules can build on each other, and the catalog records how tightly. Horizon di
 | Can you disable it while the parent is on? | No. Module Manager refuses. | Yes. The parent keeps running. |
 | Sample pair | `sample` requires `sample-hard` | `sample` can use `sample-soft` |
 
-When a soft dependency is enabled, the parent needs to find out so it can switch on the extra behavior. Module Manager passes that information to the parent's workloads as Helm values, as a ConfigMap, or both, depending on how the module is registered. The [soft-feature contract](04_module-architecture.md#soft-feature-contract) gives the value and key names.
+When a soft dependency is enabled, the parent needs to find out so it can switch on the extra behavior. Module Manager passes that information to the parent's workloads as Helm values, as a ConfigMap, or both, depending on how the module is registered. The [soft-feature contract](06_interfaces.md#soft-feature-contract) gives the value and key names.
 
 A module can also opt in to automatic cleanup. If its catalog entry sets `autoDisableWhenUnused`, Module Manager disables it when the last enabled module that depends on it, hard or soft, is disabled. This is off unless the module asks for it.
 
@@ -71,7 +72,7 @@ All three routes below use the same catalog and the same Keycloak sign-in. Choos
 
 ### Horizon API
 
-The Horizon API is the contract the other routes are built on. The endpoints are listed in [Interfaces](04_module-architecture.md#horizon-api-endpoints). Its Swagger page is generated from the live catalog, so it always shows exactly the templates that enabled modules expose. `GET /v1/catalog` returns every template that enabled modules expose, with its parameters. Submitting a template starts a run, and you then follow that run through its status, logs and artifact downloads. You can also abort a run or look it up in history later. Every call needs a Keycloak access token for the `horizon` realm. The portal and the CLI call these same endpoints.
+The Horizon API is the contract the other routes are built on. The endpoints are listed in [Horizon API endpoints](06_interfaces.md#horizon-api-endpoints). Its Swagger page is generated from the live catalog, so it always shows exactly the templates that enabled modules expose. `GET /v1/catalog` returns every template that enabled modules expose, with its parameters. Submitting a template starts a run, and you then follow that run through its status, logs and artifact downloads. You can also abort a run or look it up in history later. Every call needs a Keycloak access token for the `horizon` realm. The portal and the CLI call these same endpoints.
 
 ![Horizon API Swagger page, generated from the templates that enabled modules expose](images/overview-horizon-api-swagger.jpg)
 
