@@ -108,13 +108,9 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
 
     stringParam {
       name('POST_REPO_COMMAND')
-      defaultValue('''
-        cd build/soong ; \
-git fetch https://android.googlesource.com/platform/build/soong refs/changes/90/3619490/1 && git cherry-pick FETCH_HEAD; \
-git fetch https://android.googlesource.com/platform/build/soong refs/changes/91/3619491/1 && git cherry-pick FETCH_HEAD; \
-git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/3619492/1 && git cherry-pick FETCH_HEAD; cd -''')
+      defaultValue('')
       description('''<p>Optional additional commands post repo sync/fetch, git clone and prior to build/make.<br/>
-        The values here are for ABFS Android 15.<br/>
+        The build/soong sandbox fix ABFS needs is applied automatically per Android version (Android 15 cherry-picks plus soong.go sed, Android 16 soong.go patch); leave empty unless extra commands are needed.<br/>
         <b>Note: </b>Single command line only, use logical operators to execute subsequent commands.<br/><br/></p>''')
       trim(true)
     }
