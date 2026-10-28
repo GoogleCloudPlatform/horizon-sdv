@@ -47,7 +47,7 @@ spec:
   # Optional commands run after the sources are mounted and before the build,
   # as the Jenkins job's POST_REPO_COMMAND. The build/soong sandbox fix ABFS
   # needs is applied automatically per Android version by aaos_environment.sh
-  # (Android 15 cherry-picks, Android 16 soong.go sed), so this stays empty
+  # (Android 15 cherry-picks plus soong.go sed, Android 16 soong.go sed), so this stays empty
   # unless extra user commands are needed. Single command line.
   postRepoCommand: ""
   # Parallel build jobs (-j) for the ABFS build, passed as AAOS_PARALLEL_BUILD_JOBS.

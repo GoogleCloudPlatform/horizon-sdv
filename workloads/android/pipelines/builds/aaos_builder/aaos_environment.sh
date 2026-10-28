@@ -571,40 +571,43 @@ fi
 # it is selected from AAOS_REVISION instead of being a user default.
 #   - Android 14 / 15.0.0_r4: nothing needed.
 #   - Android 15: upstream build/soong sandbox changes 3619490-3619492
-#     (abandoned on main, still fetchable).
+#     (ui/build/sandbox_linux.go, abandoned on main, still fetchable) and
+#     the same ui/build/soong.go sed as Android 16. The cherry-picks alone
+#     only fix the sandbox bind mount: when the Soong evaluation is not served
+#     from the ninjago cache, soong_build still runs locally and panics with
+#     "open /abfs/out/soong/.temp/rawN: read-only file system" (seen on
+#     aosp_cf_arm64_auto and sdk_car_x86_64 at android-15.0.0_r36).
 #   - Android 16: pass TOP and LOG_DIR through sandboxPath in
-#     ui/build/soong.go; without it soong_build panics with
-#     "open /abfs/out/soong/.temp/rawN: read-only file system".
+#     ui/build/soong.go; without it soong_build panics the same way.
 # Branch names (android-latest-release, main, custom) carry no version, so
 # nothing is applied for them; use POST_REPO_COMMAND to add the fix by hand.
 if [[ "${ABFS_BUILDER}" == "true" ]]; then
-    ABFS_SOONG_FIX="none"
+    ABFS_SOONG_CHERRY_PICK="false"
+    ABFS_SOONG_SED="false"
     case "${AAOS_REVISION}" in
         android-14*|android-15.0.0_r4)
-            ABFS_SOONG_FIX="none"
             ;;
         android-15*)
-            ABFS_SOONG_FIX="cherry-pick"
+            ABFS_SOONG_CHERRY_PICK="true"
+            ABFS_SOONG_SED="true"
             ;;
         android-16*)
-            ABFS_SOONG_FIX="sed"
+            ABFS_SOONG_SED="true"
             ;;
         *)
             echo "ABFS: AAOS_REVISION ${AAOS_REVISION} carries no Android version, no build/soong fix applied automatically; add it with POST_REPO_COMMAND if the build needs it"
             ;;
     esac
-    case "${ABFS_SOONG_FIX}" in
-        cherry-pick)
-            POST_REPO_COMMAND_LIST+=(
-                "cd build/soong ; git fetch https://android.googlesource.com/platform/build/soong refs/changes/90/3619490/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/91/3619491/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/3619492/1 && git cherry-pick FETCH_HEAD; cd -"
-            )
-            ;;
-        sed)
-            POST_REPO_COMMAND_LIST+=(
-                "cd build/soong && sed -i -e 's|Set(\"TOP\", os.Getenv(\"TOP\"))|Set(\"TOP\", config.sandboxPath(os.Getenv(\"TOP\"), os.Getenv(\"TOP\")))|' -e 's|Set(\"LOG_DIR\", config.LogsDir())|Set(\"LOG_DIR\", config.sandboxPath(os.Getenv(\"TOP\"), config.LogsDir()))|' ui/build/soong.go && grep -q 'sandboxPath(os.Getenv(\"TOP\")' ui/build/soong.go; cd -"
-            )
-            ;;
-    esac
+    if [[ "${ABFS_SOONG_CHERRY_PICK}" == "true" ]]; then
+        POST_REPO_COMMAND_LIST+=(
+            "cd build/soong ; git fetch https://android.googlesource.com/platform/build/soong refs/changes/90/3619490/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/91/3619491/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/3619492/1 && git cherry-pick FETCH_HEAD; cd -"
+        )
+    fi
+    if [[ "${ABFS_SOONG_SED}" == "true" ]]; then
+        POST_REPO_COMMAND_LIST+=(
+            "cd build/soong && sed -i -e 's|Set(\"TOP\", os.Getenv(\"TOP\"))|Set(\"TOP\", config.sandboxPath(os.Getenv(\"TOP\"), os.Getenv(\"TOP\")))|' -e 's|Set(\"LOG_DIR\", config.LogsDir())|Set(\"LOG_DIR\", config.sandboxPath(os.Getenv(\"TOP\"), config.LogsDir()))|' ui/build/soong.go && grep -q 'sandboxPath(os.Getenv(\"TOP\")' ui/build/soong.go; cd -"
+        )
+    fi
 fi
 
 if [ -n "${POST_REPO_COMMAND}" ]; then
