@@ -99,10 +99,10 @@ pipeline {
            trim: true)
 
     string(name: 'CUTTLEFISH_GCE_CLOUD_LABEL',
-           defaultValue: 'cuttlefish-vm-v1410',
+           defaultValue: 'cuttlefish-vm-v1553',
            description: '''<p>The Jenkins GCE Clouds label for jobs dependent on the Cuttlefish instance template, e.g.<br/></p>
                         <ul>
-                          <li>cuttlefish-vm-v1410</li>
+                          <li>cuttlefish-vm-v1553</li>
                           <li>cuttlefish-vm-main</li>
                         </ul>''',
            trim: true)
