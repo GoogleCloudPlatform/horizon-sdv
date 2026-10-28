@@ -53,7 +53,7 @@ Before starting the upgrade, ensure the following:
 
 - The **3.0.0 environment is fully deployed and healthy**. All Argo CD applications must be `Synced` and `Healthy` before starting.
 - You have access to `terraform/env/terraform.tfvars` and can run the deployment workflow.
-- You have `kubectl` connectivity to the cluster. Refer to [Connect to GKE via Connect Gateway](../../deployment_guide.md#section-3c---connect-to-gke-via-connect-gateway) if needed.
+- You have `kubectl` connectivity to the cluster. Refer to [Connect to GKE via Connect Gateway](../deployment_guide.md#section-3c---connect-to-gke-via-connect-gateway) if needed.
 - You have the Argo CD admin credentials available. The admin password is stored in GCP Secret Manager under the secret named `argocd-admin-password-b64`.
 
 ---
@@ -79,7 +79,7 @@ git checkout <BRANCH_NAME>
 git pull
 ```
 
-If your `terraform/env/terraform.tfvars` requires any updates for new variables introduced in 3.1.0, apply them now. No new required variables are introduced in this release. Refer to the [Deployment Guide – Configure Terraform Variables](../../deployment_guide.md#section-2c---configure-terraform-variables) for the full variable reference.
+If your `terraform/env/terraform.tfvars` requires any updates for new variables introduced in 3.1.0, apply them now. No new required variables are introduced in this release. Refer to the [Deployment Guide – Configure Terraform Variables](../deployment_guide.md#section-2c---configure-terraform-variables) for the full variable reference.
 
 ---
 
