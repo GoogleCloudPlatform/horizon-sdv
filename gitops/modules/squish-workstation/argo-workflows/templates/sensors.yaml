@@ -49,6 +49,7 @@ spec:
                 generateName: webhook-{{ .Values.parentModuleName }}-init-
                 namespace: {{ .Values.workflowNamespace }}
               spec:
+                serviceAccountName: {{ .Values.serviceAccounts.init | quote }}
                 workflowTemplateRef:
                   name: {{ .Values.parentModuleName }}-init
                 arguments:
@@ -117,6 +118,7 @@ spec:
                 generateName: webhook-{{ .Values.parentModuleName }}-execute-
                 namespace: {{ .Values.workflowNamespace }}
               spec:
+                serviceAccountName: {{ .Values.serviceAccounts.execute | quote }}
                 workflowTemplateRef:
                   name: {{ .Values.parentModuleName }}-execute
                 arguments:

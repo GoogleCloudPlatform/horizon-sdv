@@ -19,8 +19,11 @@ Helm chart path: `gitops/modules/squish-workstation`
 Self-service [Google Cloud Workstations](https://cloud.google.com/workstations/docs/overview) with
 [Squish](https://www.qt.io/quality-assurance/squish), the GUI test automation tool from The Qt Company,
 preinstalled on the Horizon GNOME desktop. All GCP resources are provisioned declaratively with
-Kubernetes Config Connector (KCC) when the module is enabled in the Developer Portal; no Terraform run is
-needed per module.
+Kubernetes Config Connector (KCC) when the module is enabled in the Developer Portal. **No Terraform change is
+required**: the module does not need extra permissions for the Config Connector service account.
+
+The module is supported in the main environment only; rendering fails when `config.isSubEnvironment` is true
+because its GCP resource IDs (cluster, configuration, VM service account, image repository) are project-global.
 
 ## Table of contents
 
@@ -32,6 +35,7 @@ needed per module.
 - [Creating a Workstation](#creating-a-workstation)
 - [Smoke Test](#smoke-test)
 - [Configuration](#configuration)
+- [Security Model](#security-model)
 - [Disabling the Module](#disabling-the-module)
 - [Licensing](#licensing)
 
@@ -44,13 +48,16 @@ needed per module.
 | Developer Portal overview | `mod-squish-workstation-overview` | `portal/overview.html` |
 | Image build context | `squish` image | `image/` |
 
-Config Connector resources (namespace `squish-workstation-app`), in Argo CD sync-wave order:
+Config Connector resources (namespace `squish-workstation-app`, created by the parent Application at wave 0),
+in Argo CD sync-wave order. Every resource except the `squish.creators` bindings carries
+`cnrm.cloud.google.com/deletion-policy: <squish.deletionPolicy>`:
 
 | Wave | Kind | Purpose |
 | :--- | :--- | :--- |
-| 1 | `ArtifactRegistryRepository` `squish-workstation` | Docker repository for the Squish image (abandoned on disable). |
+| 1 | `ArtifactRegistryRepository` `squish-workstation` | Docker repository for the Squish image. |
 | 1 | `IAMServiceAccount` `squish-workstation-vm` | Service account of the workstation VMs. |
-| 2 | `IAMPolicyMember` (project level) | VM SA: `secretmanager.secretAccessor` (IAM condition: license secret only), `artifactregistry.reader`, `logging.logWriter`. Each entry of `squish.creators`: `workstations.workstationCreator` and `workstations.operationViewer`. |
+| 2 | `IAMPolicyMember` (resource level) | VM SA: `secretmanager.secretAccessor` on the license secret, `artifactregistry.reader` on the `squish-workstation` repository. |
+| 2 | `IAMPolicyMember` (project level, opt-in) | Only with `squish.kcc.projectIamBindings.enabled: true`. VM SA: `logging.logWriter`. Each entry of `squish.creators`: `workstations.workstationCreator` and `workstations.operationViewer`. |
 | 3 | `WorkstationCluster` `squish-workstation-cluster` | Cluster on the platform VPC (`sdv-network` / `sdv-subnet`). |
 | 4 | `WorkstationConfig` `squish-workstation-config` | Machine type, pool size, persistent home disk, Squish image. |
 
@@ -83,9 +90,16 @@ The Squish layer (`image/`) follows the Horizon GNOME hook model
 
 - `post-install-hooks.d/01_install_squish.sh` (image build): downloads the Squish installer, verifies its
   SHA-256 checksum, reads the license key from Secret Manager, runs the unattended install into
-  `/opt/qt/squish` and removes the license key and installer from the image layer.
+  `/opt/qt/squish` from a private temporary directory (with a temporary `HOME`) and removes that directory on
+  exit, so neither the license key nor the installer's `~/.squish-license` ends up in the image layer. Only the
+  secret *name* is stored in the image (`/opt/qt/.squish-gcp-license-secret`).
+- `Dockerfile`: `configure_workstation.sh` only logs a warning when a hook fails, so the build asserts afterwards
+  that `/opt/qt/squish/bin` and the secret reference exist and that no `/root/.squish-license`, `/root/.squish`
+  or `/tmp/squish-license-key` is left. Build settings (`GCP_PROJECT`, `SQUISH_*`, `EXTRA_PKGS`, `CURL_OPTS`)
+  are build arguments only and are not exported into the runtime image.
 - `etc/workstation-startup.d/200_setting-squish.sh` (each workstation start): reads the license key from
-  Secret Manager into `~/.squish-license` (mode 600) and links `~/squish` to `/opt/qt/squish`.
+  Secret Manager into `~/.squish-license` (owned by the workstation user, mode 600) and links `~/squish` to
+  `/opt/qt/squish`.
 
 ## Prerequisites
 
@@ -100,16 +114,42 @@ The Squish layer (`image/`) follows the Horizon GNOME hook model
    ```
 
    Never commit license keys to the repository. The `workflow-executor` service account (image build) already
-   has project-level Secret Manager access; the workstation VM service account gets access through the module.
+   has project-level Secret Manager access; the workstation VM service account is granted
+   `roles/secretmanager.secretAccessor` on this secret only, through the module.
 
 2. **Horizon GNOME base image.** The Squish image is layered on
    `<region>-docker.pkg.dev/<project>/horizon-sdv/cloud-ws-images/horizon-gnome:latest`. Publish it with the
    Jenkins job *Cloud Workstations > Workstation Images > Horizon GNOME* (or *Workstation Image Chain*), or
    pass another image as the `baseImage` workflow parameter.
 
-3. **Config Connector IAM permissions.** The Config Connector service account `gke-config-connector-sa` needs
-   `roles/resourcemanager.projectIamAdmin` to reconcile the `IAMPolicyMember` resources. It is granted in
-   `terraform/env/main.tf` and applied with the regular Horizon platform deployment.
+3. **Project-level IAM bindings (administrator).** By default (`squish.kcc.projectIamBindings.enabled: false`)
+   the module creates no project-level IAM bindings, because that would require
+   `roles/resourcemanager.projectIamAdmin` for the cluster-wide Config Connector service account. An administrator
+   pre-provisions them once (after enabling the module, when the VM service account exists):
+
+   | Member | Role |
+   | :--- | :--- |
+   | `serviceAccount:squish-workstation-vm@<project>.iam.gserviceaccount.com` | `roles/logging.logWriter` |
+   | each workstation creator (user or group) | `roles/workstations.workstationCreator` |
+   | each workstation creator (user or group) | `roles/workstations.operationViewer` |
+
+   ```bash
+   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+     --member="serviceAccount:squish-workstation-vm@${PROJECT_ID}.iam.gserviceaccount.com" \
+     --role=roles/logging.logWriter
+   for role in roles/workstations.workstationCreator roles/workstations.operationViewer; do
+     gcloud projects add-iam-policy-binding "${PROJECT_ID}" --member="group:qa-team@example.com" --role="${role}"
+   done
+   ```
+
+   Without `roles/logging.logWriter` the workstation runs normally but does not ship its logs to Cloud Logging.
+   Set `squish.kcc.projectIamBindings.enabled: true` only if your environment deliberately allows Config Connector
+   to manage project IAM; `squish.creators` is then reconciled by the module.
+
+   The two resource-level bindings (license secret, image repository) are always created by the module. If their
+   `IAMPolicyMember` reports a `setIamPolicy` permission error, grant `gke-config-connector-sa` the corresponding
+   admin role on that single resource (`roles/secretmanager.admin` on the secret,
+   `roles/artifactregistry.admin` on the repository), not on the project.
 
 ## Enabling the Module
 
@@ -135,8 +175,8 @@ horizon workflow submit --module squish-workstation --template squish-workstatio
 
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
-| `baseImage` | `<region>-docker.pkg.dev/<project>/horizon-sdv/cloud-ws-images/horizon-gnome:latest` | Base image for the Squish layer. |
-| `imageTag` | `latest` | Tag to push. The WorkstationConfig uses `squish.imageTag`. |
+| `baseImage` | `<region>-docker.pkg.dev/<project>/horizon-sdv/cloud-ws-images/horizon-gnome:latest` | Base image for the Squish layer. Must be an Artifact Registry image in the platform project with a tag or `@sha256:` digest; anything else is rejected. |
+| `imageTag` | `latest` | Tag to push (`[A-Za-z0-9_][A-Za-z0-9._-]{0,127}`). The WorkstationConfig uses `squish.imageTag`. |
 | `dryRun` | `false` | Build without pushing. |
 
 Re-run the workflow to update Squish (change `SQUISH_DOWNLOAD_URL` and `SQUISH_SHA256` in `image/Dockerfile`)
@@ -144,7 +184,8 @@ or to pick up a new base image. Running workstations use the new image after the
 
 ## Creating a Workstation
 
-Users listed in `squish.creators` can create their own workstation:
+Users listed in `squish.creators` (or granted the creator roles by an administrator, see
+[Prerequisites](#prerequisites)) can create their own workstation:
 
 1. Open **Cloud Workstations** → **Workstations** in the Google Cloud console and click **Create workstation**.
 2. Select the configuration **Squish** (`squish-workstation-config`), then **Start** and **Launch**.
@@ -169,7 +210,7 @@ SSH that `~/.squish-license` and `~/squish` exist, and stops it again. It runs a
 
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
-| `workstationId` | `squish-smoke-test` | Test workstation ID. |
+| `workstationId` | `squish-smoke-test` | Test workstation ID (`[a-z]([a-z0-9-]{0,61}[a-z0-9])?`). |
 | `verifySquish` | `true` | Check the Squish license and installation over SSH. |
 | `deleteWorkstation` | `false` | Delete the workstation afterwards. Its home disk is retained (`reclaimPolicy: RETAIN`) and must be deleted manually. |
 
@@ -182,24 +223,48 @@ Edit the `squish` block in [`values.yaml`](./values.yaml):
 | `region` | `config.region` | Region of the cluster, config and image repository. |
 | `network` / `subnetwork` | `sdv-network` / `sdv-subnet` | Platform VPC (`config.network` / `config.subnetwork` take precedence if injected). |
 | `licenseSecretName` | `squish-license-key` | Secret Manager secret with the Squish license key. |
-| `creators` | `[]` | Principals allowed to create workstations, e.g. `group:qa@example.com`. |
+| `artifactRepository` | `squish-workstation` | Artifact Registry repository for the Squish image; the VM SA gets `artifactregistry.reader` on it. |
+| `creators` | `[]` | Principals allowed to create workstations, e.g. `group:qa@example.com`. Only applied when `kcc.projectIamBindings.enabled` is true. |
 | `workstation.machineType` | `e2-standard-8` | Workstation machine type. |
 | `workstation.poolSize` | `1` | Pre-started VMs for fast startup (billed while idle). |
 | `workstation.persistentDisk.sizeGB` | `500` | Home disk size. |
 | `workstation.persistentDisk.diskType` | `pd-balanced` | Home disk type. |
 | `workstation.idleTimeout` / `runningTimeout` | `1200s` / `43200s` | Automatic shutdown timers. |
-| `deletionPolicy` | `abandon` | KCC deletion policy for the cluster and config (see below). |
+| `deletionPolicy` | `abandon` | KCC deletion policy for the repository, VM service account and its bindings, cluster and config (see below). |
+| `kcc.projectIamBindings.enabled` | `false` | Let Config Connector create the project-level bindings (`logging.logWriter`, `creators`). See [Prerequisites](#prerequisites). |
 
 The `creators` grants are project-wide because Config Connector cannot bind IAM on `WorkstationConfig`
 resources; creators can therefore create workstations from any configuration in the project.
+
+## Security Model
+
+- **No project IAM administration by Config Connector.** Config Connector runs in cluster mode, so a grant of
+  `roles/resourcemanager.projectIamAdmin` to its service account would let any chart grant arbitrary project
+  roles. The module therefore binds only on its own resources (license secret, image repository) and keeps
+  project-level bindings opt-in (`squish.kcc.projectIamBindings.enabled`, default `false`).
+- **Least privilege for the workstation VM.** The VM service account can read only the license secret and pull
+  only from the `squish-workstation` repository.
+- **No license in the image.** The license key is read at build time into a private temporary directory that is
+  removed on exit, and the build fails if license files remain. At runtime the key is fetched again into the
+  user's `~/.squish-license` (mode 600).
+- **Validated workflow input.** `squish-workstation-init` accepts only base images from the platform project's
+  Artifact Registry and validates `imageTag` before anything is passed to the BuildKit build;
+  `squish-workstation-execute` validates `workstationId`.
+- **Explicit workflow service accounts.** The Sensors set `serviceAccountName` on submitted Workflows
+  (`workflow-executor` for init, `workflow-executor-elevated` for execute), so the controller default cannot
+  replace them.
+- **Pruning.** Both child Applications use `automated.prune: true`, so removing an entry from `creators`
+  removes its binding.
 
 ## Disabling the Module
 
 With the default `deletionPolicy: abandon`, disabling the module removes the Kubernetes resources but keeps the
 workstation cluster, configuration, users' workstations and home disks, and the image repository in GCP, so no
-data is lost and re-enabling adopts them again. IAM bindings and the VM service account are deleted. To remove
-everything, delete the workstations, the configuration and the cluster with `gcloud workstations`, then the
-Artifact Registry repository `squish-workstation`.
+data is lost and re-enabling adopts them again. The VM service account and its bindings are kept as well, so
+abandoned workstations keep working; `creators` bindings are always deleted. Bindings pre-provisioned by an
+administrator are not touched. To remove everything, delete the workstations, the configuration and the cluster
+with `gcloud workstations`, then the Artifact Registry repository `squish-workstation`, the service account
+`squish-workstation-vm` and the administrator-provisioned bindings.
 
 ## Licensing
 

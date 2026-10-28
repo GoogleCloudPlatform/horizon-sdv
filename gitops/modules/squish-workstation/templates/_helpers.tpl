@@ -27,3 +27,14 @@ Module Manager config (config.region, config.network, config.subnetwork) where a
 -}}
 {{- merge $resolved (deepCopy .Values.squish) | toYaml -}}
 {{- end -}}
+
+{{/*
+Fails rendering in a sub-environment: the module's GCP resources (WorkstationCluster, WorkstationConfig, VM service
+account, Artifact Registry repository) have project-global IDs, so a second copy would take over the main
+environment's resources.
+*/}}
+{{- define "squish-workstation.requireMainEnv" -}}
+{{- if (.Values.config | default dict).isSubEnvironment }}
+{{- fail "squish-workstation does not support sub-environments (config.isSubEnvironment=true): its GCP resource IDs are project-global. Enable it in the main environment only." }}
+{{- end }}
+{{- end -}}

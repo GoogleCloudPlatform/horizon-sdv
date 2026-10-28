@@ -21,15 +21,19 @@ source "/google/scripts/common.sh"
 
 # Define variables
 CURL_OPTS="${CURL_OPTS}"
+GCP_PROJECT="${GCP_PROJECT:-}"
 SQUISH_DOWNLOAD_URL="${SQUISH_DOWNLOAD_URL}"
 SQUISH_GCP_LICENSE_SECRET="${SQUISH_GCP_LICENSE_SECRET}"
 SQUISH_SHA256="${SQUISH_SHA256}"
 
 _INSTALLER_NAME="squish-android-linux64.run"
-_LICENSE_KEY_PATH="/tmp/squish-license-key"
 _QT_DIR="/opt/qt"
 _SQUISH_GCP_LICENSE_SECRET_NAME=".squish-gcp-license-secret"
 _SQUISH_TARGET_DIR="${_QT_DIR}/squish"
+
+umask 077
+_WORK_DIR="$(mktemp -d)"
+_LICENSE_KEY_PATH="${_WORK_DIR}/squish-license-key"
 
 
 # Download a file and verify its SHA-256 checksum (the Horizon GNOME base has no fetch_assets.sh helper).
@@ -45,42 +49,58 @@ download_and_validate() {
 
 fetch_installer() {
   log "Fetching Squish installer..."
-  download_and_validate "${SQUISH_DOWNLOAD_URL}" "${SQUISH_SHA256}" "${_INSTALLER_NAME}"
-  chmod +x "${_INSTALLER_NAME}"
+  download_and_validate "${SQUISH_DOWNLOAD_URL}" "${SQUISH_SHA256}" "${_WORK_DIR}/${_INSTALLER_NAME}"
+  chmod 700 "${_WORK_DIR}/${_INSTALLER_NAME}"
 }
 
 
 fetch_license_key() {
-  log "Fetching license key from GCP Secret Manager (secret: ${SQUISH_GCP_LICENSE_SECRET})..."
+  if [[ -z "${GCP_PROJECT}" ]]; then
+    log "ERROR: GCP_PROJECT is not set; cannot read the Squish license from Secret Manager."
+    return 1
+  fi
+  log "Fetching license key from GCP Secret Manager (project: ${GCP_PROJECT}, secret: ${SQUISH_GCP_LICENSE_SECRET})..."
   gcloud \
     secrets \
     versions \
     access \
     latest \
     --secret="${SQUISH_GCP_LICENSE_SECRET}" \
+    --project="${GCP_PROJECT}" \
+    --quiet \
     > "${_LICENSE_KEY_PATH}"
+  if [[ ! -s "${_LICENSE_KEY_PATH}" ]]; then
+    log "ERROR: Secret Manager secret ${SQUISH_GCP_LICENSE_SECRET} is empty."
+    return 1
+  fi
   mkdir -p "${_QT_DIR}"
-  printf "%s" \
-    "${SQUISH_GCP_LICENSE_SECRET}" \
-    > "${_QT_DIR}/${_SQUISH_GCP_LICENSE_SECRET_NAME}"
+  (
+    umask 022
+    printf "%s" \
+      "${SQUISH_GCP_LICENSE_SECRET}" \
+      > "${_QT_DIR}/${_SQUISH_GCP_LICENSE_SECRET_NAME}"
+  )
 }
 
 
 install() {
   log "Running Squish installer..."
-  mkdir -p "${_SQUISH_TARGET_DIR}"
-  ./${_INSTALLER_NAME} \
-      unattended=1 \
-      targetdir="${_SQUISH_TARGET_DIR}" \
-      licensekey="$(cat ${_LICENSE_KEY_PATH})"
+  (
+    umask 022
+    mkdir -p "${_SQUISH_TARGET_DIR}" "${_WORK_DIR}/home"
+    cd "${_WORK_DIR}"
+    HOME="${_WORK_DIR}/home" "./${_INSTALLER_NAME}" \
+        unattended=1 \
+        targetdir="${_SQUISH_TARGET_DIR}" \
+        licensekey="$(cat "${_LICENSE_KEY_PATH}")"
+  )
 }
 
 
 # Runs on every exit (also on failure) so the license key never stays in the image layer.
 cleanup() {
-  log "Removing license key..."
-  rm -f "${_LICENSE_KEY_PATH}"
-  rm -f "${_INSTALLER_NAME}"
+  log "Removing installer and license key..."
+  rm -rf "${_WORK_DIR}" /root/.squish-license /root/.squish /tmp/squish-license-key
 }
 
 

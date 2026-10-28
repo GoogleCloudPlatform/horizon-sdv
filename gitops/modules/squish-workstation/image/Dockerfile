@@ -25,7 +25,9 @@ ARG BASE_IMAGE
 
 FROM ${BASE_IMAGE}
 
-ARG CURL_OPTS="-fsSL --retry 3"
+# Build-only settings: ARG (not ENV) so none of them, in particular the secret name and project, is exported into
+# the runtime image. They are passed inline to configure_workstation.sh below.
+ARG CURL_OPTS="-fsSL --retry 3 --connect-timeout 10 --max-time 300"
 ARG EXTRA_PKGS="\
   jq \
   libxcb-icccm4 \
@@ -35,20 +37,30 @@ ARG EXTRA_PKGS="\
   libxcb-xinerama0 \
   libxcb-xkb1 \
   libxkbcommon-x11-0"
+ARG GCP_PROJECT=""
 ARG GCP_REGION="us-central1"
 ARG SQUISH_DOWNLOAD_URL="https://d13lb3tujbc8s0.cloudfront.net/squish/squish-9.2.2-android-linux64.run"
 ARG SQUISH_GCP_LICENSE_SECRET="squish-license-key"
 ARG SQUISH_SHA256="202758cf795b6cae939d5ba714fd1d31c83478746f0fb1b2ea33ca3881e7669d"
 
-ENV CURL_OPTS="${CURL_OPTS}"
-ENV EXTRA_PKGS="${EXTRA_PKGS}"
+# Same runtime variable as the horizon-gnome base image.
 ENV GCP_REGION="${GCP_REGION}"
-ENV SQUISH_DOWNLOAD_URL="${SQUISH_DOWNLOAD_URL}"
-ENV SQUISH_GCP_LICENSE_SECRET="${SQUISH_GCP_LICENSE_SECRET}"
-ENV SQUISH_SHA256="${SQUISH_SHA256}"
 
 # Merge assets into the container
 COPY assets/ /
 
 # Perform centralized workstation configuration (hooks, packages, and integration).
-RUN /google/scripts/build/configure_workstation.sh
+# Hard build assertions: configure_workstation.sh's run_hooks() only logs a warning when a hook fails, so verify
+# that Squish was installed, that the runtime secret reference is present and that no license material is left.
+RUN CURL_OPTS="${CURL_OPTS}" \
+    EXTRA_PKGS="${EXTRA_PKGS}" \
+    GCP_PROJECT="${GCP_PROJECT}" \
+    SQUISH_DOWNLOAD_URL="${SQUISH_DOWNLOAD_URL}" \
+    SQUISH_GCP_LICENSE_SECRET="${SQUISH_GCP_LICENSE_SECRET}" \
+    SQUISH_SHA256="${SQUISH_SHA256}" \
+    /google/scripts/build/configure_workstation.sh && \
+    test -d /opt/qt/squish/bin && \
+    test -s /opt/qt/.squish-gcp-license-secret && \
+    ! test -e /root/.squish-license && \
+    ! test -e /root/.squish && \
+    ! test -e /tmp/squish-license-key

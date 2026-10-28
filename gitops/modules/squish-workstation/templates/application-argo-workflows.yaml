@@ -15,11 +15,13 @@
 # Child Application: squish-workstation-init (image build) and squish-workstation-execute (smoke test)
 # WorkflowTemplates plus their Sensors. Separate Application so Argo CD only validates WorkflowTemplates
 # after the Argo Workflows CRDs exist.
+{{- include "squish-workstation.requireMainEnv" . }}
+{{- $config := .Values.config | default dict }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: mod-{{ .Values.moduleName }}-argo-workflows
-  namespace: {{ .Values.argocd.namespace }}
+  namespace: {{ $config.namespacePrefix }}{{ .Values.argocd.namespace }}
   labels:
     app.kubernetes.io/name: {{ .Values.moduleName }}
     horizon-sdv.io/module: {{ .Values.moduleName }}
@@ -28,27 +30,28 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: {{ .Values.argocd.project }}
+  project: {{ $config.namespacePrefix }}{{ .Values.argocd.project }}
   source:
     repoURL: {{ .Values.repo.url | quote }}
     targetRevision: {{ .Values.repo.revision | quote }}
     path: gitops/modules/squish-workstation/argo-workflows
     helm:
       values: |
-        workflowNamespace: {{ .Values.config.namespacePrefix }}workflows
-        eventsNamespace: {{ .Values.config.namespacePrefix }}argo-events
+        workflowNamespace: {{ $config.namespacePrefix }}workflows
+        eventsNamespace: {{ $config.namespacePrefix }}argo-events
         parentModuleName: {{ .Values.moduleName | quote }}
-        gcpProjectId: {{ .Values.config.projectID | quote }}
+        gcpProjectId: {{ $config.projectID | default "" | quote }}
         sourceRepo:
           url: {{ .Values.repo.url | quote }}
           revision: {{ .Values.repo.revision | quote }}
-        scmAuthMethod: {{ (.Values.config.scm | default dict).authMethod | default "" | quote }}
+        scmAuthMethod: {{ ($config.scm | default dict).authMethod | default "" | quote }}
         squish:
 {{ include "squish-workstation.settings" . | indent 10 }}
   destination:
     server: https://kubernetes.default.svc
-    namespace: {{ .Values.config.namespacePrefix }}workflows
+    namespace: {{ $config.namespacePrefix }}workflows
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-    automated: {}
+    automated:
+      prune: true

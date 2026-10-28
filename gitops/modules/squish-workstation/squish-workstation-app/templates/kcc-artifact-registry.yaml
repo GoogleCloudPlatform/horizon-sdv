@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # Docker repository for the Squish workstation image (built and pushed by squish-workstation-init).
-# Abandoned on module disable so the built image survives a re-enable.
+# Follows squish.deletionPolicy (default abandon: the built image survives a module disable/re-enable).
 apiVersion: artifactregistry.cnrm.cloud.google.com/v1beta1
 kind: ArtifactRegistryRepository
 metadata:
@@ -22,7 +22,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
     cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
-    cnrm.cloud.google.com/deletion-policy: "abandon"
+    cnrm.cloud.google.com/deletion-policy: {{ .Values.squish.deletionPolicy | quote }}
   labels:
     {{- include "squish-workstation-app.labels" . | nindent 4 }}
 spec:

@@ -13,6 +13,20 @@
 # limitations under the License.
 #
 # In-cluster static overview HTML for the Developer Portal (Module Manager GET /modules/{name}/overview).
+# The Namespace is rendered here (wave 0) because the parent Application's destination is the module-manager
+# namespace, so CreateNamespace=true would not create overviewNamespace (same pattern as storage-gcs-module).
+{{- include "squish-workstation.requireMainEnv" . }}
+{{- $nginx := ((.Values.config | default dict).nginx | default dict) }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.overviewNamespace }}
+  labels:
+    app.kubernetes.io/name: module-overview
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -23,6 +37,8 @@ metadata:
     app.kubernetes.io/name: module-overview
     app.kubernetes.io/component: module-overview-http
     horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 data:
   index.html: |-
 {{ .Files.Get "portal/overview.html" | nindent 4 }}
@@ -35,6 +51,8 @@ metadata:
   labels:
     app.kubernetes.io/name: module-overview
     horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   replicas: 1
   selector:
@@ -47,9 +65,10 @@ spec:
         app.kubernetes.io/name: module-overview
         horizon-sdv.io/module: {{ .Values.moduleName | quote }}
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: nginx
-          image: {{ .Values.config.nginx.image }}:{{ .Values.config.nginx.tag }}
+          image: "{{ $nginx.image | default "nginx" }}:{{ $nginx.tag | default "1.27-alpine" }}"
           ports:
             - containerPort: 80
               name: http
@@ -88,6 +107,8 @@ metadata:
   labels:
     app.kubernetes.io/name: module-overview
     horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   type: ClusterIP
   selector:

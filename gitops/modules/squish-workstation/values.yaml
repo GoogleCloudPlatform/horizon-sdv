@@ -69,7 +69,8 @@ squish:
   licenseSecretName: squish-license-key
 
   # Principals allowed to create their own Squish workstations (granted project-wide
-  # roles/workstations.workstationCreator and roles/workstations.operationViewer via Config Connector).
+  # roles/workstations.workstationCreator and roles/workstations.operationViewer via Config Connector when
+  # squish.kcc.projectIamBindings.enabled is true; otherwise pre-provisioned by an administrator).
   # Creators are automatically granted roles/workstations.user on workstations they create.
   # Example: ["group:qa-team@example.com", "user:alice@example.com"]
   creators: []
@@ -90,10 +91,21 @@ squish:
       # RETAIN keeps user home disks when a workstation is deleted.
       reclaimPolicy: RETAIN
 
-  # Config Connector deletion policy for the WorkstationCluster and WorkstationConfig. "abandon" keeps the
-  # cluster, config and users' workstations/disks in GCP when the module is disabled (no data loss); clean up
-  # manually with gcloud. Set to "delete" to remove them together with the module.
+  # Config Connector deletion policy for the Artifact Registry repository, workstation VM service account and its
+  # IAM bindings, WorkstationCluster and WorkstationConfig. "abandon" keeps them (and users' workstations/disks) in
+  # GCP when the module is disabled (no data loss), so abandoned workstations keep their service account; clean up
+  # manually with gcloud. Set to "delete" to remove them together with the module. squish.creators bindings are
+  # always deleted when removed.
   deletionPolicy: abandon
+
+  # Config Connector options.
+  kcc:
+    # Project-level IAMPolicyMembers (roles/logging.logWriter for the workstation VM service account and the
+    # squish.creators roles). Off by default: Config Connector runs in cluster mode, and granting its service account
+    # roles/resourcemanager.projectIamAdmin would let any chart create arbitrary project IAM bindings. When false,
+    # an administrator pre-provisions these bindings (see README "Prerequisites").
+    projectIamBindings:
+      enabled: false
 
   build:
     # Base image for the Squish layer (Horizon GNOME desktop). Empty uses

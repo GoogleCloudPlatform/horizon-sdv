@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# squish-workstation-init: verifies prerequisites (license secret, Artifact Registry repository, base image) and
+# squish-workstation-init: validates the parameters, verifies prerequisites (license secret, Artifact Registry
+#   repository, base image) and
 #   builds/pushes the Squish workstation image with the common-docker-image-build ClusterWorkflowTemplate
 #   (workloads-common). Run once after enabling the module and whenever the image should be rebuilt.
 # squish-workstation-execute: smoke test. Creates (if missing) and starts a test workstation from the Squish
@@ -42,7 +43,7 @@ spec:
         description: "Where the submit call originated (Horizon); mirrored on workflow label horizon-sdv.io/submitted-from."
       - name: baseImage
         value: {{ include "squish-workstation-wf.baseImage" . | quote }}
-        description: "Full URI of the Horizon GNOME base image the Squish layer is built on."
+        description: "Full URI of the Horizon GNOME base image the Squish layer is built on. Must be an Artifact Registry image in this project (tag or @sha256 digest)."
       - name: imageTag
         value: {{ .Values.squish.imageTag | quote }}
         description: "Tag for the Squish image. The WorkstationConfig uses squish.imageTag from the module values."
@@ -102,6 +103,7 @@ spec:
                 - name: buildArgs
                   value: |
                     BASE_IMAGE={{ "{{" }}workflow.parameters.baseImage{{ "}}" }}
+                    GCP_PROJECT={{ .Values.gcpProjectId }}
                     GCP_REGION={{ .Values.squish.region }}
                     SQUISH_GCP_LICENSE_SECRET={{ .Values.squish.licenseSecretName }}
                 - name: platform
@@ -121,8 +123,23 @@ spec:
             value: {{ .Values.squish.artifactRepository | quote }}
           - name: BASE_IMAGE
             value: "{{ "{{" }}workflow.parameters.baseImage{{ "}}" }}"
+          - name: IMAGE_TAG
+            value: "{{ "{{" }}workflow.parameters.imageTag{{ "}}" }}"
         args:
           - |
+            # Validate user-supplied parameters before anything uses them: build-image passes baseImage to
+            # buildctl via BUILD_ARGS (one --opt per line) and runs the base image's build scripts as root in the
+            # privileged BuildKit pod, so only well-formed images from this project's Artifact Registry are allowed.
+            BASE_IMAGE_RE="^[a-z0-9-]+-docker\.pkg\.dev/${PROJECT}/[a-z0-9._/-]+(:[A-Za-z0-9._-]+|@sha256:[a-f0-9]{64})$"
+            IMAGE_TAG_RE='^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$'
+            if [[ ! "${BASE_IMAGE}" =~ ${BASE_IMAGE_RE} ]]; then
+              echo "ERROR: invalid baseImage. Expected <region>-docker.pkg.dev/${PROJECT}/<repository>/<image>:<tag> or @sha256:<digest>."
+              exit 1
+            fi
+            if [[ ! "${IMAGE_TAG}" =~ ${IMAGE_TAG_RE} ]]; then
+              echo "ERROR: invalid imageTag. Expected 1-128 characters [A-Za-z0-9_.-], not starting with '.' or '-'."
+              exit 1
+            fi
             echo "Checking access to Secret Manager secret '${LICENSE_SECRET}' (value is not printed)..."
             if ! gcloud secrets versions access latest --secret="${LICENSE_SECRET}" --project="${PROJECT}" > /dev/null; then
               echo "ERROR: cannot read secret '${LICENSE_SECRET}'. Create it with your Squish license key (see module README)."
@@ -133,19 +150,12 @@ spec:
               echo "ERROR: repository '${REPOSITORY}' not found. Check that Argo CD Application mod-{{ .Values.parentModuleName }}-squish-workstation-app is Synced/Healthy."
               exit 1
             fi
-            case "${BASE_IMAGE}" in
-              *-docker.pkg.dev/*)
-                echo "Checking base image '${BASE_IMAGE}'..."
-                if ! gcloud artifacts docker images describe "${BASE_IMAGE}" > /dev/null; then
-                  echo "ERROR: base image '${BASE_IMAGE}' not found. Publish horizon-gnome with the Jenkins job"
-                  echo "'Cloud Workstations > Workstation Images > Horizon GNOME' (or the image chain job), or pass baseImage."
-                  exit 1
-                fi
-                ;;
-              *)
-                echo "Base image '${BASE_IMAGE}' is not in Artifact Registry; skipping existence check."
-                ;;
-            esac
+            echo "Checking base image '${BASE_IMAGE}'..."
+            if ! gcloud artifacts docker images describe "${BASE_IMAGE}" --project="${PROJECT}" > /dev/null; then
+              echo "ERROR: base image '${BASE_IMAGE}' not found. Publish horizon-gnome with the Jenkins job"
+              echo "'Cloud Workstations > Workstation Images > Horizon GNOME' (or the image chain job), or pass baseImage."
+              exit 1
+            fi
             echo "Prerequisites OK."
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -170,7 +180,7 @@ spec:
         description: "Where the submit call originated (Horizon); mirrored on workflow label horizon-sdv.io/submitted-from."
       - name: workstationId
         value: squish-smoke-test
-        description: "ID of the test workstation (created from the Squish WorkstationConfig if it does not exist)."
+        description: "ID of the test workstation (created from the Squish WorkstationConfig if it does not exist). 1-63 characters [a-z0-9-], starting with a letter."
       - name: verifySquish
         value: "true"
         description: "When true, check over SSH that the Squish license and installation are present on the workstation."
@@ -204,6 +214,13 @@ spec:
             value: "{{ "{{" }}workflow.parameters.deleteWorkstation{{ "}}" }}"
         args:
           - |
+            # Validate the workstation ID (GCP resource ID rules) before it is used in any command.
+            WORKSTATION_RE='^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'
+            if [[ ! "${WORKSTATION}" =~ ${WORKSTATION_RE} ]]; then
+              echo "ERROR: invalid workstationId. Expected 1-63 characters [a-z0-9-], starting with a letter and not ending with '-'."
+              exit 1
+            fi
+
             WS_ARGS=(--config="${CONFIG}" --cluster="${CLUSTER}" --region="${REGION}" --project="${PROJECT}")
 
             echo "Checking WorkstationConfig '${CONFIG}' in cluster '${CLUSTER}' (${REGION})..."

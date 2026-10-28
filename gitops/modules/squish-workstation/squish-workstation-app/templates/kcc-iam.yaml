@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Workstation VM service account and project-level IAM bindings.
-# Requires the Config Connector GSA (gke-config-connector-sa) to hold roles/resourcemanager.projectIamAdmin
-# (terraform/env/main.tf). Config Connector cannot bind IAM on WorkstationCluster/WorkstationConfig, and
-# Artifact Registry does not support resource.name IAM conditions, so bindings are project-level; only the
-# Secret Manager binding is narrowed to the Squish license secret with an IAM condition.
+# Workstation VM service account and its IAM bindings.
+# The license secret and Artifact Registry bindings are scoped to those resources, so Config Connector never needs
+# resourcemanager.projects.setIamPolicy for them (no Terraform change for this module).
+# Project-level bindings (roles/logging.logWriter for the VM and the squish.creators self-service roles) need
+# resourcemanager.projects.setIamPolicy and are therefore opt-in (squish.kcc.projectIamBindings.enabled);
+# when disabled an administrator pre-provisions them (see README).
+# The service account and the VM bindings follow squish.deletionPolicy so that abandoned WorkstationConfigs and
+# user workstations keep working. Creator bindings never carry it: removing a creator must revoke access.
 # IAMPolicyMember spec is immutable: names include a hash of member and role so that changing
 # squish.creators creates new bindings and Argo CD prunes the old ones.
 apiVersion: iam.cnrm.cloud.google.com/v1beta1
@@ -27,6 +30,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
     cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+    cnrm.cloud.google.com/deletion-policy: {{ .Values.squish.deletionPolicy | quote }}
   labels:
     {{- include "squish-workstation-app.labels" . | nindent 4 }}
 spec:
@@ -42,6 +46,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
     cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+    cnrm.cloud.google.com/deletion-policy: {{ .Values.squish.deletionPolicy | quote }}
   labels:
     {{- include "squish-workstation-app.labels" . | nindent 4 }}
 spec:
@@ -50,16 +55,9 @@ spec:
       name: {{ .Values.squish.serviceAccountId }}
   role: roles/secretmanager.secretAccessor
   resourceRef:
-    kind: Project
-    external: projects/{{ .Values.gcpProjectId }}
-  condition:
-    title: squish-license-secret-only
-    description: Limit access to the Squish license secret {{ .Values.squish.licenseSecretName }}.
-    expression: >-
-      (resource.type == "secretmanager.googleapis.com/Secret" &&
-      resource.name.endsWith("/secrets/{{ .Values.squish.licenseSecretName }}")) ||
-      (resource.type == "secretmanager.googleapis.com/SecretVersion" &&
-      resource.name.extract("/secrets/{secret}/versions/") == "{{ .Values.squish.licenseSecretName }}")
+    apiVersion: secretmanager.cnrm.cloud.google.com/v1beta1
+    kind: SecretManagerSecret
+    external: projects/{{ .Values.gcpProjectId }}/secrets/{{ .Values.squish.licenseSecretName }}
 ---
 # Pull the Squish image from Artifact Registry when a workstation starts.
 apiVersion: iam.cnrm.cloud.google.com/v1beta1
@@ -70,6 +68,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
     cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+    cnrm.cloud.google.com/deletion-policy: {{ .Values.squish.deletionPolicy | quote }}
   labels:
     {{- include "squish-workstation-app.labels" . | nindent 4 }}
 spec:
@@ -78,8 +77,10 @@ spec:
       name: {{ .Values.squish.serviceAccountId }}
   role: roles/artifactregistry.reader
   resourceRef:
-    kind: Project
-    external: projects/{{ .Values.gcpProjectId }}
+    apiVersion: artifactregistry.cnrm.cloud.google.com/v1beta1
+    kind: ArtifactRegistryRepository
+    name: {{ .Values.squish.artifactRepository }}
+{{- if .Values.squish.kcc.projectIamBindings.enabled }}
 ---
 # Cloud Logging from the workstation VM (Horizon GNOME base: /google/scripts/cloud_logging_setup.sh).
 apiVersion: iam.cnrm.cloud.google.com/v1beta1
@@ -90,6 +91,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
     cnrm.cloud.google.com/project-id: "{{ .Values.gcpProjectId }}"
+    cnrm.cloud.google.com/deletion-policy: {{ .Values.squish.deletionPolicy | quote }}
   labels:
     {{- include "squish-workstation-app.labels" . | nindent 4 }}
 spec:
@@ -120,5 +122,6 @@ spec:
   resourceRef:
     kind: Project
     external: projects/{{ $.Values.gcpProjectId }}
+{{- end }}
 {{- end }}
 {{- end }}

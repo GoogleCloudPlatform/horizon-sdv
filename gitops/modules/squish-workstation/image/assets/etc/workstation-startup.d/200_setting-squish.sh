@@ -35,23 +35,27 @@ squish_fetch_license_key() {
       versions \
       access \
       latest \
-      --secret="${SQUISH_GCP_LICENSE_SECRET}"
+      --secret="${SQUISH_GCP_LICENSE_SECRET}" \
+      --quiet
   )
+  rm -f "${_HOME_DIR}/${_SQUISH_LICENSE_NAME}"
   (
     umask 077
+    set -o noclobber
     jq \
       -n \
       --arg key "${SQUISH_LICENSE_KEY}" \
       '{format: "local", key: $key}' \
       > "${_HOME_DIR}/${_SQUISH_LICENSE_NAME}"
   )
-  chmod 600 "${_HOME_DIR}/${_SQUISH_LICENSE_NAME}"
-  chown "${WORKSTATION_USER}:" "${_HOME_DIR}/${_SQUISH_LICENSE_NAME}"
+  chown -h "${WORKSTATION_USER}:" "${_HOME_DIR}/${_SQUISH_LICENSE_NAME}"
+  chmod 0600 "${_HOME_DIR}/${_SQUISH_LICENSE_NAME}"
 }
 
 # /home is a persistent disk: the link survives restarts, so (re)create it idempotently.
 squish_make_symlink() {
     ln -sfn "${_SQUISH_DIR}" "${_HOME_DIR}/squish"
+    chown -h "${WORKSTATION_USER}:" "${_HOME_DIR}/squish"
 }
 
 main() {

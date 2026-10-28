@@ -15,11 +15,13 @@
 # Child Application: Config Connector resources for the Squish Cloud Workstation
 # (Artifact Registry repository, workstation service account, IAM, WorkstationCluster, WorkstationConfig).
 # No HTTPRoute: workstations are opened through the Cloud Workstations URL, not the GKE Gateway.
+{{- include "squish-workstation.requireMainEnv" . }}
+{{- $config := .Values.config | default dict }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: mod-{{ .Values.moduleName }}-squish-workstation-app
-  namespace: {{ .Values.argocd.namespace }}
+  namespace: {{ $config.namespacePrefix }}{{ .Values.argocd.namespace }}
   labels:
     app.kubernetes.io/name: {{ .Values.moduleName }}
     horizon-sdv.io/module: {{ .Values.moduleName }}
@@ -28,7 +30,7 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: {{ .Values.argocd.project }}
+  project: {{ $config.namespacePrefix }}{{ .Values.argocd.project }}
   source:
     repoURL: {{ .Values.repo.url | quote }}
     targetRevision: {{ .Values.repo.revision | quote }}
@@ -36,7 +38,7 @@ spec:
     helm:
       values: |
         namespace: {{ .Values.appNamespace }}
-        gcpProjectId: {{ .Values.config.projectID | quote }}
+        gcpProjectId: {{ $config.projectID | default "" | quote }}
         parentModuleName: {{ .Values.moduleName | quote }}
         squish:
 {{ include "squish-workstation.settings" . | indent 10 }}
@@ -46,4 +48,5 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-    automated: {}
+    automated:
+      prune: true

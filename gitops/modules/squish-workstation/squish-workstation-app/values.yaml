@@ -49,5 +49,8 @@ squish:
       diskType: pd-balanced
       reclaimPolicy: RETAIN
   deletionPolicy: abandon
+  kcc:
+    projectIamBindings:
+      enabled: false
   build:
     baseImage: ""
