@@ -45,7 +45,7 @@ Three sample modules show how [hard and soft dependencies](01_overview.md#how-mo
 
 `sample` also lists `sample-data` and `storage-gcs` as soft dependencies, to show a module using GCS. Both `sample-hard` and `sample-soft` set `autoDisableWhenUnused: true` in the catalog. Auto-disable is optional, and modules without that flag stay enabled when nothing depends on them.
 
-When `sample-soft` is enabled, `sample` sees it through the [soft-feature contract](04_module-architecture.md#soft-feature-contract). Its Hello World application shows the result; see [Hello-world application](#hello-world-application).
+When `sample-soft` is enabled, `sample` sees it through the [soft-feature contract](06_interfaces.md#soft-feature-contract). Its Hello World application shows the result; see [Hello-world application](#hello-world-application).
 
 ### Change git ref in developer portal
 
@@ -67,7 +67,7 @@ Module Manager injects Helm values into the parent:
 - `config`, the cluster `MODULE_CONFIG`.
 - `overviewNamespace`, from the catalog, when the module has an overview Service.
 - `repo.url` and `repo.revision`.
-- `softFeaturesEnabled`, when the module has soft dependencies; see the [soft-feature contract](04_module-architecture.md#soft-feature-contract).
+- `softFeaturesEnabled`, when the module has soft dependencies; see the [soft-feature contract](06_interfaces.md#soft-feature-contract).
 
 Do not hard-code the Git repo URL or revision in a way that ignores those values.
 
@@ -152,7 +152,7 @@ Optional:
 | `softDependencies` | Optional extras; parent still enables without them |
 | `autoDisableWhenUnused` | Disable this module when the last enabled module that lists it as a hard or soft dependency is disabled |
 | `applications` | Extra portal links (`id`, `url`, optional `title`; `url` may be site-relative `/...`) |
-| `softFeaturesPropagation` / `softFeaturesConfigMapNamespaces` | How soft-dep flags reach workloads; see the [soft-feature contract](04_module-architecture.md#soft-feature-contract) |
+| `softFeaturesPropagation` / `softFeaturesConfigMapNamespaces` | How soft-dep flags reach workloads; see the [soft-feature contract](06_interfaces.md#soft-feature-contract) |
 
 Catalog name `example` must match labels and Sensor/template ownership. Path must be the parent chart directory, not the `argo-workflows` subchart.
 
