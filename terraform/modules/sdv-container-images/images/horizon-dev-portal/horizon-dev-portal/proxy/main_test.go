@@ -27,12 +27,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -983,12 +983,11 @@ func TestProxyMainSmoke(t *testing.T) {
 	}))
 	defer ha.Close()
 
-	addr := freeAddr(t)
 	var logs safeBuf
 	cmd := exec.Command(os.Args[0], "-test.run=^TestProxyMainSmoke$")
 	cmd.Env = envWith(map[string]string{
 		"HORIZON_PROXY_TEST_RUN_MAIN":  "1",
-		"LISTEN_ADDR":                  addr,
+		"LISTEN_ADDR":                  "127.0.0.1:0",
 		"OIDC_ISSUER_URL":              issuer.issuer,
 		"MODULE_MANAGER_BASE_URL":      mm.URL,
 		"HORIZON_API_BASE_URL":         ha.URL,
@@ -1010,7 +1009,7 @@ func TestProxyMainSmoke(t *testing.T) {
 	})
 
 	client := &http.Client{Timeout: 2 * time.Second}
-	base := "http://" + addr
+	base := "http://" + waitListenAddr(t, &logs)
 	resp := pollGET(t, client, base+"/healthz", &logs)
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
@@ -1362,15 +1361,19 @@ func envWith(overrides map[string]string) []string {
 	return out
 }
 
-func freeAddr(t *testing.T) string {
+var listenAddrPattern = regexp.MustCompile(`listening on (127\.0\.0.1:\d+)`)
+
+func waitListenAddr(t *testing.T, logs *safeBuf) string {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if m := listenAddrPattern.FindStringSubmatch(logs.String()); m != nil {
+			return m[1]
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	addr := ln.Addr().String()
-	_ = ln.Close()
-	return addr
+	t.Fatalf("child did not report a listen address\n%s", logs.String())
+	return ""
 }
 
 func pollGET(t *testing.T, client *http.Client, rawURL string, logs *safeBuf) *http.Response {

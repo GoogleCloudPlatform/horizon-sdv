@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -116,8 +117,12 @@ func main() {
 	registerCLIRoutes(mux, env("CLI_DIST_DIR", "/cli-dist"), cliVer)
 	mux.Handle("/", spaHandler(htmlBaseTagHref(normalizePublicPath(env("PUBLIC_PATH", "")))))
 
-	log.Printf("listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("listen: %v", err)
+	}
+	log.Printf("listening on %s", ln.Addr().String())
+	log.Fatal(http.Serve(ln, mux))
 }
 
 func env(k, def string) string {
