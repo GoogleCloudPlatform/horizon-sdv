@@ -48,7 +48,7 @@ config:
   # (config.versions.components); empty here so templates render without Terraform.
   versions:
     components:
-      core: ""
+      horizoncore: ""
 
   # Developer Portal (SPA + proxy): Gateway path, Keycloak, in-cluster URL overrides — not a chart version.
   horizonDevelopmentPortal:

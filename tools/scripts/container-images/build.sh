@@ -23,6 +23,9 @@
 # This script is a development convenience tool for fast local iteration.
 # It does NOT update Terraform state. For official/production builds, use
 # Terraform (terraform apply), which tracks image state and triggers.
+#
+# Requires: python3 with PyYAML (python3-yaml / pip install pyyaml) to read
+# versions.yaml the same way Terraform yamldecode does.
 
 set -euo pipefail
 
@@ -251,18 +254,55 @@ declare -A IMAGE_VERSIONS=()
 declare -A IMAGE_BUILD_ARGS=()
 IMAGE_NAMES=()
 
-# Horizon core version from versions.yaml (components.core). Terraform reads the same
-# file (local.core_version in locals.tf), so locals.tf references to it are resolved here.
-CORE_VERSION=""
+# Horizon platform version from versions.yaml (components.horizoncore). Terraform reads the
+# same file (local.horizon_core_version in locals.tf), so locals.tf references are resolved here.
+# Parsed with PyYAML so quotes and nesting match yamldecode (not a line-based grep).
+HORIZON_CORE_VERSION=""
 
-read_core_version() {
+read_horizon_core_version() {
   if [[ ! -f "$VERSIONS_FILE" ]]; then
     log_err "versions.yaml not found at: ${VERSIONS_FILE}"
     exit 1
   fi
-  CORE_VERSION="$(sed -n 's/^[[:space:]]*core:[[:space:]]*"\{0,1\}\([^"#[:space:]]*\)"\{0,1\}.*/\1/p' "$VERSIONS_FILE" | head -n 1)"
-  if [[ -z "$CORE_VERSION" ]]; then
-    log_err "Could not read components.core from ${VERSIONS_FILE}."
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_err "python3 is required to read ${VERSIONS_FILE}."
+    exit 1
+  fi
+  local py_out=""
+  if ! py_out="$(python3 - "$VERSIONS_FILE" 2>&1 <<'PY'
+import sys
+try:
+    import yaml
+except ImportError:
+    print("PyYAML is required to read versions.yaml (apt install python3-yaml / pip install pyyaml)", file=sys.stderr)
+    sys.exit(2)
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    data = yaml.safe_load(f)
+if not isinstance(data, dict):
+    print(f"{path}: expected a mapping at the root", file=sys.stderr)
+    sys.exit(1)
+components = data.get("components")
+if not isinstance(components, dict):
+    print(f"{path}: missing or invalid 'components' mapping", file=sys.stderr)
+    sys.exit(1)
+if "horizoncore" not in components:
+    print(f"{path}: missing components.horizoncore", file=sys.stderr)
+    sys.exit(1)
+horizoncore = components["horizoncore"]
+if horizoncore is None or isinstance(horizoncore, (dict, list)):
+    print(f"{path}: components.horizoncore must be a scalar string", file=sys.stderr)
+    sys.exit(1)
+print(str(horizoncore).strip(), end="")
+PY
+  )"; then
+    log_err "Could not read components.horizoncore from ${VERSIONS_FILE}."
+    [[ -n "$py_out" ]] && log_err "${py_out}"
+    exit 1
+  fi
+  HORIZON_CORE_VERSION="$py_out"
+  if [[ -z "$HORIZON_CORE_VERSION" ]]; then
+    log_err "components.horizoncore in ${VERSIONS_FILE} is empty."
     exit 1
   fi
 }
@@ -274,7 +314,7 @@ parse_image_catalog() {
     exit 1
   fi
 
-  read_core_version
+  read_horizon_core_version
 
   # Pass 1: extract simple local variable assignments for resolving build_arg references
   # (e.g.  common_nginx_version = "1.28.1-alpine3.23")
@@ -375,10 +415,10 @@ parse_image_catalog() {
     if [[ "$line" =~ build_version[[:space:]]*=[[:space:]]*\"([^\"]*)\" ]]; then
       cur_ver="${BASH_REMATCH[1]}"
     elif [[ "$line" =~ build_version[[:space:]]*=[[:space:]]*local\.([a-z_][a-z0-9_]*) ]]; then
-      # build_version = local.<name>: core_version comes from versions.yaml, others from simple locals
+      # build_version = local.<name>: horizon_core_version comes from versions.yaml, others from simple locals
       local ver_ref="${BASH_REMATCH[1]}"
-      if [[ "$ver_ref" == "core_version" ]]; then
-        cur_ver="$CORE_VERSION"
+      if [[ "$ver_ref" == "horizon_core_version" ]]; then
+        cur_ver="$HORIZON_CORE_VERSION"
       else
         cur_ver="${local_vars[$ver_ref]:-}"
       fi
@@ -478,11 +518,11 @@ build_image() {
   local build_args_raw="${IMAGE_BUILD_ARGS[$name]:-}"
   local registry_host="${GCP_REGION}-docker.pkg.dev"
 
-  # The portal embeds the horizon CLI; stamp it with the core version, as Terraform does
-  # (terraform/modules/base/main.tf passes HORIZON_CLI_VERSION = local.core_version).
+  # The portal embeds the horizon CLI; stamp it with the Horizon version, as Terraform does
+  # (terraform/modules/base/main.tf passes HORIZON_CLI_VERSION = local.horizon_core_version).
   if [[ "$name" == "horizon-dev-portal" ]]; then
     [[ -n "$build_args_raw" ]] && build_args_raw+=","
-    build_args_raw+="HORIZON_CLI_VERSION=${CORE_VERSION}"
+    build_args_raw+="HORIZON_CLI_VERSION=${HORIZON_CORE_VERSION}"
   fi
   local full_image="${registry_host}/${GCP_PROJECT}/${REGISTRY_ID}/${name}:${version}"
   local context_dir="${IMAGES_DIR}/${directory}/${name}"

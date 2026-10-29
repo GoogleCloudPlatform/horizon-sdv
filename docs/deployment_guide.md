@@ -32,6 +32,7 @@ Horizon SDV is designed to simplify the deployment and management of Android wor
   - Section #2b - Clone the Repository [link](#section-2b---clone-the-repository)
   - Section #2c - Configure Terraform Variables [link](#section-2c---configure-terraform-variables)
   - Section #2d - Run the Deployment Script [link](#section-2d---run-the-deployment-script)
+  - Section #2e - Update the Horizon version [link](#section-2e---update-the-horizon-version)
 - Section #3 - Post-Deployment Setup [link](#section-3---post-deployment-setup)
   - Section #3a (Optional) - Domain Setup via GCP [link](#section-3a-optional---domain-setup-via-gcp)
   - Section #3b - Update Nameservers [link](#section-3b---update-nameservers)
@@ -376,6 +377,30 @@ Steps to start the Terraform workflow.
 > [!Note]
 > GCE Disks or other GCE resources provisioned by the GKE cluster will not be automatically removed while running
 > deployment script with `--destroy` or `-d` flag as they are not managed by Terraform. A manual cleanup is required.
+
+### Section #2e - Update the Horizon version
+
+The Horizon version is defined once in the repository-root `versions.yaml` as `components.horizoncore`. Updating it and re-applying Terraform refreshes the Developer Portal image tag, the Horizon CLI binaries served from the portal, and the version shown in the UI.
+
+Example: change `4.3.0` to `5.0.0`.
+
+1. Edit `versions.yaml` and set `components.horizoncore` to the new value (for example `"5.0.0"`).
+   The value must be a valid Docker tag (no spaces; letters, digits, `_`, `.`, `-`; no `+`).
+2. Commit and push to the branch set in `scm_repo_branch` in `terraform.tfvars` (the deployer clones that remote branch).
+3. Re-run the deployment with apply ([Section #2d](#section-2d---run-the-deployment-script)), for example `./container-deploy.sh -a` or `./deploy.sh -a`.
+4. Wait for Terraform to build and push `horizon-dev-portal:5.0.0` and for Argo CD to sync the Developer Portal app (new image and ConfigMap).
+
+**Verify on the running instance**
+
+- Artifact Registry contains `…/horizon-dev-portal:5.0.0`.
+- After sign-in, the floating tag shows `Horizon 5.0.0` on Developer Portal pages ([Section #4a](#section-4a---horizon-developer-portal)).
+- Tools → Horizon CLI: download a binary and run `horizon version` — it should report `5.0.0`.
+
+**Notes**
+
+- Do not change the `horizon-dev-portal` versions in `terraform/modules/base/locals.tf` or `image.tag` in the portal chart values; they follow `versions.yaml`.
+- CLI binaries already downloaded to laptops stay on the old version until users download again from the portal.
+- Changing only portal code without bumping `components.horizoncore` rebuilds under the same tag and may not roll the pod; bump the version (or restart the portal Deployment) when a rollout is required.
 
 ## Section #3 - Post-Deployment Setup
 
@@ -749,7 +774,7 @@ This section details how to sign in to and use cluster applications, including t
 ### Section #4a - Horizon Developer Portal
 The site root (`https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/`) redirects to the Horizon Developer Portal at `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/developer-portal/`. Use the Developer Portal for module administration and workflows; open other cluster apps via the direct URLs in the sections below. See also the [Developer Portal user guide](developer_portal_user_guide.md).
 
-After you sign in, every Developer Portal screen shows the Horizon version in a small tag at the bottom right (`Horizon <version>`). The value comes from `versions.yaml` in the repository root, and the tag is not shown if no version is set. The sign-in page does not show it.
+After you sign in, every Developer Portal screen shows the Horizon version in a small tag at the bottom right (`Horizon <version>`). The value comes from `versions.yaml` in the repository root, and the tag is not shown if no version is set. The sign-in page does not show it. To change the version on a running deployment, see [Section #2e - Update the Horizon version](#section-2e---update-the-horizon-version).
 
 ### Section #4b - Argo CD
 Argo CD is the GitOps tool being used with a git repository as the "source of truth" where the desired state of Kubernetes applications have been configured. 
@@ -1078,7 +1103,7 @@ Terraform fails during plan or apply with an error similar to:
 
 `versions.yaml` in the repository root defines the Horizon version, and Terraform reads it on every run. The deployment clones the branch set in `scm_repo_branch` from `scm_repo_url`, so the file must exist on that branch, not only in your local working copy.
 
-1. Check that `versions.yaml` exists in the repository root and defines `components.core`.
+1. Check that `versions.yaml` exists in the repository root and defines `components.horizoncore`.
 2. Commit and push the file to the branch set in `scm_repo_branch` in `terraform.tfvars`.
 3. Run the deployment script again.
 

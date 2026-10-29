@@ -14,19 +14,21 @@
 
 # Horizon platform version(s). Single source of truth for the release number.
 #
-# Terraform is the only reader of this file (yamldecode in terraform/modules/base).
+# Readers of this file:
+#   - Terraform (yamldecode in terraform/modules/base)
+#   - tools/scripts/container-images/build.sh via PyYAML (portal image tag and HORIZON_CLI_VERSION)
 # Helm charts under gitops/ cannot read files outside their own directory, so they
 # receive the value through the Terraform-injected Argo CD values, not from here.
 #
-# components.core is also used as the Developer Portal image tag (locals.tf), as the
+# components.horizoncore is also used as the Developer Portal image tag (locals.tf), as the
 # horizon CLI version, and as the version shown in the portal UI. The portal image is
 # rebuilt and re-tagged when this value changes, so bump it (e.g. RC.3 -> RC.4) for each
 # build that must roll out. Other image tags stay in terraform/modules/base/locals.tf.
 
 components:
-  # The core component is the Horizon platform release itself.
+  # The Horizon platform release itself (not a generic "core" key — unique for grepping).
   # restrictions:
   #   - no spaces, because the version is passed inside the -ldflags string
   #   - must be a valid Docker tag: letters, digits, "_", "." and "-" only (no "+"),
   #     not starting with "." or "-", at most 128 characters
-  core: "4.3.9"
+  horizoncore: "4.3.10"

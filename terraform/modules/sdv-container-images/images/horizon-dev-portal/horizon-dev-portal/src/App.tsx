@@ -308,7 +308,7 @@ function ShellLayout() {
       >
         <Outlet />
       </Box>
-      {/* Version Display: Horizon core version, bottom right on every signed-in screen. */}
+      {/* Version Display: Horizon platform version (versions.yaml components.horizoncore), bottom right on every signed-in screen. */}
       {horizonVersion ? (
         <Box
           sx={{

@@ -28,7 +28,7 @@ podAnnotations: {}
 image:
   repository: horizon-dev-portal
   # Informational only: the deployed image reference comes from config.gitops.horizonDevPortal (set by Terraform).
-  # The parent Application sets this from versions.yaml (components.core); do not hard-code a version here.
+  # The parent Application sets this from versions.yaml (components.horizoncore); do not hard-code a version here.
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -53,7 +53,7 @@ config:
   publicPath: "/developer-portal"
   # Full browser origin for window.APP_CONFIG.baseUrl (scheme + host, optional port). Do not set this to the Argo Workflows UI path (/workflows); the portal appends /workflows/... for deep links itself.
   publicBaseUrl: ""
-  # Horizon platform (core) version shown in the UI via window.APP_CONFIG.horizonVersion. Same value as the portal image tag (versions.yaml components.core).
+  # Horizon platform version shown in the UI via window.APP_CONFIG.horizonVersion. Same value as the portal image tag (versions.yaml components.horizoncore).
   horizonVersion: ""
 
   # Keycloak / OIDC (browser uses relative keycloakTokenPath; Go proxy uses full issuer + token URLs).
