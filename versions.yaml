@@ -31,4 +31,4 @@ components:
   #   - no spaces, because the version is passed inside the -ldflags string
   #   - must be a valid Docker tag: letters, digits, "_", "." and "-" only (no "+"),
   #     not starting with "." or "-", at most 128 characters
-  horizoncore: "4.3.10"
+  horizoncore: "4.3.11"
