@@ -259,10 +259,13 @@ func TestBearerToken(t *testing.T) {
 
 func TestNewMMProxy(t *testing.T) {
 	var gotPath, gotQuery, gotAuth string
+	var gotMu sync.Mutex
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMu.Lock()
 		gotPath = r.URL.Path
 		gotQuery = r.URL.RawQuery
 		gotAuth = r.Header.Get("Authorization")
+		gotMu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer up.Close()
@@ -283,7 +286,10 @@ func TestNewMMProxy(t *testing.T) {
 			t.Fatalf("header %q: status %d", header, rec.Code)
 		}
 	}
-	if gotPath != "" {
+	gotMu.Lock()
+	path := gotPath
+	gotMu.Unlock()
+	if path != "" {
 		t.Fatal("upstream called without a bearer token")
 	}
 
@@ -296,7 +302,10 @@ func TestNewMMProxy(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("bad token status %d", rec.Code)
 	}
-	if gotPath != "" {
+	gotMu.Lock()
+	path = gotPath
+	gotMu.Unlock()
+	if path != "" {
 		t.Fatal("upstream called for a rejected token")
 	}
 
@@ -308,16 +317,22 @@ func TestNewMMProxy(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
-	if gotPath != "/modules" || gotQuery != "team=a" || gotAuth != "Bearer "+raw {
-		t.Fatalf("upstream path %q query %q auth set %v", gotPath, gotQuery, gotAuth == "Bearer "+raw)
+	gotMu.Lock()
+	path, query, auth := gotPath, gotQuery, gotAuth
+	gotMu.Unlock()
+	if path != "/modules" || query != "team=a" || auth != "Bearer "+raw {
+		t.Fatalf("upstream path %q query %q auth set %v", path, query, auth == "Bearer "+raw)
 	}
 
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/mm", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
 	h.ServeHTTP(rec, req)
-	if gotPath != "/" {
-		t.Fatalf("trimmed path %q", gotPath)
+	gotMu.Lock()
+	path = gotPath
+	gotMu.Unlock()
+	if path != "/" {
+		t.Fatalf("trimmed path %q", path)
 	}
 }
 
@@ -494,16 +509,23 @@ func TestNewHorizonProxy(t *testing.T) {
 	var calls []string
 	var auths []string
 	var retryHits int
+	var upstreamMu sync.Mutex
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
+		upstreamMu.Lock()
 		calls = append(calls, r.URL.RequestURI()+"#"+string(body))
 		auths = append(auths, r.Header.Get("Authorization"))
+		retry := false
 		if r.URL.Path == "/retry" {
 			retryHits++
 			if retryHits == 1 {
-				http.Error(w, "denied", http.StatusUnauthorized)
-				return
+				retry = true
 			}
+		}
+		upstreamMu.Unlock()
+		if retry {
+			http.Error(w, "denied", http.StatusUnauthorized)
+			return
 		}
 		fmt.Fprintf(w, "upstream:%s", body)
 	}))
@@ -530,11 +552,15 @@ func TestNewHorizonProxy(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != "upstream:" {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
-	if len(auths) != 1 || auths[0] != "Bearer ci-1" {
-		t.Fatalf("auth %#v", auths)
+	upstreamMu.Lock()
+	gotCalls := append([]string(nil), calls...)
+	gotAuths := append([]string(nil), auths...)
+	upstreamMu.Unlock()
+	if len(gotAuths) != 1 || gotAuths[0] != "Bearer ci-1" {
+		t.Fatalf("auth %#v", gotAuths)
 	}
-	if calls[0] != "/v1/catalog?q=1#" {
-		t.Fatalf("forwarded %q", calls[0])
+	if gotCalls[0] != "/v1/catalog?q=1#" {
+		t.Fatalf("forwarded %q", gotCalls[0])
 	}
 
 	rec = httptest.NewRecorder()
@@ -543,22 +569,31 @@ func TestNewHorizonProxy(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != "upstream:hello" {
 		t.Fatalf("post status %d body %s", rec.Code, rec.Body.String())
 	}
-	if !strings.HasSuffix(calls[len(calls)-1], "#hello") {
-		t.Fatalf("post forwarded %q", calls[len(calls)-1])
+	upstreamMu.Lock()
+	gotCalls = append([]string(nil), calls...)
+	upstreamMu.Unlock()
+	if !strings.HasSuffix(gotCalls[len(gotCalls)-1], "#hello") {
+		t.Fatalf("post forwarded %q", gotCalls[len(gotCalls)-1])
 	}
 
+	upstreamMu.Lock()
 	before := len(calls)
+	upstreamMu.Unlock()
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/horizon/retry", nil)
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("retry status %d body %s", rec.Code, rec.Body.String())
 	}
-	if len(calls)-before != 2 {
-		t.Fatalf("retry calls %d", len(calls)-before)
+	upstreamMu.Lock()
+	gotCalls = append([]string(nil), calls...)
+	gotAuths = append([]string(nil), auths...)
+	upstreamMu.Unlock()
+	if len(gotCalls)-before != 2 {
+		t.Fatalf("retry calls %d", len(gotCalls)-before)
 	}
-	if auths[len(auths)-2] == auths[len(auths)-1] {
-		t.Fatalf("expected a refreshed token, auths %#v", auths[len(auths)-2:])
+	if gotAuths[len(gotAuths)-2] == gotAuths[len(gotAuths)-1] {
+		t.Fatalf("expected a refreshed token, auths %#v", gotAuths[len(gotAuths)-2:])
 	}
 	if grants := log.grants(); len(grants) < 2 {
 		t.Fatalf("grants %#v", grants)
@@ -598,8 +633,11 @@ func TestNewHorizonProxy(t *testing.T) {
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodDelete, "/api/horizon", strings.NewReader("gone"))
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK || calls[len(calls)-1] != "/#gone" {
-		t.Fatalf("delete status %d forwarded %q", rec.Code, calls[len(calls)-1])
+	upstreamMu.Lock()
+	lastCall := calls[len(calls)-1]
+	upstreamMu.Unlock()
+	if rec.Code != http.StatusOK || lastCall != "/#gone" {
+		t.Fatalf("delete status %d forwarded %q", rec.Code, lastCall)
 	}
 }
 
@@ -967,8 +1005,11 @@ func TestProxyMainSmoke(t *testing.T) {
 
 	issuer := newTestOIDC(t)
 	var mmPath string
+	var mmMu sync.Mutex
 	mm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mmMu.Lock()
 		mmPath = r.URL.Path
+		mmMu.Unlock()
 		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -977,8 +1018,11 @@ func TestProxyMainSmoke(t *testing.T) {
 	}))
 	defer mm.Close()
 	var haAuth string
+	var haMu sync.Mutex
 	ha := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		haMu.Lock()
 		haAuth = r.Header.Get("Authorization")
+		haMu.Unlock()
 		_, _ = io.WriteString(w, "ha-ok")
 	}))
 	defer ha.Close()
@@ -1063,8 +1107,11 @@ func TestProxyMainSmoke(t *testing.T) {
 	}
 	mmBody, _ := io.ReadAll(mmResp.Body)
 	mmResp.Body.Close()
-	if mmResp.StatusCode != http.StatusOK || string(mmBody) != "mm-ok" || mmPath != "/status" {
-		t.Fatalf("mm status %d body %s path %s", mmResp.StatusCode, mmBody, mmPath)
+	mmMu.Lock()
+	gotMMPath := mmPath
+	mmMu.Unlock()
+	if mmResp.StatusCode != http.StatusOK || string(mmBody) != "mm-ok" || gotMMPath != "/status" {
+		t.Fatalf("mm status %d body %s path %s", mmResp.StatusCode, mmBody, gotMMPath)
 	}
 
 	before := issuer.tokenHits.Load()
@@ -1077,8 +1124,11 @@ func TestProxyMainSmoke(t *testing.T) {
 	if haResp.StatusCode != http.StatusOK || string(haBody) != "ha-ok" {
 		t.Fatalf("horizon %d %s\n%s", haResp.StatusCode, haBody, logs.String())
 	}
-	if haAuth != "Bearer smoke-access" {
-		t.Fatalf("horizon auth %q", haAuth)
+	haMu.Lock()
+	gotHAAuth := haAuth
+	haMu.Unlock()
+	if gotHAAuth != "Bearer smoke-access" {
+		t.Fatalf("horizon auth %q", gotHAAuth)
 	}
 	if issuer.tokenHits.Load() <= before {
 		t.Fatal("main did not call the derived token endpoint")
