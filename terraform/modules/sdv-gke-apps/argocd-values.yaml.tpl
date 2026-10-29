@@ -104,6 +104,37 @@ configs:
         end
       end
       return hs
+    # Cluster-mode Config Connector singleton (same status.healthy contract as ConfigConnectorContext above).
+    # Without this, the configconnector-operator child Application (sync-wave -1) reports Healthy as soon as
+    # the ConfigConnector CR is applied, before the operator has actually finished bootstrapping (creating
+    # cnrm-system, registering storage.cnrm.* CRDs), letting the root sync race ahead into later waves.
+    resource.customizations.health.core.cnrm.cloud.google.com_ConfigConnector: |
+      hs = {}
+      if obj.metadata ~= nil and obj.metadata.deletionTimestamp ~= nil and obj.metadata.deletionTimestamp ~= "" then
+        hs.status = "Healthy"
+        hs.message = "Deleting (Config Connector finalizing)"
+        return hs
+      end
+      hs.status = "Progressing"
+      hs.message = "Waiting for Config Connector operator (status.healthy unset)"
+      if obj.status ~= nil and obj.status.healthy ~= nil then
+        if obj.status.healthy == true then
+          hs.status = "Healthy"
+          hs.message = ""
+          return hs
+        end
+        if obj.status.healthy == false then
+          if obj.status.errors ~= nil and obj.status.errors[1] ~= nil and obj.status.errors[1] ~= "" then
+            hs.status = "Degraded"
+            hs.message = obj.status.errors[1]
+            return hs
+          end
+          hs.status = "Progressing"
+          hs.message = "status.healthy is false (CNRM reconciling; describe ConfigConnector if stuck)"
+          return hs
+        end
+      end
+      return hs
   # policy.csv + scopes: keep identical to keycloak-post-argocd/configure.sh (POLICY_CSV + rbac-cm patch).
   # Why here: argo-helm resets argocd-rbac-cm on upgrade if omitted. scopes '[roles]' matches Keycloak JWT roles claim; `list` lines satisfy Argo CD 3.x UI list APIs.
   rbac:

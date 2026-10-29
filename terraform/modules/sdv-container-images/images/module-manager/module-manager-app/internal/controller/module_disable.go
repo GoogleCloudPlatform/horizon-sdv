@@ -88,7 +88,13 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 		return fmt.Errorf("perform module disable: drain cloud-workstations CRs: %w", err)
 	}
 	if err := completeCloudWorkstationsCoreDrain(ctx, c, argocdNamespace, moduleName); err != nil {
-		return fmt.Errorf("perform module disable: %w", err)
+		// completeCloudWorkstationsCoreDrain can fail after already disabling selfHeal but before
+		// clearing skip-reconcile, leaving the core Application both unhealable and unreconcilable -
+		// worse than the pre-drain paused state. Recover it so a retry is possible.
+		if recoverErr := recoverCloudWorkstationsCoreAfterIncompleteCompletion(ctx, c, argocdNamespace, moduleName); recoverErr != nil {
+			return fmt.Errorf("perform module disable: complete cloud-workstations core drain: %w; recover: %v", err, recoverErr)
+		}
+		return fmt.Errorf("perform module disable: complete cloud-workstations core drain: %w", err)
 	}
 
 	if err := TeardownPrefixedModuleChildApplication(ctx, c, argocdNamespace, moduleConfig, moduleName); err != nil {

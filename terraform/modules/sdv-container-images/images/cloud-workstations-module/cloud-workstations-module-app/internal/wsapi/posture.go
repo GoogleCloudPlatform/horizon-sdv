@@ -148,22 +148,25 @@ func postureProto(name, etag string, desired Posture) *pb.WorkstationConfig {
 	dirs := make([]*pb.WorkstationConfig_EphemeralDirectory, 0, len(desired.EphemeralDirectories))
 	for _, dir := range desired.EphemeralDirectories {
 		item := &pb.WorkstationConfig_EphemeralDirectory{MountPath: dir.MountPath}
-		if dir.DiskType != nil || dir.SourceSnapshot != nil || dir.SourceImage != nil || dir.ReadOnly != nil {
-			disk := &pb.WorkstationConfig_EphemeralDirectory_GcePersistentDisk{}
-			if dir.DiskType != nil {
-				disk.DiskType = *dir.DiskType
-			}
-			if dir.SourceSnapshot != nil {
-				disk.SourceSnapshot = *dir.SourceSnapshot
-			}
-			if dir.SourceImage != nil {
-				disk.SourceImage = *dir.SourceImage
-			}
-			if dir.ReadOnly != nil {
-				disk.ReadOnly = *dir.ReadOnly
-			}
-			item.DirectoryType = &pb.WorkstationConfig_EphemeralDirectory_GcePd{GcePd: disk}
+		// GcePd is the only directory type this API supports, so it is always attached, even when
+		// every override field is nil (the user cleared all overrides). Gating this on "any field
+		// set" would omit DirectoryType entirely for a cleared directory, sending an incomplete,
+		// ambiguous update instead of the explicit empty-fields payload diskTypeMatches /
+		// optionalStringMatches / readOnlyMatches above already treat as "use the server default".
+		disk := &pb.WorkstationConfig_EphemeralDirectory_GcePersistentDisk{}
+		if dir.DiskType != nil {
+			disk.DiskType = *dir.DiskType
 		}
+		if dir.SourceSnapshot != nil {
+			disk.SourceSnapshot = *dir.SourceSnapshot
+		}
+		if dir.SourceImage != nil {
+			disk.SourceImage = *dir.SourceImage
+		}
+		if dir.ReadOnly != nil {
+			disk.ReadOnly = *dir.ReadOnly
+		}
+		item.DirectoryType = &pb.WorkstationConfig_EphemeralDirectory_GcePd{GcePd: disk}
 		dirs = append(dirs, item)
 	}
 	return &pb.WorkstationConfig{
@@ -218,6 +221,17 @@ func ephemeralEqual(live []*pb.WorkstationConfig_EphemeralDirectory, desired []E
 	}
 	if len(byMount) != len(live) {
 		return false
+	}
+	// The CRD does not enforce unique mountPath across ephemeralDirectories (no
+	// x-kubernetes-list-type: map), so desired can arrive with duplicates. Without this check, two
+	// desired entries sharing a mountPath would both be compared against the same live entry,
+	// masking drift on whichever one does not match the API server's authoritative single value.
+	seenDesired := make(map[string]struct{}, len(desired))
+	for _, want := range desired {
+		if _, dup := seenDesired[want.MountPath]; dup {
+			return false
+		}
+		seenDesired[want.MountPath] = struct{}{}
 	}
 	for _, want := range desired {
 		got, ok := byMount[want.MountPath]

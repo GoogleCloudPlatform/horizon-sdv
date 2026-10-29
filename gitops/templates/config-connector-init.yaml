@@ -20,6 +20,13 @@
 # Do not create ConfigConnectorContext when mode is cluster: the operator rejects CCC as unnecessary.
 # configconnector-operator-cnrm-discovery grants the operator read access to CNRM API groups (e.g. edgenetwork).
 # Ref: https://cloud.google.com/config-connector/docs/how-to/install-upgrade-uninstall
+#
+# Main environment only. Every resource below is cluster-scoped (ClusterRole/ClusterRoleBinding) or lives
+# in an unprefixed, shared namespace (gcp, cnrm-system). The Config Connector operator itself only runs on
+# the main environment (gitops/templates/configconnector-operator.yaml is isSubEnvironment-gated), so a
+# sub-environment never needs these; without this guard every sub-environment's root Application would
+# also "own" these same globally-named resources and could prune them on its own teardown.
+{{- if not (default false .Values.config.isSubEnvironment) }}
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -245,3 +252,4 @@ spec:
                   memory: 32Mi
                 limits:
                   memory: 128Mi
+{{- end }}

@@ -168,6 +168,60 @@ func TestPostureMatchesClearedEphemeralFieldsAreDrift(t *testing.T) {
 	}
 }
 
+func TestBuildPostureUpdateAlwaysAttachesGcePdForClearedDirectory(t *testing.T) {
+	req, err := BuildPostureUpdate("projects/p/locations/l/workstationClusters/c/workstationConfigs/cfg", "etag-1", Posture{
+		DisableSsh:           true,
+		EphemeralDirectories: []EphemeralDirectory{{MountPath: "/tmp"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirs := req.GetWorkstationConfig().GetEphemeralDirectories()
+	if len(dirs) != 1 {
+		t.Fatalf("ephemeral directories = %+v", dirs)
+	}
+	disk := dirs[0].GetGcePd()
+	if disk == nil {
+		t.Fatal("GcePd was omitted for a directory with no override fields set; the update must still send an explicit empty-fields payload")
+	}
+	if disk.GetDiskType() != "" || disk.GetSourceSnapshot() != "" || disk.GetSourceImage() != "" || disk.GetReadOnly() {
+		t.Fatalf("unexpected non-zero disk fields: %+v", disk)
+	}
+}
+
+func TestPostureMatchesRejectsDuplicateDesiredMountPath(t *testing.T) {
+	disk := "pd-ssd"
+	desired := Posture{
+		DisableSsh: true,
+		EphemeralDirectories: []EphemeralDirectory{
+			{MountPath: "/tmp", DiskType: &disk},
+			{MountPath: "/tmp"},
+		},
+	}
+	live := &pb.WorkstationConfig{
+		Host: &pb.WorkstationConfig_Host{Config: &pb.WorkstationConfig_Host_GceInstance_{
+			GceInstance: &pb.WorkstationConfig_Host_GceInstance{DisableSsh: true},
+		}},
+		EphemeralDirectories: []*pb.WorkstationConfig_EphemeralDirectory{{
+			MountPath: "/tmp",
+			DirectoryType: &pb.WorkstationConfig_EphemeralDirectory_GcePd{GcePd: &pb.WorkstationConfig_EphemeralDirectory_GcePersistentDisk{
+				DiskType: "pd-ssd",
+			}},
+		}},
+	}
+	// len(live) != len(desired) already catches this (1 vs 2), so pad live to the same length with a
+	// second mountPath to isolate the duplicate-desired-mountPath check itself.
+	live.EphemeralDirectories = append(live.EphemeralDirectories, &pb.WorkstationConfig_EphemeralDirectory{
+		MountPath: "/other",
+		DirectoryType: &pb.WorkstationConfig_EphemeralDirectory_GcePd{GcePd: &pb.WorkstationConfig_EphemeralDirectory_GcePersistentDisk{
+			DiskType: "pd-standard",
+		}},
+	})
+	if PostureMatches(live, desired) {
+		t.Fatal("duplicate mountPath entries in desired must never be reported as matching")
+	}
+}
+
 func posturePathAllowed(path string) bool {
 	switch path {
 	case "name", "etag", "host", "host.gce_instance", "host.gce_instance.disable_ssh", "allowed_ports", "ephemeral_directories":

@@ -263,6 +263,12 @@ spec:
                     Actuated via the Workstations API.
                 ephemeralDirectories:
                   type: array
+                  # Reject duplicate mountPath entries at admission time (the Workstations API has one
+                  # ephemeral directory per mountPath; without this, wsapi.ephemeralEqual would otherwise
+                  # have to guess which of two same-path desired entries the live API-side value belongs to).
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys:
+                    - mountPath
                   items:
                     type: object
                     properties:

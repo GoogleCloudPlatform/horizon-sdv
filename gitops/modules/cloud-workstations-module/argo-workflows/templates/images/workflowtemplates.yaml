@@ -206,7 +206,11 @@ spec:
               name: common-docker-image-build
               template: build
               clusterScope: true
-            depends: "(build-gnome.Succeeded || build-gnome.Skipped || build-gnome.Omitted)"
+            # validate.Succeeded is required explicitly: when buildGnome=false, build-gnome can reach
+            # Omitted (its own depends on stage-gnome/build-preflight unsatisfied) without validate ever
+            # succeeding, and the when: below short-circuits true via buildGnome != 'true' regardless.
+            # Without this, a failed validate would not stop this task from running with an empty BASE_IMAGE.
+            depends: "validate.Succeeded && (build-gnome.Succeeded || build-gnome.Skipped || build-gnome.Omitted)"
             when: "'{{ "{{" }}workflow.parameters.buildAndroidStudio{{ "}}" }}' == 'true' && ('{{ "{{" }}workflow.parameters.buildGnome{{ "}}" }}' != 'true' || '{{ "{{" }}tasks.build-gnome.status{{ "}}" }}' == 'Succeeded')"
             arguments:
               artifacts:
@@ -227,7 +231,8 @@ spec:
               name: common-docker-image-build
               template: build
               clusterScope: true
-            depends: "(build-gnome.Succeeded || build-gnome.Skipped || build-gnome.Omitted)"
+            # See build-android-studio above: validate.Succeeded is required explicitly for the same reason.
+            depends: "validate.Succeeded && (build-gnome.Succeeded || build-gnome.Skipped || build-gnome.Omitted)"
             when: "'{{ "{{" }}workflow.parameters.buildAsfp{{ "}}" }}' == 'true' && ('{{ "{{" }}workflow.parameters.buildGnome{{ "}}" }}' != 'true' || '{{ "{{" }}tasks.build-gnome.status{{ "}}" }}' == 'Succeeded')"
             arguments:
               artifacts:
@@ -288,9 +293,30 @@ spec:
             value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.preflight.dockerArtifactPathName "tag" "") | quote }}
           - name: GNOME_BUILT
             value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.gnome.dockerArtifactPathName "tag" "") | quote }}
+          - name: INSTALL_ANTIGRAVITY_AGENT
+            value: '{{ "{{" }}workflow.parameters.installAntigravityAgent{{ "}}" }}'
         args:
           - |
-            on() { case "$1" in true|True|TRUE) return 0 ;; *) return 1 ;; esac; }
+            # Exact lowercase "true" only, matching the DAG's `when: == 'true'` string compares.
+            # A looser check here (e.g. accepting True/TRUE) would let validate and
+            # summarize-digests believe a build happened while the DAG silently Skips the task.
+            on() { [ "$1" = "true" ]; }
+            # Reject anything that is not exactly "true" or "false" so a case/typo mismatch
+            # fails loudly here instead of silently diverging from the DAG's when: clauses.
+            boolcheck() {
+              case "$2" in
+                true|false) ;;
+                *) echo "ERROR: $1 must be \"true\" or \"false\" (got \"$2\")" >&2; exit 1 ;;
+              esac
+            }
+            boolcheck dryRun "$DRY_RUN"
+            boolcheck buildEnvironmentImage "$BUILD_ENVIRONMENT"
+            boolcheck buildPreflight "$BUILD_PREFLIGHT"
+            boolcheck buildGnome "$BUILD_GNOME"
+            boolcheck buildCodeOss "$BUILD_CODE_OSS"
+            boolcheck buildAndroidStudio "$BUILD_ANDROID_STUDIO"
+            boolcheck buildAsfp "$BUILD_ASFP"
+            boolcheck installAntigravityAgent "$INSTALL_ANTIGRAVITY_AGENT"
             # Portal marks optional URI fields required; testers type "-".
             blank() { case "$(printf '%s' "$1" | tr -d '[:space:]')" in ''|-) return 0 ;; *) return 1 ;; esac; }
             blank "$PREFLIGHT_IMAGE" && PREFLIGHT_IMAGE=
@@ -310,6 +336,16 @@ spec:
               echo "ERROR: imageTag is required" >&2
               exit 1
             fi
+            # imageTag is interpolated unquoted into BuildKit's --output=type=image,name=...,push=...
+            # CSV value and into buildArgs lines; a comma, backslash, or newline could inject
+            # extra output/build-arg attributes (e.g. a dryRun push=false bypass). Restrict to a
+            # safe tag charset.
+            case "$IMAGE_TAG" in
+              *[!A-Za-z0-9._-]*)
+                echo "ERROR: imageTag may only contain letters, digits, '.', '_', '-'" >&2
+                exit 1
+                ;;
+            esac
             child=false
             on "$BUILD_ANDROID_STUDIO" && child=true
             on "$BUILD_ASFP" && child=true
@@ -441,7 +477,9 @@ spec:
         args:
           - |
             set -euo pipefail
-            on() { case "$1" in true|True|TRUE) return 0 ;; *) return 1 ;; esac; }
+            # Exact lowercase "true" only, matching the DAG's when: clauses and the validate
+            # step's boolcheck (workflow.parameters are already guaranteed exact by then).
+            on() { [ "$1" = "true" ]; }
             describe() {
               local label=$1 prefix=$2 build=$3 out=$4
               local ref="${prefix}${IMAGE_TAG}"

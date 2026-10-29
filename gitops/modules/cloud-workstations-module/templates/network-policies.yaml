@@ -41,11 +41,14 @@ spec:
   policyTypes:
   - Egress
   egress:
+  # namespaceSelector and podSelector must be in the SAME peer entry (AND) so this only matches
+  # kube-dns pods in kube-system. Two separate "-" list items would be OR'd, opening egress to
+  # every pod in kube-system on 53/udp+tcp, not just kube-dns.
   - to:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: kube-system
-    - podSelector:
+      podSelector:
         matchLabels:
           k8s-app: kube-dns
     ports:

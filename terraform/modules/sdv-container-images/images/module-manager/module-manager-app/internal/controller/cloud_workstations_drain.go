@@ -52,13 +52,26 @@ func pauseCloudWorkstationsCoreForDrain(ctx context.Context, c client.Client, ar
 	return nil
 }
 
+// resumeCloudWorkstationsCoreCleanupTimeout bounds the fresh context resumeCloudWorkstationsCoreAfterFailedDrain
+// uses for its own API call (see below), independent of the caller's ctx deadline/cancellation.
+const resumeCloudWorkstationsCoreCleanupTimeout = 30 * time.Second
+
 // resumeCloudWorkstationsCoreAfterFailedDrain clears the pause after a drain error.
 // selfHeal is still set to true, so Argo CD manages the core Application again. The module is still enabled.
+//
+// This deliberately does not use the caller's ctx for its own API call. It runs on the error path of a
+// long drain (up to cwsDrainStageTimeout per stage) that, for the REST disable handler, is driven by
+// r.Context() - cancelled the moment the client/proxy disconnects. Reusing that ctx here would make the
+// resume call fail immediately with the same cancellation/deadline that triggered this cleanup in the
+// first place, leaving the core Application stuck paused with no recovery. A fresh, short-lived context
+// gives the cleanup a real chance to reach the API server even when the triggering ctx is already dead.
 func resumeCloudWorkstationsCoreAfterFailedDrain(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
 	if moduleName != cloudWorkstationsModuleName {
 		return nil
 	}
-	if err := setArgoCDApplicationSkipReconcile(ctx, c, argocdNamespace, cloudWorkstationsCoreAppName, false); err != nil {
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), resumeCloudWorkstationsCoreCleanupTimeout)
+	defer cancel()
+	if err := setArgoCDApplicationSkipReconcile(cleanupCtx, c, argocdNamespace, cloudWorkstationsCoreAppName, false); err != nil {
 		return fmt.Errorf("resume Cloud Workstations core Application after failed drain: %w", err)
 	}
 	return nil
@@ -82,6 +95,35 @@ func completeCloudWorkstationsCoreDrain(ctx context.Context, c client.Client, ar
 	}
 	if err := setArgoCDApplicationSkipReconcile(ctx, c, argocdNamespace, cloudWorkstationsCoreAppName, false); err != nil {
 		return fmt.Errorf("resume Cloud Workstations core Application after drain: %w", err)
+	}
+	return nil
+}
+
+// recoverCloudWorkstationsCoreAfterIncompleteCompletion is called when completeCloudWorkstationsCoreDrain
+// fails. That function can disable selfHeal and then fail before clearing skip-reconcile, leaving the core
+// Application both un-healable (selfHeal: false) and un-reconcilable (skip-reconcile: "true") - a worse
+// state than before the drain started. This restores selfHeal: true in addition to clearing skip-reconcile
+// (resumeCloudWorkstationsCoreAfterFailedDrain alone only does the latter, which is sufficient for a drain
+// failure where selfHeal was never touched, but not here). Uses a fresh context for the same reason
+// resumeCloudWorkstationsCoreAfterFailedDrain does.
+func recoverCloudWorkstationsCoreAfterIncompleteCompletion(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
+	if moduleName != cloudWorkstationsModuleName {
+		return nil
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), resumeCloudWorkstationsCoreCleanupTimeout)
+	defer cancel()
+	app := &unstructured.Unstructured{}
+	app.SetGroupVersionKind(argoCDApplicationGVK)
+	key := client.ObjectKey{Namespace: argocdNamespace, Name: cloudWorkstationsCoreAppName}
+	if err := c.Get(cleanupCtx, key, app); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	patch := client.RawPatch(types.MergePatchType, []byte(`{"spec":{"syncPolicy":{"automated":{"selfHeal":true}}}}`))
+	if err := c.Patch(cleanupCtx, app, patch); err != nil {
+		return fmt.Errorf("re-enable self-heal on Cloud Workstations core Application: %w", err)
+	}
+	if err := setArgoCDApplicationSkipReconcile(cleanupCtx, c, argocdNamespace, cloudWorkstationsCoreAppName, false); err != nil {
+		return fmt.Errorf("resume Cloud Workstations core Application after incomplete drain completion: %w", err)
 	}
 	return nil
 }

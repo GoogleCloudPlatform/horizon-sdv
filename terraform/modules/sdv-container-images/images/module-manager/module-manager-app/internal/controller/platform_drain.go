@@ -206,6 +206,12 @@ func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string, bes
 		return err
 	}
 	if err := completeCloudWorkstationsCoreDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); err != nil {
+		// See PerformModuleDisable: completeCloudWorkstationsCoreDrain can fail after disabling
+		// selfHeal but before clearing skip-reconcile, leaving the core Application both unhealable
+		// and unreconcilable. Recover it so a retry is possible.
+		if recoverErr := recoverCloudWorkstationsCoreAfterIncompleteCompletion(ctx, p.Client, p.ArgoCDNamespace, moduleName); recoverErr != nil {
+			return fmt.Errorf("%w; recover: %v", err, recoverErr)
+		}
 		return err
 	}
 
