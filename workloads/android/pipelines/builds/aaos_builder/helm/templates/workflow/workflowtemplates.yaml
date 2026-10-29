@@ -129,7 +129,7 @@ spec:
         description: "cacheman sync timeout in seconds; 0 disables the wait."
       - name: postRepoCommand
         value: {{ .Values.spec.postRepoCommand | quote }}
-        description: "Commands run after the mount and before the build (Jenkins POST_REPO_COMMAND); default applies the build/soong changes ABFS needs for Android 15."
+        description: "Optional commands run after the mount and before the build (Jenkins POST_REPO_COMMAND). The build/soong sandbox fix ABFS needs is applied automatically per Android version (A15 cherry-picks plus soong.go sed, A16 soong.go patch); leave empty unless extra commands are needed."
       - name: aaosParallelBuildJobs
         value: {{ .Values.spec.parallelBuildJobs | quote }}
         description: "Parallel build jobs (-j). Default: 16. Empty lets the build system decide. If the ABFS cacheman socket gets overloaded during the build, the value may be too high."
