@@ -207,10 +207,12 @@ limitations under the License. -->
         <p class="overline">Horizon module</p>
         <h1>abfs-service-module</h1>
         <p class="lead">
-          ABFS GKE data plane: dedicated node pool, server, Gerrit uploaders,
-          pusher-config bootstrap, and CASFS on those nodes. Licence Secret
-          and Spanner/GCS stay in <code>abfs-data</code>; this module consumes
-          them when <code>licensed</code> is on.
+          ABFS 0.1.14 GKE data plane: dedicated server and uploader node pools,
+          server, Gerrit uploaders, pusher-config bootstrap, and CASFS on the
+          uploader nodes. License Secret, Spanner/GCS and the uploader manifest
+          table stay in <code>abfs-data</code>; this module consumes them when
+          <code>licensed</code> is on. Builds run on the pool of
+          <code>abfs-client-ubuntu</code>.
         </p>
       </header>
       <div class="grid">
@@ -220,7 +222,7 @@ limitations under the License. -->
           <ul>
             <li>
               Node pools <code>abfs-data-server-node-pool</code> and
-              <code>abfs-data-uploader-node-pool</code> (licence GCE metadata on
+              <code>abfs-data-uploader-node-pool</code> (license GCE metadata on
               both pools; git-pusher has the same entitlement check as the server)
             </li>
             <li>
@@ -228,7 +230,7 @@ limitations under the License. -->
             </li>
             <li>
               Pusher-config Job, CASFS installer, PDBs / NetworkPolicies / VPAs
-              (licence-gated)
+              (license-gated)
             </li>
           </ul>
         </article>
@@ -237,16 +239,16 @@ limitations under the License. -->
           <p>
             Requires <code>abfs-data</code> first: Secret
             <code>horizon/abfs-license</code>, runtime SA
-            <code>abfs-license@…</code>, Spanner, and GCS. Import the licence
+            <code>abfs-license@…</code>, Spanner, and GCS. Import the license
             there before enabling this module.
           </p>
           <div class="callout">
             <strong>Enable order</strong>
-            <code>abfs-data</code> &rarr; import licence &rarr;
+            <code>abfs-data</code> &rarr; import license &rarr;
             <code>abfs-service-module</code>
           </div>
           <div class="warn">
-            <strong>Licence gate</strong>
+            <strong>License gate</strong>
             PreSync validator fails sync if Secret
             <code>horizon/abfs-license</code> is missing or empty.
           </div>

@@ -175,7 +175,7 @@ limitations under the License. -->
         </p>
         <div class="callout">
           <strong>Enable order</strong>
-          <code>abfs-data</code> &rarr; import licence &rarr; service &rarr; client modules.
+          <code>abfs-data</code> &rarr; import license &rarr; service &rarr; client modules.
         </div>
       </article>
       <article class="card">
@@ -196,7 +196,7 @@ limitations under the License. -->
           <code>abfs-license-sa-identity</code> (<code>uniqueId</code>, <code>email</code>)
           is not Helm-owned and survives prune so re-enable can undelete the same SA.
           If undelete cannot restore that identity, re-enable fails until
-          <code>uniqueId</code> is cleared by hand (new SA needs a new Google licence).
+          <code>uniqueId</code> is cleared by hand (new SA needs a new Google license).
           Project ID comes from Module Manager config.
         </p>
       </article>
@@ -205,12 +205,16 @@ limitations under the License. -->
         <p>
           Child app <code>mod-abfs-data-license-workflows</code> exposes
           <code>abfs-license-import</code> and
-          <code>abfs-license-clear</code> (<code>horizon-sdv.io/expose: "true"</code>).
-          They appear under <strong>Workflow Templates</strong> when the module is READY.
+          <code>abfs-license-clear</code>; <code>mod-abfs-data-uploader-config</code>
+          exposes <code>abfs-uploader-config-select</code> (which Android revision the
+          uploaders seed, table in ConfigMap <code>horizon/abfs-uploader-config</code>);
+          <code>mod-abfs-data-spanner-workflows</code> exposes
+          <code>abfs-spanner-backup-schedule</code>. They appear under
+          <strong>Workflow Templates</strong> when the module is READY.
         </p>
         <p>
           <strong>Import</strong> verifies the payload, then writes or replaces
-          <code>license</code>. Run import again to update a licence that is already stored.
+          <code>license</code>. Run import again to update a license that is already stored.
           <strong>Clear</strong> empties the value but
           keeps the Secret (<code>confirm=yes</code>). if
           <code>abfs-data-server-node-pool</code> and/or
@@ -225,7 +229,7 @@ limitations under the License. -->
         </p>
       </article>
       <article class="card">
-        <h2>Steps to verify correct licence import</h2>
+        <h2>Steps to verify correct license import</h2>
         <p>
           After Portal <strong>abfs-license-import</strong> (or
           <code>argo submit</code>), confirm the Secret in the cluster:
@@ -234,7 +238,7 @@ limitations under the License. -->
           <code>kubectl get secret abfs-license -n horizon -o jsonpath='{.data.license}' | base64 -d | head -c 80; echo</code>
         </p>
         <div class="warn">
-          <strong>Licence gate</strong>
+          <strong>License gate</strong>
           Empty <code>data.license</code> means import did not land — re-run import
           before enabling <strong>abfs-service-module</strong> (PreSync validator
           will fail sync otherwise).

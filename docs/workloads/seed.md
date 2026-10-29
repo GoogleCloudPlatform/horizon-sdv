@@ -95,7 +95,7 @@ Defines the version for use with the ABFS server, uploader and build jobs.
 Defines the ABFS CASFS version for use with the ABFS build jobs.
 
 ## `ABFS_COS_IMAGE_REF`
-Defines the ABFS Containerized OS images used on server and uploader instances.
+COS image family for the ABFS Docker Image Template COS flavour (informational). The ABFS server and uploaders no longer run on VMs; they are deployed by the `abfs-service-module` on GKE node pools, see `docs/workloads/android/abfs.md`.
 
 Use `gcloud compute images list --no-standard-images --project=cos-cloud | grep lts` to check for available LTS images.
 

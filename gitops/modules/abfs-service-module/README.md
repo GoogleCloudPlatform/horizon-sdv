@@ -14,9 +14,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. -->
 
-# Android Build File System (ABFS) Module
+# Android Build File System (ABFS) Service Module
 
-The ABFS module provides integrated support for high-performance Android Open Source Project (AOSP) builds on Google Cloud Platform, using a specialized kernel-level Android Build File System (`casfs`) and high-efficiency background uploader/synchronizer components.
+Helm chart: `gitops/modules/abfs-service-module`  
+Argo CD parent Application: **`mod-abfs-service-module`** (enabled from the Developer Portal, catalog name `abfs-service-module`).
+
+The service module is the ABFS **runtime data plane**: the dedicated server and uploader node pools, the ABFS server, the Gerrit uploaders (git-pushers) that seed Android sources into ABFS, the pusher-config bootstrap, and the `casfs` kernel module installer for those pools. Persistent data (license, Spanner, GCS, uploader manifest table) belongs to `abfs-data-module`; build nodes belong to `abfs-client-module-ubuntu`. The platform-level picture, enable order and procedures are in [docs/workloads/android/abfs.md](../../../docs/workloads/android/abfs.md).
 
 ---
 
@@ -27,17 +30,22 @@ The ABFS module provides integrated support for high-performance Android Open So
 | **STATUS** | experimental |
 | **OWNER** | Google |
 | **CONTACT** | [horizon-sdv@google.com](mailto:horizon-sdv@google.com) |
-| **VERSION** | 0.1.14 |
+| **ABFS VERSION** | 0.1.14 (`image.tag`, casfs `casfs-0.1.14.tar.gz`) |
+| **CHART VERSION** | 0.2.0 |
 | **CONTAINS_COMMERCIAL** | no |
 
 ---
 
-## Features
+## Catalog
 
-- **Painless CASFS Kernel Compilation**: Installs and loads the customized `casfs` filesystem kernel module onto GKE worker nodes dynamically.
-- **Dedicated ABFS Node Pools**: The module creates and owns separate server and uploader pools (see *Node pool* below), so each side has independent scaling and limits.
-- **Node Pool Service Account Identity**: Server and uploader pools both use the licensed runtime SA, `GCE_METADATA`, and GCE metadata key `abfs-license` (git-pusher has the same entitlement check as the server).
-- **Native GitOps Lifecycle**: Packaged as a standard Helm chart managed natively by Argo CD.
+| Setting | Value |
+|---------|-------|
+| Module name | `abfs-service-module` |
+| Hard dependencies | none declared in the catalog. Runtime prerequisite: `abfs-data` enabled **and** a license imported (PreSync validator) |
+| Depended on by | `abfs-client-ubuntu` (hard) |
+| Overview service | `mod-abfs-service-module-overview` in namespace `abfs` (live status page, `files/overview-server.py`) |
+
+Enable order: `abfs-data` → import license → **abfs-service-module** → `abfs-client-ubuntu`.
 
 ---
 
@@ -46,186 +54,149 @@ The ABFS module provides integrated support for high-performance Android Open So
 ```
 gitops/modules/abfs-service-module/
 ├── Chart.yaml                  # Parent Helm chart metadata
-├── values.yaml                 # Parent values (licensed, VPA, overview image)
-├── README.md                   # This module documentation file
+├── values.yaml                 # Parent values (licensed, VPA, overview image, dataOverview link)
+├── README.md                   # This file
 ├── files/
-│   └── overview-server.py      # Live mobilisation status HTTP server
+│   └── overview-server.py      # Live status HTTP server for the portal overview
 ├── portal/
-│   └── overview.html           # Developer overview (status placeholder injected)
-├── node-pool/                  # Sub-chart: the dedicated ABFS data node pool
-│   ├── Chart.yaml              # Node pool Helm chart
-│   ├── values.yaml             # Pool shape (machine type, autoscaling, taint)
-│   └── templates/              # KCC ContainerNodePool + license metadata hooks
-└── abfs/                       # Sub-chart containing resources & templates
-    ├── Chart.yaml              # ABFS workloads Helm chart
-    ├── values.yaml             # Default workload configuration parameters
-    └── templates/              # Deployment, StatefulSet, VPA, license validator, …
+│   └── overview.html           # Developer Portal overview (status placeholder injected)
+├── templates/
+│   ├── application-node-pool.yaml      # child app mod-<module>-node-pool (sync-wave -1)
+│   ├── application-abfs.yaml           # child app mod-<module>-data-plane
+│   ├── application-argo-workflows.yaml # child app mod-<module>-argo-workflows
+│   └── module-overview-http.yaml       # overview Deployment/Service
+├── node-pool/                  # Sub-chart: server + uploader ContainerNodePools, license metadata hooks
+│   ├── values.yaml             # Pool shapes, license Secret/metadata settings
+│   └── templates/
+├── abfs/                       # Sub-chart: the ABFS workloads (license-gated)
+│   ├── values.yaml             # image, server, uploader, pusher, casfs, KCC IAM, network policy
+│   ├── scripts/                # pusher tree / pusher config / sync Job helpers
+│   └── templates/              # Deployment, StatefulSet, Jobs, DaemonSet, KCC IAM, PDB, VPA, NetworkPolicy
+└── argo-workflows/             # Sub-chart: abfs-smoke-test WorkflowTemplate + Sensor
 ```
 
-`node-pool/` is a sub-chart of its own, with its own Application, rather than a
-template under `abfs/`: everything in `abfs/` is licence-gated and renders nothing
-while `licensed` is false, whereas the node pool has to exist *before* the licence.
+`node-pool/` is a sub-chart with its own Application rather than a template under `abfs/`: everything in `abfs/` renders nothing while `licensed` is false, whereas the node pools have to exist before the license can be stamped into their metadata.
+
+### External platform dependencies
+
+- `gitops/apps/module-manager/templates/module-catalog.yaml` registers the module (chart path, overview page, overview Service and namespace).
+- Module Manager injects `config.projectID`, `config.region`, `config.clusterName`, `config.nodeLocations`, `config.gcpComputeSaEmail`, `config.releaseChannel` into the child Applications.
+- Secret `horizon/abfs-license`, service account `abfs-license`, ConfigMap `horizon/abfs-uploader-config`, Spanner `abfs` and bucket `<projectID>-abfs` come from `abfs-data-module`.
 
 ---
 
-## External Platform Dependencies
+## What it deploys
 
-One file outside `gitops/modules/abfs-service-module/` is required, to register the module
-with Horizon's central catalog:
+| Child Application | Chart | Namespace | Purpose |
+|-------------------|-------|-----------|---------|
+| `mod-abfs-service-module-node-pool` (wave -1) | `node-pool/` | `abfs` | KCC `ContainerNodePool` `abfs-data-server-node-pool` and `abfs-data-uploader-node-pool`; PreSync/PostSync Job `abfs-license-metadata-inject` keeping GCE metadata `abfs-license` equal to the Secret; status ConfigMap `abfs-license-metadata-status` |
+| `mod-abfs-service-module-data-plane` | `abfs/` | `abfs` | PreSync `abfs-license-validate`; KCC `IAMPolicyMember`s for the license SA; Deployment `abfs-server` + Service (`:50051`, internal LB by default); StatefulSet `abfs-gerrit-uploader` (3); Job `abfs-pusher-config`; DaemonSet `abfs-casfs-installer`; PDBs, VPAs (`Off`), NetworkPolicy, Helm test |
+| `mod-abfs-service-module-argo-workflows` | `argo-workflows/` | `workflows`, `argo-events` | WorkflowTemplate `abfs-smoke-test` (exposed in the portal) and its webhook Sensor |
 
-- **`gitops/apps/module-manager/templates/module-catalog.yaml`**: registers
-  `abfs-service-module` (chart path, overview page, overview Service and namespace) with
-  Module Manager, making the module visible and enable/disable-able in the Developer Portal.
-
----
-
-## Module Overview
-
-The module is integrated with Horizon's GitOps deployment and uses the platform's
-cluster-mode Config Connector setup.
-
-### Module Ownership
+### Module ownership
 
 | Module | Owns |
 | --- | --- |
-| `abfs-service-module` | ABFS server, uploaders, bootstrap job, policies, and data node pools.|
-| `abfs-data-module` | Spanner, GCS bucket, runtime service account, and licence Secret. |
-| `abfs-client-module-ubuntu` / `-cos` | Build node pools, CASFS for build nodes, and ABFS-enabled build workflows. |
+| `abfs-service-module` | server and uploader node pools, ABFS server, uploaders, pusher-config bootstrap, casfs installer for the data pools, IAM project roles of the license SA, policies |
+| `abfs-data-module` | license SA and Secret, Spanner, GCS bucket, uploader manifest table, license / uploader-config / Spanner-backup workflows |
+| `abfs-client-module-ubuntu` | build node pool `abfs-build-node-pool-ubuntu` and its casfs installer |
+| `workloads-android` | the ABFS build and builder-image WorkflowTemplates and pipeline scripts |
 
-The service module configures connections to Spanner and GCS but does not create
-those resources. The data module owns their lifecycle so disabling the service
-does not remove persistent data. The service module also manages the IAM roles
-and pusher configuration required by its workloads.
-
-### Node Pool Lifecycle
-
-Config Connector manages the server and uploader node pools; Terraform manages
-the GKE cluster. Argo CD creates or removes the pools with this module.
-
-### Chart Configuration
-
-- The values file provides defaults for every setting used by the chart. The parent
-  Application supplies environment-specific values such as project, region, and namespace.
-
-- `parentModuleName` is retained because the parent Application injects it for resource labels.
-- Spanner and bucket values configure external resources owned by `abfs-data-module`.
-  Initialize the database schema before enabling the ABFS workloads.
-
-### Platform Integration
-
-Horizon runs Config Connector in cluster mode. Parent Applications inject the
-project, namespace, and region; no per-module Config Connector resource is needed.
-
-### Runtime Requirements
-
-The licence Secret is validated before workload sync. ABFS 0.1.14 reads licence
-data from GCE instance metadata and checks for a Compute Engine identity, so
-both pools use `GCE_METADATA` and the licensed runtime service account. The
-licence value is sourced from the data module's Secret and is never stored in Git.
-
-With `casfs.provider=daemonset`, the installer builds CASFS for the running
-kernel. Use Ubuntu nodes with Secure Boot disabled and configure
-`casfs.daemonset.sourceUrl`.
-
-Enable `abfs-data-module` and import a valid ABFS licence through its
-`abfs-license-import` workflow before enabling this module. This ensures the
-required data resources are available and the `abfs-license` Secret is populated
-when the node pools are created.
+The service module configures the connection to Spanner and GCS but does not create those resources, so disabling the service never removes persistent data.
 
 ---
 
-## Node Pool Sizing
+## Runtime requirements
 
-| Pool | Machine type | Autoscaling | Taint | License identity |
+- **License**: `licensed: true` is the desired state; the PreSync hook `abfs-license-validate` (wave -10) fails the sync of the data plane when `horizon/abfs-license` is missing or `data.license` is empty. ABFS 0.1.14 reads the license from GCE instance metadata and checks for a Compute Engine identity, so both pools run with the license SA as node service account (`GCE_METADATA`); Workload Identity cannot provide that. The license value is never stored in Git.
+- **Config Connector** in cluster mode, as deployed by Horizon; the parent Applications inject project, region and namespace.
+- **Ubuntu nodes with Secure Boot off** (`UBUNTU_CONTAINERD`) on the uploader pool, where `casfs.provider=daemonset` builds the kernel module on the node (`casfs.daemonset.sourceUrl`, DaemonSet `abfs-casfs-installer` with `casfs.daemonset.nodeSelector` = uploader pool). The uploaders and the pusher Job run `abfs cacheman`, which mounts casfs, and gate on `/sys/module/casfs` before starting (`casfs.requireReady`, 600 s); the server itself does not need casfs. Both pools are kept Ubuntu so the DaemonSet can be widened to the server pool by setting a shared `nodeSelector`.
+- **Enable `abfs-data` and import the license first**, so the pools are created with the metadata and do not have to be recreated.
+
+---
+
+## Node pools
+
+| Pool | Machine type | Autoscaling | Taint / label | Workload |
 | :--- | :--- | :--- | :--- | :--- |
-| server | `n2-highmem-64` | min 0, max 2 | `workloadType=android-abfs-data-server` | `GCE_METADATA` + `abfs-license` |
-| uploader | `n2-standard-32` | min 0, max 5 | `workloadType=android-abfs-data-uploader` | `GCE_METADATA` + `abfs-license` |
+| `abfs-data-server-node-pool` | `n2-highmem-64` (64 vCPU / 512 GiB) | 0–2 | `workloadType=android-abfs-data-server`, `workloadLabel=android-abfs-data` | `abfs-server` (requests 32 CPU / 256 Gi) |
+| `abfs-data-uploader-node-pool` | `n2-standard-32` (32 vCPU / 128 GiB) | 0–5 | `workloadType=android-abfs-data-uploader`, `workloadLabel=android-abfs-data` | `abfs-gerrit-uploader-{0,1,2}` (24 CPU / 96 Gi each, one pod per node), `abfs-pusher-config`, casfs installer |
 
-Both pools use `UBUNTU_CONTAINERD`, 100 GB boot disks, and the cluster's release
-channel for node upgrades (`autoUpgrade` is true unless the channel is `UNSPECIFIED`).
+Both pools: 100 GB boot disk, `UBUNTU_CONTAINERD`, Secure Boot off, node SA = license SA, `autoUpgrade` on unless the cluster release channel is `UNSPECIFIED` (then `version` pins apply). Two pools rather than one shared data pool so server and uploaders scale and are sized independently.
 
-### Identity and Licence
+### License metadata on the pools
 
-ABFS server and git-pusher read `abfs-license` from GCE instance metadata and
-require a Compute Engine identity. Both pools therefore use `GCE_METADATA` and
-the licensed runtime service account; Workload Identity does not provide the
-metadata ABFS requires. The account is owned by `abfs-data-module` and must not
-be recreated because the licence is bound to its numeric identity.
+The license reaches the ABFS processes as GCE instance attribute `abfs-license` (value = Secret `data.license`, i.e. base64 of the payload). KCC treats `nodeConfig.metadata` as immutable and `gcloud container node-pools update` has no `--metadata` flag, therefore:
 
-The licence Secret is never committed to Git. KCC applies metadata at pool
-creation, and changing the Secret may require a pool recreation. Import the
-licence before enabling this module.
+- At create, Helm `lookup` of the Secret fills the metadata (best effort: Argo CD's `helm template` often cannot see Secrets).
+- PostSync Job `abfs-license-metadata-inject` waits for each CR, compares metadata with the Secret and, when they differ, re-creates the CR with the metadata (pool recreate). It writes `abfs/abfs-license-metadata-status` (`status: applied`).
+- PreSync of the same Job clears `UpdateFailed` CRs and orphan GKE pools (a pool that exists in GKE without its CR). A Ready CR is never deleted only because the license key is missing.
+- The `abfs-license-import` / `abfs-license-clear` workflows of `abfs-data` also delete both CRs when they exist, so a license change is a pool recreate. Prefer importing before enabling this module.
 
-### Sizing
+### Sizing notes
 
-The server pool uses **`n2-highmem-64`** (64 vCPU / 512 GiB), The uploader pool uses
-`n2-standard-32` (32 vCPU / 128 GiB). Both boot disks are **100 GB**.
+Each uploader has a 1 Ti `premium-rwo` PVC (`uploader.dataDisk`). Existing StatefulSet PVCs do not resize in place; shrinking means deleting PVC and pod. `deletePvcWhenDisabled: true` maps to `persistentVolumeClaimRetentionPolicy.whenDeleted=Delete`, so disabling the module removes the staging disks; set it to `false` to keep them across disable/enable. One uploader per node is deliberate: disk throughput limits are per instance.
 
-Pods differ by requests only (`abfs/values.yaml`):
-
-| Workload | Machine type | Pod CPU | Pod memory |
-| :--- | :--- | :--- | :--- |
-| Server (1) | `n2-highmem-64` (64 vCPU / 512 GiB) | 32 | 256 Gi |
-| Uploaders (3) | `n2-standard-32` | 24 | 96 Gi |
-
-One pod per node on the uploader pool (max 5 = 3 uploaders plus headroom). Each uploader has
-a **1 Ti** (`1024Gi`) `premium-rwo` PVC. Requests use most of the dedicated node
-while leaving kubelet/casfs headroom. **Existing StatefulSet PVCs do not resize
-in place** — shrinking from 4 Ti requires deleting the PVC (and usually the pod)
-so a new claim is created.
-
-`uploader.dataDisk.deletePvcWhenDisabled: true` sets
-`persistentVolumeClaimRetentionPolicy.whenDeleted=Delete` so disabling the
-module (Argo prune of the StatefulSet) also removes those PVCs. Set it `false`
-to Retain staging disks across disable/enable. Already-orphaned PVCs from
-before this flag must be deleted manually once.
-
-One pod per node is deliberate: **disk performance limits are shared across
-volumes on the same instance**, so packing uploaders together would make them
-compete for the throughput a dedicated pool exists to guarantee.
-
-Rejected candidates:
-
-- **`n2-standard-16`** — ~58 GiB allocatable; uploaders OOM at 32 Gi.
-- **Separate server/uploader pools** — not used; one shared data pool only.
-- **`c2d-highcpu-112`** / **`n2-highcpu-32`** — wrong memory profile or no Hyperdisk.
-
-Review requests against production measurements and update the machine type and
-maximum node count together when sizing changes.
+Rejected alternatives: `n2-standard-16` for uploaders (~58 GiB allocatable, OOM at 32 Gi), `c2d-highcpu-112` / `n2-highcpu-32` (memory profile, no Hyperdisk), a single shared data pool (server and uploaders compete).
 
 ### Autoscaling
 
-Capacity scales at the node level (`minNodeCount: 0`, `maxNodeCount: 5`). VPAs
-provide sizing recommendations in `updateMode: "Off"`.
+Capacity scales at node level (min 0). VPAs run in `updateMode: "Off"` for recommendations only. There is deliberately **no HPA on the uploader StatefulSet**: VPA and HPA on one target is unsupported, `uploader.count` must equal the number of pusher entries, and uploader replicas are **not interchangeable** — each pod is assigned work by its hostname (`<namePrefix>-<ordinal>`) in the pusher config, so an extra replica would idle. Changing uploader capacity is a chart change (`uploader.count`), not runtime elasticity.
 
-There is deliberately **no HorizontalPodAutoscaler on the uploader StatefulSet**.
-Three reasons, in increasing order of how hard they are to remove:
+---
 
-1. `vpa.yaml` already renders a VerticalPodAutoscaler against that StatefulSet.
-   VPA and HPA on the same target, both managing CPU and memory, is unsupported.
-2. `uploader.count` generates the pusher config, which `values.yaml` requires to
-   match the replica count exactly. Changing replicas at runtime desynchronises it.
-3. Most fundamentally, uploader replicas are **not interchangeable**. Each pod is
-   assigned work by name in the pusher config, keyed on its StatefulSet hostname
-   (`<namePrefix>-<ordinal>`). A replica added by an HPA has no pusher entry and
-   therefore does no work — it would occupy a node and idle.
+## Seeding: pusher config and the uploader table
 
-An HPA assumes interchangeable replicas sharing a queue, which is not how the ABFS
-uploaders are built. Changing uploader capacity is therefore a configuration change
-(`uploader.count` and the pusher config together), not a runtime elasticity
-decision. Keep `uploader.count` and the pusher configuration aligned when changing
-capacity.
+Which Android manifest the uploaders seed is decided by the **active row** of ConfigMap `horizon/abfs-uploader-config` (owned by `abfs-data`, changed with its `abfs-uploader-config-select` workflow). The flow in this module:
 
-### CASFS and Upgrades
+1. Job `abfs-pusher-config` (sync-wave 10, after the server) reads the table, builds the pusher tree (`scripts/build_pusher_tree.sh`, `scripts/modify_pusher_config.py`) and compares its hash with the ABFS ref `config` of project `abfs-meta`. Equal hash → exit 0; different → `abfs push` the tree and point the ref at it. PreSync hook `abfs-pusher-config-presync` deletes a stale Job so a failed bootstrap can retry.
+2. Uploader init container `select-uploader-config` repeats the table read on every start; pod `-0` additionally re-runs a copy of the Job as `abfs-pusher-config-sync` (`scripts/recreate_pusher_job.py`) so a row change takes effect on restart.
+3. Init container `wait-for-server` blocks until `abfs-server` answers and the ref matches the active row; only then does the uploader start fetching.
+4. If the ConfigMap is unreadable (abfs-data disabled), `pusher.fallbackRepo` from `abfs/values.yaml` is used with a WARNING.
 
-The workloads wait for CASFS to load. The installer requires Ubuntu nodes,
-Secure Boot disabled, and a configured source URL. An empty `releaseChannel`
-enables node auto-upgrades; version pins apply only when the channel is
-`UNSPECIFIED`.
+`pusher.workers` (200) and `pusher.concurrentUploads` (200) must be identical on every pusher. The pusher names must equal the uploader pod hostnames.
+
+---
+
+## Validate after enable
+
+```bash
+kubectl get application -n argocd | grep abfs-service-module
+# expect: mod-abfs-service-module, -node-pool, -data-plane, -argo-workflows — Synced/Healthy
+
+kubectl get containernodepool -n abfs
+kubectl get configmap abfs-license-metadata-status -n abfs -o jsonpath='{.data.status}'; echo   # applied
+kubectl get pods -n abfs -o wide
+kubectl get job -n abfs abfs-pusher-config -o jsonpath='{.status.conditions[*].type}'; echo      # Complete
+kubectl logs -n abfs abfs-gerrit-uploader-0 -c wait-for-server | tail -3                       # ref matches the active row
+kubectl get workflowtemplate abfs-smoke-test -n workflows
+
+# From an uploader pod: the ref the pushers follow
+kubectl exec -n abfs abfs-gerrit-uploader-0 -c abfs-uploader -- sh -c \
+  'echo config | abfs --remote-servers abfs-server:50051 --tunnel-ports 0 --disable-tls=true --auth-type none test-client get-ref -p abfs-meta -s default-server'
+```
+
+The portal overview page (`mod-abfs-service-module-overview`) shows the same: license Secret state, GCE metadata applied, server Deployment, uploader StatefulSet and pods, casfs DaemonSet, pusher Job.
+
+### After disable
+
+Pods, Jobs, DaemonSet, NetworkPolicies and both `ContainerNodePool` CRs are pruned and KCC deletes the GKE pools; uploader PVCs are deleted (`deletePvcWhenDisabled`). Spanner, GCS, the license Secret and the uploader table remain (owned by `abfs-data`). Check the GKE pools are really gone; an orphan pool makes the next enable report `already exists` until the PreSync hook or `gcloud container node-pools delete` removes it.
+
+---
+
+## Chart configuration
+
+- `abfs/values.yaml` provides defaults for every setting; the parent Application supplies project, region and namespace.
+- `image.repository` / `image.tag`: `europe-docker.pkg.dev/abfs-binaries/abfs-containers-alpha/abfs-alpha:0.1.14`. The license SA needs Artifact Registry read on project `abfs-binaries` (granted by Google through the EAP allow-list, not by this chart).
+- `spanner.instance` / `spanner.database` (`abfs`), `storage.bucket` (empty → `<projectID>-abfs`): connection settings for resources owned by `abfs-data`.
+- `client.tls: false`, `client.authType: none`: the server listens without TLS and auth; build pods must pass `--disable-tls=true --auth-type none` (`abfs.clientFlags` in the builder chart).
+- `server.service.internalLoadBalancer: true` adds an internal LB in front of `abfs-server` for clients outside the cluster (for example the standalone VM guide in `experimental/kcc-google-abfs/docs`); in-cluster builds use `abfs-server.abfs.svc.cluster.local:50051`.
+- `ui.enabled: false`: the ABFS UI stays off until functional; `dataPlane.expose: false`.
+- `otel.enabled`: metrics to the GKE managed OpenTelemetry collector.
+- `casfs.daemonset.sourceUrl`: casfs source tarball built on every node of the pools; update together with `image.tag` on an ABFS release.
 
 ---
 
 ## Getting Started
 
-The module is enabled and disabled through the Module Manager in the Developer Portal. Argo CD then reconciles everything under `gitops/modules/abfs-service-module/`.
-
+Enable and disable the module through Module Manager in the Developer Portal (Administration → Modules). Argo CD then reconciles everything under `gitops/modules/abfs-service-module/`. Procedures (license, seeding a revision, builds, teardown, version update) are in [docs/workloads/android/abfs.md](../../../docs/workloads/android/abfs.md).
