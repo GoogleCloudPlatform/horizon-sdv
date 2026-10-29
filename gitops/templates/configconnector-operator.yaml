@@ -14,10 +14,10 @@
 
 {{- if not (default false .Values.config.isSubEnvironment) }}
 # Git-pinned Config Connector operator (main environment only).
-# Helm chart: vendored operator + NetworkPolicy + cluster-mode ConfigConnector CR
-# (same sync as the ConfigConnector CRD; no SkipDryRunOnMissingResource on that CR).
-# Wave -1 so this Application exists before parent StorageBucket (wave 5).
-# Discovery RBAC and webhook monitor stay in gitops/templates/config-connector-init.yaml.
+# Helm chart: vendored operator (with its CRDs) + NetworkPolicy.
+# Wave -1 so this Application exists before the parent's ConfigConnector CR (wave 1).
+# The CR, discovery RBAC, readiness gates and webhook monitor stay in the parent
+# (gitops/templates/config-connector-init.yaml).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

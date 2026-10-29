@@ -293,7 +293,7 @@ A direct dependency for MTK Connect, functioning as a NoSQL database that stores
 A management tool designed to simplify the installation and configuration of Gerrit.
 
 ### Config Connector operator
-Deploys Config Connector as a Git-pinned operator (`gitops/apps/configconnector-operator/`) instead of the GKE add-on, which stays disabled. The cluster-mode `ConfigConnector` CR is in that same chart (same sync as its CRD). Discovery RBAC and the webhook monitor stay in `gitops/templates/config-connector-init.yaml`. See `gitops/apps/configconnector-operator/README.md` for cutover and rollback.
+Deploys Config Connector as a Git-pinned operator (`gitops/apps/configconnector-operator/`) instead of the GKE add-on, which stays disabled. The cluster-mode `ConfigConnector` CR, discovery RBAC, readiness gates and the webhook monitor stay in the root Application (`gitops/templates/config-connector-init.yaml`), so upgrades do not prune the CR. See `gitops/apps/configconnector-operator/README.md` for cutover and rollback.
 
 ### External Secrets
 While not directly visible in ArgoCD, External Secrets plays a crucial role in synchronizing secrets between GCP Secret Manager and Kubernetes Secrets.

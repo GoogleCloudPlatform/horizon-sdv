@@ -18,11 +18,15 @@ GitOps installs Config Connector from this Helm chart. Argo CD Application
 `configconnector-operator` points at this path. The GKE Config Connector
 add-on stays **disabled** (`terraform/modules/sdv-gke-cluster/main.tf`).
 
-The cluster-mode `ConfigConnector` CR is `templates/configconnector.yaml` in
-this chart, in the same Application as the `ConfigConnector` CRD, so Argo CD
-skips dry-run for that CR without `SkipDryRunOnMissingResource`. Pass
-`config.projectID` from the parent Application Helm values. Discovery RBAC
-and the webhook monitor stay in `gitops/templates/config-connector-init.yaml`.
+The cluster-mode `ConfigConnector` CR is **not** in this chart. It stays in the
+parent `horizon-sdv` Application (`gitops/templates/config-connector-init.yaml`),
+which has owned it since before the Git-pinned operator. If the CR moved to this
+Application, the parent would prune it on the first sync of the upgrade, and the
+operator would uninstall Config Connector (CRDs, `cnrm-system`, webhooks).
+The parent applies it at wave 1 after the `kcc-crd-gate` hook sees this
+chart's `ConfigConnector` CRD established, then `kcc-readiness-gate` waits for
+the operator to reconcile it. Discovery RBAC and the webhook monitor are in the
+same parent template.
 
 | Field | Value |
 | --- | --- |
@@ -41,10 +45,10 @@ that vendored file.
 `default`/`kube-system`. The API is not a Pod in those namespaces, and an
 egress-only policy otherwise blocks reconcile.
 
-Greenfield: this Application ships the `ConfigConnector` CRD and CR together.
-The parent `horizon-sdv` app still annotates the Argo Workflows `StorageBucket`
-with `SkipDryRunOnMissingResource=true` because `storage.cnrm` CRDs are not
-in this operator bundle.
+The parent `horizon-sdv` app annotates the `ConfigConnector` CR and the Argo
+Workflows `StorageBucket` with `SkipDryRunOnMissingResource=true`. On
+greenfield their CRDs do not exist when the parent sync starts, and
+`storage.cnrm` CRDs are not in this operator bundle.
 
 `WorkstationCluster`, `WorkstationConfig`, and `Workstation` CRDs are installed
 by the operator after it reconciles the cluster-mode `ConfigConnector` CR.
@@ -58,21 +62,10 @@ for those three kinds.
    `ConfigConnector` CR or CNRM resources.
 3. Wait until GKE finishes add-on teardown (`configconnector-operator-system`
    may be reclaimed).
-4. If the `ConfigConnector` CR is still owned by the parent `horizon-sdv`
-   Application (prune enabled), annotate the live object **before** the first
-   sync of this revision. Otherwise the parent can prune it at wave 0 before
-   this child Application re-applies it:
-
-   ```bash
-   kubectl annotate configconnector configconnector.core.cnrm.cloud.google.com \
-     argocd.argoproj.io/sync-options=Prune=false --overwrite
-   ```
-
-5. Let Argo CD sync this chart (operator + CRD + `ConfigConnector` CR).
-6. Confirm operator and `cnrm-system` are Ready, Workstations CRDs exist, and
+4. Let Argo CD sync. The parent keeps owning the existing `ConfigConnector` CR,
+   and this chart replaces the add-on operator.
+5. Confirm operator and `cnrm-system` are Ready, Workstations CRDs exist, and
    inventoried CNRM objects are still Ready.
-
-Greenfield has no existing CR, so the annotate step is not required.
 
 ## Field ownership
 
@@ -95,5 +88,5 @@ generation, or leave the add-on off.
    `gcr.io/gke-release/cnrm/operator:<VERSION>`.
 4. Set the StatefulSet `image:` in `templates/configconnector-operator.yaml` to
    `gcr.io/gke-release/cnrm/operator:<VERSION>@sha256:<DIGEST>`, then update
-   this table. Do not edit `templates/configconnector.yaml` as part of a pin bump.
+   this table. Do not edit the `ConfigConnector` CR as part of a pin bump.
 5. The new version must be **>=** the version already on the cluster.

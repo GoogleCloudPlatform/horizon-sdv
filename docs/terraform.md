@@ -188,7 +188,7 @@ Creates Google Cloud Storage (GCS) buckets. Uniform bucket-level access is enabl
 Deploys and configures required Kubernetes resources post Standard GKE Cluster creation.
 - Deploy External Secrets and Argo CD via Helm.
 - Create required Service accounts, Secrets and Secret Stores.
-- Apply cluster-scoped Config Connector (`ConfigConnector` CR) via GitOps (`gitops/apps/configconnector-operator`, child Argo Application from `gitops/templates/configconnector-operator.yaml`); Workload Identity uses `gke-config-connector-sa` (env `sa11`). The operator is Git-pinned, not the GKE add-on. Discovery RBAC and the webhook monitor remain in `gitops/templates/config-connector-init.yaml`. The Argo Workflows `StorageBucket` CR in the root app still uses `SkipDryRunOnMissingResource=true` until `storage.cnrm` CRDs exist.
+- Apply cluster-scoped Config Connector via GitOps: the operator is `gitops/apps/configconnector-operator` (child Argo Application from `gitops/templates/configconnector-operator.yaml`), and the `ConfigConnector` CR is in the root app (`gitops/templates/config-connector-init.yaml`); Workload Identity uses `gke-config-connector-sa` (env `sa11`). The operator is Git-pinned, not the GKE add-on. Discovery RBAC and the webhook monitor are in the same root template. The Argo Workflows `StorageBucket` CR in the root app still uses `SkipDryRunOnMissingResource=true` until `storage.cnrm` CRDs exist.
 - Create Argo CD App Project and Argo CD Application.
 
 ## Module - sdv-gke-cluster

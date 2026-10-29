@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Discovery RBAC and webhook cert monitor for Config Connector (platform GitOps).
-# Cluster-mode ConfigConnector CR lives in gitops/apps/configconnector-operator
-# (same Application as the ConfigConnector CRD). Main environment only for that CR
-# because the operator Application is gated on isSubEnvironment.
+# Cluster-mode ConfigConnector CR, discovery RBAC, readiness gates and webhook cert monitor
+# for Config Connector (platform GitOps). The operator and its CRDs are the
+# configconnector-operator child Application (gitops/apps/configconnector-operator).
 # The operator is Git-pinned, not the GKE add-on.
+# The CR stays in this root Application: releases before the Git-pinned operator rendered
+# it here too, so moving it to another Application would let this one prune it on upgrade,
+# which uninstalls Config Connector.
 # Do not create ConfigConnectorContext when mode is cluster: the operator rejects CCC as unnecessary.
 # configconnector-operator-cnrm-discovery grants the operator read access to CNRM API groups (e.g. edgenetwork).
 # Ref: https://cloud.google.com/config-connector/docs/how-to/install-upgrade-uninstall
@@ -69,7 +71,7 @@ subjects:
 # Centralized KCC webhook TLS monitor:
 # periodically verifies that the certificate served by cnrm-validating-webhook
 # chains to the CA bundle configured in ValidatingWebhookConfiguration.
-# The same identity runs the wave 1 readiness gate below, so it is in wave 0.
+# The same identity runs the readiness gates below, so it is in wave 0.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -101,7 +103,9 @@ rules:
     verbs: ["get"]
   - apiGroups: ["apiextensions.k8s.io"]
     resources: ["customresourcedefinitions"]
-    resourceNames: ["storagebuckets.storage.cnrm.cloud.google.com"]
+    resourceNames:
+      - configconnectors.core.cnrm.cloud.google.com
+      - storagebuckets.storage.cnrm.cloud.google.com
     verbs: ["get"]
   - apiGroups: [""]
     resources: ["namespaces"]
@@ -126,10 +130,80 @@ subjects:
     name: kcc-webhook-cert-monitor
     namespace: gcp
 ---
-# Readiness gate. The root Application does not wait on child Application health, so
-# without this the root reaches cnrm-system and storage.cnrm resources before the
-# configconnector-operator child Application (wave -1) has finished. A Job hook is a
-# real wave barrier: later waves start only after it succeeds.
+# CRD gate. The root Application does not wait on child Application health, and on
+# greenfield the ConfigConnector CRD comes from the configconnector-operator child
+# Application (wave -1). A Job hook is a real wave barrier, so the CR below (wave 1)
+# is applied only after the CRD is established.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kcc-crd-gate
+  namespace: gcp
+  labels:
+    app.kubernetes.io/name: horizon-sdv
+    app.kubernetes.io/component: config-connector
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      serviceAccountName: kcc-webhook-cert-monitor
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+        - name: wait-for-configconnector-crd
+          image: {{ .Values.config.containerImages.kccWebhookCertMonitor | quote }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              API_SERVER="https://kubernetes.default.svc"
+              TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+              CA_CERT_PATH="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              while :; do
+                CRD="$(curl -fsS --cacert "${CA_CERT_PATH}" -H "Authorization: Bearer ${TOKEN}" \
+                  "${API_SERVER}/apis/apiextensions.k8s.io/v1/customresourcedefinitions/configconnectors.core.cnrm.cloud.google.com" 2>/dev/null \
+                  | jq -r '[.status.conditions[]? | select(.type=="Established") | .status][0] // ""' 2>/dev/null || true)"
+                echo "configconnector-crd=${CRD:-absent}"
+                if [ "${CRD}" = "True" ]; then
+                  echo "OK: ConfigConnector CRD is established"
+                  exit 0
+                fi
+                sleep 5
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+# Cluster-wide singleton. Prune=false keeps it if it ever drops out of the chart.
+# Identity is Terraform WI (env sa11).
+apiVersion: core.cnrm.cloud.google.com/v1beta1
+kind: ConfigConnector
+metadata:
+  name: configconnector.core.cnrm.cloud.google.com
+  labels:
+    app.kubernetes.io/name: horizon-sdv
+    app.kubernetes.io/component: config-connector
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: Prune=false,SkipDryRunOnMissingResource=true
+spec:
+  mode: cluster
+  googleServiceAccount: gke-config-connector-sa@{{ required "config.projectID is required" .Values.config.projectID }}.iam.gserviceaccount.com
+  stateIntoSpec: Absent
+---
+# Readiness gate, same wave as the CR above; it polls until the operator has reconciled
+# it. Later waves reach cnrm-system and storage.cnrm resources only after it succeeds.
 apiVersion: batch/v1
 kind: Job
 metadata:
