@@ -70,6 +70,7 @@ Horizon SDV is designed to simplify the deployment and management of Android wor
   - Section #6f - Homepage not reachable after deployment [link](#section-6f---homepage-not-reachable-after-deployment)
   - Section #6g - Jenkins cannot run pipeline as admin [link](#section-6g---jenkins-cannot-run-pipeline-as-admin)
   - Section #6h - Terraform cannot find versions.yaml [link](#section-6h---terraform-cannot-find-versionsyaml)
+  - Section #6i - Horizon version not updated after apply [link](#section-6i---horizon-version-not-updated-after-apply)
 
 ## Technologies
 Technologies being used to provision the infrastructure along with the required applications for the GKE cluster.
@@ -1108,3 +1109,19 @@ Terraform fails during plan or apply with an error similar to:
 3. Run the deployment script again.
 
 If you run the deployment from a local checkout instead of the container, the file must be present at the root of that checkout.
+
+### Section #6i - Horizon version not updated after apply
+
+If after bumping `components.horizoncore` in `versions.yaml`, pushing to `scm_repo_branch`, and running apply ([Section #2e](#section-2e---update-the-horizon-version)), the Developer Portal still shows the previous version (image tag and floating UI tag), use the steps below.
+
+Terraform updates the **root** Argo CD Application `horizon-sdv` (Helm values: portal image tag and `horizoncore`). The **child** Application `horizon-dev-portal` — and thus the live Deployment and ConfigMap — change only when that root Application syncs. If `horizon-sdv` stays **OutOfSync**, the child can remain on the old tag (for example `:4.3.9`) even though the root values already show the new one (for example `:4.3.10`).
+
+1. Check the root Application:
+   `kubectl -n argocd get application horizon-sdv`
+2. If the status is **OutOfSync**, sync the root (Argo CD UI → Sync, or
+   `kubectl -n argocd patch application horizon-sdv --type merge -p '{"operation":{"sync":{}}}'`).
+3. Confirm the child and the live resources:
+   - `kubectl -n argocd get application horizon-dev-portal` → **Synced**
+   - Deployment image and ConfigMap `HORIZON_VERSION` match `components.horizoncore`
+
+Also confirm `versions.yaml` was pushed to the branch in `scm_repo_branch` (the deployer clones that remote branch, not only a local commit). See [Section #6h](#section-6h---terraform-cannot-find-versionsyaml) if Terraform cannot read the file.
