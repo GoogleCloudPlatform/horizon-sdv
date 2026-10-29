@@ -25,6 +25,8 @@ metadata:
     app.kubernetes.io/component: config-connector
   annotations:
     argocd.argoproj.io/sync-wave: "1"
+    # Cluster-wide singleton. Keep it if this object drops out of the chart.
+    argocd.argoproj.io/sync-options: Prune=false
 spec:
   mode: cluster
   googleServiceAccount: gke-config-connector-sa@{{ required "config.projectID is required" .Values.config.projectID }}.iam.gserviceaccount.com

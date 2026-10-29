@@ -69,6 +69,7 @@ subjects:
 # Centralized KCC webhook TLS monitor:
 # periodically verifies that the certificate served by cnrm-validating-webhook
 # chains to the CA bundle configured in ValidatingWebhookConfiguration.
+# The same identity runs the wave 1 readiness gate below, so it is in wave 0.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -78,7 +79,7 @@ metadata:
     app.kubernetes.io/name: horizon-sdv
     app.kubernetes.io/component: config-connector
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "0"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -88,11 +89,23 @@ metadata:
     app.kubernetes.io/name: horizon-sdv
     app.kubernetes.io/component: config-connector
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "0"
 rules:
   - apiGroups: ["admissionregistration.k8s.io"]
     resources: ["validatingwebhookconfigurations"]
     resourceNames: ["validating-webhook.cnrm.cloud.google.com"]
+    verbs: ["get"]
+  - apiGroups: ["core.cnrm.cloud.google.com"]
+    resources: ["configconnectors"]
+    resourceNames: ["configconnector.core.cnrm.cloud.google.com"]
+    verbs: ["get"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    resourceNames: ["storagebuckets.storage.cnrm.cloud.google.com"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    resourceNames: ["cnrm-system"]
     verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -103,7 +116,7 @@ metadata:
     app.kubernetes.io/name: horizon-sdv
     app.kubernetes.io/component: config-connector
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "0"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -113,6 +126,71 @@ subjects:
     name: kcc-webhook-cert-monitor
     namespace: gcp
 ---
+# Readiness gate. The root Application does not wait on child Application health, so
+# without this the root reaches cnrm-system and storage.cnrm resources before the
+# configconnector-operator child Application (wave -1) has finished. A Job hook is a
+# real wave barrier: later waves start only after it succeeds.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kcc-readiness-gate
+  namespace: gcp
+  labels:
+    app.kubernetes.io/name: horizon-sdv
+    app.kubernetes.io/component: config-connector
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      serviceAccountName: kcc-webhook-cert-monitor
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+        - name: wait-for-config-connector
+          image: {{ .Values.config.containerImages.kccWebhookCertMonitor | quote }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              API_SERVER="https://kubernetes.default.svc"
+              TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+              CA_CERT_PATH="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              get() {
+                curl -fsS --cacert "${CA_CERT_PATH}" -H "Authorization: Bearer ${TOKEN}" "${API_SERVER}$1" 2>/dev/null || true
+              }
+              while :; do
+                CC="$(get /apis/core.cnrm.cloud.google.com/v1beta1/configconnectors/configconnector.core.cnrm.cloud.google.com | jq -r '.status.healthy // false' 2>/dev/null || echo false)"
+                NS="$(get /api/v1/namespaces/cnrm-system | jq -r '.status.phase // ""' 2>/dev/null || true)"
+                CRD="$(get /apis/apiextensions.k8s.io/v1/customresourcedefinitions/storagebuckets.storage.cnrm.cloud.google.com \
+                  | jq -r '[.status.conditions[]? | select(.type=="Established") | .status][0] // ""' 2>/dev/null || true)"
+                TLS=false
+                if echo | openssl s_client -connect cnrm-validating-webhook.cnrm-system.svc:443 \
+                  -servername cnrm-validating-webhook.cnrm-system.svc >/dev/null 2>&1; then
+                  TLS=true
+                fi
+                echo "configConnector.healthy=${CC} cnrm-system=${NS:-absent} storagebucket-crd=${CRD:-absent} webhook-tls=${TLS}"
+                if [ "${CC}" = "true" ] && [ "${NS}" = "Active" ] && [ "${CRD}" = "True" ] && [ "${TLS}" = "true" ]; then
+                  echo "OK: Config Connector is ready"
+                  exit 0
+                fi
+                sleep 10
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+# Wave 2, after the readiness gate, because cnrm-system is created by the operator.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -122,7 +200,7 @@ metadata:
     app.kubernetes.io/name: horizon-sdv
     app.kubernetes.io/component: config-connector
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "2"
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
@@ -138,7 +216,7 @@ metadata:
     app.kubernetes.io/name: horizon-sdv
     app.kubernetes.io/component: config-connector
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "2"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -157,7 +235,7 @@ metadata:
     app.kubernetes.io/name: horizon-sdv
     app.kubernetes.io/component: config-connector
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   schedule: "*/5 * * * *"
   concurrencyPolicy: Forbid
