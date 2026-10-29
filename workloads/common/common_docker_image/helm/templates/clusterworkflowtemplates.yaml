@@ -188,14 +188,15 @@ spec:
             cd "${CONTEXT_ROOT}"
             # One build-arg per line of BUILD_ARGS. Collected as positional parameters so
             # values containing spaces (e.g. apt source lines) reach buildctl intact.
+            # Read the bytes literally. printf "%b" would turn \n and other escapes into
+            # extra build-arg lines, and an unquoted heredoc would expand $(...) in the value.
+            printf '%s\n' "$BUILD_ARGS" > /tmp/build-args
             set --
-            while IFS= read -r line; do
+            while IFS= read -r line || [ -n "$line" ]; do
               if [ -n "$(printf '%s' "$line" | tr -d '[:space:]')" ]; then
                 set -- "$@" --opt "build-arg:${line}"
               fi
-            done <<EOF
-            $(printf "%b" "${BUILD_ARGS}")
-            EOF
+            done < /tmp/build-args
             buildctl build \
               --frontend=dockerfile.v0 \
               --local=dockerfile="${DOCKERFILE_ROOT}" \

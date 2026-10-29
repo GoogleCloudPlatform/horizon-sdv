@@ -321,6 +321,19 @@ spec:
             blank() { case "$(printf '%s' "$1" | tr -d '[:space:]')" in ''|-) return 0 ;; *) return 1 ;; esac; }
             blank "$PREFLIGHT_IMAGE" && PREFLIGHT_IMAGE=
             blank "$GNOME_IMAGE" && GNOME_IMAGE=
+            # These values become a single BASE_IMAGE build-arg. A newline or backslash would
+            # split into an extra build-arg once the shared builder reads BUILD_ARGS line by line.
+            # (charset covers a registry path, a tag, and a @sha256: digest)
+            refcheck() {
+              case "$2" in
+                *[!A-Za-z0-9._:/@-]*)
+                  echo "ERROR: $1 must be an image reference" >&2
+                  exit 1
+                  ;;
+              esac
+            }
+            [ -n "$PREFLIGHT_IMAGE" ] && refcheck preflightImage "$PREFLIGHT_IMAGE"
+            [ -n "$GNOME_IMAGE" ] && refcheck gnomeImage "$GNOME_IMAGE"
             any=false
             on "$BUILD_ENVIRONMENT" && any=true
             on "$BUILD_PREFLIGHT" && any=true
