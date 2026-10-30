@@ -200,6 +200,11 @@ variable "primary_subnetwork" {
   default     = "sdv-subnet"
 }
 
+variable "sdv_network" {
+  description = "Primary platform VPC network name."
+  type        = string
+}
+
 variable "common_nginx_version" {
   description = "nginx version to be used by horizon apps and workloads"
   type        = string
@@ -223,5 +228,15 @@ variable "cluster_release_channel" {
 
 variable "abfs_build_node_pool_version" {
   description = "CASFS-pinned GKE node version for abfs-client-module-ubuntu ContainerNodePool."
+  type        = string
+}
+
+variable "component_versions" {
+  description = "Horizon platform component versions (components map from the repo-root versions.yaml, e.g. horizoncore). Passed to GitOps as config.versions.components."
+  type        = map(string)
+}
+
+variable "connect_gateway_url" {
+  description = "Connect Gateway URL used to reach the cluster API."
   type        = string
 }

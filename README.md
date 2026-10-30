@@ -52,12 +52,12 @@ Try deployment from Google Cloud Shell. Press the button to clone the official H
 
 We welcome contributions - for details, refer to the [contribution guide](https://github.com/GoogleCloudPlatform/horizon-sdv/blob/main/docs/contributing.md).
 
-For consultation regarding an initial setup, specific use case, technology or related topics, please contact horizon-sdv@google.com.
+For consultation regarding an initial setup, specific use case, technology or related topics, please contact horizon-sdv@google.com and horizon-sdv@accenture.com.
 
 ## Staying up-to-date
 In case you would like to receive updates, you can [subscribe here](https://forms.gle/TFaKXqfHbF6oUAeg6). 
 
-In case of questions you can directly reach out to [horizon-sdv@google.com](mailto:horizon-sdv@google.com).
+In case of questions you can directly reach out to [horizon-sdv@google.com](mailto:horizon-sdv@google.com) and [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com).
 
 For specific technical issues you can [raise an issue on Github](https://github.com/GoogleCloudPlatform/horizon-sdv/issues).
 

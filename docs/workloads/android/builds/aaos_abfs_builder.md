@@ -99,9 +99,17 @@ Delete the ABFS cache directory prior to build.
 ### `POST_REPO_COMMAND`
 
 Optional parameter that allows the user to include additional commands to run after the repo has been synced, or cloned.
-For ABFS this has default patches for soong to support building with the ABFS.
 
-Some build targets already define this command, so if user updates this then the default will be overridden. This is a single command line, so use of logical operators to execute subsequent commands is essential.
+The build/soong fix ABFS needs (Soong runs `soong_build` in a sandbox where the ABFS mount is read-only) is applied automatically by `aaos_environment.sh` based on `AAOS_REVISION`, so this parameter can stay empty:
+
+| `AAOS_REVISION` | Applied automatically |
+|-----------------|-----------------------|
+| `android-14*`, `android-15.0.0_r4` | nothing |
+| `android-15*` (tested: android-15.0.0_r36) | build/soong cherry-picks 3619490, 3619491, 3619492 (`ui/build/sandbox_linux.go`) plus the same `sed` on `ui/build/soong.go` as Android 16; the cherry-picks alone still fail with `read-only file system` when the Soong evaluation is not served from the ninjago cache |
+| `android-16*` (tested: android-16.0.0_r3) | `sed` on `ui/build/soong.go` so `TOP` and `LOG_DIR` are passed to `soong_build` as sandbox paths |
+| branch names (`android-latest-release`, `main`, custom) | nothing; the revision carries no Android version, so add the fix through this parameter if the build needs it |
+
+Anything set here runs after the automatic fix. This is a single command line, so use of logical operators to execute subsequent commands is essential.
 
 Useful for installing additional code, tools etc, prior to build.
 

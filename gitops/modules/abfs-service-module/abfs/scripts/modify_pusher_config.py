@@ -124,6 +124,23 @@ def write_seed(path, document):
     print("write_seed: wrote %s" % path)
 
 
+def print_current_config(row, url, branch, file_name, specs):
+    """Write the active repo to the job log."""
+    name = row.get("name")
+    kind = "custom" if name == "AndroidCustom" else "predefined"
+    shown = {
+        "name": name,
+        "repo": {
+            "url": url,
+            "branch": branch,
+            "file": file_name,
+            "fetch-ref-spec": specs,
+        },
+    }
+    print("===== current config (%s) =====" % kind)
+    print(yaml.safe_dump(shown, sort_keys=False).rstrip())
+
+
 def active_repo(path):
     """Active row and its repo fields from one table file."""
     row = find_active_row(load_table(path))
@@ -141,6 +158,7 @@ def main():
         except TableError as fallback_exc:
             fail("fallback table not usable either (%s)" % fallback_exc)
     workers = shared_workers(load_yaml(os.environ["PUSHER_CONFIG"]))
+    print_current_config(row, url, branch, file_name, specs)
     write_seed(os.environ["SEED_OUT"], seed_document(url, branch, file_name, specs, workers))
     print("modify_pusher: %s branch=%s workers=%s" % (row.get("name"), branch, workers))
 

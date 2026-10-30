@@ -2,12 +2,27 @@
 name: horizon-create-module
 description: >-
   Interactive guide and procedural workflow to scaffold, implement, configure, and contribute new modules to Horizon SDV.
-  Enforces repository rules: all modules must reside in gitops/modules (workloads directory is deprecated),
-  all partner contributions must be Apache 2.0 licensed, and non-Apache 2.0 dependencies must be placed in third_party.
+  Enforces repository rules: all modules must reside in gitops/modules, module code is Apache 2.0 licensed,
+  and all other file locations follow docs/contributing.md.
   Covers the Helm App-of-Apps pattern, declarative GCP infrastructure via Kubernetes Config Connector (KCC),
   Argo Workflows and Argo Events Sensors, GKE-based applications with Gateway API HTTPRoutes,
   and registration in the Module Manager catalog (ModuleCatalog CR) with Developer Portal integration.
 ---
+
+<!-- Copyright 2026 Google LLC
+Modifications Copyright (c) 2026 Accenture, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
 
 # Horizon SDV Module Creation Skill
 
@@ -19,12 +34,12 @@ This skill guides developers and AI agents through designing, scaffolding, imple
 
 > [!IMPORTANT]
 > **Condensed Setup Questionnaire**: When starting a module creation request, gather these 4 basic inputs:
-> 1. **Module Name & Title**: Target identifier in kebab-case and display title, using repository workload/workflow naming conventions:
->    - `aaos-builder` (*"AAOS Image Builder"*)
->    - `cvd-launcher` (*"Cuttlefish Virtual Device Launcher"*)
->    - `cts-testbench` (*"Android CTS Testbench"*)
+> 1. **Module Name & Title**: Target identifier in kebab-case and display title, following existing module names, e.g.:
+>    - `workloads-android` (*"Android Workloads"*)
+>    - `remotive-topology` (*"RemotiveTopology"*)
+>    - `storage-gcs-module` (*"Storage GCS"*)
 >    *(All modules are placed under `gitops/modules/<name>/`)*.
-> 2. **Cloud Infrastructure (KCC)**: GCP resources needed (e.g. Pub/Sub topic, Cloud Storage bucket, BigQuery dataset, IAM member, or none).
+> 2. **Cloud Infrastructure (KCC)**: GCP resources needed (e.g. Pub/Sub topic, Cloud Storage bucket, BigQuery dataset, or none).
 > 3. **Application & Ingress**: Does it expose a web UI / API on the GKE Gateway? (e.g. root path `/<module-name>`).
 > 4. **Dependencies**: Any required modules (`hardDependencies`) or optional integrations (`softDependencies`)? *(e.g. `workloads-common`, `storage-gcs`)*.
 >
@@ -36,12 +51,11 @@ This skill guides developers and AI agents through designing, scaffolding, imple
 
 1. **All Modules in `gitops/modules/`**:
    - Every module (core platform modules, partner-contributed modules, and modular workloads) must reside in **`gitops/modules/<module-name>/`**.
-   - There is no top-level `partner/` directory; partners contribute extensions as standard modules under `gitops/modules/`.
-   - The top-level `workloads/` folder is **deprecated** going forward in favor of `gitops/modules/`.
+   - For the correct location of all other files, follow `docs/contributing.md`.
 2. **Apache 2.0 License Requirement for Contributions**:
    - All module code, Helm charts, manifests, and documentation in `gitops/modules/<module-name>/` **must be licensed under Apache 2.0**.
-3. **Non-Apache 2.0 Dependencies in `third_party/`**:
-   - Any third-party dependency, library, or component that **cannot be licensed under Apache 2.0** must be isolated strictly within the **`third_party/<component_name>/`** directory.
+3. **Partner Content and Non-Apache 2.0 Dependencies**:
+   - Follow `docs/contributing.md` for where they go and how they are licensed.
 
 ---
 
@@ -49,21 +63,22 @@ This skill guides developers and AI agents through designing, scaffolding, imple
 
 Horizon SDV includes reference module implementations in `gitops/modules/`:
 
-| Module Directory | Primary Role & Capabilities | Pipeline Naming (`init` / `exec`) | Real Reference Path |
+| Module Directory | Primary Role & Capabilities | WorkflowTemplates | Real Reference Path |
 | :--- | :--- | :--- | :--- |
-| **`sample-module`** | Full App-of-Apps reference with Pub/Sub KCC, web UI, soft feature toggles | `sample-init` / `sample-smoke-test` | [`gitops/modules/sample-module`](../../../../gitops/modules/sample-module) |
-| **`sample-hard-module`** | Hard dependency target; auto-enabled and blocks parent deletion | `sample-hard-init` / `sample-hard-smoke-test` | [`gitops/modules/sample-hard-module`](../../../../gitops/modules/sample-hard-module) |
-| **`sample-soft-module`** | Soft dependency target; dynamically toggled feature flags | `sample-soft-init` / `sample-soft-smoke-test` | [`gitops/modules/sample-soft-module`](../../../../gitops/modules/sample-soft-module) |
-| **`sample-data-module`** | Declarative GCP Storage bucket CR (`GCSBucket` reconciled by storage operator) | Bucket lifecycle management | [`gitops/modules/sample-data-module`](../../../../gitops/modules/sample-data-module) |
-| **`storage-gcs-module`** | Go operator + REST API for dynamic GCS bucket & object lifecycle | `storage-gcs-upload` (`upload`, `resumable-upload`) | [`gitops/modules/storage-gcs-module`](../../../../gitops/modules/storage-gcs-module) |
-| **`workloads-common`** | Shared cluster pipelines (Docker builds, GitHub App credentials) | `prepare-pipeline-git-creds` / `common-docker-image-build` | [`gitops/modules/workloads-common`](../../../../gitops/modules/workloads-common) |
-| **`workloads-android`** | Android build, test, and Cuttlefish virtual device workloads | Workload execution DAGs | [`gitops/modules/workloads-android`](../../../../gitops/modules/workloads-android) |
+| **`sample-module`** | Full App-of-Apps reference with Pub/Sub KCC, web UI, soft feature toggles | `sample-smoke-test`, `sample-smoke-test-alt` | [`gitops/modules/sample-module`](../../../../gitops/modules/sample-module) |
+| **`sample-hard-module`** | Hard dependency target; auto-enabled and blocks parent deletion | `sample-hard-smoke-test`, `sample-hard-smoke-test-alt` | [`gitops/modules/sample-hard-module`](../../../../gitops/modules/sample-hard-module) |
+| **`sample-soft-module`** | Soft dependency target; dynamically toggled feature flags | `sample-soft-smoke-test`, `sample-soft-smoke-test-alt` | [`gitops/modules/sample-soft-module`](../../../../gitops/modules/sample-soft-module) |
+| **`sample-data-module`** | Declarative GCP Storage bucket CR (`GCSBucket` reconciled by storage operator) | None (bucket CR only) | [`gitops/modules/sample-data-module`](../../../../gitops/modules/sample-data-module) |
+| **`storage-gcs-module`** | Go operator + REST API for dynamic GCS bucket & object lifecycle | `storage-gcs-module-internal`, `storage-gcs-upload` | [`gitops/modules/storage-gcs-module`](../../../../gitops/modules/storage-gcs-module) |
+| **`workloads-common`** | Shared cluster pipelines (Docker builds, GitHub App credentials) | ClusterWorkflowTemplates `prepare-pipeline-git-creds`, `prepare-github-app-git-creds`, `common-docker-image-build` | [`gitops/modules/workloads-common`](../../../../gitops/modules/workloads-common) |
+| **`workloads-android`** | Android build, test, and Cuttlefish virtual device workloads | Charts under `workloads/android/pipelines/` | [`gitops/modules/workloads-android`](../../../../gitops/modules/workloads-android) |
+| **`remotive-topology`** | RemotiveTopology pipelines: builder image, instance template, topology launcher | Charts under `workloads/remotive/pipelines/` | [`gitops/modules/remotive-topology`](../../../../gitops/modules/remotive-topology) |
 
 ---
 
-## Default Pipeline Structure: Initialization & Execution
+## Scaffold Pipeline Structure: Initialization & Execution
 
-By default, every scaffolded module includes **two standard pipeline definitions**:
+The scaffold creates **two starting pipeline definitions**. Existing modules use other names (see the table above); rename, add or remove them to fit the module:
 
 1. **Initialization Pipeline (`<module-name>-init`)**:
    - **Purpose**: Prepares runtime credentials, validates KCC cloud resources, sets up buckets/topics, initializes database schemas, seeds assets, or warms build caches.
@@ -83,11 +98,11 @@ By default, every scaffolded module includes **two standard pipeline definitions
 ### Phase 1: Planning & Quick Questionnaire
 
 Confirm the 4 core parameters:
-1. **Module Name & Title**: Kebab-case identifier and human-readable title based on repository workload/workflow patterns:
-   - `aaos-builder` (*"AAOS Image Builder"*)
-   - `cvd-launcher` (*"Cuttlefish Virtual Device Launcher"*)
-   - `cts-testbench` (*"Android CTS Testbench"*)
-2. **KCC Cloud Resources**: GCP resources to declare (Pub/Sub, GCS, BigQuery, IAM).
+1. **Module Name & Title**: Kebab-case identifier and human-readable title following existing module names, e.g.:
+   - `workloads-android` (*"Android Workloads"*)
+   - `remotive-topology` (*"RemotiveTopology"*)
+   - `storage-gcs-module` (*"Storage GCS"*)
+2. **KCC Cloud Resources**: GCP resources to declare (Pub/Sub, GCS, BigQuery).
 3. **Application & Routing**: Gateway HTTPRoute prefix (e.g. `/<module-name>`).
 4. **Dependencies**: Hard dependencies (e.g. `workloads-common`) or soft dependencies (e.g. `storage-gcs`).
 
@@ -101,11 +116,11 @@ Run the scaffolding script to generate the complete module skeleton inside `gito
 ./.agents/plugins/horizon-dev/skills/horizon-create-module/scripts/scaffold-module.sh \
   --name my-module \
   --title "My Module Title" \
-  --description "Module description here" \
+  --desc "Module description here" \
   --path-prefix "/my-module"
 ```
 
-#### Standard Core Module Layout (`gitops/modules/<module-name>/`)
+#### Scaffolded Module Layout (`gitops/modules/<module-name>/`)
 
 ```text
 gitops/modules/<module-name>/
@@ -116,17 +131,16 @@ gitops/modules/<module-name>/
 │   └── overview.html                        # Rich HTML card/documentation for Dev Portal
 ├── templates/
 │   ├── module-overview-http.yaml            # ConfigMap + Nginx deployment + Service for portal
-│   ├── application-<app-name>.yaml          # ArgoCD Application for GKE app / KCC resources
+│   ├── application-<module-name>-app.yaml   # ArgoCD Application for GKE app / KCC resources
 │   └── application-argo-workflows.yaml      # ArgoCD Application for Argo Workflows child chart
-├── <app-name>/                              # Child Helm chart (GKE app + KCC resources)
+├── <module-name>-app/                       # Child Helm chart (GKE app + KCC resources)
 │   ├── Chart.yaml
 │   ├── values.yaml
 │   └── templates/
-│       ├── deployment.yaml                  # Kubernetes Deployment
-│       ├── service.yaml                     # Kubernetes Service
-│       ├── gateway-<app-name>.yaml          # Gateway API HTTPRoute & HealthCheckPolicy
-│       ├── network-policies.yaml            # NetworkPolicy (defense in depth)
-│       └── kcc-<resource>.yaml              # Config Connector manifests (e.g. PubSubTopic)
+│       ├── deployment.yaml                  # Kubernetes Deployment + Service
+│       ├── gateway-route.yaml               # Gateway API HTTPRoute & HealthCheckPolicy
+│       ├── network-policies.yaml            # NetworkPolicy: opens port 8080 (see ref 04 §4)
+│       └── kcc-pubsub.yaml                  # Config Connector PubSubTopic
 └── argo-workflows/                          # Child Helm chart for workflows & sensors
     ├── Chart.yaml
     ├── values.yaml
@@ -398,7 +412,8 @@ Open `gitops/apps/module-manager/templates/module-catalog.yaml` and add the new 
 
 1. **Helm Template & Lint Validation**:
    ```bash
-   helm lint gitops/modules/<module-name>
+   helm lint gitops/modules/<module-name> \
+     -f .agents/plugins/horizon-dev/skills/horizon-create-module/scripts/lint-values.yaml
    helm lint gitops/modules/<module-name>/<app-name>
    helm lint gitops/modules/<module-name>/argo-workflows
    ```
@@ -431,5 +446,5 @@ Open `gitops/apps/module-manager/templates/module-catalog.yaml` and add the new 
 - **[03_argo_workflows_and_events.md](./references/03_argo_workflows_and_events.md)** — WorkflowTemplates (`init` + `execute`), parameters, artifacts, and Argo Events Sensors.
 - **[04_gke_apps_and_gateway.md](./references/04_gke_apps_and_gateway.md)** — GKE workloads, Gateway API HTTPRoute, HealthCheckPolicy, and NetworkPolicy.
 - **[05_module_catalog_registration.md](./references/05_module_catalog_registration.md)** — ModuleCatalog CR, hard/soft dependencies, and portal HTML overview.
-- **[06_partner_contributions.md](./references/06_partner_contributions.md)** — Partner contribution workflow, standard module placement in `gitops/modules/`, Apache 2.0 license requirement, non-Apache 2.0 dependencies in `third_party/`, branch rules (`contrib/*` -> `devel`), and CLA.
+- **[06_partner_contributions.md](./references/06_partner_contributions.md)** — Partner contribution workflow, module placement in `gitops/modules/`, Apache 2.0 license requirement, and CLA. File locations, branch and PR rules: see `docs/contributing.md` and `docs/branching_strategy.md`.
 - **[07_testing_and_verification.md](./references/07_testing_and_verification.md)** — Linting, Argo CD sync, KCC status checks, and Horizon CLI commands.

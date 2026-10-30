@@ -44,12 +44,12 @@ spec:
   # Optional replacement for the default make command line. Single command
   # line only; chain with logical operators. Consumed by aaos_environment.sh.
   overrideMakeCommand: ""
-  # Commands run after the sources are mounted and before the build, as the
-  # Jenkins job's POST_REPO_COMMAND. The default is the Jenkins default: three
-  # build/soong changes ABFS needs for Android 15 ("The values here are for
-  # ABFS Android 15"); without them lunch fails in the Soong sandbox on the
-  # unreplaced {ABFS_DIR} mount. Single command line.
-  postRepoCommand: "cd build/soong ; git fetch https://android.googlesource.com/platform/build/soong refs/changes/90/3619490/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/91/3619491/1 && git cherry-pick FETCH_HEAD; git fetch https://android.googlesource.com/platform/build/soong refs/changes/92/3619492/1 && git cherry-pick FETCH_HEAD; cd -"
+  # Optional commands run after the sources are mounted and before the build,
+  # as the Jenkins job's POST_REPO_COMMAND. The build/soong sandbox fix ABFS
+  # needs is applied automatically per Android version by aaos_environment.sh
+  # (Android 15 cherry-picks plus soong.go sed, Android 16 soong.go sed), so this stays empty
+  # unless extra user commands are needed. Single command line.
+  postRepoCommand: ""
   # Parallel build jobs (-j) for the ABFS build, passed as AAOS_PARALLEL_BUILD_JOBS.
   # The shared aaos_environment.sh no longer caps it, so without a value the
   # build uses every core on the node. Safe default for ABFS is '16'.

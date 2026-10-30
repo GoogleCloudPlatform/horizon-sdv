@@ -31,6 +31,7 @@ data:
   table: |
 {{- range .Values.uploaderConfig.entries }}
     - name: {{ .name | quote }}
+{{- if not (eq .storeRepo false) }}
       repo:
         url: {{ $.Values.uploaderConfig.manifestUrl | quote }}
         branch: {{ .branch | quote }}
@@ -38,6 +39,7 @@ data:
         fetch-ref-spec:
 {{- range $.Values.uploaderConfig.fetchRefSpec }}
           - {{ . | quote }}
+{{- end }}
 {{- end }}
       active: {{ .active }}
       synced: {{ .active }}

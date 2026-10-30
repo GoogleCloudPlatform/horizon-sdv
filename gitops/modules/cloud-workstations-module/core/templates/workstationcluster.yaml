@@ -1,0 +1,53 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# One workstation cluster for the module. Created when the module is enabled and removed by the
+# existing child-first drain on disable. Jenkins keeps sdv-cloud-ws-cluster.
+{{- if include "cloud-workstations-core.mainEnv" . | eq "true" }}
+{{- $cw := .Values.config.cloudWorkstations | default dict }}
+{{- $clusterId := required "config.cloudWorkstations.clusterId is required" $cw.clusterId }}
+{{- $network := required "config.cloudWorkstations.network is required" $cw.network }}
+{{- $subnetwork := required "config.cloudWorkstations.subnetwork is required" $cw.subnetwork }}
+{{- $project := required "config.projectID is required" .Values.config.projectID }}
+{{- $location := required "config.region is required" .Values.config.region }}
+{{- if eq $clusterId "sdv-cloud-ws-cluster" }}
+{{- fail "config.cloudWorkstations.clusterId must not be the Jenkins-owned cluster sdv-cloud-ws-cluster" }}
+{{- end }}
+{{- if not (regexMatch "^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$" $clusterId) }}
+{{- fail "config.cloudWorkstations.clusterId must match ^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$" }}
+{{- end }}
+{{- $networkRef := $network }}
+{{- if not (hasPrefix "projects/" $network) }}
+{{- $networkRef = printf "projects/%s/global/networks/%s" $project $network }}
+{{- end }}
+{{- $subnetworkRef := $subnetwork }}
+{{- if not (hasPrefix "projects/" $subnetwork) }}
+{{- $subnetworkRef = printf "projects/%s/regions/%s/subnetworks/%s" $project $location $subnetwork }}
+{{- end }}
+apiVersion: workstations.horizon-sdv.io/v1alpha1
+kind: WorkstationCluster
+metadata:
+  name: {{ $clusterId | quote }}
+  namespace: cloud-workstations
+  labels:
+    horizon-sdv.io/module: {{ .Values.moduleName | default "cloud-workstations" | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: {{ $project | quote }}
+  location: {{ $location | quote }}
+  network: {{ $networkRef | quote }}
+  subnetwork: {{ $subnetworkRef | quote }}
+  resourceID: {{ $clusterId | quote }}
+{{- end }}

@@ -20,4 +20,5 @@ window.APP_CONFIG = window.APP_CONFIG || {
   keycloakUrl: '/auth/realms/horizon/protocol/openid-connect/token',
   keycloakClientId: 'horizon-dev-portal',
   horizonApiOAuthClientId: 'horizon-api-ci',
+  horizonVersion: 'dev',
 };

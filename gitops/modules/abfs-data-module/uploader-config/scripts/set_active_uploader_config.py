@@ -17,9 +17,14 @@
 # The workflow saves ConfigMap key "table" to /tmp/table.yaml, then runs this
 # script. SELECTION names the row that becomes active and synced.
 # CUSTOM_CONFIG is applied only when that name is AndroidCustom; an empty paste uses
-# DEFAULT_CUSTOM_CONFIG. Every other row is active false and synced false.
-# The patch is written to /tmp/uploader-config-patch.json.
+# DEFAULT_CUSTOM_CONFIG. An AndroidCustom row with no repo is an empty slot and
+# counts as a change. Every other row is active false and synced false.
+# The patch is written to /tmp/uploader-config-patch.json. An AndroidCustom
+# submit also writes that entry to /tmp/android-custom-saved.yaml so the form
+# shows it on the next open. The workflow log prints the previously active row
+# and the row just selected, each marked predefined or custom.
 
+import copy
 import json
 import os
 
@@ -28,6 +33,7 @@ import yaml
 REPO_KEYS = ("url", "branch", "file", "fetch-ref-spec")
 TABLE_PATH = "/tmp/table.yaml"
 PATCH_PATH = "/tmp/uploader-config-patch.json"
+SAVED_PATH = "/tmp/android-custom-saved.yaml"
 
 
 def row_name(selection):
@@ -136,12 +142,37 @@ def already_active(entries, name):
     return False
 
 
+def complete_repo(entry):
+    """Stored repo on one row, or None when that slot is empty or incomplete."""
+    if not isinstance(entry, dict):
+        return None
+    repo = entry.get("repo")
+    if not isinstance(repo, dict):
+        return None
+    if any(not repo.get(key) for key in REPO_KEYS):
+        return None
+    spec = repo.get("fetch-ref-spec")
+    if not isinstance(spec, list) or not all(isinstance(item, str) and item.strip() for item in spec):
+        return None
+    return repo_of(entry)
+
+
 def custom_repo_changed(entries, new_repo):
-    """True when the pasted AndroidCustom configuration is not the one stored on that row."""
+    """True when AndroidCustom has no stored repo, or the stored repo differs."""
     for entry in entries:
         if isinstance(entry, dict) and entry.get("name") == "AndroidCustom":
-            return repo_of(entry) != new_repo
+            current = complete_repo(entry)
+            if current is None:
+                return True
+            return current != new_repo
     return True
+
+
+def write_saved_listing(repo):
+    """Write the AndroidCustom entry the form shows the next time that row is opened."""
+    text = yaml.safe_dump([{"name": "AndroidCustom", "repo": repo}], sort_keys=False)
+    open(SAVED_PATH, "w").write(text)
+    print("write_saved_listing: %d characters" % len(text))
 
 
 def write_restart_flag(restart):
@@ -151,21 +182,64 @@ def write_restart_flag(restart):
     print("restart_uploaders: %s" % ("true" if restart else "false"))
 
 
+def config_kind(entry):
+    """AndroidCustom is custom. Every other named row is predefined."""
+    if not isinstance(entry, dict) or not entry.get("name"):
+        return "none"
+    if entry.get("name") == "AndroidCustom":
+        return "custom"
+    return "predefined"
+
+
+def active_entry(entries):
+    """The row that is active before this submit, or None."""
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("active") is True:
+            return entry
+    return None
+
+
+def print_config(heading, entry):
+    """Write one full row to the workflow log, labeled predefined or custom."""
+    kind = config_kind(entry)
+    print("===== %s (%s) =====" % (heading, kind))
+    if not isinstance(entry, dict):
+        print("(no active config)")
+        return
+    shown = {"name": entry.get("name")}
+    repo = entry.get("repo")
+    if isinstance(repo, dict):
+        shown["repo"] = repo
+    print(yaml.safe_dump(shown, sort_keys=False).rstrip())
+
+
 def main():
     selection, custom_text = read_inputs()
     entries = load_table()
+    previous = copy.deepcopy(active_entry(entries))
     same_row = already_active(entries, selection)
     repo_changed = False
     if selection == "AndroidCustom":
         custom_repo_value = custom_repo(custom_text)
         repo_changed = custom_repo_changed(entries, custom_repo_value)
+        write_saved_listing(custom_repo_value)
     else:
         custom_repo_value = None
         print("main: selection is not AndroidCustom, leaving repo blocks unchanged")
     chosen = apply_selection(entries, selection, custom_repo_value)
     write_patch(entries)
     write_restart_flag((not same_row) or repo_changed)
-    print("Active row: %s branch=%s" % (chosen["name"], chosen["repo"]["branch"]))
+    print(
+        "config: previous=%s (%s) current=%s (%s)"
+        % (
+            previous.get("name") if isinstance(previous, dict) else "none",
+            config_kind(previous),
+            chosen.get("name") if isinstance(chosen, dict) else "none",
+            config_kind(chosen),
+        )
+    )
+    print_config("previous config", previous)
+    print_config("current config", chosen)
 
 
 if __name__ == "__main__":

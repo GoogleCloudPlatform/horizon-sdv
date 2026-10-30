@@ -544,6 +544,69 @@ module "base" {
           }
         ]
       }
+    },
+    {
+      sa16 = {
+        account_id   = "gke-cws-workstation-power-sa"
+        display_name = "Cloud Workstations Start and Stop Workflows"
+        description  = "workflows/cws-workstation-power: start and stop Cloud Workstations from Argo workflows via Workload Identity"
+
+        gke_sas = [
+          {
+            gke_ns = "workflows"
+            gke_sa = "cws-workstation-power"
+          }
+        ]
+
+        # Start and stop are the custom role horizonCloudWorkstationsPower in terraform/modules/base.
+        roles    = toset([])
+        sa_roles = toset([])
+        # Argo archives step logs to the artifact bucket with the pod identity. That bucket is created by
+        # gitops, so access is a condition on its name rather than a bucket IAM binding.
+        conditional_roles = [
+          {
+            role        = "roles/storage.objectUser"
+            title       = "argo_workflows_artifact_bucket"
+            description = "Object access only on the Argo Workflows artifact bucket"
+            expression  = "resource.name == \"projects/_/buckets/${var.sdv_gcp_project_id}-argo-workflows\" || resource.name.startsWith(\"projects/_/buckets/${var.sdv_gcp_project_id}-argo-workflows/objects/\")"
+          }
+        ]
+      }
+    },
+    {
+      sa14 = {
+        account_id   = "gke-cws-module-sa"
+        display_name = "Cloud Workstations Module Controller"
+        description  = "cloud-workstations/cloud-workstations-module-sa: Cloud Workstations reconciliation via Workload Identity"
+
+        gke_sas = [
+          {
+            gke_ns = "cloud-workstations"
+            gke_sa = "cloud-workstations-module-sa"
+          }
+        ]
+
+        # Project permissions are the custom role horizonCloudWorkstationsController in terraform/modules/base.
+        roles             = toset([])
+        sa_roles          = toset([])
+        conditional_roles = []
+      }
+      sa15 = {
+        account_id   = "gke-cws-host-vm-sa"
+        display_name = "Cloud Workstations Module Host VM"
+        description  = "Service account attached to host VMs managed by the Cloud Workstations module"
+
+        # This identity is attached to workstation VMs. No Kubernetes workload impersonates it.
+        gke_sas = []
+
+        roles = toset([
+          "roles/artifactregistry.reader",
+          "roles/logging.logWriter",
+          "roles/monitoring.metricWriter"
+        ])
+        sa_roles          = toset([])
+        conditional_roles = []
+      }
     }
   )
 

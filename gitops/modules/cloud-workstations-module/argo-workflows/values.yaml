@@ -1,0 +1,251 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+workflowNamespace: workflows
+eventsNamespace: argo-events
+moduleName: cloud-workstations
+
+# Namespace of the Horizon Cloud Workstations CRs (created by the parent chart, wave 0).
+resourceNamespace: cloud-workstations
+
+# Default waits for the cws-helpers steps (seconds); callers may override per call.
+readyTimeoutSeconds: 1800
+deleteTimeoutSeconds: 1800
+
+# Artifact Registry paths (under <region>-docker.pkg.dev/<projectID>/) for the containerImage choices.
+# Same values as config.workloads.cloudWorkstations.workstationPresets.wsImages in gitops/workloads/values-jenkins.yaml.
+workstationImages:
+  codeOss: horizon-sdv/cloud-ws-images/horizon-code-oss
+  androidStudio: horizon-sdv/cloud-ws-images/horizon-android-studio
+  asfp: horizon-sdv/cloud-ws-images/horizon-asfp
+
+# Parameters of cws-create-config and cws-update-config, in the order of the Jenkins job form.
+# value is the Jenkins form prefill (config-admin-operations/*/groovy/job.groovy); no value = required.
+# A blank field falls back to the Terraform default (workloads/cloud-workstations/terraform/config/variables.tf).
+# createOnly parameters are not offered on update. updateRequired parameters have no default on update:
+# as update replaces every field, a default there would silently change the image or drop a disk.
+configParameters:
+  - name: cloudWsConfigName
+    description: "REQUIRED: Name of the workstation configuration."
+  - name: containerImage
+    value: "C-OSS (VCS)"
+    updateRequired: true
+    description: "C-OSS (VCS), AS, ASfP, or a full image URI (tag ignored)."
+  - name: containerImageTag
+    value: "latest"
+    description: "Tag appended to the selected image. Empty = latest."
+  - name: wsIdleTimeout
+    value: "1200"
+    description: "Idle timeout in seconds. Empty = 1200 (20 mins)."
+  - name: wsRunningTimeout
+    value: "43200"
+    description: "Running timeout in seconds. Empty = 43200 (12 hrs)."
+  - name: wsReplicaZones
+    value: ""
+    createOnly: true
+    description: "Exactly two comma-separated zones in the region. Empty = GCP default."
+  - name: hostMachineType
+    value: "e2-standard-4"
+    description: "Compute Engine machine type of the host VM. Empty = e2-standard-4."
+  - name: hostQuickStartPoolSize
+    value: "0"
+    description: "Pre-created host VMs (0 = none, low cost). Empty = 0."
+  - name: hostBootDiskSize
+    value: "40"
+    description: "Boot disk size in GB (min 31). Empty = 40."
+  - name: hostDisablePublicIpAddresses
+    value: "true"
+    description: "true or false. true = no public IP. Empty = true."
+  - name: hostDisableSsh
+    value: "true"
+    description: "true or false. true = SSH disabled. Empty = true."
+  - name: hostEnableNestedVirtualization
+    value: "false"
+    description: "true or false (N1/N2 machine types only). Empty = false."
+  - name: pdRequired
+    value: "false"
+    updateRequired: true
+    description: "true or false. true = mount a persistent disk (PD_* below)."
+  - name: pdMountPath
+    value: "/home"
+    description: "Persistent disk mount path. Empty = /home."
+  - name: pdFsType
+    value: "ext4"
+    description: "Filesystem type, e.g. ext4. Must be empty with pdSourceSnapshot."
+  - name: pdDiskType
+    value: "pd-balanced"
+    description: "pd-balanced, pd-ssd, pd-standard or pd-extreme. Empty = pd-standard."
+  - name: pdSizeGb
+    value: "10"
+    description: "10, 50, 100, 200, 500 or 1000. Empty = 200. <200 needs balanced/ssd."
+  - name: pdReclaimPolicy
+    value: "DELETE"
+    description: "DELETE or RETAIN. Empty = DELETE."
+  - name: pdSourceSnapshot
+    value: ""
+    description: "Snapshot name (no path). Requires empty pdFsType and pdSizeGb."
+  - name: edRequired
+    value: "false"
+    updateRequired: true
+    description: "true or false. true = mount an ephemeral disk (ED_* below)."
+  - name: edMountPath
+    value: "/tmp"
+    description: "Ephemeral disk mount path. Empty = /tmp."
+  - name: edDiskType
+    value: "pd-standard"
+    description: "pd-standard, pd-ssd, pd-balanced or pd-extreme. Empty = pd-standard."
+  - name: edSourceSnapshot
+    value: ""
+    description: "Source snapshot. Not with edSourceImage; needs edReadOnly=true."
+  - name: edSourceImage
+    value: ""
+    description: "Source image. Not together with edSourceSnapshot."
+  - name: edReadOnly
+    value: "false"
+    description: "true or false. true requires edSourceSnapshot."
+  - name: containerEntrypointCommands
+    value: ""
+    description: "Comma-separated entrypoint commands. Empty = image default."
+  - name: containerEntrypointArgs
+    value: ""
+    description: "Comma-separated entrypoint arguments, e.g. arg1, arg2."
+  - name: containerWorkingDir
+    value: ""
+    description: "Working directory inside the container."
+  - name: containerEnvVars
+    value: ""
+    description: "JSON object, e.g. {\"ENV1\":\"val1\", \"ENV2\":\"val2\"}."
+  - name: containerUser
+    value: ""
+    description: "Numeric user ID to run the container as."
+  - name: wsAllowedPorts
+    value: ""
+    description: "JSON list, e.g. [{\"first\":80,\"last\":80}]. Empty = 80 and 1024-65535."
+  - name: wsAdminIamMembers
+    description: "REQUIRED: Comma-separated emails granted Workstation Admin (full list)."
+
+deleteConfigParameters:
+  - name: cloudWsConfigName
+    description: "REQUIRED: Name of the workstation configuration to delete."
+  - name: confirmDelete
+    value: "false"
+    description: "REQUIRED: Set to true to confirm deletion (irreversible)."
+
+getConfigParameters:
+  - name: cloudWsConfigName
+    description: "REQUIRED: Exact name of the workstation configuration."
+
+listConfigsParameters:
+  - name: cloudWsConfigNameRegexPattern
+    value: ""
+    description: "Regex to filter configuration names, e.g. ^my-config-.*$. Empty = all."
+
+listWorkstationsByConfigParameters:
+  - name: cloudWsConfigName
+    description: "REQUIRED: Exact name of the workstation configuration."
+
+# From MODULE_CONFIG.
+config: {}
+
+# ServiceAccount for start and stop only. Workload Identity: gke-cws-workstation-power-sa.
+powerServiceAccount: cws-workstation-power
+# Clone source for Dockerfile contexts (parent Application sets these from repo.url / repo.revision).
+pipelineRepoUrl: ""
+pipelineRepoRevision: ""
+
+workflowTemplateName: cws-image-build
+
+# Portal / Sensor inputs. WorkflowTemplate arguments and the Sensor map this list
+# (cws.arguments / cws.sensor) so defaults cannot drift. Sensor src.value is the
+# fallback when the Horizon API omits a field that has a non-empty default.
+imageBuild:
+  parameters:
+    - name: horizonSubmittedFrom
+      value: ""
+      description: "Source of this run, e.g. portal. Shown as a label on the workflow."
+    - name: imageTag
+      value: ""
+      description: "Tag applied to every image built in this run."
+    - name: dryRun
+      value: "false"
+      description: "true = build only, nothing is pushed. Keep false if another image builds on this one."
+    - name: buildEnvironmentImage
+      value: "false"
+      description: "Build the cws-workflow step image used by all other CWS workflows."
+    - name: buildPreflight
+      value: "true"
+      description: "Build and push horizon-preflight. false = reuse preflightImage."
+    - name: preflightImage
+      value: "-"
+      description: "Published preflight URI when buildPreflight is false. Default - means unused."
+    - name: buildGnome
+      value: "true"
+      description: "Build and push horizon-gnome. false = reuse gnomeImage."
+    - name: gnomeImage
+      value: "-"
+      description: "Published GNOME URI when buildGnome is false. Default - means unused."
+    - name: buildCodeOss
+      value: "true"
+      description: "Build and push horizon-code-oss. false = reuse codeOssImage."
+    - name: buildAndroidStudio
+      value: "true"
+      description: "Build and push horizon-android-studio. false = reuse androidStudioImage."
+    - name: buildAsfp
+      value: "true"
+      description: "Build and push horizon-asfp. false = reuse asfpImage."
+    - name: installAntigravityAgent
+      value: "false"
+      description: "Forwarded to GNOME when it is built. true = install Antigravity into GNOME."
+
+# Workstation image builds. Paths are relative to the cloned repo root.
+# GAR paths match Jenkins CLOUD_WS_HORIZON_*_IMAGE_NAME / CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME.
+images:
+  environment:
+    # Slim image (gcloud, kubectl, jq). Separate GAR path from the Jenkins env image.
+    # Step image for every CWS workflow except cws-image-build. Build it once per environment
+    # with imageTag=latest; until then those workflows stay Pending (ImagePullBackOff).
+    dockerfileDir: gitops/modules/cloud-workstations-module/argo-workflows/images/environment
+    dockerArtifactPathName: horizon-sdv/cloud-ws-workloads/cws-workflow
+    tag: latest
+  preflight:
+    dockerfileDir: workloads/cloud-workstations/pipelines/workstation-images/horizon-preflight
+    dockerArtifactPathName: horizon-sdv/cloud-ws-images/horizon-preflight
+  gnome:
+    dockerfileDir: workloads/cloud-workstations/pipelines/workstation-images/horizon-gnome
+    dockerArtifactPathName: horizon-sdv/cloud-ws-images/horizon-gnome
+    cwsBaseImageTag: latest
+  codeOss:
+    dockerfileDir: workloads/cloud-workstations/pipelines/workstation-images/horizon-code-oss
+    dockerArtifactPathName: horizon-sdv/cloud-ws-images/horizon-code-oss
+  androidStudio:
+    dockerfileDir: workloads/cloud-workstations/pipelines/workstation-images/horizon-android-studio
+    dockerArtifactPathName: horizon-sdv/cloud-ws-images/horizon-android-studio
+  asfp:
+    dockerfileDir: workloads/cloud-workstations/pipelines/workstation-images/horizon-asfp
+    dockerArtifactPathName: horizon-sdv/cloud-ws-images/horizon-asfp
+  commonUtilsDir: workloads/cloud-workstations/pipelines/workstation-images/common-utils
+
+  # Describe pushed tags. Not the step image: cws-image-build must run before that image exists.
+  digest:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+
+# Build-arg defaults copied from the Jenkins job.groovy files.
+buildDefaults:
+  antigravity2Version: "2.2.1"
+  antigravity2TarballUrl: "https://storage.googleapis.com/antigravity-public/antigravity-hub/2.2.1-5287492581195776/linux-x64/Antigravity.tar.gz"
+  antigravity2TarballSha256: "a6ba77046f92aa1ce21d8a0c67495471af4c2be11ba624e5d935821969b20989"
+  antigravityCliVersion: "1.1.0"
+  antigravityCliTarballUrl: "https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.0/agy_cli_linux_x64.tar.gz"
+  antigravityCliSha256: "7ee512440af5ed0c819065cd7cc14eec90699214df4be32280ac346f0100577e"
+

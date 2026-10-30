@@ -410,12 +410,69 @@ resource "kubectl_manifest" "argocd_appproject" {
   ]
 }
 
+# Destroy only: polls until the root Application is gone (drain gate, then Argo CD cascade) so Argo CD,
+# its AppProject and the cluster outlive it. The kubectl provider wait cannot do this here: its watch is
+# cut by the Connect Gateway, and its polling mode is capped at 20 minutes.
+resource "terraform_data" "argocd_application_deletion" {
+  for_each = local.all_environments
+
+  input = {
+    app             = "${kubernetes_namespace.argocd[each.key].metadata[0].name}/${each.value.namespace_prefix}${var.argocd_application_name}"
+    url             = "${var.connect_gateway_url}/apis/argoproj.io/v1alpha1/namespaces/${kubernetes_namespace.argocd[each.key].metadata[0].name}/applications/${each.value.namespace_prefix}${var.argocd_application_name}"
+    timeout_minutes = 120
+  }
+
+  provisioner "local-exec" {
+    when        = destroy
+    interpreter = ["bash", "-c"]
+    command     = <<-EOT
+      set -euo pipefail
+      command -v curl >/dev/null || { echo "ERROR: curl not found"; exit 1; }
+      response_body=$(mktemp)
+      trap 'rm -f "$response_body"' EXIT
+      deadline=$(( $(date +%s) + ${self.output.timeout_minutes} * 60 ))
+      echo "Waiting for ${self.output.app} to be deleted"
+      while true; do
+        token=$(gcloud auth application-default print-access-token)
+        code=$(printf 'Authorization: Bearer %s\n' "$token" | curl -sS -o "$response_body" -w '%%{http_code}' -H @- "${self.output.url}" || true)
+        case "$code" in
+          404)
+            if grep -Eq '"kind"[[:space:]]*:[[:space:]]*"Status"' "$response_body" &&
+               grep -Eq '"reason"[[:space:]]*:[[:space:]]*"NotFound"' "$response_body" &&
+               grep -Eq '"group"[[:space:]]*:[[:space:]]*"argoproj.io"' "$response_body" &&
+               grep -Eq '"kind"[[:space:]]*:[[:space:]]*"applications"' "$response_body"; then
+              echo "OK: ${self.output.app} deleted"
+              exit 0
+            fi
+            echo "ERROR: GET ${self.output.app} returned an unexpected HTTP 404:" >&2
+            cat "$response_body" >&2
+            exit 1
+            ;;
+          200) ;;
+          *) echo "WARN: GET ${self.output.app} returned HTTP $code; retrying" ;;
+        esac
+        if [ "$(date +%s)" -ge "$deadline" ]; then
+          echo "ERROR: ${self.output.app} still present after ${self.output.timeout_minutes} minutes"
+          exit 1
+        fi
+        sleep 15
+      done
+    EOT
+  }
+
+  depends_on = [
+    kubectl_manifest.argocd_appproject,
+    helm_release.argocd_main,
+    helm_release.argocd_subenvs,
+    helm_release.workflow_namespace_drain
+  ]
+}
+
 # Create Application for each environment
 resource "kubectl_manifest" "argocd_application" {
   for_each = local.all_environments
 
   validate_schema = false
-  wait            = true
   # Avoid "metadata.resourceVersion: Invalid value: 0x0: must be specified for an update" on
   # Application CRD updates (e.g. after out-of-band kubectl apply) by using server-side apply.
   server_side_apply = true
@@ -460,6 +517,10 @@ resource "kubectl_manifest" "argocd_application" {
               environmentName: "${each.value.env_name}"
               enableNetworkPolicies: ${var.enable_network_policies}
               storageLocation: ${var.gcp_storage_location}
+              cloudWorkstations:
+                clusterId: horizon-sdv-ws-cluster
+                network: ${var.sdv_network}
+                subnetwork: ${var.primary_subnetwork}
               probeSourceCIDRs:
                 - ${var.nodes_range}
 %{if var.enable_arm64_dedicated_subnet~}
@@ -479,12 +540,16 @@ resource "kubectl_manifest" "argocd_application" {
               nginx:
                 image: nginx
                 tag: "${var.common_nginx_version}"
+              versions:
+                components:
+                  ${indent(18, trimspace(yamlencode(var.component_versions)))}
               containerImages:
                 kccWebhookCertMonitor: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/kcc-webhook-cert-monitor:${var.images["kcc-webhook-cert-monitor"].version}
                 horizondevelopmentportal: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/horizon-dev-portal:${var.images["horizon-dev-portal"].version}
                 gerritMcpServer: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/gerrit-mcp-server-app:${var.images["gerrit-mcp-server-app"].version}
                 moduleManager: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/module-manager-app:${var.images["module-manager-app"].version}
                 storageGcsModule: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/storage-gcs-module-app:${var.images["storage-gcs-module-app"].version}
+                cloudWorkstationsModule: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/cloud-workstations-module-app:${var.images["cloud-workstations-module-app"].version}
                 horizonApi: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/horizon-api-app:${var.images["horizon-api-app"].version}
               apps:
                 kccWebhookCertMonitor: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/kcc-webhook-cert-monitor:${var.images["kcc-webhook-cert-monitor"].version}
@@ -538,6 +603,7 @@ resource "kubectl_manifest" "argocd_application" {
     kubectl_manifest.argocd_appproject,
     helm_release.argocd_main,
     helm_release.argocd_subenvs,
-    helm_release.workflow_namespace_drain
+    helm_release.workflow_namespace_drain,
+    terraform_data.argocd_application_deletion
   ]
 }

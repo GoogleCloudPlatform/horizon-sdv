@@ -1,0 +1,399 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Cloud Workstations configuration operations, replacing the Jenkins Config-Admin-Operations jobs.
+# Parameters, defaults and messages follow those jobs; the steps only touch Horizon WorkstationConfig CRs
+# and the module controller applies them to Config Connector and GCP.
+{{- $create := include "cws.configParamList" (dict "root" . "mode" "create") | fromJsonArray }}
+{{- $update := include "cws.configParamList" (dict "root" . "mode" "update") | fromJsonArray }}
+{{- $updateRequired := list }}
+{{- range $update }}{{ if .updateRequired }}{{ $updateRequired = append $updateRequired .name }}{{ end }}{{ end }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-create-config
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+    horizon-sdv.io/expose: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  {{- include "cws.configMutex" . | nindent 2 }}
+  arguments:
+    parameters:
+      {{- include "cws.arguments" $create | nindent 6 }}
+  templates:
+    - name: main
+      dag:
+        tasks:
+          - name: validate
+            template: validate
+          - name: create
+            depends: validate
+            templateRef:
+              name: cws-helpers
+              template: create-and-wait-ready
+            arguments:
+              parameters:
+                - name: manifest
+                  value: "{{ "{{tasks.validate.outputs.parameters.manifest}}" }}"
+          - name: report
+            depends: create
+            template: report
+            arguments:
+              parameters:
+                - name: message
+                  value: "Created Workstation Configuration: '{{ "{{tasks.validate.outputs.parameters.name}}" }}' with input data."
+                - name: status
+                  value: "Status: SUCCESS - Workstation Configuration creation job completed."
+
+    - name: validate
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          {{- include "cws.platformEnv" . | nindent 10 }}
+          {{- include "cws.parameterEnv" $create | nindent 10 }}
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws.shellLib" . | nindent 12 }}
+            {{- include "cws.jenkinsLog" . | nindent 12 }}
+            {{- include "cws.configSpecLib" . | nindent 12 }}
+
+            echo 'Creating a new Cloud WS Configuration...'
+            check_config_required_inputs
+            parse_config_inputs create
+            require_cluster write
+            print_header "CLOUD WORKSTATION: CREATE CONFIGURATION"
+            load_config "$CONFIG_NAME"
+            [[ -z "$CONFIG_JSON" ]] \
+              || log_error "WS Config '${CONFIG_NAME}' already exists. Please enter a new unique workstation Configuration name. Aborting..."
+            check_config_rules
+            spec=$(config_spec create)
+            jq -n --arg name "$CONFIG_NAME" --argjson spec "$spec" \
+              '{apiVersion: "workstations.horizon-sdv.io/v1alpha1", kind: "WorkstationConfig", metadata: {name: $name}, spec: $spec}' \
+              > /tmp/manifest.json
+            printf '%s' "$CONFIG_NAME" > /tmp/name
+            log_info "WorkstationConfig to create:"
+            jq . /tmp/manifest.json | print_result
+      outputs:
+        parameters:
+          - name: manifest
+            valueFrom:
+              path: /tmp/manifest.json
+          - name: name
+            valueFrom:
+              path: /tmp/name
+
+    {{- include "cws.reportTemplate" . | nindent 4 }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-update-config
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+    horizon-sdv.io/expose: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  {{- include "cws.configMutex" . | nindent 2 }}
+  arguments:
+    parameters:
+      {{- include "cws.arguments" $update | nindent 6 }}
+  templates:
+    - name: main
+      dag:
+        tasks:
+          - name: validate
+            template: validate
+          - name: update
+            depends: validate
+            templateRef:
+              name: cws-helpers
+              template: patch-and-wait-ready
+            arguments:
+              parameters:
+                - name: kind
+                  value: workstationconfig
+                - name: name
+                  value: "{{ "{{tasks.validate.outputs.parameters.name}}" }}"
+                - name: patch
+                  value: "{{ "{{tasks.validate.outputs.parameters.patch}}" }}"
+          - name: report
+            depends: update
+            template: report
+            arguments:
+              parameters:
+                - name: message
+                  value: "Updated Workstation Configuration: '{{ "{{tasks.validate.outputs.parameters.name}}" }}' with new input data."
+                - name: status
+                  value: "Status: SUCCESS - Workstation Configuration update job completed."
+
+    # Like Jenkins, every Jenkins-managed field is replaced: a blank parameter means its default, not "unchanged".
+    # Exception: updateRequired parameters (image, PD, ED) have no default and must be set explicitly.
+    # replicaZones (immutable) and fields the Jenkins jobs never managed keep their current values.
+    - name: validate
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          {{- include "cws.platformEnv" . | nindent 10 }}
+          {{- include "cws.parameterEnv" $update | nindent 10 }}
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws.shellLib" . | nindent 12 }}
+            {{- include "cws.jenkinsLog" . | nindent 12 }}
+            {{- include "cws.configSpecLib" . | nindent 12 }}
+
+            echo 'Updating Cloud WS Configuration...'
+            check_config_required_inputs
+            require_update_inputs {{ join " " $updateRequired }}
+            parse_config_inputs update
+            require_cluster write
+            print_header "CLOUD WORKSTATION: UPDATE CONFIGURATION"
+            require_existing_config
+            check_config_rules
+            spec=$(config_spec update)
+            config_update_patch "$spec" <<<"$CONFIG_JSON" > /tmp/patch.json
+            printf '%s' "$CONFIG_NAME" > /tmp/name
+            log_info "Changes to WorkstationConfig '${CONFIG_NAME}' (JSON merge patch, null = removed):"
+            jq . /tmp/patch.json | print_result
+      outputs:
+        parameters:
+          - name: patch
+            valueFrom:
+              path: /tmp/patch.json
+          - name: name
+            valueFrom:
+              path: /tmp/name
+
+    {{- include "cws.reportTemplate" . | nindent 4 }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-delete-config
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+    horizon-sdv.io/expose: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  {{- include "cws.configMutex" . | nindent 2 }}
+  arguments:
+    parameters:
+      {{- include "cws.arguments" .Values.deleteConfigParameters | nindent 6 }}
+  templates:
+    - name: main
+      dag:
+        tasks:
+          - name: validate
+            template: validate
+          - name: delete
+            depends: validate
+            templateRef:
+              name: cws-helpers
+              template: delete-and-wait-gone
+            arguments:
+              parameters:
+                - name: kind
+                  value: workstationconfig
+                - name: name
+                  value: "{{ "{{tasks.validate.outputs.parameters.name}}" }}"
+          - name: report
+            depends: delete
+            template: report
+            arguments:
+              parameters:
+                - name: message
+                  value: "Deleted Workstation Configuration: '{{ "{{tasks.validate.outputs.parameters.name}}" }}' and its IAM bindings."
+                - name: status
+                  value: "Status: SUCCESS - Workstation Configuration deletion job completed."
+
+    # Refuses while Workstations still use the config: the controller would otherwise leave it stuck deleting.
+    - name: validate
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          {{- include "cws.platformEnv" . | nindent 10 }}
+          {{- include "cws.parameterEnv" .Values.deleteConfigParameters | nindent 10 }}
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws.shellLib" . | nindent 12 }}
+            {{- include "cws.jenkinsLog" . | nindent 12 }}
+            {{- include "cws.configSpecLib" . | nindent 12 }}
+
+            echo 'Deleting Cloud WS Configuration...'
+            require_config_name
+            confirm=$(param_bool confirmDelete false)
+            [[ "$confirm" == true ]] \
+              || log_error "Required Parameter value NOT set to true: confirmDelete must be selected in order to proceed for deletion."
+            require_cluster
+            print_header "CLOUD WORKSTATION: DELETE CONFIGURATION"
+            require_existing_config
+            children=$(workstations_of_config "$CONFIG_NAME")
+            if [[ -n "$children" ]]; then
+              log_warning "Workstations created using WS Config '${CONFIG_NAME}':"
+              print_result <<<"$children"
+              log_error "WS Config '${CONFIG_NAME}' still has workstations. Delete them first. Aborting..."
+            fi
+            printf '%s' "$CONFIG_NAME" > /tmp/name
+      outputs:
+        parameters:
+          - name: name
+            valueFrom:
+              path: /tmp/name
+
+    {{- include "cws.reportTemplate" . | nindent 4 }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-get-config
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+    horizon-sdv.io/expose: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: get-config
+  serviceAccountName: workflow-executor
+  arguments:
+    parameters:
+      {{- include "cws.arguments" .Values.getConfigParameters | nindent 6 }}
+  templates:
+    - name: get-config
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          {{- include "cws.platformEnv" . | nindent 10 }}
+          {{- include "cws.parameterEnv" .Values.getConfigParameters | nindent 10 }}
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws.shellLib" . | nindent 12 }}
+            {{- include "cws.jenkinsLog" . | nindent 12 }}
+            {{- include "cws.configSpecLib" . | nindent 12 }}
+
+            echo 'Fetching details of the input Cloud WS Configuration...'
+            require_config_name
+            require_cluster
+            print_header "CLOUD WORKSTATION: GET CONFIG DETAILS"
+            require_existing_config
+            log_success "Workstation Config '${CONFIG_NAME}' Details:"
+            config_details <<<"$CONFIG_JSON" | print_result
+            log_info "Workstation Config '${CONFIG_NAME}' Status:"
+            print_status <<<"$CONFIG_JSON" | print_result
+            echo "Status: SUCCESS - Workstation Configuration details retrieved successfully."
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-list-configs
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+    horizon-sdv.io/expose: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: list-configs
+  serviceAccountName: workflow-executor
+  arguments:
+    parameters:
+      {{- include "cws.arguments" .Values.listConfigsParameters | nindent 6 }}
+  templates:
+    - name: list-configs
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          {{- include "cws.platformEnv" . | nindent 10 }}
+          {{- include "cws.parameterEnv" .Values.listConfigsParameters | nindent 10 }}
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws.shellLib" . | nindent 12 }}
+            {{- include "cws.jenkinsLog" . | nindent 12 }}
+
+            echo 'Fetching list of Cloud WS Configurations that match input regex pattern...'
+            pattern=$(trim "$cloudWsConfigNameRegexPattern")
+            require_cluster
+            print_header "CLOUD WORKSTATION: LIST CONFIGURATIONS"
+            configs=$(kubectl get "$(resource_for workstationconfig)" -n "$CWS_NAMESPACE" -o json) \
+              || log_error "Failed to list Workstation Configs."
+            log_info "Filtering list of WS Configs that match given regex pattern: '${pattern}'..."
+            matching=$(jq -r --arg reg "$pattern" '.items | map(.metadata.name) | map(select(test($reg))) | .[]' <<<"$configs") \
+              || log_error "Failed to run jq: invalid JSON or invalid regex pattern."
+            if [[ -z "$matching" ]]; then
+              log_warning "NO matching workstation Configurations found for input regex pattern: '${pattern}'"
+            else
+              log_success "List of matching workstation Configurations found for input regex pattern: '${pattern}'"
+              print_result <<<"$matching"
+            fi
+            echo "Status: SUCCESS - Workstation Configurations listed successfully."
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-list-workstations-by-config
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+    horizon-sdv.io/expose: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: list-workstations-by-config
+  serviceAccountName: workflow-executor
+  arguments:
+    parameters:
+      {{- include "cws.arguments" .Values.listWorkstationsByConfigParameters | nindent 6 }}
+  templates:
+    - name: list-workstations-by-config
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          {{- include "cws.platformEnv" . | nindent 10 }}
+          {{- include "cws.parameterEnv" .Values.listWorkstationsByConfigParameters | nindent 10 }}
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws.shellLib" . | nindent 12 }}
+            {{- include "cws.jenkinsLog" . | nindent 12 }}
+
+            echo 'Fetching list of workstations created using input Cloud WS Configuration...'
+            require_config_name
+            require_cluster
+            print_header "CLOUD WORKSTATION: LIST WORKSTATIONS BY CONFIG"
+            require_existing_config
+            workstations=$(workstations_of_config "$CONFIG_NAME")
+            if [[ -z "$workstations" ]]; then
+              log_warning "NO workstations found for input configuration: '${CONFIG_NAME}'"
+            else
+              log_success "List of Workstations created using input Configuration: '${CONFIG_NAME}'"
+              print_result <<<"$workstations"
+            fi
+            echo "Status: SUCCESS - Workstations listed by configuration successfully."

@@ -22,14 +22,24 @@ locals {
 
   common_nginx_version = "1.31.2-alpine3.23"
 
+  # Horizon platform version(s) from the repo-root versions.yaml. components.horizoncore is also the
+  # Developer Portal image tag (build_version / deploy_version of "horizon-dev-portal" below).
+  versions             = yamldecode(file("${path.module}/../../../versions.yaml"))
+  horizon_core_version = local.versions.components.horizoncore
+
   images = {
     # build_version: version of container images to be built and pushed to Artifact Registry.
     # deploy_version: version of container images to be used for Argo CD post-jobs.
 
     "storage-gcs-module-app" = {
       directory      = "storage-gcs-module"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
+    }
+    "cloud-workstations-module-app" = {
+      directory      = "cloud-workstations-module"
+      build_version  = "0.2.1"
+      deploy_version = "0.2.1"
     }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"
@@ -107,17 +117,18 @@ locals {
       deploy_version = "1.0.0"
     }
     # Developer portal (Vite + Go proxy). context_path is set so sdv-container-images trigger hashing skips node_modules/dist (same as former external client tree).
+    # Image tag (build_version / deploy_version) follows components.horizoncore from the repo-root versions.yaml; do not edit here.
     "horizon-dev-portal" = {
       directory      = "horizon-dev-portal"
-      build_version  = "4.3.4"
-      deploy_version = "4.3.4"
+      build_version  = local.horizon_core_version
+      deploy_version = local.horizon_core_version
       context_path   = abspath("${path.module}/../sdv-container-images/images/horizon-dev-portal/horizon-dev-portal")
       platform       = "linux/amd64"
     }
     "module-manager-app" = {
       directory      = "module-manager"
-      build_version  = "0.3.4"
-      deploy_version = "0.3.4"
+      build_version  = "0.3.7"
+      deploy_version = "0.3.7"
     }
     "workflow-namespace-drain-app" = {
       directory      = "workflow-namespace-drain"
@@ -126,8 +137,8 @@ locals {
     }
     "horizon-api-app" = {
       directory      = "horizon-api"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.1.1"
+      deploy_version = "1.1.1"
     }
     "kcc-webhook-cert-monitor" = {
       directory      = "kcc-webhook-cert-monitor"

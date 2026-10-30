@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -145,16 +146,17 @@ func anyManagedApplicationDeletionTimestamp(parentErr error, parent *unstructure
 
 // Handler implements the REST API for the Module Manager.
 type Handler struct {
-	client          client.Client
-	apiReader       client.Reader
-	stateStore      controller.StateStoreInterface
-	catalogStore    controller.CatalogStoreInterface
-	namespace       string
-	argocdNamespace string
-	argocdProject   string
-	repoURL         string
-	targetRevision  string
-	moduleConfig    string
+	client             client.Client
+	apiReader          client.Reader
+	stateStore         controller.StateStoreInterface
+	catalogStore       controller.CatalogStoreInterface
+	namespace          string
+	argocdNamespace    string
+	argocdProject      string
+	repoURL            string
+	targetRevision     string
+	moduleConfig       string
+	gitOpsRootAppNames []string
 }
 
 // NewHandler returns a new API handler.
@@ -164,18 +166,20 @@ func NewHandler(
 	stateStore controller.StateStoreInterface,
 	catalogStore controller.CatalogStoreInterface,
 	namespace, argocdNamespace, argocdProject, repoURL, targetRevision, moduleConfig string,
+	gitOpsRootAppNames []string,
 ) *Handler {
 	return &Handler{
-		client:          c,
-		apiReader:       apiReader,
-		stateStore:      stateStore,
-		catalogStore:    catalogStore,
-		namespace:       namespace,
-		argocdNamespace: argocdNamespace,
-		argocdProject:   argocdProject,
-		repoURL:         repoURL,
-		targetRevision:  targetRevision,
-		moduleConfig:    moduleConfig,
+		client:             c,
+		apiReader:          apiReader,
+		stateStore:         stateStore,
+		catalogStore:       catalogStore,
+		namespace:          namespace,
+		argocdNamespace:    argocdNamespace,
+		argocdProject:      argocdProject,
+		repoURL:            repoURL,
+		targetRevision:     targetRevision,
+		moduleConfig:       moduleConfig,
+		gitOpsRootAppNames: gitOpsRootAppNames,
 	}
 }
 
@@ -695,6 +699,30 @@ func (h *Handler) deleteModuleTargetRevision(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, map[string]string{"status": "ok"})
 }
 
+// platformTeardownBlocksEnable reports whether any configured root Application is deleting,
+// so a module enabled now would race the platform drain.
+func (h *Handler) platformTeardownBlocksEnable(ctx context.Context) (bool, error) {
+	for _, name := range h.gitOpsRootAppNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(schema.GroupVersionKind{Group: "argoproj.io", Version: "v1alpha1", Kind: "Application"})
+		err := h.client.Get(ctx, client.ObjectKey{Namespace: h.argocdNamespace, Name: name}, u)
+		if apierrors.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if ts := u.GetDeletionTimestamp(); ts != nil && !ts.IsZero() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (h *Handler) enableModule(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -708,6 +736,16 @@ func (h *Handler) enableModule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	controller.ModuleOpsMutex.Lock()
 	defer controller.ModuleOpsMutex.Unlock()
+
+	blocking, err := h.platformTeardownBlocksEnable(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if blocking {
+		http.Error(w, "platform teardown in progress", http.StatusConflict)
+		return
+	}
 
 	mod, err := h.resolveModule(ctx, idOrName)
 	if err != nil || mod == nil {

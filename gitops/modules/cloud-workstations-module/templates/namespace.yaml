@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Dedicated cloud-workstations namespace for the Cloud Workstations controller,
+# Horizon custom resources, and owner-linked KCC objects (LLD D7, D8).
+# Created at Sync Wave 0 so that it exists and is secured before child applications sync.
+{{- if not (default false .Values.config.isSubEnvironment) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloud-workstations
+  labels:
+    horizon-sdv.io/module: {{ .Values.moduleName | default "cloud-workstations" | quote }}
+    horizon-sdv.io/module-managed: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+{{- end }}
+

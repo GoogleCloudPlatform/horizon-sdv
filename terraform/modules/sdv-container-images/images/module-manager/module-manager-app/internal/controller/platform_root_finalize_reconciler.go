@@ -33,14 +33,17 @@ var argoApplicationGVK = schema.GroupVersionKind{Group: "argoproj.io", Version: 
 // interface to keep the reconciler unit-testable without a real state/catalog store.
 type platformDrainer interface {
 	DrainAllEnabledModules(ctx context.Context) error
+	DisableAllEnabledModules(ctx context.Context) error
 	ManagedModuleApplicationsRemaining(ctx context.Context, argoCDNamespace string) (bool, error)
-	ManagedDestinationNamespaces(ctx context.Context, argoCDNamespace string) []string
+	platformDrainNamespaces(ctx context.Context) []string
 	StripKCCFinalizersInNamespaces(ctx context.Context, namespaces []string) error
 	RemovePlatformDrainFinalizer(ctx context.Context, ns, name string) error
+	PlatformDrainGatePresent(ctx context.Context) (bool, error)
+	ReleasePlatformDrainGate(ctx context.Context) error
 }
 
 // RootGitOpsApplicationReconciler drains module Applications when the root horizon-sdv
-// Application is deleted, then removes PlatformDrainFinalizer to unblock Terraform destroy.
+// Application is deleted, then releases the drain gate and removes PlatformDrainFinalizer.
 type RootGitOpsApplicationReconciler struct {
 	Client             client.Client
 	Drainer            platformDrainer
@@ -69,10 +72,9 @@ func (r *RootGitOpsApplicationReconciler) Reconcile(ctx context.Context, req ctr
 	return ctrl.Result{}, nil
 }
 
-// reconcileRoot drains modules and removes PlatformDrainFinalizer from the root Application.
+// reconcileRoot drains modules once the root Application is being deleted. With the drain gate in
+// place the drain runs before Argo CD removes anything else; without it, the finalizer fallback runs.
 func (r *RootGitOpsApplicationReconciler) reconcileRoot(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(argoApplicationGVK)
 	if err := r.Client.Get(ctx, req.NamespacedName, u); err != nil {
@@ -81,9 +83,55 @@ func (r *RootGitOpsApplicationReconciler) reconcileRoot(ctx context.Context, req
 	if ts := u.GetDeletionTimestamp(); ts == nil || ts.IsZero() {
 		return ctrl.Result{}, nil
 	}
+	gated, err := r.Drainer.PlatformDrainGatePresent(ctx)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+	}
+	if gated {
+		return r.reconcileGatedDrain(ctx, req)
+	}
 	if !hasFinalizerUnstructured(u, PlatformDrainFinalizer) {
 		return ctrl.Result{}, nil
 	}
+	return r.reconcileRootDeletion(ctx, req)
+}
+
+// reconcileGatedDrain runs while the drain gate holds Argo CD's cascade, so Argo CD, Config Connector
+// and the module controllers are all still running, as they are for a Portal disable.
+func (r *RootGitOpsApplicationReconciler) reconcileGatedDrain(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	if err := r.Drainer.DisableAllEnabledModules(ctx); err != nil {
+		logger.Error(err, "disable all modules behind the platform drain gate",
+			"gateHeld", true,
+			"escapeHatch", platformDrainGateEscapeHatch(r.ArgoCDNamespace))
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	remaining, err := r.Drainer.ManagedModuleApplicationsRemaining(ctx, r.ArgoCDNamespace)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+	}
+	if remaining {
+		logger.Info("waiting for module Applications to be deleted before releasing the platform drain gate")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	if err := r.Drainer.ReleasePlatformDrainGate(ctx); err != nil {
+		logger.Error(err, "release platform drain gate")
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+	}
+	if err := r.Drainer.RemovePlatformDrainFinalizer(ctx, req.Namespace, req.Name); err != nil {
+		logger.Error(err, "remove platform drain finalizer from root Application")
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+	}
+	return ctrl.Result{}, nil
+}
+
+// reconcileRootDeletion is the fallback when there is no drain gate (for example the root never synced
+// its last wave). Argo CD's cascade is already removing platform components while this runs.
+func (r *RootGitOpsApplicationReconciler) reconcileRootDeletion(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 
 	if err := r.Drainer.DrainAllEnabledModules(ctx); err != nil {
 		logger.Error(err, "drain all modules for platform teardown")
@@ -98,7 +146,7 @@ func (r *RootGitOpsApplicationReconciler) reconcileRoot(ctx context.Context, req
 		// Child Applications are still present (waiting on KCC or other finalizers).
 		// Re-run the KCC stripper on every reconcile iteration so stuck KCC objects
 		// unblock as soon as their token expires or auth is revoked.
-		nss := r.Drainer.ManagedDestinationNamespaces(ctx, r.ArgoCDNamespace)
+		nss := r.Drainer.platformDrainNamespaces(ctx)
 		if err := r.Drainer.StripKCCFinalizersInNamespaces(ctx, nss); err != nil {
 			logger.Error(err, "strip KCC finalizers during platform drain wait")
 		}
@@ -132,38 +180,32 @@ func (r *RootGitOpsApplicationReconciler) SetupWithManager(mgr ctrl.Manager) err
 	argo := &unstructured.Unstructured{}
 	argo.SetGroupVersionKind(argoApplicationGVK)
 
-	matchWatched := func(u *unstructured.Unstructured) bool {
-		if u.GetNamespace() != ns {
-			return false
-		}
-		_, ok := rootNames[u.GetName()]
-		return ok
-	}
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(argo).
 		WithEventFilter(predicate.Funcs{
 			CreateFunc: func(e event.CreateEvent) bool {
 				u, ok := e.Object.(*unstructured.Unstructured)
-				if !ok || !matchWatched(u) {
-					return false
-				}
-				ts := u.GetDeletionTimestamp()
-				if ts == nil || ts.IsZero() {
-					return false
-				}
-				return hasFinalizerUnstructured(u, PlatformDrainFinalizer)
+				return ok && rootIsDeleting(u, ns, rootNames)
 			},
 			DeleteFunc: func(e event.DeleteEvent) bool { return false },
 			UpdateFunc: func(e event.UpdateEvent) bool {
 				u, ok := e.ObjectNew.(*unstructured.Unstructured)
-				if !ok || !matchWatched(u) {
-					return false
-				}
-				ts := u.GetDeletionTimestamp()
-				return ts != nil && !ts.IsZero()
+				return ok && rootIsDeleting(u, ns, rootNames)
 			},
 			GenericFunc: func(e event.GenericEvent) bool { return false },
 		}).
 		Complete(r)
+}
+
+// rootIsDeleting accepts a configured root Application with a deletion timestamp. It does not require
+// PlatformDrainFinalizer, because the gated drain must run and release the gate even without it.
+func rootIsDeleting(u *unstructured.Unstructured, ns string, rootNames map[string]struct{}) bool {
+	if u == nil || u.GetNamespace() != ns {
+		return false
+	}
+	if _, ok := rootNames[u.GetName()]; !ok {
+		return false
+	}
+	ts := u.GetDeletionTimestamp()
+	return ts != nil && !ts.IsZero()
 }

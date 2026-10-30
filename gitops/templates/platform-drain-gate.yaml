@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+# Platform drain gate. When the root Application is deleted, Argo CD deletes its resources in reverse
+# sync-wave order and waits for each wave to be gone before the next. This ConfigMap is the highest wave,
+# so it goes first and its finalizer holds the rest of the cascade. Module Manager disables every enabled
+# module while Argo CD, Config Connector and the module controllers are still running, then removes it.
+# Keep the wave above every other wave in gitops/templates.
+# Prune=false: dropping this file from Git must not delete the gate outside a platform teardown.
+# Do not delete it by hand. If a teardown is stuck, check the module-manager logs; to give up on the drain:
+#   kubectl -n <prefix>argocd patch configmap platform-drain-gate --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-drain-gate
+  namespace: {{ .Values.config.namespacePrefix }}argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "100"
+    argocd.argoproj.io/sync-options: Prune=false
+  finalizers:
+    - horizon-sdv.io/platform-drain-gate

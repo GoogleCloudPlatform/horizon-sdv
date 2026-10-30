@@ -15,6 +15,11 @@
 # Workflow template for selecting an android version for uploader seeding.
 # Each dropdown label is the stored row name. The branch rides along in parentheses
 # so the portal can show it; the selection script keeps only the name.
+#
+# Configuration is the one form box. AndroidCustom can edit it, and the saved
+# repo is shown the next time that row is opened. A predefined version shows
+# the same box read-only: its own branch, and the shared manifest url, file,
+# and fetch-ref-spec from uploader values.
 
 {{- $customBranch := "" }}
 {{- $activeName := "" }}
@@ -33,6 +38,32 @@
 {{- end }}
 {{- if not $activeName }}
 {{- fail "uploaderConfig.entries must mark one row active" }}
+{{- end }}
+{{- $savedRepo := dict }}
+{{- $found := lookup "v1" "ConfigMap" .Values.horizonNamespace .Values.uploaderConfigMapName }}
+{{- $tableText := "" }}
+{{- if $found.data }}
+{{- $tableText = index $found.data "table" | default "" }}
+{{- end }}
+{{- if $tableText }}
+{{- range fromYamlArray $tableText }}
+{{- if eq .name "AndroidCustom" }}
+{{- $repo := .repo }}
+{{- if and $repo (index $repo "url") (index $repo "branch") (index $repo "file") (index $repo "fetch-ref-spec") }}
+{{- $savedRepo = $repo }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $showURL := .Values.uploaderConfig.manifestUrl }}
+{{- $showBranch := $customBranch }}
+{{- $showFile := .Values.uploaderConfig.manifestFile }}
+{{- $showSpec := .Values.uploaderConfig.fetchRefSpec }}
+{{- if index $savedRepo "url" }}
+{{- $showURL = index $savedRepo "url" }}
+{{- $showBranch = index $savedRepo "branch" }}
+{{- $showFile = index $savedRepo "file" }}
+{{- $showSpec = index $savedRepo "fetch-ref-spec" }}
 {{- end }}
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
@@ -59,8 +90,9 @@ spec:
 {{- end }}
         
       - name: Configuration
-        description: "Read-only unless Android_Versions is AndroidCustom."
-        value: |
+        description: |
+          Read-only unless Android_Versions is AndroidCustom.
+          # predefined-template
           - name: AndroidCustom
             repo:
               url: {{ .Values.uploaderConfig.manifestUrl }}
@@ -68,6 +100,16 @@ spec:
               file: {{ .Values.uploaderConfig.manifestFile }}
               fetch-ref-spec:
 {{- range .Values.uploaderConfig.fetchRefSpec }}
+              - {{ . }}
+{{- end }}
+        value: |
+          - name: AndroidCustom
+            repo:
+              url: {{ $showURL }}
+              branch: {{ $showBranch }}
+              file: {{ $showFile }}
+              fetch-ref-spec:
+{{- range $showSpec }}
                 - {{ . }}
 {{- end }}
   templates:
@@ -101,6 +143,8 @@ spec:
 {{- range .Values.uploaderConfig.fetchRefSpec }}
                     - {{ . }}
 {{- end }}
+          - name: WORKFLOW_TEMPLATE
+            value: abfs-uploader-config-select
           - name: ABFS_NAMESPACE
             value: {{ .Values.abfsNamespace | quote }}
           - name: UPLOADER_STATEFULSET
@@ -128,6 +172,26 @@ spec:
 {{ .Files.Get "scripts/set_active_uploader_config.py" | nindent 12 }}
             PY
             kubectl patch configmap "${UPLOADER_CONFIGMAP}" -n "${HORIZON_NAMESPACE}" --type merge --patch-file /tmp/uploader-config-patch.json
+            if [[ -s /tmp/android-custom-saved.yaml ]]; then
+              kubectl get workflowtemplate "${WORKFLOW_TEMPLATE}" -o json > /tmp/wft.json
+              python3 - << 'PY'
+            import json
+            wft = json.load(open("/tmp/wft.json"))
+            text = open("/tmp/android-custom-saved.yaml").read()
+            if not text.endswith("\n"):
+                text += "\n"
+            params = wft.get("spec", {}).get("arguments", {}).get("parameters", [])
+            index = next((i for i, item in enumerate(params) if item.get("name") == "Configuration"), None)
+            if index is None:
+                raise SystemExit("ERROR: WorkflowTemplate is missing the Configuration parameter")
+            json.dump(
+                [{"op": "replace", "path": "/spec/arguments/parameters/%d/value" % index, "value": text}],
+                open("/tmp/wft-configuration.patch.json", "w"),
+            )
+            print("patch Configuration index=%d chars=%d" % (index, len(text)))
+            PY
+              kubectl patch workflowtemplate "${WORKFLOW_TEMPLATE}" --type json --patch-file /tmp/wft-configuration.patch.json
+            fi
             if [[ "$(tr -d '[:space:]' < /tmp/uploader-restart)" != "true" ]]; then
               echo "Selected row is already active; uploaders were not restarted"
               exit 0

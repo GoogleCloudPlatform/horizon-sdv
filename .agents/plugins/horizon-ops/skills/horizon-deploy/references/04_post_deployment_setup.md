@@ -1,3 +1,18 @@
+<!-- Copyright 2026 Google LLC
+Modifications Copyright (c) 2026 Accenture, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
+
 # Phase 4: Post-Deployment Setup
 
 This runbook covers critical post-deployment configurations required to bring the cluster to fully operational status.
@@ -19,10 +34,8 @@ When Terraform creates the subdomain zone `<SUB_DOMAIN>-horizon-sdv-com` (DNS Na
 3. Save the records and allow standard DNS propagation.
 
 ### 1.2 DNSSEC Authorization (If `sdv_dns_dnssec_enabled = true`)
-1. In [Google Search Console](https://search.google.com/search-console), verify ownership of `<HORIZON_DOMAIN>`.
-2. Retrieve the DS record from **Cloud DNS** → `<SUB_DOMAIN>-horizon-sdv-com` → **Registrar Setup**.
-3. Add the `DS` record to your root zone pointing to `<SUB_DOMAIN>`.
-4. Verify DNSSEC at [DNSSEC Debugger](https://dnssec-debugger.verisignlabs.com/).
+1. In [Google Search Console](https://search.google.com/search-console), add `<HORIZON_DOMAIN>` as a property. If it is not verified automatically, add the TXT record shown by Search Console to the root zone, then click **Verify** (see "Zone creation and authorization" in `docs/deployment_guide.md`).
+2. *(Optional)* Retrieve the DS record from **Cloud DNS** → `<SUB_DOMAIN>-horizon-sdv-com` → **Registrar Setup**, add it to your root zone for `<SUB_DOMAIN>`, and check the chain at [DNSSEC Debugger](https://dnssec-debugger.verisignlabs.com/).
 
 ---
 
@@ -35,8 +48,10 @@ Obtain cluster credentials to run `kubectl` commands through Google Cloud Connec
 gcloud auth login
 
 # 2. Get fleet credentials
-# Replace <MEMBERSHIP_NAME> with your GKE cluster name (typically sdv-<env-name>-cluster)
-gcloud container fleet memberships get-credentials <MEMBERSHIP_NAME> --project=<GCP_PROJECT_ID>
+# The fleet membership is the GKE cluster name: sdv-cluster (terraform/env/main.tf).
+# If that is not found (e.g. an older deployment), list memberships and use the one shown.
+gcloud container fleet memberships get-credentials sdv-cluster --project=<GCP_PROJECT_ID>
+# Fallback: gcloud container fleet memberships list --project=<GCP_PROJECT_ID> --format="value(name)"
 
 # 3. Verify connectivity
 kubectl get nodes
@@ -50,27 +65,28 @@ Keycloak provides central IAM and SSO for all applications.
 
 > [!IMPORTANT]
 > **Proactive Credential Presentation Rule**:
-> Only present the two locally-generated Keycloak administrator credentials below. Do **not** proactively display Terraform-generated service passwords (Argo CD, Jenkins, Postgres, etc.) as workloads receive credentials automatically via External Secrets and users authenticate via Keycloak SSO.
+> Only present the locally-generated administrator credentials below (and the Argo CD break-glass `admin` from `manual_secrets.s5`). Do **not** proactively display Terraform-generated service passwords (Jenkins, Postgres, etc.) as workloads receive credentials automatically via External Secrets and users authenticate via Keycloak SSO.
 
 | Account | Realm | Username | Secret Manager Key | Purpose & Usage |
 | :--- | :--- | :--- | :--- | :--- |
-| **Horizon SSO Admin** *(Recommended)* | `horizon` | `horizon-admin` | `keycloak-horizon-admin-password-b64` | **Primary SSO account for all platform tools**.<br>Use when logging into Argo CD, Jenkins, Gerrit, Grafana, Headlamp, and Developer Portal via **"LOG IN VIA KEYCLOAK"**, or at `/auth/admin/horizon/console/`. |
+| **Horizon SSO Admin** *(Recommended)* | `horizon` | `horizon-admin` | `keycloak-horizon-admin-password-b64` (initial password only) | **Primary SSO account for all platform tools**.<br>Use when logging into Argo CD, Jenkins, Gerrit, Grafana, Headlamp, and Developer Portal via **"LOG IN VIA KEYCLOAK"**, or at `/auth/admin/horizon/console/`.<br>Keycloak requires a password change at first login. |
 | **Keycloak Root Superadmin** | `master` | `admin` | `keycloak-admin-password-b64` | **Root Keycloak server administration only**.<br>Used at `/auth/admin/master/console/` to manage server-level settings and realms. |
 
-### 3.2 Keycloak Administration Steps
+### 3.1 Keycloak Administration Steps
 1. Open the Keycloak Console:
    - For Horizon realm: `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/auth/admin/horizon/console/` (Log in with `horizon-admin`)
    - For Master realm: `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/auth/admin/master/console/` (Log in with `admin`)
-2. Retrieve the respective password from GCP Secret Manager:
+2. Retrieve the respective password from GCP Secret Manager. The `horizon-admin` value is the **initial** password and is only valid until the first login:
    ```bash
-   # Horizon realm admin password
+   # Horizon realm admin initial password (valid until first login)
    gcloud secrets versions access latest --secret="keycloak-horizon-admin-password-b64" --project=<GCP_PROJECT_ID> | base64 --decode && echo
 
    # Master realm superadmin password
    gcloud secrets versions access latest --secret="keycloak-admin-password-b64" --project=<GCP_PROJECT_ID> | base64 --decode && echo
    ```
+3. If the `horizon-admin` password was changed and lost, log in at `/auth/admin/master/console/` as `admin`, switch to the `horizon` realm, then **Users** → `horizon-admin` → **Credentials** → **Reset password**.
 
-### 3.3 Configure Google Identity Provider
+### 3.2 Configure Google Identity Provider
 1. In the **Horizon** realm, navigate to **Identity Providers** → **Add provider** → **Google**.
 2. Verify Redirect URI matches:
    `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/auth/realms/horizon/broker/google/endpoint`
@@ -108,7 +124,7 @@ Keycloak provides central IAM and SSO for all applications.
 > By security design (Principle of Least Privilege), Keycloak provisions users (including `horizon-admin` and initial Google SSO users) with standard realm authentication, but does **not** grant cluster-wide admin/write rights across connected apps by default. Without explicit group membership:
 > - **Argo CD** assigns `role:readonly` (causing `permission denied: applications, sync`).
 > - **Jenkins** assigns view-only access.
-> - **Grafana** assigns viewer role.
+> - **Grafana** refuses login unless the user is in `administrators` (Admin) or `viewers` (Viewer). `developers` alone is not enough (`gitops/templates/grafana.yaml`: `role_attribute_strict: true`).
 >
 > Therefore, joining `administrators` is a required post-deployment step for any platform administrator.
 
@@ -140,16 +156,25 @@ Horizon SDV orchestrates multi-application deployment via sequential **Argo CD S
 
 ### 5.1 Sync Wave Sequence & Architecture
 
-| Sync Wave | Components / Resources | Verification & Purpose |
-| :---: | :--- | :--- |
-| **Wave 0** | Core Namespaces, CRDs, ExternalSecrets, NetworkPolicies, ServiceAccounts | Foundational Kubernetes schemas & IAM access. |
-| **Wave 1** | StorageClasses, PVCs, Filestore CSI driver, Redis, Zookeeper | Persistent storage & caching backends. |
-| **Wave 2** | PostgreSQL Database, Config Connector GCP resources | Relational database & Cloud SQL backends. |
-| **Wave 3** | Core Controllers, Keycloak deployment, Gerrit Operator, Argo Workflows | Central IAM & workflow orchestrators. |
-| **Wave 4** | Jenkins Controller, Gerrit instance, Grafana, Headlamp, MTK Connect, Horizon API | Workload execution engines & platform UI tools. |
-| **Wave 5** | Post-install Jobs (`keycloak-post-*`) & Core Gateway Routes (`gateway-*.yaml`) | Automatic client creation in Keycloak & Gateway HTTPS ingress for core apps. |
-| **Wave 6** | Backstage Developer Portal Application (`horizon-dev-portal`) | Portal frontend and backend proxy pods. |
-| **Wave 7** | Developer Portal Ingress Routes (`gateway-horizon-dev-portal.yaml`) | Maps root `/` and `/developer-portal/` to the Portal on Google Cloud Gateway. |
+Argo CD Applications by `argocd.argoproj.io/sync-wave` annotation in `gitops/templates` (an Application without the annotation is wave 0). Some Applications are conditional on `terraform.tfvars` settings. Other resources (Secrets, Gateway HTTPRoutes, init jobs) also carry wave annotations and span waves 1-9.
+
+| Wave | Applications |
+| :---: | :--- |
+| 0 | external-dns |
+| 1 | *(no Applications; resources only: `*-init`, Config Connector, Gateway and Argo CD route)* |
+| 2 | postgresql, zookeeper, gerrit-operator, module-manager, dynpvc-provisioner, dynpvc-releaser, workloads-openbsw |
+| 3 | keycloak |
+| 4 | gerrit, headlamp, headlamp-oauth2-proxy, headlamp-token-injector, mtk-connect, monitoring-tools, argo-events |
+| 5 | grafana, kubescape-operator, argo-events-resources |
+| 6 | jenkins, argo-workflows, horizon-dev-portal (Horizon Developer Portal) |
+| 7 | horizon-api |
+| 8 | gerrit-mcp-server, mcp-gateway-registry |
+| 9 | *(no Applications; MCP Gateway Registry route resources only)* |
+
+Regenerate the table from the repository if in doubt (prints `<wave> <file>`; files missing from the output have no annotation, i.e. wave 0):
+```bash
+awk 'FNR==1 || /^---/ {app=0} /^kind: Application$/ {app=1} app && /argocd.argoproj.io\/sync-wave/ {gsub(/[^0-9-]/, "", $2); print $2, FILENAME; app=0}' gitops/templates/*.yaml | sort -n
+```
 
 ### 5.2 Wave Verification & Remediation Commands
 

@@ -56,6 +56,12 @@ spec:
             value: linux/amd64
           - name: registryAuthInsecure
             value: "true"
+          # Optional. When "true", schedule this build on the android node pool.
+          # Default "false" keeps Android / Remotive / other callers on the default pool.
+          - name: androidPool
+            value: "false"
+      # Applied only when androidPool=true. Empty "{}" leaves scheduling unchanged.
+      podSpecPatch: '{{ "{{=" }}inputs.parameters.androidPool == "true" ? "nodeSelector:\n  workloadLabel: android\ntolerations:\n- key: workloadType\n  operator: Equal\n  value: android\n  effect: NoSchedule" : "{}"{{ "}}" }}'
       # moby/buildkit defaults start buildkitd as the main process; this template overrides the primary
       # container command for credentials + buildctl, so buildkitd runs in a sidecar with the image default
       # and shares /run/buildkit via emptyDir (no inline buildkitd start or socket polling in the script).
@@ -182,14 +188,15 @@ spec:
             cd "${CONTEXT_ROOT}"
             # One build-arg per line of BUILD_ARGS. Collected as positional parameters so
             # values containing spaces (e.g. apt source lines) reach buildctl intact.
+            # Read the bytes literally. printf "%b" would turn \n and other escapes into
+            # extra build-arg lines, and an unquoted heredoc would expand $(...) in the value.
+            printf '%s\n' "$BUILD_ARGS" > /tmp/build-args
             set --
-            while IFS= read -r line; do
+            while IFS= read -r line || [ -n "$line" ]; do
               if [ -n "$(printf '%s' "$line" | tr -d '[:space:]')" ]; then
                 set -- "$@" --opt "build-arg:${line}"
               fi
-            done <<EOF
-            $(printf "%b" "${BUILD_ARGS}")
-            EOF
+            done < /tmp/build-args
             buildctl build \
               --frontend=dockerfile.v0 \
               --local=dockerfile="${DOCKERFILE_ROOT}" \

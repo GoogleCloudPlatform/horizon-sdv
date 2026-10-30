@@ -2044,7 +2044,7 @@ Gerrit triggers are based on a single project/repo build, i.e. build one compone
 
 Cuttlefish instance templates are instances pre-installed with Android cuttlefish debian host packages, Android 14, 15 and 16 CTS, together with other tools required to launch CVD and run CTS tests. There are two instances we have created ahead of time:
 
-- `cuttlefish-vm-v1410` based on [android-cuttlefish.git v1.41.0 tag](https://github.com/google/android-cuttlefish/tree/v1.41.0)
+- `cuttlefish-vm-v1553` based on [android-cuttlefish.git v1.55.3 tag](https://github.com/google/android-cuttlefish/tree/v1.55.3)
 - `cuttlefish-vm-main` based on [android-cuttlefish.git main branch](https://github.com/google/android-cuttlefish/tree/main)
 
 Users may wish to create newer versions as the android-cuttlefish repo is updated and new tagged versions appear. This section describes how to create the instance templates and configure the test jobs to use those instances.

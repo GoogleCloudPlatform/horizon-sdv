@@ -62,6 +62,7 @@ import type { ModuleResponse, StatusResponse } from './types';
 import { deploymentStatus, isReady } from './moduleStatus';
 import { HORIZON_LOGO_SRC, READY_MODULES_REFRESH_EVENT } from './constants';
 import { getRouterBasename } from './utils/publicPath';
+import { config } from './utils/config';
 import * as React from 'react';
 import { ToolsPage } from './pages/ToolsPage.tsx';
 import HorizonCliTab from './pages/tools/HorizonCliTab.tsx';
@@ -144,6 +145,7 @@ function ShellLayout() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const location = useLocation();
   const readyMods = useReadyModules();
+  const horizonVersion = config.getString('horizonVersion', '');
 
   const drawer = (
     <Box>
@@ -298,12 +300,36 @@ function ShellLayout() {
         sx={{
           flexGrow: 1,
           p: 3,
+          // Leave room for the fixed version tag so it does not cover the bottom of the page.
+          pb: 7,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           mt: 8,
         }}
       >
         <Outlet />
       </Box>
+      {/* Version Display: Horizon platform version (versions.yaml components.horizoncore), bottom right on every signed-in screen. */}
+      {horizonVersion ? (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 1,
+            backgroundColor: 'background.paper',
+            boxShadow: 2,
+            // Below the AppBar, mobile drawer and dialogs.
+            zIndex: 1000,
+            pointerEvents: 'none',
+          }}
+        >
+          <Typography variant="caption" color="text.secondary">
+            Horizon {horizonVersion}
+          </Typography>
+        </Box>
+      ) : null}
     </Box>
   );
 }

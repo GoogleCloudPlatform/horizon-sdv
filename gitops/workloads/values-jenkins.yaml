@@ -16,7 +16,7 @@ config:
   workloads:
     android:
       cuttlefish:
-        tag: "v1410"
+        tag: "v1553"
       mirror:
         workloadEnv:
           image: "horizon-sdv/mirror-workloads/env"

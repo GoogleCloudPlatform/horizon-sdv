@@ -1,0 +1,4 @@
+{
+  "name": "horizon-debug",
+  "description": "Horizon SDV plugin for connecting to a live cluster and running a read-only health check."
+}
