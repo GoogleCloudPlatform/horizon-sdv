@@ -96,6 +96,18 @@ type artifactsModuleObject struct {
 	Updated     string `json:"updated,omitempty"`
 }
 
+// artifactsModuleDetail reads the storage-gcs-module error body.
+// writeErr sends {"detail":"..."}; anything else is ignored.
+func artifactsModuleDetail(body []byte) string {
+	var payload struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(payload.Detail)
+}
+
 func artifactsObjectsFromModule(objs []artifactsModuleObject) []artifactsObjectInfo {
 	out := make([]artifactsObjectInfo, 0, len(objs))
 	for _, obj := range objs {
@@ -449,7 +461,13 @@ func (s *Server) handleArtifactsListObjects(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		if resp.StatusCode == http.StatusForbidden {
-			http.Error(w, "bucket not allowed", http.StatusForbidden)
+			// "bucket not accessible" is a GCS permission failure.
+			// Any other 403 from the module is the allowlist.
+			msg := "bucket not allowed"
+			if artifactsModuleDetail(respBody) == "bucket not accessible" {
+				msg = "bucket not accessible"
+			}
+			http.Error(w, msg, http.StatusForbidden)
 			return
 		}
 		if resp.StatusCode == http.StatusNotFound {

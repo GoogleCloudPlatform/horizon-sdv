@@ -59,6 +59,73 @@ func TestArtifactsObjectsFromModuleUsesObjectAttributes(t *testing.T) {
 	}
 }
 
+func TestHandleArtifactsListObjectsModuleStatuses(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		upstream   int
+		body       string
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "missing bucket",
+			upstream:   http.StatusNotFound,
+			body:       `{"detail":"bucket not found"}`,
+			wantStatus: http.StatusNotFound,
+			wantBody:   "bucket not found",
+		},
+		{
+			name:       "bucket not accessible",
+			upstream:   http.StatusForbidden,
+			body:       `{"detail":"bucket not accessible"}`,
+			wantStatus: http.StatusForbidden,
+			wantBody:   "bucket not accessible",
+		},
+		{
+			name:       "module allowlist",
+			upstream:   http.StatusForbidden,
+			body:       `{"detail":"bucket not allowed"}`,
+			wantStatus: http.StatusForbidden,
+			wantBody:   "bucket not allowed",
+		},
+		{
+			name:       "module failure",
+			upstream:   http.StatusInternalServerError,
+			body:       `{"detail":"storage operation failed"}`,
+			wantStatus: http.StatusBadGateway,
+			wantBody:   "artifacts module error",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.upstream)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			t.Cleanup(upstream.Close)
+
+			s := &Server{opt: Options{
+				ArtifactsModuleURL:            upstream.URL,
+				ArtifactsModuleToken:          "test-token",
+				ArtifactsStaticAllowedBuckets: map[string]struct{}{"my-bucket": {}},
+			}}
+			req := httptest.NewRequest(http.MethodGet, "/v1/artifacts/buckets/my-bucket/objects", nil)
+			req.SetPathValue("bucket", "my-bucket")
+			rr := httptest.NewRecorder()
+			s.handleArtifactsListObjects(rr, req, nil)
+			if rr.Code != tc.wantStatus {
+				t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+			}
+			if strings.TrimSpace(rr.Body.String()) != tc.wantBody {
+				t.Fatalf("body %q", rr.Body.String())
+			}
+		})
+	}
+}
+
 func TestHandleArtifactsListObjectsProxyTimeout(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Outlast the client deadline, then return so the test server can shut down.

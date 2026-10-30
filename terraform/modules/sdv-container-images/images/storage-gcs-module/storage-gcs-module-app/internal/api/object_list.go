@@ -64,12 +64,7 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 	var attrs []*storage.ObjectAttrs
 	next, err := pager.NextPage(&attrs)
 	if err != nil {
-		var gerr *googleapi.Error
-		if errors.As(err, &gerr) && gerr.Code == http.StatusBadRequest {
-			writeErr(w, http.StatusBadRequest, "invalid pageToken")
-			return
-		}
-		writeOpErr(w, err)
+		writeListObjectsErr(w, err)
 		return
 	}
 
@@ -94,6 +89,31 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		resp["nextPageToken"] = next
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// writeListObjectsErr keeps a missing or hidden bucket as a client error.
+// GCS reports a missing bucket as storage.ErrBucketNotExist or HTTP 404, and
+// a bucket the caller cannot see as HTTP 403.
+func writeListObjectsErr(w http.ResponseWriter, err error) {
+	if errors.Is(err, storage.ErrBucketNotExist) {
+		writeErr(w, http.StatusNotFound, "bucket not found")
+		return
+	}
+	var gerr *googleapi.Error
+	if errors.As(err, &gerr) {
+		switch gerr.Code {
+		case http.StatusBadRequest:
+			writeErr(w, http.StatusBadRequest, "invalid pageToken")
+			return
+		case http.StatusNotFound:
+			writeErr(w, http.StatusNotFound, "bucket not found")
+			return
+		case http.StatusForbidden:
+			writeErr(w, http.StatusForbidden, "bucket not accessible")
+			return
+		}
+	}
+	writeOpErr(w, err)
 }
 
 func validateObjectsListPrefix(prefix string) error {
