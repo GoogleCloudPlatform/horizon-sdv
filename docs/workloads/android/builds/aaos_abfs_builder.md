@@ -24,7 +24,14 @@ limitations under the License. -->
 
 ## Introduction <a name="introduction"></a>
 
-This job is used to build Android Automotive virtual devices and platform targets using the source and build caches from the Android Build Fielsystem.
+This job is used to build Android Automotive virtual devices and platform targets using the source and build caches from the Android Build Filesystem (ABFS). The sources are mounted from the ABFS server (`abfs mount -b <AAOS_REVISION>`) instead of `repo sync`, and ninja reuses cached outputs through `abfs cacheman`.
+
+It is available in two forms sharing the same scripts (`workloads/android/pipelines/builds/aaos_builder/`):
+
+- **Argo Workflow** `aaos-builder-abfs`, deployed by the `workloads-android` module (chart `aaos_builder/helm` with `values-abfs.yaml`). Submit it from the Developer Portal: **workloads-android → Workflow Templates → aaos-builder-abfs → Configure & submit**. Parameters are the camelCase equivalents of the Jenkins ones (`androidRevision`, `lunchTarget`, `postRepoCommand`, `abfs.server`, ...). The build runs in one pod in namespace `workflows`.
+- **Jenkins job** `Android Workflows → Builds → AAOS Builder ABFS`, parameters below.
+
+For the ABFS platform (modules, license, seeding) see [ABFS integration](../abfs.md).
 
 This pipeline/scripts supports builds for:
 
@@ -40,10 +47,9 @@ The following provides examples of the environment variables and Jenkins build p
 
 One-time setup requirements.
 
-- Before running this pipeline job, ensure that the following template has been created by running the corresponding job:
-  - Docker image template: `Android Workflows/Environment/ABFS/Docker Image Template`
-
-- Ensure ABFS server has been seeded with the required version of Android.
+- ABFS modules enabled from the Developer Portal in this order: `abfs-data` (license imported), `abfs-service-module`, `abfs-client-ubuntu`. The build pods run on the `abfs-build-node-pool-ubuntu` pool created by the client module and connect to `abfs-server.abfs.svc.cluster.local:50051`.
+- The ABFS builder image pushed to the project registry (`horizon-sdv/aaos-abfs-builder`): Argo `workloads-android → abfs-builder-runtime-image` with `NO_PUSH=false`, or Jenkins `Android Workflows/Environment/ABFS/Docker Image Template`. See [Docker Image Template](../environment/abfs/docker_image_template.md).
+- The requested `AAOS_REVISION` seeded into ABFS: the matching row must have been active in `abfs-data → abfs-uploader-config-select` long enough for the uploaders to finish. A build of an unseeded revision fails at `abfs mount`. The current implementation seeds a single branch/revision at a time; if the `AndroidLatest` row is seeded first, later seeds are faster because the sources of the new branch already reside on the ABFS server.
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
@@ -51,8 +57,10 @@ One-time setup requirements.
 
 ### `AAOS_REVISION`
 
-The Android revision, i.e. branch or tag to build. Tested versions are below:
+The Android revision, i.e. branch or tag to build. It must be seeded into ABFS (see Prerequisites). Tested versions:
 
+- `android-14.0.0_r30` (ap2a)
+- `android-15.0.0_r36` (bp1a)
 - `android-16.0.0_r3` (bp3a)
 
 ### `AAOS_MANIFEST_NAME`
@@ -159,7 +167,7 @@ Note: this can change, so the `Seed Workloads` job supports this parameter to al
 
 ### `ABFS_CASFS_VERSION`
 
-The version of ABFS CASFS module to install on the client. This version in the most part should be the same as ABFS_VERSION but in some cases the CASFS module needs to be updated to match the kernel version and thus may not align with the common ABFS version.
+The version of the ABFS CASFS module expected on the build node. Since ABFS 0.1.14 the kernel module is not installed by the build: the `abfs-client-ubuntu` module runs a DaemonSet that installs the prebuilt `casfs-kmod-<kernel>_<version>` package or builds casfs from source for the node kernel, and the build only waits for `/sys/module/casfs`. The `abfs_repository_list.txt` artifact records the precompiled ABFS component versions that are available in the apt repository for download at the time of the build.
 
 Note: this can change, so the `Seed Workloads` job supports this parameter to allow it to be replaced across all jobs.  You may replace locally but remember the `Seed` will overwrite when run again.
 
@@ -171,7 +179,7 @@ The ABFS aptitude repository to fetch the ABFS client artifacts, e.g. abfs-apt-a
 
 The ABFS server endpoint (`host:port`) passed to `abfs config -w` during initialisation, default `abfs-server.abfs.svc.cluster.local:50051`.
 
-Build pods run in the `jenkins` namespace, so the ABFS server Service in the `abfs` namespace must be addressed by its fully qualified name.
+Build pods run in the `jenkins` (Jenkins) or `workflows` (Argo) namespace, so the ABFS server Service in the `abfs` namespace must be addressed by its fully qualified name. The server is deployed by `abfs-service-module`; `server.service.internalLoadBalancer` additionally exposes it on an internal IP for clients outside the cluster.
 
 Note: this can change, so the `Seed Workloads` job supports this parameter to allow it to be replaced across all jobs.
 
@@ -183,7 +191,7 @@ Change this on an ABFS build to test session encryption or authentication.
 
 ### `UPLOADER_MANIFEST_SERVER`
 
-ABFS manifest source URL. Used for seeding ABFS builds, blobs/objects.
+Host passed to `abfs --manifest-server` (default `android.googlesource.com`). It must be the host the uploaders seed from (manifest URL of the active row in `abfs-uploader-config`). If the Horizon internal mirror is used to mirror the Android source and manifest repositories, the Horizon Gerrit domain can be used here to seed from that mirror.
 
 ### `AAOS_ARTIFACT_STORAGE_SOLUTION`
 
@@ -272,5 +280,5 @@ These are as follows:
 
 ## KNOWN ISSUES <a name="known-issues"></a>
 
-For details, reach out to Google.
+Known issues of ABFS builds are listed in one place: [ABFS integration → Known issues](../abfs.md#knownissues).
 

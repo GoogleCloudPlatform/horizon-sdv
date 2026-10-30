@@ -96,12 +96,7 @@ Each module is a separate ArgoCD Application (app-of-apps) and is created/delete
 
 To find modules, go to “Administration” tab, or click on “Open Administration → Modules”.
 
-Currently there are 5 modules available:
-- sample-hard
-- sample-soft
-- sample
-- workloads-common
-- workloads-android
+The available modules are registered in `gitops/apps/module-manager/templates/module-catalog.yaml`. They include the sample modules used below to explain dependencies (`sample-hard`, `sample-soft`, `sample`), the workload modules (`workloads-common`, `workloads-android`) and the ABFS modules (`abfs-data`, `abfs-service-module`, `abfs-client-ubuntu`, see [ABFS integration](workloads/android/abfs.md)).
 
 #### Browsing
 
