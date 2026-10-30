@@ -43,6 +43,8 @@ spec:
         gcsSigningServiceAccount: gke-{{ .Values.config.namespacePrefix }}argo-workflows-sa@{{ .Values.config.projectID }}.iam.gserviceaccount.com
         artifactsModuleUrl: "https://storage-gcs-module.{{ .Values.config.namespacePrefix }}horizon.svc.cluster.local:8443"
         artifactsGcsProjectId: {{ .Values.config.projectID | quote }}
+        # Platform buckets are not GCSBucket CRs. Match storage-gcs-module config.allowedBuckets.
+        artifactsAllowedBuckets: {{ printf "%s-aaos,%s-openbsw,%s-argo-workflows" .Values.config.projectID .Values.config.projectID .Values.config.projectID | quote }}
         # GKE 1.21+ default datapath metadata; Dataplane V2 uses 169.254.169.254:80 — omit or set gceMetadataHost: "" in overrides.
         gceMetadataHost: "169.254.169.252:988"
         workflowTtlSecondsAfterSuccess: 86400
