@@ -305,13 +305,13 @@ git clone <REPOSITORY_URL>
       - `scm_username`: Username (use `git` for GitHub PAT, actual username for Gerrit/GitLab)
       - `scm_password`: Password or token (GitHub PAT, Gerrit HTTP password, GitLab token, etc.)
     - If using `app` authentication (GitHub only):
-      - `sdv_github_app_id`: GitHub App ID from [Section #1c - Create and Install GitHub Application](#section-1c---create-and-install-github-application).
+      - `sdv_github_app_id`: GitHub App ID from [Section #5c - Create and Install GitHub Application](#section-5c---create-and-install-github-application).
       - `sdv_github_app_install_id`: 
          - Navigate to Organization Settings, GitHub Apps and click on "Configure".
          - Once in the GitHub App configuration page, the `GH_INSTALLATION_ID` is present in the URL of the page as below,
          - `https://github.com/organizations/<GH-ORG-NAME>/settings/installations/<INSTALLATION_ID>`
          - Enter the value of `<INSTALLATION_ID>`
-       - `sdv_github_app_private_key`: GitHub App Private key downloaded from [Section #1c - Create and Install GitHub Application](#section-1c---create-and-install-github-application). Paste the content between `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----`.
+       - `sdv_github_app_private_key`: GitHub App Private key downloaded from [Section #5c - Create and Install GitHub Application](#section-5c---create-and-install-github-application). Paste the content between `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----`.
     - If using `none` authentication (public repos):
       - No credentials needed - simply provide the repository URL and branch
   - Required Admin Secrets
@@ -773,7 +773,7 @@ After modules are enabled, run the Jenkins seed job and regenerate workload temp
 This section details how to sign in to and use cluster applications, including their functionalities within the cluster environment. When using sub-environments, each sub-environment has its own Developer Portal and application URLs at `https://<SUB_ENV_NAME>.<SUB_DOMAIN>.<HORIZON_DOMAIN>`. See the [Sub-Environment Deployment Guide – Accessing Sub-Environment Applications](guides/sub_environments/sub_environment_deployment_guide.md#accessing-sub-environment-applications) for the URL pattern and application list.
 
 ### Section #4a - Horizon Developer Portal
-The site root (`https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/`) redirects to the Horizon Developer Portal at `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/developer-portal/`. Use the Developer Portal for module administration and workflows; open other cluster apps via the direct URLs in the sections below. See also the [Developer Portal user guide](developer_portal_user_guide.md).
+The site root (`https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/`) redirects to the Horizon Developer Portal at `https://<SUB_DOMAIN>.<HORIZON_DOMAIN>/developer-portal/`. Use the Developer Portal for module administration and workflows; open other cluster apps via the direct URLs in the sections below. See also the [Horizon Portal guide](architecture/02_horizon-portal.md).
 
 After you sign in, every Developer Portal screen shows the Horizon version in a small tag at the bottom right (`Horizon <version>`). The value comes from `versions.yaml` in the repository root, and the tag is not shown if no version is set. The sign-in page does not show it. To change the version on a running deployment, see [Section #2e - Update the Horizon version](#section-2e---update-the-horizon-version).
 
