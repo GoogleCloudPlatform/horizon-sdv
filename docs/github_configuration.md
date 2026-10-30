@@ -135,8 +135,8 @@ The following ruleset should be created for release branches.
 
 | Tag Type | Pattern | Example | Regex |
 | --- | --- | --- | --- |
-| Release | `R<X>.<Y>.<Z>` | `R1.0.0` | `^R\d+\.\d+\.\d+$` |
-| Release Candidate | `Rel<X>.<Y>.<Z>-RC<A>` | `Rel1.0.0-RC1` | `^Rel\d+\.\d+\.\d+-RC\d+$` |
+| Release | `HORIZON_RELEASE_<X>.<Y>.<Z>` | `HORIZON_RELEASE_1.0.0` | `^R\d+\.\d+\.\d+$` |
+| Release Candidate | `HORIZON_RELEASE_<X>.<Y>.<Z>-RC<A>` | `HORIZON_RELEASE_1.0.0-RC1` | `^Rel\d+\.\d+\.\d+-RC\d+$` |
 
 ---
 

@@ -324,7 +324,7 @@ Delete the old `v1.18.0` instance template:
   Select `DELETE`  
   Select `Build`   
 
-- R3.0.0 no longer references this version and as such, this will delete the instance template and disk image for v1.18.0 and save on cost.
+- HORIZON_RELEASE_3.0.0 no longer references this version and as such, this will delete the instance template and disk image for v1.18.0 and save on cost.
 
 Upgrade the `main` instance template:
 
@@ -441,9 +441,9 @@ Open Source Modules BOM and versions.
 
 [Horizon SDV Rel.3.0.0 Open Source modules](bom/horizon-sdv-rel.3.0.0-open-source-modules.md)
 
-[Jenkins BOM(3.0.0)](bom/jenkins-bom-3.0.0.md)
+[Jenkins BOM(HORIZON_RELEASE_3.0.0)](bom/jenkins-bom-3.0.0.md)
 
-[Gerrit BOM(R3.0.0)](bom/gerrit-bom-r3.0.0.md)
+[Gerrit BOM(HORIZON_RELEASE_3.0.0)](bom/gerrit-bom-r3.0.0.md)
 
 ---
 
