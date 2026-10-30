@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -36,8 +37,14 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-//go:embed all:dist
+// SPA files are embedded from spa. That directory is not named dist, so it
+// stays in git while **/dist/ remains ignored. The image build copies the Vite
+// output over spa before compiling.
+//
+//go:embed all:spa
 var staticFS embed.FS
+
+const staticRoot = "spa"
 
 // Renew access token this long before JWT expiry (proactive refresh / refresh_token exchange).
 const ciTokenRefreshLead = 90 * time.Second
@@ -110,8 +117,12 @@ func main() {
 	registerCLIRoutes(mux, env("CLI_DIST_DIR", "/cli-dist"), cliVer)
 	mux.Handle("/", spaHandler(htmlBaseTagHref(normalizePublicPath(env("PUBLIC_PATH", "")))))
 
-	log.Printf("listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("listen: %v", err)
+	}
+	log.Printf("listening on %s", ln.Addr().String())
+	log.Fatal(http.Serve(ln, mux))
 }
 
 func env(k, def string) string {
@@ -482,9 +493,9 @@ func spaHandler(baseHref string) http.Handler {
 		if p == "" {
 			p = "index.html"
 		}
-		b, err := staticFS.ReadFile("dist/" + p)
+		b, err := staticFS.ReadFile(staticRoot + "/" + p)
 		if err != nil {
-			b, err = staticFS.ReadFile("dist/index.html")
+			b, err = staticFS.ReadFile(staticRoot + "/index.html")
 			if err != nil {
 				http.NotFound(w, r)
 				return

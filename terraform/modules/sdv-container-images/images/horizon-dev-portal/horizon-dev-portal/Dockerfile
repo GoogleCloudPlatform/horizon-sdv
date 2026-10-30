@@ -36,7 +36,8 @@ WORKDIR /src
 COPY proxy/go.mod proxy/go.sum* ./
 RUN go mod download
 COPY proxy/*.go ./
-COPY --from=frontend /app/dist ./dist
+# The proxy embeds spa. Replace the committed test fixture with the Vite build.
+COPY --from=frontend /app/dist ./spa
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /horizon-dev-portal .
 
 FROM gcr.io/distroless/static-debian12:nonroot
