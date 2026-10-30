@@ -154,14 +154,14 @@ When all features/fixes required for a release are finished and pushed to `main`
 ## Release Tagging:
 | **Tag Type** | **Branch** | **Pattern** | **Example** |
 | :--- | :--- | :--- | :--- |
-| Release Candidate | release branch `rel/*` | `Rel<X>.<Y>.<Z>-RC<N>` | `Rel1.0.0-RC1` |
-| Release | `main` | `R<X>.<Y>.<Z>` | `R1.0.0` |
+| Release Candidate | release branch `rel/*` | `HORIZON_RELEASE_<X>.<Y>.<Z>-RC<N>` | `HORIZON_RELEASE_1.0.0-RC1` |
+| Release | `main` | `HORIZON_RELEASE_<X>.<Y>.<Z>` | `HORIZON_RELEASE_1.0.0` |
 
 ## Release Procedure:
 > **IMPORTANT:** No changes are allowed to be pushed to the `main` branch while the release branch is operational. Any late fixes which need to be pulled into the release branch (so that they can be included in the release) are strictly controlled by the Release Management team.
 
 The following release tasks are carried out on the release branch:
-1. **Tag Release Candidate** — `Rel<X>.<Y>.<Z>-RC<N>` — to be done before each formal test run (e.g. `Rel1.0.0-RC1`).
+1. **Tag Release Candidate** — `HORIZON_RELEASE_<X>.<Y>.<Z>-RC<N>` — to be done before each formal test run (e.g. `HORIZON_RELEASE_1.0.0-RC1`).
 2. **Release Testing**
 3. **Edits**
    * Superficial edits (e.g. release notes, documentation updates, minor non-code fixes) can be made directly on the release branch.
@@ -181,7 +181,7 @@ The following release tasks are carried out on the release branch:
    * Wait for PR approval.
 6. Release Manager **merges** to `main` using GitHub’s **Squash Merge** option.
 7. **Delete** release branch.
-8. **Tag Release:** `R<X>.<Y>.<Z>` (e.g. `R1.0.0`).
+8. **Tag Release:** `HORIZON_RELEASE_<X>.<Y>.<Z>` (e.g. `HORIZON_RELEASE_1.0.0`).
 
 ### PR Approval Checks:
 * Code review of any minor fixes made on release branch.
