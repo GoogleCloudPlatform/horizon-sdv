@@ -225,3 +225,8 @@ variable "abfs_build_node_pool_version" {
   description = "CASFS-pinned GKE node version for abfs-client-module-ubuntu ContainerNodePool."
   type        = string
 }
+
+variable "component_versions" {
+  description = "Horizon platform component versions (components map from the repo-root versions.yaml, e.g. horizoncore). Passed to GitOps as config.versions.components."
+  type        = map(string)
+}

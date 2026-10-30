@@ -22,6 +22,11 @@ locals {
 
   common_nginx_version = "1.31.2-alpine3.23"
 
+  # Horizon platform version(s) from the repo-root versions.yaml. components.horizoncore is also the
+  # Developer Portal image tag (build_version / deploy_version of "horizon-dev-portal" below).
+  versions             = yamldecode(file("${path.module}/../../../versions.yaml"))
+  horizon_core_version = local.versions.components.horizoncore
+
   images = {
     # build_version: version of container images to be built and pushed to Artifact Registry.
     # deploy_version: version of container images to be used for Argo CD post-jobs.
@@ -107,10 +112,11 @@ locals {
       deploy_version = "1.0.0"
     }
     # Developer portal (Vite + Go proxy). context_path is set so sdv-container-images trigger hashing skips node_modules/dist (same as former external client tree).
+    # Image tag (build_version / deploy_version) follows components.horizoncore from the repo-root versions.yaml; do not edit here.
     "horizon-dev-portal" = {
       directory      = "horizon-dev-portal"
-      build_version  = "4.3.3"
-      deploy_version = "4.3.3"
+      build_version  = local.horizon_core_version
+      deploy_version = local.horizon_core_version
       context_path   = abspath("${path.module}/../sdv-container-images/images/horizon-dev-portal/horizon-dev-portal")
       platform       = "linux/amd64"
     }

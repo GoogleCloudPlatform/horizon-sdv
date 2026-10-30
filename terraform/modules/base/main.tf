@@ -123,7 +123,7 @@ module "sdv_container_images" {
       version         = image.build_version
       build_args = merge(
         try(image.build_args, {}),
-        name == "horizon-dev-portal" ? { HORIZON_CLI_VERSION = image.build_version } : {}
+        name == "horizon-dev-portal" ? { HORIZON_CLI_VERSION = local.horizon_core_version } : {}
       )
       context_path    = try(image.context_path, null)
       dockerfile_path = try(image.dockerfile_path, null)
@@ -272,6 +272,9 @@ module "sdv_gke_apps" {
   }
 
   common_nginx_version = local.common_nginx_version
+
+  # Horizon platform component versions from the repo-root versions.yaml.
+  component_versions = local.versions.components
 
   enable_arm64_dedicated_subnet       = var.enable_arm64_dedicated_subnet
   arm64_region       = var.arm64_region
