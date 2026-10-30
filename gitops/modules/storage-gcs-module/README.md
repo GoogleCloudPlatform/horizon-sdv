@@ -28,7 +28,7 @@ The **Go** binary (`controller-runtime`) reconciles **`GCSBucket`** CRs and serv
 
 - **NetworkPolicy:** ingress on `:8080` is limited to kubelet probe sources on node primary CIDRs (`config.probeSourceCIDRs`). Ingress on `:8443` is limited to pods in `{prefix}workflows` labeled `horizon-sdv.io/storage-gcs-api-client: "true"`. There is no ports-only (open-to-all) ingress rule. Chart defaults are `10.1.0.0/24` and `10.2.0.0/24`; production values come from Terraform `nodes_range` / `arm64_nodes_range` via root GitOps → Module Manager **MODULE_CONFIG** (`probeSourceCIDRs`). Wrong CIDRs cause silent probe failures under horizon default-deny.
 - **TLS:** HTTPS on `:8443` with cluster-generated CA (`storage-gcs-module-api-tls`). Workflow clients mount `ca.crt` and set `CURL_CA_BUNDLE`.
-- **Authentication:** all `/api/v1/*` routes and `/ready` require `Authorization: Bearer <token>`. Secret `storage-gcs-module-api-token` maps each caller to a current token and an optional previous token (rotation overlap). Horizon holds the full map (`tokens.json`); workflows only get caller `storage-gcs-internal`. Keys are generated once and preserved across syncs (`lookup`). `/health` stays unauthenticated for kubelet probes. API logs `caller=` and `token=current|previous` on each authenticated request. Invalid `tokens.json` fails closed (pod does not start; no fallback to the legacy token).
+- **Authentication:** all `/api/v1/*` routes and `/ready` require `Authorization: Bearer <token>`. Secret `storage-gcs-module-api-token` maps each caller to a current token and an optional previous token (rotation overlap). Horizon holds the full map (`tokens.json`); workflows only get caller `storage-gcs-internal`, and `horizon-api` only gets its dedicated `horizon-api` token, which is limited to object-list requests. Keys are generated once and preserved across syncs (`lookup`). `/health` stays unauthenticated for kubelet probes. API logs `caller=` and `token=current|previous` on each authenticated request. Invalid `tokens.json` fails closed (pod does not start; no fallback to the legacy token).
 - **Bucket allowlist:** requests are allowed only for buckets in `ALLOWED_BUCKETS` (Helm `config.allowedBuckets`, project-prefixed by default: `{project}-aaos`, `{project}-openbsw`, `{project}-argo-workflows`) or for `spec.bucketName` of a **`GCSBucket`** CR. The name must be `{projectId}-...`. Others return `403`. **`ValidatingAdmissionPolicy`** rejects invalid `GCSBucket` specs at admission (prefix + no `deletionPolicy: Delete` on platform buckets).
 
 Do not call the HTTP API from arbitrary pods; use **`storage-gcs-upload`** (`templateRef`) which authenticates as caller `storage-gcs-internal`.
@@ -71,7 +71,8 @@ Horizon Secret keys:
 | `tokens.json` | `{"<caller>":{"current":"...","previous":"..."}}` — mounted as env `API_TOKENS` |
 | `token` | Caller `default` (legacy / ad-hoc); optional env `API_BEARER_TOKEN` if `tokens.json` is empty |
 | `storage-gcs-internal` | Workflow templates (`storage-gcs-module-internal`) |
-| `token-previous` / `storage-gcs-internal-previous` | Optional overlap during rotation |
+| `horizon-api` | Horizon API object-list proxy only |
+| `token-previous` / `storage-gcs-internal-previous` / `horizon-api-previous` | Optional overlap during rotation |
 
 **Rotate one caller** (does not change other callers). Helm owns `tokens.json` from the per-caller Secret keys — patch those keys, not `tokens.json` by hand:
 
@@ -92,6 +93,7 @@ To revoke one caller, delete its keys from the Secret and restart; other callers
 | GET | `/api/v1/buckets/{bucket}/objects-meta/{object_path...}` | Object metadata (`object_path` may contain `/`) |
 | GET | `/api/v1/buckets/{bucket}/objects-meta-raw/{object_path...}` | Raw metadata (includes custom `metadata` map) |
 | PATCH | `/api/v1/buckets/{bucket}/objects-meta/{object_path...}` | Update raw metadata (contentType/cacheControl/custom metadata) |
+| GET | `/api/v1/buckets/{bucket}/objects-list` | List objects by name prefix (`prefix`, `pageToken`, `pageSize`). Empty `prefix` lists from the start of the bucket. A prefix without a trailing `/` is a string prefix, not an exact object name. `pageSize` defaults to 1000 and must be 1–1000. |
 | POST | `/api/v1/buckets/{bucket}/objects/filter` | Query objects by path/wildcards and metadata filters |
 | POST | `/api/v1/buckets/{bucket}/objects-meta/batch-update` | Add/update metadata on filtered objects |
 | POST | `/api/v1/buckets/{bucket}/objects-meta/batch-remove` | Remove selected or all metadata from filtered objects |

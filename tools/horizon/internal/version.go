@@ -12,26 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package horizon
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 )
 
 // Stamped by mkdist / Docker ldflags. Local `go build` keeps these defaults.
 var (
-	version = "dev"
+	version   = "dev"
 	buildDate = "unknown"
 )
 
 type versionInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
 	BuildDate string `json:"buildDate"`
 }
 
@@ -50,12 +48,18 @@ func formatBuildDate(value string) string {
 	return t.Format("02/01/2006")
 }
 
-func formatVersion(mode string, info versionInfo) (string, error) {
+func formatVersion(mode string, info versionInfo, raw bool) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "", "text":
 		return fmt.Sprintf("%s %s (built %s)\n", info.Name, info.Version, formatBuildDate(info.BuildDate)), nil
 	case "json":
-		b, err := json.Marshal(info)
+		var b []byte
+		var err error
+		if raw {
+			b, err = json.Marshal(info)
+		} else {
+			b, err = json.MarshalIndent(info, "", "  ")
+		}
 		if err != nil {
 			return "", err
 		}
@@ -65,14 +69,18 @@ func formatVersion(mode string, info versionInfo) (string, error) {
 	}
 }
 
-func runVersion(args []string) error {
-	fs := flag.NewFlagSet("version", flag.ExitOnError)
-	out := fs.String("output", "text", "text | json")
-	_ = fs.Parse(args)
-	s, err := formatVersion(*out, currentVersion())
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprint(os.Stdout, s)
-	return err
+func FormatVersion(mode string, raw bool) (string, error) {
+	return formatVersion(mode, currentVersion(), raw)
+}
+
+func GetCurrentName() string {
+	return currentVersion().Name
+}
+
+func GetCurrentVersion() string {
+	return currentVersion().Version
+}
+
+func GetCurrentBuildDate() string {
+	return formatBuildDate(currentVersion().BuildDate)
 }

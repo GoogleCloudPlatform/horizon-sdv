@@ -55,8 +55,21 @@ type Options struct {
 	// K8sClient is used for runtime injection (e.g. sampleSoftEnabled). Nil skips injection.
 	K8sClient       client.Client
 	ModuleManagerNS string
-	StateCRName     string
-	CatalogCRName   string
+	// GCSBucketsNS is the namespace of GCSBucket CRs (storage-gcs-module MANAGER_NAMESPACE, normally horizon).
+	GCSBucketsNS  string
+	StateCRName   string
+	CatalogCRName string
+	// Artifacts module configuration for GCS bucket/object listing.
+	ArtifactsModuleURL string
+	// ArtifactsModuleToken is a static bearer token, used only when ArtifactsModuleTokenFile is empty.
+	ArtifactsModuleToken string
+	// ArtifactsModuleTokenFile is read on each object-list request. A secret volume
+	// updates after storage-gcs-module creates or rotates the token; an env
+	// secretKeyRef stays at whatever value the container started with.
+	ArtifactsModuleTokenFile      string
+	ArtifactsModuleCAFile         string
+	ArtifactsGCSProjectID         string
+	ArtifactsStaticAllowedBuckets map[string]struct{}
 }
 
 type Server struct {
@@ -82,6 +95,8 @@ func New(opt Options) *Server {
 	mux.HandleFunc("GET /v1/workflows/{workflowName}", s.withAuth(s.handleWorkflowGet))
 	mux.HandleFunc("DELETE /v1/workflows/{workflowName}", s.withAuth(s.handleWorkflowDelete))
 	mux.HandleFunc("POST /v1/workflows/{workflowName}/abort", s.withAuth(s.handleWorkflowAbort))
+	mux.HandleFunc("GET /v1/artifacts/buckets", s.withAuth(s.handleArtifactsListBuckets))
+	mux.HandleFunc("GET /v1/artifacts/buckets/{bucket}/objects", s.withAuth(s.handleArtifactsListObjects))
 	s.srv = &http.Server{Addr: opt.HTTPAddr, Handler: mux}
 	return s
 }

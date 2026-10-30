@@ -14,11 +14,14 @@
 #
 namespace: horizon-api
 # Full image ref; parent Application sets this from config.containerImages.horizonApi.
-image: "horizon-api-app:1.0.0"
+image: "horizon-api-app:1.1.1"
 
 moduleManagerNamespace: module-manager
 moduleManagerStateName: cluster
 moduleManagerCatalogName: cluster
+
+# GCSBucket CRs live here (storage-gcs-module MANAGER_NAMESPACE).
+gcsBucketsNamespace: horizon
 
 # Full issuer URL e.g. https://example.com/auth/realms/horizon
 oidcIssuerUrl: ""
@@ -54,3 +57,14 @@ workflowTtlSecondsAfterCompletion: 86400
 workflowDeleteWaitTimeout: ""
 
 config: {}
+
+# Parent Application sets the in-cluster HTTPS URL, project id, and static bucket allowlist.
+# Port 8080 serves /health only when API TLS is enabled; the API is on 8443.
+artifactsModuleUrl: ""
+artifactsGcsProjectId: ""
+# Comma-separated full GCS names. Parent sets "{projectID}-aaos,{projectID}-openbsw,{projectID}-argo-workflows"
+# (storage-gcs-module config.allowedBuckets). Those buckets are not GCSBucket CRs.
+artifactsAllowedBuckets: ""
+
+
+

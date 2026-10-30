@@ -992,7 +992,11 @@ function configForChoice(template: string, choice: string): string {
   if (!parsed) {
     return template;
   }
-  return replaceYamlScalar(replaceYamlScalar(template, 'name', parsed.name), 'branch', parsed.detail);
+  return replaceYamlScalar(
+    replaceYamlScalar(template, 'name', parsed.name),
+    'branch',
+    parsed.detail
+  );
 }
 
 function workflowParamHelperText(p: { description?: string }): string | undefined {
@@ -1109,10 +1113,12 @@ function SubmitDialog({
                 </FormControl>
               );
             }
-            const choiceParam = entry.parameters.find((item) => dropdownOptions(item).some((option) => isCustomChoice(option)));
+            const choiceParam = entry.parameters.find((item) =>
+              dropdownOptions(item).some((option) => isCustomChoice(option))
+            );
             const choiceOptions = choiceParam ? dropdownOptions(choiceParam) : [];
-            const chosenRaw = choiceParam ? params[choiceParam.name] ?? '' : '';
-            const chosen = choiceOptions.includes(chosenRaw) ? chosenRaw : choiceOptions[0] ?? '';
+            const chosenRaw = choiceParam ? (params[choiceParam.name] ?? '') : '';
+            const chosen = choiceOptions.includes(chosenRaw) ? chosenRaw : (choiceOptions[0] ?? '');
             const readOnlyConfig =
               choiceOptions.some((option) => isCustomChoice(option)) &&
               !isCustomChoice(chosen) &&

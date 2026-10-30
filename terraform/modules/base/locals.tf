@@ -33,8 +33,8 @@ locals {
 
     "storage-gcs-module-app" = {
       directory      = "storage-gcs-module"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "cloud-workstations-module-app" = {
       directory      = "cloud-workstations-module"
@@ -137,8 +137,8 @@ locals {
     }
     "horizon-api-app" = {
       directory      = "horizon-api"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.1.1"
+      deploy_version = "1.1.1"
     }
     "kcc-webhook-cert-monitor" = {
       directory      = "kcc-webhook-cert-monitor"

@@ -601,6 +601,55 @@ func workflowOpenAPIComponentSchemas() map[string]interface{} {
 	}
 }
 
+func artifactsOpenAPIComponentSchemas() map[string]interface{} {
+	return map[string]interface{}{
+		"BucketInfo": map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"name": map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"name"},
+		},
+		"ListBucketsResponse": map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"buckets": map[string]interface{}{
+					"type": "array",
+					"items": map[string]interface{}{
+						"$ref": "#/components/schemas/BucketInfo",
+					},
+				},
+			},
+			"required": []interface{}{"buckets"},
+		},
+		"ObjectInfo": map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"name":        map[string]interface{}{"type": "string"},
+				"size":        map[string]interface{}{"type": "integer", "format": "int64"},
+				"contentType": map[string]interface{}{"type": "string"},
+				"updated":     map[string]interface{}{"type": "string", "format": "date-time"},
+				"generation":  map[string]interface{}{"type": "integer", "format": "int64"},
+				"md5Hash":     map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"name", "size"},
+		},
+		"ListObjectsResponse": map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"objects": map[string]interface{}{
+					"type": "array",
+					"items": map[string]interface{}{
+						"$ref": "#/components/schemas/ObjectInfo",
+					},
+				},
+				"nextPageToken": map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"objects"},
+		},
+	}
+}
+
 func mergeSchemaMaps(a, b map[string]interface{}) map[string]interface{} {
 	out := make(map[string]interface{}, len(a)+len(b))
 	for k, v := range a {
@@ -610,6 +659,76 @@ func mergeSchemaMaps(a, b map[string]interface{}) map[string]interface{} {
 		out[k] = v
 	}
 	return out
+}
+
+func openapiArtifactsPaths() map[string]interface{} {
+	return map[string]interface{}{
+		"/v1/artifacts/buckets": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []interface{}{"Artifacts"},
+				"summary":     "List allowed GCS buckets",
+				"operationId": "listArtifactsBuckets",
+				"description": "Buckets from the static allowlist and GCSBucket custom resources (gcsmanager.horizon.io/v1alpha1) in the horizon namespace. When a GCS project id is configured, both static allowlist entries and custom-resource names must use that project id as a prefix.",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "List of accessible buckets",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{"$ref": "#/components/schemas/ListBucketsResponse"},
+							},
+						},
+					},
+					"401": map[string]interface{}{"description": "Unauthorized - missing or invalid bearer token"},
+					"500": map[string]interface{}{"description": "Failed to list buckets"},
+				},
+			},
+		},
+		"/v1/artifacts/buckets/{bucket}/objects": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []interface{}{"Artifacts"},
+				"summary":     "List objects in a GCS bucket",
+				"operationId": "listArtifactsObjects",
+				"description": "Lists objects in an allowed bucket. `prefix` is a GCS object-name prefix: empty starts at the beginning of the bucket, and a value without a trailing slash still matches every object name that begins with that string. `limit` is the page size sent to storage (1–1000, default 1000). Pass `pageToken` from the previous response's `nextPageToken` to continue.",
+				"parameters": []interface{}{
+					map[string]interface{}{
+						"name": "bucket", "in": "path", "required": true,
+						"schema": map[string]interface{}{"type": "string"},
+					},
+					map[string]interface{}{
+						"name": "prefix", "in": "query",
+						"schema":      map[string]interface{}{"type": "string"},
+						"description": "GCS object-name prefix. Empty lists from the start of the bucket. A trailing slash is not required.",
+					},
+					map[string]interface{}{
+						"name": "pageToken", "in": "query",
+						"schema":      map[string]interface{}{"type": "string"},
+						"description": "Pagination token for next page",
+					},
+					map[string]interface{}{
+						"name": "limit", "in": "query",
+						"schema":      map[string]interface{}{"type": "integer", "minimum": 1, "maximum": 1000, "default": 1000},
+						"description": "Page size applied by storage (1–1000). Defaults to 1000. Use nextPageToken for further pages.",
+					},
+				},
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "List of objects in the bucket",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{"$ref": "#/components/schemas/ListObjectsResponse"},
+							},
+						},
+					},
+					"400": map[string]interface{}{"description": "Invalid bucket name or limit"},
+					"401": map[string]interface{}{"description": "Unauthorized - missing or invalid bearer token"},
+					"403": map[string]interface{}{"description": "Forbidden - bucket not in allowlist"},
+					"404": map[string]interface{}{"description": "Not found - bucket does not exist or is not accessible"},
+					"502": map[string]interface{}{"description": "Artifacts module error"},
+					"503": map[string]interface{}{"description": "Artifacts module URL, bearer token, or CA is not configured"},
+				},
+			},
+		},
+	}
 }
 
 func openapiWorkflowPaths() map[string]interface{} {
@@ -856,7 +975,7 @@ func retentionOpenAPIDescription(meta RetentionOpenAPI) string {
 		", secondsAfterFailure=" + strconv.Itoa(sf) + ", secondsAfterCompletion=" + strconv.Itoa(sc) + ". " + ex
 }
 
-// OpenAPISpec builds OpenAPI 3: catalog, workflow lifecycle, live logs, and one POST submit path per catalog entry.
+// OpenAPISpec builds OpenAPI 3: catalog, workflow lifecycle, live logs, artifacts listing, and one POST submit path per catalog entry.
 func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 	paths := map[string]interface{}{
 		"/v1/catalog": map[string]interface{}{
@@ -876,6 +995,9 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 		},
 	}
 	for k, v := range openapiWorkflowPaths() {
+		paths[k] = v
+	}
+	for k, v := range openapiArtifactsPaths() {
 		paths[k] = v
 	}
 	responses := submitResponsesDoc()
@@ -915,6 +1037,7 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 				"Workflow lifecycle: `GET /v1/workflows/running`, `GET /v1/workflows/history`, `GET /v1/workflows/{workflowName}`, `DELETE /v1/workflows/{workflowName}` (terminal only), `GET /v1/workflows/{workflowName}/log`, `POST /v1/workflows/{workflowName}/abort`, `GET /v1/workflows/{workflowName}/downloadArtifact/{artifactName}` (JSON signed URL by default; `inline` streams bytes for browsers). " +
 				"History and terminal status may include `archivedLogs` with `gs://` URIs derived from Workflow status artifacts. " +
 				"Live logs: `GET /v1/workflows/{workflowName}/log` without `podName` for a combined NDJSON stream (Argo workflow log or multiplexed pods); optional `podName` for a single pod. " +
+				"Artifacts: `GET /v1/artifacts/buckets` lists allowed GCS buckets; `GET /v1/artifacts/buckets/{bucket}/objects` lists objects (`prefix`, `pageToken`, `limit`). " +
 				"Argo Server uses `--auth-mode=client` for the service account." + retentionOpenAPIDescription(meta),
 		},
 		// Required when the API is exposed behind a path prefix (e.g. GKE Gateway strips /horizon-api/ before the pod). Without this, Swagger UI calls /v1/catalog on the site origin and hits the wrong backend (404 nginx).
@@ -934,7 +1057,7 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 					"description":  "Keycloak access_token for realm horizon (see info.description).",
 				},
 			},
-			"schemas": mergeSchemaMaps(openapiComponentSchemas(), workflowOpenAPIComponentSchemas()),
+			"schemas": mergeSchemaMaps(mergeSchemaMaps(openapiComponentSchemas(), workflowOpenAPIComponentSchemas()), artifactsOpenAPIComponentSchemas()),
 		},
 		"security": []interface{}{
 			map[string]interface{}{"bearerAuth": []interface{}{}},
