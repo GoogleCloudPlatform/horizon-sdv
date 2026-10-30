@@ -188,12 +188,12 @@ Creates Google Cloud Storage (GCS) buckets. Uniform bucket-level access is enabl
 Deploys and configures required Kubernetes resources post Standard GKE Cluster creation.
 - Deploy External Secrets and Argo CD via Helm.
 - Create required Service accounts, Secrets and Secret Stores.
-- Apply cluster-scoped Config Connector (`ConfigConnector` CR) via GitOps (`gitops/templates/config-connector.yaml`, root `horizon-sdv` app); Workload Identity uses `gke-config-connector-sa` (env `sa11`).
+- Apply cluster-scoped Config Connector via GitOps: the operator is `gitops/apps/configconnector-operator` (child Argo Application from `gitops/templates/configconnector-operator.yaml`), and the `ConfigConnector` CR is in the root app (`gitops/templates/config-connector-init.yaml`); Workload Identity uses `gke-config-connector-sa` (env `sa11`). The operator is Git-pinned, not the GKE add-on. Discovery RBAC and the webhook monitor are in the same root template. The Argo Workflows `StorageBucket` CR in the root app still uses `SkipDryRunOnMissingResource=true` until `storage.cnrm` CRDs exist.
 - Create Argo CD App Project and Argo CD Application.
 
 ## Module - sdv-gke-cluster
 Creates and manages a Google Kubernetes Engine (GKE) cluster along with its node pools.
-This terraform configuration sets up a GKE cluster with specific configurations for network, security, maintenance, and add-ons (including the Config Connector add-on), along with two node pools (main and build) with their respective configurations.
+This terraform configuration sets up a GKE cluster with specific configurations for network, security, maintenance, and add-ons (Config Connector GKE add-on is **disabled**; KCC is GitOps-pinned), along with two node pools (main and build) with their respective configurations.
 
 Resource "google_container_cluster" "sdv_cluster" defines a GKE cluster with various configurations:
 - Project and Location: Specifies the project ID, cluster name, location, network, and subnetwork.
@@ -204,7 +204,7 @@ Resource "google_container_cluster" "sdv_cluster" defines a GKE cluster with var
 - Secret Manager: Enables Secret Manager integration.
 - Maintenance Policy: Defines a recurring maintenance window (only days: Sat and Sun).
 - Gateway API: Enables the Gateway API with the standard channel.
-- Add-ons: Enales the Load Balancing feature and Filestore CSI driver.
+- Add-ons: Enables Load Balancing and the Filestore CSI driver. The Config Connector GKE add-on is disabled (`config_connector_config.enabled = false`); do not re-enable it after the Git-pinned operator is in place (CRD downgrade is unsupported).
 - Autoscaling is disabled.
 
 Resource "google_container_node_pool" "sdv_main_node_pool", "google_container_node_pool" "sdv_build_node_pool" and "google_container_node_pool" "sdv_openbsw_build_node_pool" define a main node pool, Android and OpenBSW build node pools for the GKE cluster with the configurations:

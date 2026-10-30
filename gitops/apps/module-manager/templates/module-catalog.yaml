@@ -117,3 +117,10 @@ spec:
 #      hardDependencies:
 #        - workloads-android
 #        - abfs-service-module
+    - name: cloud-workstations
+      path: gitops/modules/cloud-workstations-module
+      overviewPath: portal/overview.html
+      overviewService: mod-cloud-workstations-overview
+      overviewServiceNamespace: cloud-workstations-overview
+      hardDependencies:
+        - workloads-common

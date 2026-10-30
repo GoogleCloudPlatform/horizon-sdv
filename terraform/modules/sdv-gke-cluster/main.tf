@@ -73,6 +73,7 @@ resource "google_container_cluster" "sdv_cluster" {
   private_cluster_config {
     enable_private_nodes    = true
     enable_private_endpoint = true
+    # Keep in sync with gitops/apps/configconnector-operator/templates/network-policy.yaml (operator egress).
     master_ipv4_cidr_block  = "10.0.0.0/28"
   }
 
@@ -123,8 +124,11 @@ resource "google_container_cluster" "sdv_cluster" {
     gcp_filestore_csi_driver_config {
       enabled = true
     }
+    # Config Connector is GitOps-managed (pinned operator), not the GKE add-on.
+    # Leave disabled so a later terraform apply cannot re-enable the add-on (Google forbids
+    # CRD downgrade if the pinned operator is newer than the add-on bundle).
     config_connector_config {
-      enabled = true
+      enabled = false
     }
     # GKE Standard 1.34.1-gke.3720000+ enables NodeLocal DNSCache by default.
     # That intercepts kube-dns ClusterIP on the node, so existing NetworkPolicies

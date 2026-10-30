@@ -17,6 +17,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -35,6 +36,11 @@ import (
 // {prefix}remotive-kcc; CNRM deletes matching GCP instance templates when those CRs are removed). For
 // workloads-android it also waits for ConfigConnectorContext to be absent so the cluster matches the
 // pre-enable / pre–cf_instance_template baseline.
+//
+// For cloud-workstations, DrainCloudWorkstationsModule runs first: it deletes Horizon Workstations, then
+// WorkstationConfigs, then WorkstationClusters (waiting for the KCC objects too) while the controller is still
+// running, and fails without touching state or the parent Application if that times out. After the parent
+// Application is gone, RemoveCloudWorkstationsCRDs deletes the module's three Horizon CRDs.
 //
 // Ordering note (vs platform drain): this path updates ModuleManagerState before deleting the parent
 // mod-* Application so the Portal API reflects disabled during long Argo prunes. PlatformDrainer
@@ -68,6 +74,27 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 		if len(deps) > 0 {
 			return fmt.Errorf("perform module disable: module %q still has hard dependents %v", moduleName, deps)
 		}
+	}
+
+	// Drain Horizon CRs while the controller (core child) is still running; it alone releases their finalizers.
+	// A failure here leaves the module enabled and the parent Application untouched, so disable can be retried.
+	if err := pauseCloudWorkstationsCoreForDrain(ctx, c, argocdNamespace, moduleName); err != nil {
+		return fmt.Errorf("perform module disable: %w", err)
+	}
+	if err := DrainCloudWorkstationsModule(ctx, c, moduleName); err != nil {
+		if resumeErr := resumeCloudWorkstationsCoreAfterFailedDrain(ctx, c, argocdNamespace, moduleName); resumeErr != nil {
+			return fmt.Errorf("perform module disable: drain cloud-workstations CRs: %w; resume: %v", err, resumeErr)
+		}
+		return fmt.Errorf("perform module disable: drain cloud-workstations CRs: %w", err)
+	}
+	if err := completeCloudWorkstationsCoreDrain(ctx, c, argocdNamespace, moduleName); err != nil {
+		// completeCloudWorkstationsCoreDrain can fail after already disabling selfHeal but before
+		// clearing skip-reconcile, leaving the core Application both unhealable and unreconcilable -
+		// worse than the pre-drain paused state. Recover it so a retry is possible.
+		if recoverErr := recoverCloudWorkstationsCoreAfterIncompleteCompletion(ctx, c, argocdNamespace, moduleName); recoverErr != nil {
+			return fmt.Errorf("perform module disable: complete cloud-workstations core drain: %w; recover: %v", err, recoverErr)
+		}
+		return fmt.Errorf("perform module disable: complete cloud-workstations core drain: %w", err)
 	}
 
 	if err := TeardownPrefixedModuleChildApplication(ctx, c, argocdNamespace, moduleConfig, moduleName); err != nil {
@@ -111,6 +138,13 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 	}
 	if err := deletePrefixedChildApplicationIfPresent(ctx, c, argocdNamespace, moduleConfig, moduleName); err != nil {
 		return fmt.Errorf("perform module disable: remove child Application after parent delete for %q: %w", moduleName, err)
+	}
+
+	// State already says disabled, so a failure here cannot be retried through the disable API (it reports
+	// "already disabled"). Log it and continue so the dependent sweep still runs.
+	if err := RemoveCloudWorkstationsCRDs(ctx, c, argocdNamespace, moduleName); err != nil {
+		logger.Error(err, "Horizon CRD cleanup failed after the module was disabled",
+			"manual", "kubectl delete crd "+strings.Join(cloudWorkstationsHorizonCRDNames, " "))
 	}
 	return nil
 }

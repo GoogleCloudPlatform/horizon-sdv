@@ -1,0 +1,80 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Argo Events Sensors for the workstation WorkflowTemplates, one per template.
+# Parameters are mapped by index from cws-ws.parameters, the list the templates render from.
+{{- $all := include "cws-ws.parameters" . | fromYaml }}
+{{- range $template := keys $all | sortAlpha }}
+{{- $params := index $all $template }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: webhook-{{ $template }}
+  namespace: {{ $.Values.eventsNamespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: sensor-submit-workflow
+  dependencies:
+    - name: webhook-dep
+      eventSourceName: webhook
+      eventName: workflow-dispatch
+      filters:
+        data:
+          - path: body.workflowTemplateName
+            type: string
+            value:
+              - {{ $template | quote }}
+  triggers:
+    - template:
+        name: submit-{{ $template }}
+        argoWorkflow:
+          operation: submit
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: {{ $template }}-
+                namespace: {{ $.Values.workflowNamespace }}
+              spec:
+                workflowTemplateRef:
+                  name: {{ $template }}
+                arguments:
+                  parameters:
+                    {{- range $params }}
+                    - name: {{ .name }}
+                    {{- end }}
+          parameters:
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.horizonSubmittedBy
+              dest: metadata.annotations.horizon-sdv\.io/submitted-by
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.horizonSubmittedFrom
+              dest: metadata.labels.horizon-sdv\.io/submitted-from
+            {{- range $i, $p := $params }}
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.{{ $p.name }}
+                {{- if hasKey $p "value" }}
+                value: {{ $p.value | quote }}
+                {{- end }}
+              dest: spec.arguments.parameters.{{ $i }}.value
+            {{- end }}
+{{- end }}

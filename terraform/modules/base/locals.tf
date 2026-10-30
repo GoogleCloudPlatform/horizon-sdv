@@ -36,6 +36,11 @@ locals {
       build_version  = "1.0.1"
       deploy_version = "1.0.1"
     }
+    "cloud-workstations-module-app" = {
+      directory      = "cloud-workstations-module"
+      build_version  = "0.2.1"
+      deploy_version = "0.2.1"
+    }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"
       build_version  = "1.0.1"
@@ -122,8 +127,8 @@ locals {
     }
     "module-manager-app" = {
       directory      = "module-manager"
-      build_version  = "0.3.4"
-      deploy_version = "0.3.4"
+      build_version  = "0.3.7"
+      deploy_version = "0.3.7"
     }
     "workflow-namespace-drain-app" = {
       directory      = "workflow-namespace-drain"

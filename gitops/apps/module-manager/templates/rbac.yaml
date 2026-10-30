@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Module Manager: Role in its namespace (ModuleManagerState, ModuleCatalog) and Role in argocd (Applications).
+# Module Manager: Role in its namespace (ModuleManagerState, ModuleCatalog) and Role in argocd (Applications, platform drain gate).
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -54,6 +54,11 @@ rules:
   - apiGroups: ["argoproj.io"]
     resources: ["applications", "applications/finalizers"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Platform drain gate (gitops/templates/platform-drain-gate.yaml): read it and release its finalizer.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["platform-drain-gate"]
+    verbs: ["get", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -121,6 +126,43 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: module-manager-cnrm-configconnectorcontext
+subjects:
+  - kind: ServiceAccount
+    name: module-manager
+    namespace: {{ .Values.namespace }}
+---
+# cloud-workstations disable: DrainCloudWorkstationsModule deletes Horizon Workstation, WorkstationConfig and
+# WorkstationCluster CRs (child first) before the parent Application is removed, and RemoveCloudWorkstationsCRDs
+# then deletes the module's three Horizon CRDs. KCC object reads are covered by module-manager-kcc-drain.
+# CRD access is restricted by resourceNames so no other CRD (including Config Connector's) can be deleted.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: module-manager-horizon-workstations
+  labels:
+    app.kubernetes.io/name: module-manager
+rules:
+  - apiGroups: ["workstations.horizon-sdv.io"]
+    resources: ["workstations", "workstationconfigs", "workstationclusters"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    resourceNames:
+      - workstationclusters.workstations.horizon-sdv.io
+      - workstationconfigs.workstations.horizon-sdv.io
+      - workstations.workstations.horizon-sdv.io
+    verbs: ["get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: module-manager-horizon-workstations
+  labels:
+    app.kubernetes.io/name: module-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: module-manager-horizon-workstations
 subjects:
   - kind: ServiceAccount
     name: module-manager

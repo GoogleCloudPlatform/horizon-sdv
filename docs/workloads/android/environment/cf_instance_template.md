@@ -165,7 +165,7 @@ The Packer **googlecompute** builder typically creates a **zonal** boot disk who
 
 ## Config Connector mode (`ConfigConnectorContext`) <a name="config-connector-mode-configconnectorcontext"></a>
 
-Horizon platform GitOps installs Config Connector in **cluster mode** (`gitops/templates/config-connector.yaml`, `spec.mode: cluster`). In that mode the operator **rejects** per-namespace **`ConfigConnectorContext` (CCC)** (`…does not serve any purpose and should be removed`), which previously left the **`workloads-android`** Argo Application **Degraded**.
+Horizon platform GitOps installs Config Connector in **cluster mode** (`gitops/apps/configconnector-operator`, `spec.mode: cluster`). In that mode the operator **rejects** per-namespace **`ConfigConnectorContext` (CCC)** (`…does not serve any purpose and should be removed`), which previously left the **`workloads-android`** Argo Application **Degraded**.
 
 The **`cf-instance-template`** chart therefore gates CCC behind Helm value **`kcc.instanceTemplates.createConfigConnectorContext`**:
 

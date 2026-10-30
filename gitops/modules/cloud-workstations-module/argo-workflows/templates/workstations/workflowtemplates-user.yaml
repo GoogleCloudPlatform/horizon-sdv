@@ -1,0 +1,177 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# User-family workstation WorkflowTemplates (Horizon catalog: exposed). Sensors: sensors.yaml.
+# submittedBy is matched against Workstation.spec.users, the same data the controller reconciles to GCP IAM.
+# Horizon API does not verify that the caller is that user, so this filters results and is not an
+# authorization boundary. The Portal fills submittedBy from the signed-in username and hides the field.
+# Start and stop steps are in workstations/_helpers.tpl (cws-ws.powerTemplates).
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-user-list-usable-workstations
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "List Cloud Workstations that include submittedBy in spec.users. This is a filter, not access control."
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-user-list-usable-workstations") | nindent 4 }}
+  templates:
+    - name: main
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: USERS
+            value: "{{ "{{workflow.parameters.submittedBy}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            users=$(single_principal submittedBy "$USERS")
+            echo "Workstations usable by $users:"
+            kubectl get "$WS_RES" -n "$CWS_NAMESPACE" -o json \
+              | jq -r --arg m "$users" '
+                  [.items[] | select((.spec.users // []) | any(ascii_downcase == ($m | ascii_downcase)))]
+                  | if length == 0 then "No workstations found."
+                    else
+                      (["NAME", "CONFIG", "STATE", "URL"] | @tsv),
+                      (.[] | [.metadata.name, .spec.configRef.name, (.status.state // "-"),
+                              ((.status.host // "")
+                                | if . == "" then "-" elif test("^https?://") then . else "https://" + . end)] | @tsv)
+                    end' \
+              | awk -F '\t' 'NF < 4 { print; next } { printf "%-32s %-28s %-16s %s\n", $1, $2, $3, $4 }'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-user-get-workstation
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "Show a Cloud Workstation that includes submittedBy in spec.users. This is a filter, not access control."
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-user-get-workstation") | nindent 4 }}
+  templates:
+    - name: main
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: WORKSTATION_NAME
+            value: "{{ "{{workflow.parameters.workstationId}}" }}"
+          - name: USERS
+            value: "{{ "{{workflow.parameters.submittedBy}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            name=$(resource_name workstationId "$WORKSTATION_NAME")
+            users=$(single_principal submittedBy "$USERS")
+            json=$(require_ws "$name")
+            require_member "$json" "$users"
+            print_workstation "$json"
+            print_status <<<"$json"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-user-get-workstation-configuration
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "Show the WorkstationConfig of a Cloud Workstation that includes submittedBy in spec.users. This is a filter, not access control."
+spec:
+  entrypoint: main
+  serviceAccountName: workflow-executor
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-user-get-workstation-configuration") | nindent 4 }}
+  templates:
+    - name: main
+      container:
+        {{- include "cws.stepContainer" . | nindent 8 }}
+        env:
+          - name: CWS_NAMESPACE
+            value: {{ .Values.resourceNamespace | quote }}
+          - name: WORKSTATION_NAME
+            value: "{{ "{{workflow.parameters.workstationId}}" }}"
+          - name: USERS
+            value: "{{ "{{workflow.parameters.submittedBy}}" }}"
+        args:
+          - |
+            set -euo pipefail
+            {{- include "cws-ws.shlib" . | nindent 12 }}
+
+            name=$(resource_name workstationId "$WORKSTATION_NAME")
+            users=$(single_principal submittedBy "$USERS")
+            json=$(require_ws "$name")
+            require_member "$json" "$users"
+
+            config=$(jq -r '.spec.configRef.name' <<<"$json")
+            echo "Workstation $name uses config $config"
+            cfg=$(require_cfg "$config")
+            print_config "$cfg"
+            print_status <<<"$cfg"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-user-start-workstation
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "Start a Cloud Workstation once its WorkstationConfig is Ready."
+spec:
+  entrypoint: main
+  serviceAccountName: {{ .Values.powerServiceAccount }}
+  {{- include "cws-ws.workstationMutex" . | nindent 2 }}
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-user-start-workstation") | nindent 4 }}
+{{ include "cws-ws.powerTemplates" (dict "root" . "action" "start") }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cws-user-stop-workstation
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+    workflows.argoproj.io/description: "Stop a Cloud Workstation. Does not wait for its WorkstationConfig to be Ready."
+spec:
+  entrypoint: main
+  serviceAccountName: {{ .Values.powerServiceAccount }}
+  {{- include "cws-ws.workstationMutex" . | nindent 2 }}
+  arguments:
+    {{- include "cws-ws.arguments" (dict "root" . "name" "cws-user-stop-workstation") | nindent 4 }}
+{{ include "cws-ws.powerTemplates" (dict "root" . "action" "stop") }}
