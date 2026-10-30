@@ -19,6 +19,16 @@ Argo CD parent Application: **`mod-abfs-data`** (enabled from the Developer Port
 
 Owns **persistent ABFS platform data**: the license GCP service account and Kubernetes Secret, Spanner, GCS, the uploader manifest table, and the workflows that operate them (license import/clear, uploader-config selection, Spanner backup schedules). It runs no ABFS process; the runtime lives in `abfs-service-module`, the build nodes in `abfs-client-module-ubuntu`. The platform-level picture and procedures are in [docs/workloads/android/abfs.md](../../../docs/workloads/android/abfs.md).
 
+## Module Metadata
+
+| Metadata Field | Value |
+| :--- | :--- |
+| **STATUS** | horizon-verified |
+| **OWNER** | Accenture |
+| **CONTACT** | module: [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com), ABFS technology: [horizon-sdv@google.com](mailto:horizon-sdv@google.com) |
+| **CHART VERSION** | 0.1.0 |
+| **CONTAINS_COMMERCIAL** | no |
+
 ## Catalog
 
 | Setting | Value |
@@ -134,7 +144,7 @@ WorkflowTemplate **`abfs-uploader-config-select`** (portal: **abfs-data** → Wo
 | `Android_Versions` | Dropdown of the rows, shown as `<name> (<branch>)`; the active row is preselected |
 | `Configuration` | Read-only copy of the row's repo block for predefined rows; editable YAML (`name: AndroidCustom`, `repo: {url, branch, file, fetch-ref-spec}`) for `AndroidCustom`. The submitted custom block is saved into the WorkflowTemplate so the form shows it next time. |
 
-The workflow (`uploader-config/scripts/set_active_uploader_config.py`) marks the chosen row active/synced and every other row inactive, patches the ConfigMap, and, when StatefulSet `abfs/abfs-gerrit-uploader` exists, deletes pod `-0`, restarts the StatefulSet and waits (`syncTimeoutSeconds` 5400) for Job `abfs-pusher-config-sync` to write the new ABFS ref and for the rollout to finish. Selecting the already active row changes nothing. Seeding a new branch takes about a day; earlier revisions remain in Spanner/GCS.
+The workflow (`uploader-config/scripts/set_active_uploader_config.py`) marks the chosen row active/synced and every other row inactive, patches the ConfigMap, and, when StatefulSet `abfs/abfs-gerrit-uploader` exists, deletes pod `-0`, restarts the StatefulSet and waits (`syncTimeoutSeconds` 5400) for Job `abfs-pusher-config-sync` to write the new ABFS ref and for the rollout to finish. Selecting the already active row changes nothing. One branch/revision is seeded at a time; earlier revisions remain in Spanner/GCS.
 
 ```bash
 kubectl get configmap abfs-uploader-config -n horizon -o jsonpath='{.data.table}'
@@ -142,7 +152,7 @@ argo submit -n workflows --from workflowtemplate/abfs-uploader-config-select \
   -p Android_Versions='Android16_r3 (android-16.0.0_r3)' --watch
 ```
 
-To add a predefined row, append it to `uploaderConfig.entries` and sync; the parent Application ignores `/data` of the ConfigMap, so a row made active from the portal is not reverted.
+The predefined rows are fixed at install time: the parent Application ignores `/data` of the ConfigMap (a row made active from the portal is not reverted by a sync), so a row appended to `uploaderConfig.entries` later never reaches the live ConfigMap of a running installation. For a custom manifest definition use the `AndroidCustom` row and edit its `Configuration`.
 
 ## Spanner backup schedules
 
@@ -158,7 +168,9 @@ WorkflowTemplate **`abfs-spanner-backup-schedule`** manages Cloud Spanner backup
 
 ## Validate after enable
 
-Use `{namespacePrefix}` if your environment has one (e.g. `dev-horizon`).
+1. In the Developer Portal wait until the module state changes from "NOT INSTALLED" to "READY".
+2. In Argo CD wait until `mod-abfs-data`, `mod-abfs-data-sa`, `mod-abfs-data-license-workflows`, `mod-abfs-data-uploader-config` and `mod-abfs-data-spanner-workflows` are Synced/Healthy.
+3. Command-line checks. Use `{namespacePrefix}` if your environment has one (e.g. `dev-horizon`).
 
 ```bash
 PROJECT=<gcp-project-id>
@@ -245,17 +257,11 @@ kubectl patch configmap abfs-license-sa-identity -n "$NS" --type merge \
 
 ---
 
-## Clean up old `abfs-runtime` leftovers
+## Clean up the former `abfs-server` service account
 
-Earlier module revisions named the runtime account `abfs-runtime`. Remove its remains once `abfs-license` is in place:
+Projects that ran ABFS 0.0.33 from the Jenkins jobs have a service account named `abfs-server`. It is not reused (the license is bound to the UniqueID of `abfs-license`); delete it once `abfs-license` is in place and the new license works:
 
 ```bash
 PROJECT=<gcp-project-id>
-NS=horizon
-WF=workflows
-
-gcloud iam service-accounts delete abfs-runtime@${PROJECT}.iam.gserviceaccount.com --quiet || true
-kubectl delete iamserviceaccount abfs-runtime -n "$NS" --ignore-not-found
-kubectl delete configmap abfs-runtime-sa-identity -n "$NS" --ignore-not-found
-kubectl delete job -n "$WF" -l horizon-sdv.io/module=abfs-data --ignore-not-found
+gcloud iam service-accounts delete abfs-server@${PROJECT}.iam.gserviceaccount.com --quiet
 ```

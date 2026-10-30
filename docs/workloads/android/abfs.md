@@ -107,9 +107,9 @@ All portal paths below start at `https://<horizon-domain>/developer-portal/`. Mo
 
 ### Enable the ABFS feature <a name="enable"></a>
 
-Enable order matters: `abfs-data` → license import → `abfs-service-module` → `abfs-client-ubuntu`. `workloads-common` and `workloads-android` must already be enabled (the client module declares them as hard dependencies).
+Before you attempt to enable the ABFS modules, ensure `workloads-common` and `workloads-android` are already enabled (the client module declares them as hard dependencies). For ABFS itself, enable order matters: `abfs-data` → license import → `abfs-service-module` → `abfs-client-ubuntu`.
 
-1. **Enable `abfs-data`.** Wait until `mod-abfs-data`, `mod-abfs-data-sa`, `mod-abfs-data-license-workflows`, `mod-abfs-data-uploader-config` and `mod-abfs-data-spanner-workflows` are Synced/Healthy.
+1. **Enable `abfs-data`.** Wait until the module state in the portal changes from "NOT INSTALLED" to "READY". Then wait a few minutes for the underlying resources to come up, or open Argo CD and wait until `mod-abfs-data`, `mod-abfs-data-sa`, `mod-abfs-data-license-workflows`, `mod-abfs-data-uploader-config` and `mod-abfs-data-spanner-workflows` are Synced/Healthy. Command-line equivalent:
    ```bash
    kubectl get application -n argocd | grep abfs-data
    kubectl get secret abfs-license -n horizon                      # exists, data.license empty
@@ -133,7 +133,7 @@ Enable order matters: `abfs-data` → license import → `abfs-service-module` �
    ```
 5. **Check the ABFS workflows are visible**: `abfs-license-import`, `abfs-license-clear`, `abfs-uploader-config-select`, `abfs-spanner-backup-schedule` on the `abfs-data` page, `abfs-smoke-test` on `abfs-service-module`, `aaos-builder-abfs` and `abfs-builder-runtime-image` on `workloads-android`.
 
-Seeding starts as soon as the uploaders are Ready, for the row that is active in the uploader table (default `Android15_r36`, see [Seed Spanner](#seed)). A full Android branch takes roughly a day; builds for that revision work only after seeding completed.
+Seeding starts as soon as the uploaders are Ready, for the row that is active in the uploader table (default `Android15_r36`, see [Seed Spanner](#seed)). Seeding time depends on what was seeded before (see [Seed Spanner](#seed)); builds for that revision work only after seeding completed.
 
 ### Import the ABFS license <a name="license"></a>
 
@@ -182,9 +182,9 @@ Manifest URL `https://android.googlesource.com/platform/manifest`, file `default
    kubectl rollout status statefulset/abfs-gerrit-uploader -n abfs
    kubectl logs -n abfs abfs-gerrit-uploader-0 -c abfs-uploader --tail=100
    ```
-   Seeding a new release branch takes about 24 hours; previously seeded revisions stay in Spanner/GCS and remain buildable. Selecting a row that is already active changes nothing and does not restart the uploaders.
+   The current implementation seeds a single branch/revision at a time. If the `AndroidLatest` row is seeded first, later seeds are faster because most of the sources of the new branch already reside on the ABFS server. Previously seeded revisions stay in Spanner/GCS and remain buildable. Selecting a row that is already active changes nothing and does not restart the uploaders.
 
-To ship a new predefined row, add it to `uploaderConfig.entries` in the uploader-config values and sync `abfs-data`; the parent Application ignores `data` of the ConfigMap, so a row made active from the portal is not reverted by a sync. If the ConfigMap is absent (abfs-data disabled) the uploaders fall back to `pusher.fallbackRepo` in `abfs-service-module/abfs/values.yaml` and log a WARNING.
+The predefined rows are fixed when `abfs-data` is installed: the parent Application ignores `data` of the ConfigMap (so a row made active from the portal is not reverted by a sync), which also means a row added to `uploaderConfig.entries` later never reaches a running installation. For a manifest that is not in the list, select the `AndroidCustom` row and edit its `Configuration`. If the ConfigMap is absent (abfs-data disabled) the uploaders fall back to `pusher.fallbackRepo` in `abfs-service-module/abfs/values.yaml` and log a WARNING.
 
 ### Prepare the Docker image template <a name="image"></a>
 
@@ -206,10 +206,10 @@ Prerequisites: all three ABFS modules enabled, the builder image pushed, and the
 | `androidRevision` | `android-15.0.0_r36` | Tag or branch to mount (`abfs mount -b`). Must be seeded. |
 | `lunchTarget` | `aosp_cf_x86_64_auto-bp1a-userdebug` | Any AOSP target; `sdk_car_*`, `aosp_cf_*`, `aosp_tangorpro_car`. |
 | `postRepoCommand` | empty | Extra commands after mount. The build/soong sandbox fix is applied automatically per revision (table below). |
-| `parallelBuildJobs` | `16` | Lower it if cacheman reports `resource temporarily unavailable`. |
+| `parallelBuildJobs` | `16` | Lower it if cacheman reports `resource temporarily unavailable`. Clear it to let the build system use as many jobs as it wants (limited by the number of available cores). |
 | `abfs.server` | `abfs-server.abfs.svc.cluster.local:50051` | In-cluster Service of the server. |
 | `abfs.clientFlags` | `--disable-tls=true --auth-type none` | Must match how the server listens (no TLS, no auth in this chart). |
-| `abfs.version` / `abfs.casfsVersion` / `abfs.repository` | `0.1.14` / `0.1.14` / `abfs-apt-alpha-public` | Client package to install; casfs itself comes from the node DaemonSet. |
+| `abfs.version` / `abfs.casfsVersion` / `abfs.repository` | `0.1.14` / `0.1.14` / `abfs-apt-alpha-public` | Client package to install. Kernel driver package to install. Apt repository to fetch these packages from. |
 | `abfs.cachedBuild`, `abfs.cleanCache`, `abfs.cachemanTimeout` | `false`, `false`, `180` | Keep the cacheman cache on the per-workflow PVC (`750Gi`, class `reclaimable-storage-class-android-abfs`). |
 
 Soong runs `soong_build` in an nsjail sandbox where the ABFS mount is read-only and `out` is writable only at `/src/out`; `aaos_environment.sh` fixes `build/soong` per `AAOS_REVISION`:
@@ -250,10 +250,10 @@ Procedure:
    gcloud spanner databases ddl describe abfs --instance=abfs --project=${PROJECT}
    ```
 5. Request and import the new license for `abfs-license`, enable `abfs-service-module`, and confirm the server serves the existing refs before re-seeding anything (`abfs test-client get-ref` from an uploader pod, or submit a build for an already seeded revision).
-6. Clean up the Jenkins-era leftovers (`abfs-server` / `abfs-runtime` accounts, old firewall rules, the old Spanner instance once the restore is verified). The `abfs-data` README has the `abfs-runtime` clean-up commands.
+6. Clean up the Jenkins-era leftovers (the `abfs-server` service account, old firewall rules, the old Spanner instance once the restore is verified). The `abfs-data` README has the `abfs-server` clean-up command.
 
 > [!NOTE]
-> The Spanner schema shipped with the modules is the one ABFS has used since 0.0.31, and KCC acquisition of a database that already holds that schema has not been exercised in Horizon test environments. Validate the procedure on a copy of the database first and confirm the 0.0.33 → 0.1.14 data compatibility with Google. Re-seeding from scratch (about a day per branch) is the fallback when the data cannot be carried over.
+> The Spanner schema shipped with the modules is the one ABFS has used since 0.0.31, and KCC acquisition of a database that already holds that schema has not been exercised in Horizon test environments. Validate the procedure on a copy of the database first and confirm the 0.0.33 → 0.1.14 data compatibility with Google. Re-seeding from scratch is the fallback when the data cannot be carried over.
 
 ## Day-2 operations <a name="day2"></a>
 
@@ -264,6 +264,9 @@ Portal → `abfs-data` → `abfs-spanner-backup-schedule`: `backupScheduleAction
 ### Disable ABFS <a name="disable"></a>
 
 Disable in reverse order: `abfs-client-ubuntu` → `abfs-service-module` → `abfs-data`. The portal refuses to disable a module that is still a hard dependency of an enabled one.
+
+> [!IMPORTANT]
+> Leave `abfs-data` enabled unless ABFS is retired for good. Disabling it soft-deletes the license service account; if it stays disabled for 30 days the account is permanently deleted and the license bound to it becomes invalid (see [Import the ABFS license](#license)).
 
 What remains after each disable:
 
@@ -290,12 +293,16 @@ Every ABFS build writes `abfs_repository_list.txt` (listing of the apt repositor
 ## Known issues <a name="knownissues"></a>
 
 - **Resource temporarily unavailable** in ninja right after the modules were (re-)enabled: casfs blob fetches time out while the uploaders re-verify their refs. Resubmit the build with the same parameters, or lower `parallelBuildJobs`.
-- **Builds of unseeded revisions** fail at `abfs mount`. Seed the row first; a branch takes ~24 h.
+- **Builds of unseeded revisions** fail at `abfs mount`. Seed the row first (`abfs-data` → `abfs-uploader-config-select`) and wait for the uploaders to finish.
+- **Soong sandbox fix is selected from `AAOS_REVISION`** (table under [Perform an AAOS build with ABFS](#build)); branch names get none. If a build panics with `read-only file system` under `out/soong`, pass the fix through `postRepoCommand` / `POST_REPO_COMMAND`.
 - **License changes recreate the data node pools** (see [Import the ABFS license](#license)); plan them outside build hours.
+- **Node pools can be left behind on disable**: if the `ContainerNodePool` CRs are pruned while KCC is still reconciling, the GKE pool stays. For the two data pools the service module's PreSync Job deletes such an orphan before the next create (until then the CR reports `UpdateFailed ... already exists`); the build pool `abfs-build-node-pool-ubuntu` has to be deleted by hand with `gcloud container node-pools delete` before `abfs-client-ubuntu` is enabled again. See [Disable ABFS](#disable).
 - **Portal Custom Git ref does not switch pipeline scripts**: `aaos-builder-abfs` clones `aaos_environment.sh` and friends from the platform branch set in Terraform. Test script changes by merging to that branch or by passing the commands through `postRepoCommand`.
-- **Gemini / AI review on ABFS builds** has no access to the mount (`/abfs`), so its findings are of little use for ABFS-specific failures; read the raw build log.
+- **AI review on ABFS builds still runs on Gemini CLI**: the other workflows default to the Antigravity SDK and keep Gemini CLI only until it is decommissioned; the ABFS Argo workflows migrate to the Antigravity SDK in the next release. The review also has no access to the mount (`/abfs`), so its findings are of little use for ABFS-specific failures; read the raw build log.
 - **ABFS UI** (`abfs-ui`) is disabled in the chart (`ui.enabled: false`) until it is functional.
 - **Uploader capacity is not elastic**: uploader replicas are addressed by name in the pusher config, so there is no HPA. Changing the count is a chart change (`uploader.count`), see the service module README.
+
+For ABFS itself, reach out to Google: [horizon-sdv@google.com](mailto:horizon-sdv@google.com).
 
 ## References <a name="references"></a>
 

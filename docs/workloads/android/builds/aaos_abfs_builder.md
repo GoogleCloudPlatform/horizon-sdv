@@ -49,7 +49,7 @@ One-time setup requirements.
 
 - ABFS modules enabled from the Developer Portal in this order: `abfs-data` (license imported), `abfs-service-module`, `abfs-client-ubuntu`. The build pods run on the `abfs-build-node-pool-ubuntu` pool created by the client module and connect to `abfs-server.abfs.svc.cluster.local:50051`.
 - The ABFS builder image pushed to the project registry (`horizon-sdv/aaos-abfs-builder`): Argo `workloads-android → abfs-builder-runtime-image` with `NO_PUSH=false`, or Jenkins `Android Workflows/Environment/ABFS/Docker Image Template`. See [Docker Image Template](../environment/abfs/docker_image_template.md).
-- The requested `AAOS_REVISION` seeded into ABFS: the matching row must have been active in `abfs-data → abfs-uploader-config-select` long enough for the uploaders to finish (about a day per branch). A build of an unseeded revision fails at `abfs mount`.
+- The requested `AAOS_REVISION` seeded into ABFS: the matching row must have been active in `abfs-data → abfs-uploader-config-select` long enough for the uploaders to finish. A build of an unseeded revision fails at `abfs mount`. The current implementation seeds a single branch/revision at a time; if the `AndroidLatest` row is seeded first, later seeds are faster because the sources of the new branch already reside on the ABFS server.
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
@@ -167,7 +167,7 @@ Note: this can change, so the `Seed Workloads` job supports this parameter to al
 
 ### `ABFS_CASFS_VERSION`
 
-The version of the ABFS CASFS module expected on the build node. Since ABFS 0.1.14 the kernel module is not installed by the build: the `abfs-client-ubuntu` module runs a DaemonSet that installs the prebuilt `casfs-kmod-<kernel>_<version>` package or builds casfs from source for the node kernel, and the build only waits for `/sys/module/casfs`. This version is recorded in `abfs_repository_list.txt` together with the kernel; keep it aligned with `casfs.daemonset.version` of the client module.
+The version of the ABFS CASFS module expected on the build node. Since ABFS 0.1.14 the kernel module is not installed by the build: the `abfs-client-ubuntu` module runs a DaemonSet that installs the prebuilt `casfs-kmod-<kernel>_<version>` package or builds casfs from source for the node kernel, and the build only waits for `/sys/module/casfs`. The `abfs_repository_list.txt` artifact records the precompiled ABFS component versions that are available in the apt repository for download at the time of the build.
 
 Note: this can change, so the `Seed Workloads` job supports this parameter to allow it to be replaced across all jobs.  You may replace locally but remember the `Seed` will overwrite when run again.
 
@@ -191,7 +191,7 @@ Change this on an ABFS build to test session encryption or authentication.
 
 ### `UPLOADER_MANIFEST_SERVER`
 
-Host passed to `abfs --manifest-server` (default `android.googlesource.com`). It must be the host the uploaders seed from (manifest URL of the active row in `abfs-uploader-config`), not the Horizon Gerrit domain.
+Host passed to `abfs --manifest-server` (default `android.googlesource.com`). It must be the host the uploaders seed from (manifest URL of the active row in `abfs-uploader-config`). If the Horizon internal mirror is used to mirror the Android source and manifest repositories, the Horizon Gerrit domain can be used here to seed from that mirror.
 
 ### `AAOS_ARTIFACT_STORAGE_SOLUTION`
 
@@ -280,10 +280,5 @@ These are as follows:
 
 ## KNOWN ISSUES <a name="known-issues"></a>
 
-- `resource temporarily unavailable` from ninja/cacheman right after the ABFS modules were (re-)enabled, while the uploaders re-verify their refs: resubmit with the same parameters or lower `AAOS_PARALLEL_BUILD_JOBS`.
-- A build of a revision that is not seeded fails at `abfs mount`; seed it first (`abfs-data → abfs-uploader-config-select`).
-- The Soong sandbox fix is selected from `AAOS_REVISION` (table under `POST_REPO_COMMAND`); branch names get none, add it via `POST_REPO_COMMAND` when the build panics with `read-only file system` under `out/soong`.
-- The AI review (Gemini / Antigravity) has no access to the ABFS mount, so its findings are of limited value for ABFS-specific failures.
-
-For ABFS itself, reach out to Google.
+Known issues of ABFS builds are listed in one place: [ABFS integration → Known issues](../abfs.md#knownissues).
 

@@ -27,10 +27,9 @@ The service module is the ABFS **runtime data plane**: the dedicated server and 
 
 | Metadata Field | Value |
 | :--- | :--- |
-| **STATUS** | experimental |
-| **OWNER** | Google |
-| **CONTACT** | [horizon-sdv@google.com](mailto:horizon-sdv@google.com) |
-| **ABFS VERSION** | 0.1.14 (`image.tag`, casfs `casfs-0.1.14.tar.gz`) |
+| **STATUS** | horizon-verified |
+| **OWNER** | Accenture |
+| **CONTACT** | module: [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com), ABFS technology: [horizon-sdv@google.com](mailto:horizon-sdv@google.com) |
 | **CHART VERSION** | 0.2.0 |
 | **CONTAINS_COMMERCIAL** | no |
 
@@ -159,6 +158,10 @@ Which Android manifest the uploaders seed is decided by the **active row** of Co
 ---
 
 ## Validate after enable
+
+1. In the Developer Portal wait until the module state changes from "NOT INSTALLED" to "READY".
+2. In Argo CD wait until `mod-abfs-service-module`, `mod-abfs-service-module-node-pool`, `mod-abfs-service-module-data-plane` and `mod-abfs-service-module-argo-workflows` are Synced/Healthy. First enable takes 10–20 minutes.
+3. Command-line checks:
 
 ```bash
 kubectl get application -n argocd | grep abfs-service-module

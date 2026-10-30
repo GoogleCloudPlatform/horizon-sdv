@@ -21,6 +21,16 @@ Provides the **build side** of ABFS: the Ubuntu GKE node pool on which ABFS-back
 
 The platform-level picture and procedures are in [docs/workloads/android/abfs.md](../../../docs/workloads/android/abfs.md).
 
+## Module Metadata
+
+| Metadata Field | Value |
+| :--- | :--- |
+| **STATUS** | horizon-verified |
+| **OWNER** | Accenture |
+| **CONTACT** | module: [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com), ABFS technology: [horizon-sdv@google.com](mailto:horizon-sdv@google.com) |
+| **CHART VERSION** | 0.1.0 |
+| **CONTAINS_COMMERCIAL** | no |
+
 ## Catalog
 
 | Setting | Value |
@@ -64,13 +74,19 @@ Versions to keep aligned on an ABFS release: `casfs.daemonset.version` and `imag
 
 ## Validate after enable
 
+1. In the Developer Portal wait until the module state changes from "NOT INSTALLED" to "READY".
+2. In Argo CD wait until `mod-abfs-client-ubuntu` and `mod-abfs-client-ubuntu-node-pool` are Synced/Healthy.
+3. Command-line checks:
+
 ```bash
 kubectl get application -n argocd | grep abfs-client-ubuntu
 # expect: mod-abfs-client-ubuntu, mod-abfs-client-ubuntu-node-pool — Synced/Healthy
 kubectl get containernodepool abfs-build-node-pool-ubuntu -n abfs-client-module-ubuntu-overview
 gcloud container node-pools describe abfs-build-node-pool-ubuntu --cluster <cluster> --region <region> \
-  --format='value(status,autoscaling.maxNodeCount,config.shieldedInstanceConfig.enableSecureBoot)'   # RUNNING 20 False
-kubectl get daemonset abfs-casfs-installer-client -n module-manager                                   # 0/0 until a build scales the pool
+  --format='value(status,autoscaling.maxNodeCount,config.shieldedInstanceConfig.enableSecureBoot)'
+# expect: RUNNING 20 False
+kubectl get daemonset abfs-casfs-installer-client -n module-manager
+# expect: 0/0 until a build scales the pool
 
 # During a build
 kubectl get nodes -l workloadLabel=android-abfs-build
