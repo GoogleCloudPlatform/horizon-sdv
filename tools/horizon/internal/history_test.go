@@ -33,11 +33,21 @@ func TestRedactArgs(t *testing.T) {
 		"--password=hunter2",
 		"--token=",
 		"--client-secret", "abc",
+		"--client-secret", "-abc_Secret123",
+		"--token", "--abc_Secret123",
+		"--client-secret=-abc_Secret123",
 		"--my_password", "xyz",
+		"--token", "--my_password", "xyz",
 		"--api-token", "--next",
+		"--password", "--page_token", "cursor",
 		"Bearer session",
 		jwt,
 		"plain",
+		"https://user:pass@example.com/v1",
+		"https://:s3cret@redis.local/0",
+		"--api=https://admin:s3cret@horizon.example/v1",
+		"https://example.com/no-user",
+		"https://example.com:8080",
 		"--params-json", `{"sampleEnv":"jenkins","apiToken":"s3cret"}`,
 		`--params-json={"password":"hunter2"}`,
 		"--params-json=",
@@ -55,11 +65,21 @@ func TestRedactArgs(t *testing.T) {
 		"--password=" + redactedValue,
 		"--token=",
 		"--client-secret", redactedValue,
+		"--client-secret", redactedValue,
+		"--token", redactedValue,
+		"--client-secret=" + redactedValue,
 		"--my_password", redactedValue,
+		"--token", "--my_password", redactedValue,
 		"--api-token", "--next",
+		"--password", "--page_token", "cursor",
 		redactedValue,
 		redactedValue,
 		"plain",
+		"https://" + redactedValue + ":" + redactedValue + "@example.com/v1",
+		"https://" + redactedValue + ":" + redactedValue + "@redis.local/0",
+		"--api=https://" + redactedValue + ":" + redactedValue + "@horizon.example/v1",
+		"https://example.com/no-user",
+		"https://example.com:8080",
 		"--params-json", redactedValue,
 		"--params-json=" + redactedValue,
 		"--params-json=",
@@ -88,18 +108,53 @@ func TestSecretAndFlagHeuristics(t *testing.T) {
 	if isSecretFlag("--page-token") || isSecretFlag("--page_token") || isSecretFlag("--Page-Token") {
 		t.Fatal("page token classified as secret")
 	}
-	if !looksLikeFlag("--foo") || !looksLikeFlag("-n") {
+	if !looksLikeFlag("--foo") || !looksLikeFlag("-n") || !looksLikeFlag("--page-token") || !looksLikeFlag("--page_token") || !looksLikeFlag("--Authorization") {
 		t.Fatal("expected flag")
 	}
 	long := "--" + strings.Repeat("a", 51)
 	if looksLikeFlag("-") || looksLikeFlag("--") || looksLikeFlag("--foo bar") || looksLikeFlag(long) || looksLikeFlag("foo") {
 		t.Fatal("unexpected flag match")
 	}
+	for _, secret := range []string{"-abc_Secret123", "--abc_Secret123", "--abc-Secret123", "-abc", "--9abc", "--a1b2c3"} {
+		if looksLikeFlag(secret) {
+			t.Fatalf("secret-shaped value classified as flag: %s", secret)
+		}
+	}
 	if !looksLikeToken("Bearer abc") || !looksLikeToken("bearer abc") {
 		t.Fatal("expected bearer token")
 	}
 	if looksLikeToken("eyJ.short.sig") || looksLikeToken("aaa.bbb.ccc") {
 		t.Fatal("short or non-jwt values should not match")
+	}
+}
+
+func TestDashPrefixedSecretAndURLNotStored(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history.json")
+	secret := "-abc_Secret123"
+	embedded := "--abc_Secret123"
+	at := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	argv := []string{
+		"horizon", "auth", "login",
+		"--client-secret", secret,
+		"--token", embedded,
+		"--api", "https://user:pass@example.com/v1",
+	}
+	if err := appendInvocation(path, argv, at); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "history-2026-10.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	for _, leak := range []string{secret, embedded, "user:pass", "pass@"} {
+		if strings.Contains(text, leak) {
+			t.Fatalf("plaintext secret in history file: %s", text)
+		}
+	}
+	if !strings.Contains(text, "example.com/v1") || !strings.Contains(text, redactedValue) {
+		t.Fatalf("history lost the host or redaction marker: %s", text)
 	}
 }
 

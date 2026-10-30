@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +35,10 @@ const (
 	historyFileName        = "history.json"
 	redactedValue          = "***"
 )
+
+// urlUserinfo matches credentials embedded in a URL authority (user:pass@host).
+// The user may be empty (":pass@host"). Password characters stop at '@' or '/'.
+var urlUserinfo = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://)([^/\s@:]*):([^/\s@]+)@`)
 
 type HistoryEntry struct {
 	Timestamp string `json:"timestamp"`
@@ -382,9 +387,17 @@ func RedactArgs(argv []string) []string {
 		}
 		if looksLikeToken(a) {
 			out[i] = redactedValue
+			continue
 		}
+		out[i] = redactURLCredentials(a)
 	}
 	return out
+}
+
+// redactURLCredentials replaces user:password in URL authorities so history
+// keeps the host and path without the embedded credentials.
+func redactURLCredentials(s string) string {
+	return urlUserinfo.ReplaceAllString(s, "${1}"+redactedValue+":"+redactedValue+"@")
 }
 
 func isSecretFlag(s string) bool {
@@ -426,23 +439,66 @@ func looksLikeToken(s string) bool {
 	return len(s) >= 40
 }
 
+// looksLikeFlag reports whether s is a following CLI flag rather than a secret
+// value. Base64url secrets use [A-Za-z0-9_-] and often start with '-', so a
+// "starts with dash" check records them in plaintext. A flag is only:
+//   - a one-letter short option (-n, -j)
+//   - a long option (--page-token, --Authorization, --page_token)
+//
+// Another secret flag (including --my_password) is always a flag, so its own
+// value is redacted on the next iteration instead of being left behind.
 func looksLikeFlag(s string) bool {
-	if !strings.HasPrefix(s, "-") {
+	if isSecretFlag(s) {
+		return true
+	}
+	if strings.HasPrefix(s, "--") {
+		return isLongFlagName(s[2:])
+	}
+	if len(s) == 2 && s[0] == '-' {
+		r := s[1]
+		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+	}
+	return false
+}
+
+func isLongFlagName(name string) bool {
+	if name == "" || len(name) > 50 {
 		return false
 	}
-	// Remove leading dashes
-	trimmed := strings.TrimLeft(s, "-")
-	if trimmed == "" {
-		return false
+	// page_token is lowercase words. Digits or uppercase beside '_' are
+	// base64url material, not a flag name.
+	if strings.Contains(name, "_") {
+		for i := 0; i < len(name); i++ {
+			r := name[i]
+			if r == '_' {
+				if i == 0 || i == len(name)-1 || name[i-1] == '_' {
+					return false
+				}
+				continue
+			}
+			if r < 'a' || r > 'z' {
+				return false
+			}
+		}
+		return true
 	}
-	// Validate if flag names contain only alphanumeric characters, hyphens, and underscores
-	for _, r := range trimmed {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+	prevHyphen := false
+	for i := 0; i < len(name); i++ {
+		r := name[i]
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+			prevHyphen = false
+		case r == '-':
+			if prevHyphen || i == 0 {
+				return false
+			}
+			prevHyphen = true
+		default:
+			// Digits and other base64url characters are not flag names.
 			return false
 		}
 	}
-	// Flag names shall be short (not 100+ characters)
-	return len(trimmed) <= 50
+	return !prevHyphen
 }
 
 func ParseHistoryLimit(arg string) (int, error) {
