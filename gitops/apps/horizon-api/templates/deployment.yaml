@@ -78,12 +78,12 @@ spec:
             - "--artifacts-allowed-buckets={{ .Values.artifactsAllowedBuckets }}"
             {{- end }}
           env:
-            - name: ARTIFACTS_MODULE_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: storage-gcs-module-api-token
-                  key: horizon-api
-                  optional: true
+            # File, not secretKeyRef. An env value is fixed when the container
+            # starts: this Deployment syncs before storage-gcs-module creates
+            # the secret, and a later rotation would keep the old token until
+            # the pod is restarted. Kubelet refreshes a directory secret mount.
+            - name: ARTIFACTS_MODULE_TOKEN_FILE
+              value: /etc/storage-gcs-token/horizon-api
             - name: ARTIFACTS_MODULE_CA_FILE
               value: /etc/storage-gcs/ca.crt
             {{- if .Values.gceMetadataHost }}
@@ -93,6 +93,11 @@ spec:
           volumeMounts:
             - name: storage-gcs-api-ca
               mountPath: /etc/storage-gcs
+              readOnly: true
+            # Directory mount (not subPath) so kubelet can update the file
+            # after the secret is created or rotated.
+            - name: storage-gcs-api-token
+              mountPath: /etc/storage-gcs-token
               readOnly: true
           ports:
             - name: metrics
@@ -121,3 +126,11 @@ spec:
             items:
               - key: ca.crt
                 path: ca.crt
+        # Optional: storage-gcs-module may be installed after horizon-api.
+        - name: storage-gcs-api-token
+          secret:
+            secretName: storage-gcs-module-api-token
+            optional: true
+            items:
+              - key: horizon-api
+                path: horizon-api

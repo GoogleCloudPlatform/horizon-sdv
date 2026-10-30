@@ -20,6 +20,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -311,5 +313,133 @@ func TestHandleArtifactsListObjectsEmptyPrefixAndLimit(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("missing token called upstream: calls=%d", calls)
+	}
+}
+
+func TestHandleArtifactsListObjectsTokenFile(t *testing.T) {
+	dir := t.TempDir()
+	tokenPath := filepath.Join(dir, "horizon-api")
+
+	var calls int
+	var gotAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"count":0,"objects":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	s := &Server{opt: Options{
+		ArtifactsModuleURL:            upstream.URL,
+		ArtifactsModuleToken:          "stale-env-token",
+		ArtifactsModuleTokenFile:      tokenPath,
+		ArtifactsStaticAllowedBuckets: map[string]struct{}{"my-bucket": {}},
+	}}
+	call := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/v1/artifacts/buckets/my-bucket/objects", nil)
+		req.SetPathValue("bucket", "my-bucket")
+		rr := httptest.NewRecorder()
+		s.handleArtifactsListObjects(rr, req, nil)
+		return rr
+	}
+
+	// Secret not created yet: do not fall back to a token frozen in the environment.
+	missing := call()
+	if missing.Code != http.StatusServiceUnavailable {
+		t.Fatalf("missing file status %d body %s", missing.Code, missing.Body.String())
+	}
+	if calls != 0 {
+		t.Fatalf("missing token file called upstream: calls=%d", calls)
+	}
+
+	if err := os.WriteFile(tokenPath, []byte("  \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	blank := call()
+	if blank.Code != http.StatusServiceUnavailable {
+		t.Fatalf("blank token status %d body %s", blank.Code, blank.Body.String())
+	}
+	if calls != 0 {
+		t.Fatalf("blank token called upstream: calls=%d", calls)
+	}
+
+	if err := os.WriteFile(tokenPath, []byte("fresh-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ok := call()
+	if ok.Code != http.StatusOK {
+		t.Fatalf("file token status %d body %s", ok.Code, ok.Body.String())
+	}
+	if gotAuth != "Bearer fresh-token" {
+		t.Fatalf("authorization %q", gotAuth)
+	}
+
+	// Same process, secret rotated: the next request must send the new token.
+	if err := os.WriteFile(tokenPath, []byte("rotated-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rotated := call()
+	if rotated.Code != http.StatusOK {
+		t.Fatalf("rotated status %d body %s", rotated.Code, rotated.Body.String())
+	}
+	if gotAuth != "Bearer rotated-token" {
+		t.Fatalf("rotated authorization %q", gotAuth)
+	}
+	if calls != 2 {
+		t.Fatalf("upstream calls: got %d want 2", calls)
+	}
+
+	s.opt.ArtifactsModuleTokenFile = dir
+	unreadable := call()
+	if unreadable.Code != http.StatusBadGateway {
+		t.Fatalf("unreadable token status %d body %s", unreadable.Code, unreadable.Body.String())
+	}
+	if calls != 2 {
+		t.Fatalf("unreadable token called upstream: calls=%d", calls)
+	}
+}
+
+func TestArtifactsModuleTokenRetriesProjectedVolume(t *testing.T) {
+	dir := t.TempDir()
+	// Presence of ..data is what kubelet uses to publish the current secret data.
+	// A regular file is enough for the check; the test does not need a symlink.
+	if err := os.WriteFile(filepath.Join(dir, "..data"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tokenPath := filepath.Join(dir, "horizon-api")
+
+	prevRead := readArtifactsTokenFile
+	prevWait := artifactsTokenReadRetryWait
+	var reads int
+	readArtifactsTokenFile = func(name string) ([]byte, error) {
+		if name != tokenPath {
+			t.Errorf("read %s", name)
+		}
+		reads++
+		if reads < 3 {
+			return nil, os.ErrNotExist
+		}
+		return []byte("after-swap\n"), nil
+	}
+	artifactsTokenReadRetryWait = 0
+	t.Cleanup(func() {
+		readArtifactsTokenFile = prevRead
+		artifactsTokenReadRetryWait = prevWait
+	})
+
+	s := &Server{opt: Options{
+		ArtifactsModuleTokenFile: tokenPath,
+		ArtifactsModuleToken:     "stale-env-token",
+	}}
+	tok, err := s.artifactsModuleToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok != "after-swap" {
+		t.Fatalf("token %q", tok)
+	}
+	if reads != 3 {
+		t.Fatalf("reads: got %d want 3", reads)
 	}
 }

@@ -259,6 +259,7 @@ func main() {
 		CatalogCRName:                 catalogCRName,
 		ArtifactsModuleURL:            artifactsModuleURL,
 		ArtifactsModuleToken:          strings.TrimSpace(os.Getenv("ARTIFACTS_MODULE_TOKEN")),
+		ArtifactsModuleTokenFile:      strings.TrimSpace(os.Getenv("ARTIFACTS_MODULE_TOKEN_FILE")),
 		ArtifactsModuleCAFile:         strings.TrimSpace(os.Getenv("ARTIFACTS_MODULE_CA_FILE")),
 		ArtifactsGCSProjectID:         artifactsGCSProjectID,
 		ArtifactsStaticAllowedBuckets: staticAllowedBuckets,

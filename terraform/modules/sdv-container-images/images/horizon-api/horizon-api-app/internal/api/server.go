@@ -59,9 +59,14 @@ type Options struct {
 	GCSBucketsNS  string
 	StateCRName   string
 	CatalogCRName string
-	// Artifacts module configuration for GCS bucket/object listing
-	ArtifactsModuleURL            string
-	ArtifactsModuleToken          string
+	// Artifacts module configuration for GCS bucket/object listing.
+	ArtifactsModuleURL string
+	// ArtifactsModuleToken is a static bearer token, used only when ArtifactsModuleTokenFile is empty.
+	ArtifactsModuleToken string
+	// ArtifactsModuleTokenFile is read on each object-list request. A secret volume
+	// updates after storage-gcs-module creates or rotates the token; an env
+	// secretKeyRef stays at whatever value the container started with.
+	ArtifactsModuleTokenFile      string
 	ArtifactsModuleCAFile         string
 	ArtifactsGCSProjectID         string
 	ArtifactsStaticAllowedBuckets map[string]struct{}

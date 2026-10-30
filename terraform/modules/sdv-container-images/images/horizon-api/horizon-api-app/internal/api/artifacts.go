@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -43,6 +44,13 @@ import (
 // Callers map it to 400. A well-formed name that is simply not allowlisted is
 // (false, nil) and maps to 403.
 var errInvalidArtifactsBucket = errors.New("invalid bucket name")
+
+// readArtifactsTokenFile is os.ReadFile, replaced in tests.
+var readArtifactsTokenFile = os.ReadFile
+
+// artifactsTokenReadRetryWait is the pause between reads while kubelet is
+// swapping a projected secret volume. Tests set it to zero.
+var artifactsTokenReadRetryWait = 20 * time.Millisecond
 
 // artifactsModuleProxyTimeout bounds the outbound call to storage-gcs-module.
 // A zero http.Client timeout waits until the caller disconnects, so a stalled
@@ -114,6 +122,42 @@ func artifactsListPageSize(raw string) (int, error) {
 		return 0, fmt.Errorf("limit must be between 1 and %d", artifactsListMaxPageSize)
 	}
 	return n, nil
+}
+
+// artifactsModuleToken returns the storage-gcs-module bearer token for this request.
+// A configured token file is read every call. The secret may not exist when
+// horizon-api starts, and kubelet updates the mounted file when it is created
+// or rotated. An empty path falls back to the static token for tests and local runs.
+func (s *Server) artifactsModuleToken() (string, error) {
+	path := strings.TrimSpace(s.opt.ArtifactsModuleTokenFile)
+	if path == "" {
+		return strings.TrimSpace(s.opt.ArtifactsModuleToken), nil
+	}
+	// Kubelet swaps the secret volume's ..data symlink while the key file still
+	// points at it, so one read can see ENOENT even though the secret exists.
+	// Retry only when that projected volume is present. An optional secret that
+	// has not been created yet is an empty directory and returns immediately.
+	const attempts = 3
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		b, err := readArtifactsTokenFile(path)
+		if err == nil {
+			return strings.TrimSpace(string(b)), nil
+		}
+		lastErr = err
+		if !errors.Is(err, os.ErrNotExist) || !artifactsTokenVolumeProjected(path) || i == attempts-1 {
+			return "", err
+		}
+		time.Sleep(artifactsTokenReadRetryWait)
+	}
+	return "", lastErr
+}
+
+// artifactsTokenVolumeProjected reports whether path sits on a kubelet secret
+// volume. Those volumes publish the current data through a ..data symlink.
+func artifactsTokenVolumeProjected(path string) bool {
+	_, err := os.Lstat(filepath.Join(filepath.Dir(path), "..data"))
+	return err == nil
 }
 
 func (s *Server) artifactsModuleClient() (*http.Client, error) {
@@ -324,7 +368,16 @@ func (s *Server) handleArtifactsListObjects(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "invalid limit", http.StatusBadRequest)
 		return
 	}
-	token := strings.TrimSpace(s.opt.ArtifactsModuleToken)
+	token, err := s.artifactsModuleToken()
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.Error(w, "artifacts module token not configured", http.StatusServiceUnavailable)
+			return
+		}
+		log.Printf("artifacts module token: %v", err)
+		http.Error(w, "failed to read artifacts module token", http.StatusBadGateway)
+		return
+	}
 	if token == "" {
 		http.Error(w, "artifacts module token not configured", http.StatusServiceUnavailable)
 		return
