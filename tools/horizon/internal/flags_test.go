@@ -70,6 +70,70 @@ func TestLoadAPIClientRequiresConfig(t *testing.T) {
 	}
 }
 
+func TestLoadExampleAPIBaseOfflineAndUnauthenticated(t *testing.T) {
+	dir := isolateConfigEnv(t)
+	oldAPI, oldDomain := FlagAPI, FlagDomain
+	t.Cleanup(func() {
+		FlagAPI, FlagDomain = oldAPI, oldDomain
+	})
+	FlagAPI, FlagDomain = "", ""
+
+	base, err := LoadExampleAPIBase()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base != "{api}" {
+		t.Fatalf("unset base = %q", base)
+	}
+
+	// A client secret would force LoadAPIClient into a live token call.
+	t.Setenv("KEYCLOAK_CLIENT_SECRET", "secret")
+	t.Setenv("HORIZON_API_BASE_URL", "https://env.example/horizon-api/")
+	base, err = LoadExampleAPIBase()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base != "https://env.example/horizon-api" {
+		t.Fatalf("env base = %q", base)
+	}
+
+	t.Setenv("HORIZON_API_BASE_URL", "")
+	FlagAPI = "https://cli.example/horizon-api/"
+	base, err = LoadExampleAPIBase()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base != "https://cli.example/horizon-api" {
+		t.Fatalf("flag base = %q", base)
+	}
+
+	FlagAPI = ""
+	FlagDomain = "cli.example"
+	base, err = LoadExampleAPIBase()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base != "https://cli.example/horizon-api" {
+		t.Fatalf("domain flag base = %q", base)
+	}
+
+	FlagDomain = ""
+	cfgDir := filepath.Join(dir, "horizon")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("domain: file.example\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	base, err = LoadExampleAPIBase()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base != "https://file.example/horizon-api" {
+		t.Fatalf("file domain base = %q", base)
+	}
+}
+
 func TestLoadAPIClientAppliesAPIFlagBeforeURLCheck(t *testing.T) {
 	isolateConfigEnv(t)
 	oldAPI, oldDomain := FlagAPI, FlagDomain

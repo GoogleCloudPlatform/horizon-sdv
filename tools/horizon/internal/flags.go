@@ -56,3 +56,15 @@ func LoadAPIClientWith(module, template string) (*Client, *Config, error) {
 	}
 	return c, cfg, nil
 }
+
+// LoadExampleAPIBase is the Horizon API origin for example URLs.
+// It reads config, environment, and --api/--domain, and returns "{api}" when
+// no origin is configured. It never builds a client or contacts Keycloak.
+func LoadExampleAPIBase() (string, error) {
+	cfg, err := loadConfigDraft()
+	if err != nil {
+		return "", err
+	}
+	ApplyFlagOverrides(cfg, GlobalFlagOverrides("", ""))
+	return ExampleAPIBase(cfg), nil
+}

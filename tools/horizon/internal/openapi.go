@@ -451,11 +451,17 @@ func FindOperation(ops []Operation, method, path, operationID string) (*Operatio
 }
 
 // ExampleAPIBase is the configured Horizon API origin for example URLs, or "{api}".
+// A domain with no explicit base URL is expanded to https://<domain>/horizon-api.
 func ExampleAPIBase(cfg *Config) string {
 	if cfg == nil {
 		return "{api}"
 	}
 	base := strings.TrimSpace(cfg.BaseURL)
+	if base == "" {
+		if domain := strings.TrimSpace(cfg.Domain); domain != "" {
+			base = "https://" + domain + "/horizon-api"
+		}
+	}
 	if base == "" {
 		return "{api}"
 	}

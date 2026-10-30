@@ -262,6 +262,12 @@ func TestExampleAPIBase(t *testing.T) {
 	if ExampleAPIBase(&Config{BaseURL: "https://api.example/"}) != "https://api.example" {
 		t.Fatal("trailing slash")
 	}
+	if ExampleAPIBase(&Config{Domain: "horizon.example.com"}) != "https://horizon.example.com/horizon-api" {
+		t.Fatal("domain")
+	}
+	if ExampleAPIBase(&Config{BaseURL: "https://api.example/", Domain: "other.example"}) != "https://api.example" {
+		t.Fatal("base wins over domain")
+	}
 }
 
 func TestOpenAPICache(t *testing.T) {
