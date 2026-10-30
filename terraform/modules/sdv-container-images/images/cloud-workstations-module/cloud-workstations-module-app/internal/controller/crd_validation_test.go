@@ -260,9 +260,10 @@ func TestControllerRolePermissions(t *testing.T) {
 		t.Fatalf("role permissions = %v", granted)
 	}
 
-	// The controller never actAs the host VM SA itself (that would re-grant the broad bypass this
-	// role was created to avoid). Only Config Connector (creates/updates the VM) and the
-	// Workstations service agent (starts/stops the VM) may actAs gke-cws-host-vm-sa.
+	// actAs is resource-scoped to gke-cws-host-vm-sa. Config Connector attaches that
+	// SA, the Workstations agent starts the VM, and the module controller patches
+	// host.gce_instance posture. Project-wide roles/iam.serviceAccountUser on sa14
+	// stays forbidden below.
 	hostBindingStart := strings.Index(text, `resource "google_service_account_iam_member" "cws_host_sa_user"`)
 	if hostBindingStart < 0 {
 		t.Fatal("host service account actAs binding is missing")
@@ -279,13 +280,12 @@ func TestControllerRolePermissions(t *testing.T) {
 		"serviceAccount:gke-config-connector-sa@",
 		"workstations_agent",
 		"google_project_service_identity.workstations.email",
+		"module_controller",
+		"serviceAccount:gke-cws-module-sa@",
 	} {
 		if !strings.Contains(hostBinding, expected) {
 			t.Fatalf("host actAs binding is missing %q", expected)
 		}
-	}
-	if strings.Contains(hostBinding, "gke-cws-module-sa@") {
-		t.Fatal("host actAs binding must not grant the controller SA itself")
 	}
 
 	// The workstations.googleapis.com service identity must exist before it can be granted actAs.

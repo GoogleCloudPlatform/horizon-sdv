@@ -144,11 +144,16 @@ resource "google_project_service_identity" "workstations" {
   depends_on = [module.sdv_apis]
 }
 
-# Both identities create or run the VM. The module controller only patches posture and IAM.
+# actAs on the host VM SA only. Config Connector attaches it when it creates the
+# WorkstationConfig. The Workstations service agent uses it to start the VM. The
+# module controller needs it too: UpdateWorkstationConfig re-checks actAs when
+# posture fields under host.gce_instance are patched. Scoped to gke-cws-host-vm-sa.
+# sa14 still must not get project-wide roles/iam.serviceAccountUser.
 resource "google_service_account_iam_member" "cws_host_sa_user" {
   for_each = {
     config_connector   = "serviceAccount:gke-config-connector-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
     workstations_agent = "serviceAccount:${google_project_service_identity.workstations.email}"
+    module_controller  = "serviceAccount:gke-cws-module-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
   }
   service_account_id = "projects/${data.google_project.project.project_id}/serviceAccounts/gke-cws-host-vm-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
   role               = "roles/iam.serviceAccountUser"
