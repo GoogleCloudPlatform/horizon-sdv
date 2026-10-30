@@ -45,6 +45,7 @@ pipeline {
                   matchExpressions:
                   - key: aaos_pod
                     operator: Exists
+                namespaceSelector: {}
                 topologyKey: kubernetes.io/hostname
           hostname: jenkins-aaos-cf-build-pod
           serviceAccountName: ${JENKINS_SERVICE_ACCOUNT}

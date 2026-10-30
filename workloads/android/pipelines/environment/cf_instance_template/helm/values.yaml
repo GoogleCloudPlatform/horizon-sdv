@@ -161,6 +161,7 @@ spec:
             matchExpressions:
               - key: aaos_pod
                 operator: Exists
+          namespaceSelector: {}
           topologyKey: kubernetes.io/hostname
   cfRunPodResources:
     requests:
