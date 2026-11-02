@@ -74,12 +74,12 @@ pipeline {
            trim: true)
 
     string(name: 'GCLOUD_CLI_VERSION',
-           defaultValue: '545.0.0-0',
+           defaultValue: '591.0.0-0',
            description: '''<p>Version of <a target="_blank" https://docs.cloud.google.com/sdk/docs/release-notes>Google Cloud CLI</a>.<br/>Note: Define <code>latest</code> if wishing to use the latest available version.</p>''',
            trim: true)
 
     string(name: 'KUBECTL_VERSION',
-           defaultValue: '1:545.0.0-0',
+           defaultValue: '1:591.0.0-0',
            description: '''<p>Version of <code>kubectl</code>. Typically based on <a target="_blank" https://docs.cloud.google.com/sdk/docs/release-notes>Google Cloud CLI</a><br/>Note: Define <code>latest</code> if wishing to use the latest available version.</p>''',
            trim: true)
 
