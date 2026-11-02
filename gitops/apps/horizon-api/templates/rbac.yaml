@@ -40,6 +40,33 @@ subjects:
     name: horizon-api
     namespace: {{ .Values.namespace }}
 ---
+{{- $gcsBucketsNs := .Values.gcsBucketsNamespace | default "horizon" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: horizon-api-gcsbuckets
+  namespace: {{ $gcsBucketsNs }}
+  labels:
+    app.kubernetes.io/name: horizon-api
+rules:
+  - apiGroups: ["gcsmanager.horizon.io"]
+    resources: ["gcsbuckets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: horizon-api-gcsbuckets
+  namespace: {{ $gcsBucketsNs }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: horizon-api-gcsbuckets
+subjects:
+  - kind: ServiceAccount
+    name: horizon-api
+    namespace: {{ .Values.namespace }}
+---
 {{- $workflowsNs := .Values.workflowsNamespace | default "workflows" }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

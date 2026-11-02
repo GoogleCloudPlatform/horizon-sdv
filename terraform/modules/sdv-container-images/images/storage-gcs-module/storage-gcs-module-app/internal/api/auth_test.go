@@ -80,6 +80,27 @@ func TestWithAPIAuth(t *testing.T) {
 		}
 	})
 
+	t.Run("horizon-api can list objects only", func(t *testing.T) {
+		s := &Server{APITokens: []APIToken{{Caller: horizonAPICaller, Token: "horizon-api-secret"}}}
+		h := s.withAPIAuth(okHandler)
+
+		listReq := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/example/objects-list", nil)
+		listReq.Header.Set("Authorization", "Bearer horizon-api-secret")
+		listRR := httptest.NewRecorder()
+		h.ServeHTTP(listRR, listReq)
+		if listRR.Code != http.StatusOK {
+			t.Fatalf("list status=%d", listRR.Code)
+		}
+
+		otherReq := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/example/objects-meta/object", nil)
+		otherReq.Header.Set("Authorization", "Bearer horizon-api-secret")
+		otherRR := httptest.NewRecorder()
+		h.ServeHTTP(otherRR, otherReq)
+		if otherRR.Code != http.StatusForbidden {
+			t.Fatalf("other status=%d", otherRR.Code)
+		}
+	})
+
 	t.Run("previous token still accepted", func(t *testing.T) {
 		s := &Server{APITokens: []APIToken{
 			{Caller: "storage-gcs-internal", Token: "new-secret"},
@@ -147,8 +168,8 @@ func TestRequireBucketStaticAllowlist(t *testing.T) {
 	s2 := &Server{
 		ProjectID: "proj",
 		StaticAllowedBuckets: map[string]struct{}{
-			"proj-aaos":     {},
-			"other-bucket":  {},
+			"proj-aaos":    {},
+			"other-bucket": {},
 		},
 	}
 	rr4 := httptest.NewRecorder()

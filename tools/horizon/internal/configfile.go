@@ -2,8 +2,9 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//         http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -11,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package horizon
 
 import (
 	"fmt"
@@ -24,7 +25,7 @@ import (
 )
 
 // horizonConfigDir returns ~/.config/horizon (or XDG_CONFIG_HOME/horizon).
-func horizonConfigDir() (string, error) {
+func HorizonConfigDir() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
 		home, e := os.UserHomeDir()
@@ -38,7 +39,7 @@ func horizonConfigDir() (string, error) {
 
 // HorizonConfigFilePath is the default path for optional CLI defaults.
 func HorizonConfigFilePath() (string, error) {
-	dir, err := horizonConfigDir()
+	dir, err := HorizonConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -128,6 +129,15 @@ func mergeFileIntoConfig(cfg *Config, fc *fileConfig) {
 
 // LoadConfig reads defaults, optional ~/.config/horizon/config.yaml, then environment (env overrides file).
 func LoadConfig() (*Config, error) {
+	cfg, err := loadConfigDraft()
+	if err != nil {
+		return nil, err
+	}
+	return finalizeConfig(cfg)
+}
+
+// loadConfigDraft reads file and env. URL checks happen after CLI flags.
+func loadConfigDraft() (*Config, error) {
 	path, _ := HorizonConfigFilePath()
 	var fc *fileConfig
 	if path != "" {
@@ -137,7 +147,10 @@ func LoadConfig() (*Config, error) {
 			return nil, err
 		}
 	}
-	return buildConfig(fc)
+	cfg := defaultConfig()
+	mergeFileIntoConfig(cfg, fc)
+	mergeEnvIntoConfig(cfg)
+	return cfg, nil
 }
 
 // LoadConfigRelaxed is for auth login: Keycloak URL is required; Horizon API base URL is optional.
@@ -171,16 +184,9 @@ func finalizeConfigRelaxed(cfg *Config) (*Config, error) {
 		}
 	}
 	if cfg.KeycloakBase == "" {
-		return nil, fmt.Errorf("Keycloak URL unknown: set KEYCLOAK_BASE or HORIZON_DOMAIN, or domain in ~/.config/horizon/config.yaml, or pass --domain (e.g. %s auth login --device --domain horizon.example.com)", progName())
+		return nil, fmt.Errorf("Keycloak URL unknown: set KEYCLOAK_BASE or HORIZON_DOMAIN, or domain in ~/.config/horizon/config.yaml, or pass --domain (e.g. %s auth login --device --domain horizon.example.com)", ProgName())
 	}
 	return cfg, nil
-}
-
-func buildConfig(fc *fileConfig) (*Config, error) {
-	cfg := defaultConfig()
-	mergeFileIntoConfig(cfg, fc)
-	mergeEnvIntoConfig(cfg)
-	return finalizeConfig(cfg)
 }
 
 func defaultConfig() *Config {
@@ -261,6 +267,12 @@ type FlagOverrides struct {
 	Template   string
 }
 
+// RevalidateConfig re-derives API/Keycloak URLs after CLI flag overrides.
+func RevalidateConfig(cfg *Config) error {
+	_, err := finalizeConfig(cfg)
+	return err
+}
+
 func ApplyFlagOverrides(cfg *Config, fo *FlagOverrides) {
 	if fo == nil {
 		return
@@ -279,4 +291,38 @@ func ApplyFlagOverrides(cfg *Config, fo *FlagOverrides) {
 	if s := strings.TrimSpace(fo.Template); s != "" {
 		cfg.Template = s
 	}
+}
+
+// MergeLoginIntoConfigFile writes domain/keycloak fields into config.yaml (for auth login --write-config).
+func MergeLoginIntoConfigFile(domain, apiBase, keycloakBase, realm string) error {
+	dir, err := HorizonConfigDir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "config.yaml")
+
+	var fc fileConfig
+	if b, err := os.ReadFile(path); err == nil {
+		_ = yaml.Unmarshal(b, &fc)
+	}
+	if d := strings.TrimSpace(domain); d != "" {
+		fc.Domain = d
+	}
+	if s := strings.TrimSpace(apiBase); s != "" {
+		fc.APIBaseURL = strings.TrimSuffix(s, "/")
+	}
+	if s := strings.TrimSpace(keycloakBase); s != "" {
+		fc.KeycloakBase = strings.TrimSuffix(s, "/")
+	}
+	if s := strings.TrimSpace(realm); s != "" {
+		fc.KeycloakRealm = s
+	}
+	out, err := yaml.Marshal(&fc)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
 }

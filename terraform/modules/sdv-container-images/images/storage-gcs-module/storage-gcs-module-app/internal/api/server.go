@@ -2,6 +2,15 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // Package api implements the internal HTTP API for GCS operations.
 package api
@@ -104,6 +113,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/buckets/{bucket}/objects-meta-raw/{object_path...}", s.handleMetadataRaw)
 	mux.HandleFunc("PATCH /api/v1/buckets/{bucket}/objects-meta/{object_path...}", s.handleMetadataUpdate)
 	mux.HandleFunc("POST /api/v1/buckets/{bucket}/objects/filter", s.handleFilterObjects)
+	mux.HandleFunc("GET /api/v1/buckets/{bucket}/objects-list", s.handleListObjects)
 	mux.HandleFunc("POST /api/v1/buckets/{bucket}/objects-meta/batch-update", s.handleBatchMetadataUpdate)
 	mux.HandleFunc("POST /api/v1/buckets/{bucket}/objects-meta/batch-remove", s.handleBatchMetadataRemove)
 	mux.HandleFunc("POST /api/v1/buckets/{bucket}/objects-storage-class/list", s.handleStorageClassList)
@@ -637,7 +647,7 @@ func (s *Server) handleResumablePut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		writeGatewayErr(w, fmt.Errorf("gcs resumable put: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(b))))
+	writeGatewayErr(w, fmt.Errorf("gcs resumable put: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(b))))
 }
 
 func (s *Server) handleResumableStatus(w http.ResponseWriter, r *http.Request) {
@@ -685,7 +695,7 @@ func (s *Server) handleResumableStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		writeGatewayErr(w, fmt.Errorf("gcs resumable status: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(b))))
+	writeGatewayErr(w, fmt.Errorf("gcs resumable status: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(b))))
 }
 
 func gcsAuthedClient(ctx context.Context) (*http.Client, error) {

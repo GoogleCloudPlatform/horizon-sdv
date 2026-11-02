@@ -2,8 +2,9 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//         http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -11,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package horizon
 
 import (
 	"encoding/json"
@@ -33,7 +34,7 @@ type TokenCache struct {
 	ClientID       string `json:"client_id,omitempty"`
 }
 
-func tokenCachePath() (string, error) {
+func TokenCachePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -45,8 +46,8 @@ func tokenCachePath() (string, error) {
 	return filepath.Join(dir, "token.json"), nil
 }
 
-func loadTokenCache() (*TokenCache, error) {
-	p, err := tokenCachePath()
+func LoadTokenCache() (*TokenCache, error) {
+	p, err := TokenCachePath()
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +65,7 @@ func loadTokenCache() (*TokenCache, error) {
 	return &t, nil
 }
 
-func saveTokenCache(t *TokenCache) error {
+func SaveTokenCache(t *TokenCache) error {
 	if t != nil {
 		if t.ExpiresAt > 0 {
 			t.ExpiresAtHuman = time.Unix(t.ExpiresAt, 0).UTC().Format(time.RFC3339)
@@ -72,7 +73,7 @@ func saveTokenCache(t *TokenCache) error {
 			t.ExpiresAtHuman = ""
 		}
 	}
-	p, err := tokenCachePath()
+	p, err := TokenCachePath()
 	if err != nil {
 		return err
 	}
@@ -86,8 +87,8 @@ func saveTokenCache(t *TokenCache) error {
 	return nil
 }
 
-func clearTokenCache() error {
-	p, err := tokenCachePath()
+func ClearTokenCache() error {
+	p, err := TokenCachePath()
 	if err != nil {
 		return err
 	}

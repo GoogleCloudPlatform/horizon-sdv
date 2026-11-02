@@ -89,7 +89,7 @@ func main() {
 			fatal(err)
 		}
 		dest := filepath.Join(destDir, t.filename)
-		ld := fmt.Sprintf("-s -w -X main.version=%s -X main.buildDate=%s", version, buildDate)
+		ld := fmt.Sprintf("-s -w -X github.com/horizon-sdv/horizon/internal.version=%s -X github.com/horizon-sdv/horizon/internal.buildDate=%s", version, buildDate)
 		cmd := exec.Command("go", "build", "-trimpath", "-ldflags", ld, "-o", dest, ".")
 		cmd.Dir = root
 		cmd.Env = append(os.Environ(),

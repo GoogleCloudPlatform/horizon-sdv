@@ -19,6 +19,7 @@ import (
 type ctxKey int
 
 const callerCtxKey ctxKey = 1
+const horizonAPICaller = "horizon-api"
 
 // APIToken is one accepted Bearer secret bound to a caller name.
 type APIToken struct {
@@ -85,6 +86,10 @@ func (s *Server) withAPIAuth(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
+		if tok.Caller == horizonAPICaller && !isHorizonAPIListRoute(r) {
+			writeErr(w, http.StatusForbidden, "caller is not permitted for this route")
+			return
+		}
 		kind := "current"
 		if tok.Previous {
 			kind = "previous"
@@ -93,6 +98,20 @@ func (s *Server) withAPIAuth(next http.Handler) http.Handler {
 		r = r.WithContext(context.WithValue(r.Context(), callerCtxKey, tok.Caller))
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isHorizonAPIListRoute permits horizon-api to proxy only its bucket-object listing endpoint.
+func isHorizonAPIListRoute(r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	const prefix = "/api/v1/buckets/"
+	const suffix = "/objects-list"
+	if !strings.HasPrefix(r.URL.Path, prefix) || !strings.HasSuffix(r.URL.Path, suffix) {
+		return false
+	}
+	bucket := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, prefix), suffix)
+	return bucket != "" && !strings.Contains(bucket, "/")
 }
 
 func (s *Server) matchAPIToken(got string) (APIToken, bool) {

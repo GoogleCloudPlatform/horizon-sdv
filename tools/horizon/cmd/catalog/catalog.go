@@ -2,6 +2,7 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
 //         http://www.apache.org/licenses/LICENSE-2.0
 //
@@ -11,19 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package catalog
 
 import (
-	"os"
-	"path/filepath"
+	"github.com/horizon-sdv/horizon/internal"
+	"github.com/spf13/cobra"
 )
 
-// progName is the executable basename (e.g. horizon) for help text and errors.
-func progName() string {
-	if len(os.Args) > 0 {
-		if b := filepath.Base(os.Args[0]); b != "" && b != "." {
-			return b
-		}
+func NewCatalogCmd() *cobra.Command {
+	var catalogCmd = &cobra.Command{
+		Use:   "catalog",
+		Short: "Inspect the Horizon workflow catalog",
 	}
-	return "horizon"
+
+	horizon.AddAPIFlags(catalogCmd)
+	catalogCmd.AddCommand(NewCatalogGetCmd())
+
+	return catalogCmd
 }

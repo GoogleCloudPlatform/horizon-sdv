@@ -139,6 +139,14 @@ spec:
       ports:
         - protocol: TCP
           port: 2746
+    # storage-gcs-module object listing (HTTPS API)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.config.namespacePrefix }}horizon
+      ports:
+        - protocol: TCP
+          port: 8443
     # DNS (cluster DNS)
     - to:
         - namespaceSelector:
