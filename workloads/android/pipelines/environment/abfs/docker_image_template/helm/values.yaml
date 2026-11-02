@@ -57,8 +57,8 @@ spec:
   # Empty → chart composes ar+https://us-apt.pkg.dev/projects/abfs-binaries <abfsRepository> main
   abfsDistributionRegistry: ""
   nodejsVersion: "25.2.1"
-  gcloudCliVersion: "545.0.0-0"
-  kubectlVersion: "1:545.0.0-0"
+  gcloudCliVersion: "591.0.0-0"
+  kubectlVersion: "1:591.0.0-0"
   packerVersion: "1.15.0"
   enableGeminiAiAssistant: "true"
   geminiCliVersion: "latest"
