@@ -42,6 +42,11 @@ spec:
                 key: {{ .Values.apiTokenSecretKey | default "storage-gcs-internal" | quote }}
           - name: CURL_CA_BUNDLE
             value: {{ printf "%s/ca.crt" (.Values.apiTlsCAMountPath | default "/etc/storage-gcs") | quote }}
+          # Inputs via env vars, never interpolated into the script.
+          - name: BUCKET
+            value: '{{ "{{inputs.parameters.bucket}}" }}'
+          - name: OBJECT_PATH
+            value: '{{ "{{inputs.parameters.objectPath}}" }}'
         volumeMounts:
           - name: storage-gcs-api-ca
             mountPath: {{ .Values.apiTlsCAMountPath | default "/etc/storage-gcs" | quote }}
@@ -50,8 +55,6 @@ spec:
         args:
           - |
             set -euo pipefail
-            BUCKET="{{ "{{inputs.parameters.bucket}}" }}"
-            OBJECT_PATH="{{ "{{inputs.parameters.objectPath}}" }}"
             echo "Uploading to gs://${BUCKET}/${OBJECT_PATH}"
             curl -fS -X POST \
               -H "Authorization: Bearer ${STORAGE_GCS_API_TOKEN}" \
@@ -87,6 +90,11 @@ spec:
                 key: {{ .Values.apiTokenSecretKey | default "storage-gcs-internal" | quote }}
           - name: CURL_CA_BUNDLE
             value: {{ printf "%s/ca.crt" (.Values.apiTlsCAMountPath | default "/etc/storage-gcs") | quote }}
+          # Inputs via env vars, never interpolated into the script.
+          - name: BUCKET
+            value: '{{ "{{inputs.parameters.bucket}}" }}'
+          - name: OBJECT_PATH
+            value: '{{ "{{inputs.parameters.objectPath}}" }}'
         volumeMounts:
           - name: storage-gcs-api-ca
             mountPath: {{ .Values.apiTlsCAMountPath | default "/etc/storage-gcs" | quote }}
@@ -95,8 +103,6 @@ spec:
         args:
           - |
             set -euo pipefail
-            BUCKET="{{ "{{inputs.parameters.bucket}}" }}"
-            OBJECT_PATH="{{ "{{inputs.parameters.objectPath}}" }}"
             echo "Verifying object in gs://${BUCKET}/${OBJECT_PATH}"
             curl -fS \
               -H "Authorization: Bearer ${STORAGE_GCS_API_TOKEN}" \
@@ -130,7 +136,8 @@ spec:
           - name: delaySeconds
             value: "60"
       container:
-        image: alpine:3.19
+        # curlimages/curl runs non-root (alpine would need root for apk add).
+        image: curlimages/curl:8.5.0
         env:
           - name: STORAGE_GCS_API_TOKEN
             valueFrom:
@@ -139,6 +146,22 @@ spec:
                 key: {{ .Values.apiTokenSecretKey | default "storage-gcs-internal" | quote }}
           - name: CURL_CA_BUNDLE
             value: {{ printf "%s/ca.crt" (.Values.apiTlsCAMountPath | default "/etc/storage-gcs") | quote }}
+          # Inputs via env vars, never interpolated into the script.
+          - name: BUCKET
+            value: '{{ "{{inputs.parameters.bucket}}" }}'
+          - name: OBJECT_PATH
+            value: '{{ "{{inputs.parameters.objectPath}}" }}'
+          - name: SIZE_MIB
+            value: '{{ "{{inputs.parameters.totalSizeMiB}}" }}'
+          - name: CHUNK_MIB
+            value: '{{ "{{inputs.parameters.chunkSizeMiB}}" }}'
+          - name: DELAY_COUNT_RAW
+            value: '{{ "{{inputs.parameters.delayCount}}" }}'
+          - name: DELAY_SECONDS_RAW
+            value: '{{ "{{inputs.parameters.delaySeconds}}" }}'
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
         volumeMounts:
           - name: storage-gcs-api-ca
             mountPath: {{ .Values.apiTlsCAMountPath | default "/etc/storage-gcs" | quote }}
@@ -147,12 +170,6 @@ spec:
         args:
           - |
             set -eu
-            BUCKET="{{ "{{inputs.parameters.bucket}}" }}"
-            OBJECT_PATH="{{ "{{inputs.parameters.objectPath}}" }}"
-            SIZE_MIB="{{ "{{inputs.parameters.totalSizeMiB}}" }}"
-            CHUNK_MIB="{{ "{{inputs.parameters.chunkSizeMiB}}" }}"
-            DELAY_COUNT_RAW="{{ "{{inputs.parameters.delayCount}}" }}"
-            DELAY_SECONDS_RAW="{{ "{{inputs.parameters.delaySeconds}}" }}"
             BASE_URL="{{ .Values.storageGcsModuleBaseUrl }}"
             AUTH_HEADER="Authorization: Bearer ${STORAGE_GCS_API_TOKEN}"
             MIN_CHUNK=262144
@@ -196,7 +213,6 @@ spec:
               exit 1
             fi
 
-            apk add --no-cache curl >/dev/null
             TOTAL_BYTES=$(awk -v m="$SIZE_MIB" 'BEGIN { printf "%.0f", m * 1048576 }')
             CHUNK_BYTES=$(awk -v m="$CHUNK_MIB" 'BEGIN { printf "%.0f", m * 1048576 }')
             if [ "$CHUNK_BYTES" -lt "$MIN_CHUNK" ]; then

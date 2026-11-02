@@ -31,6 +31,11 @@ spec:
   cloudZone: ""
   # Default x86 Cuttlefish GCE template (CF Instance Template publish for revision main).
   instanceTemplateName: instance-template-cuttlefish-vm-main
+  # Submit-time cuttlefishDownloadUrl must start with one of these prefixes
+  # (downloaded images are extracted and booted in the GCE VM).
+  cuttlefishDownloadUrlAllowPrefixes:
+    - "gs://"
+    - "https://dl.google.com/"
   dockerArtifactPathName: horizon-sdv/aaos-builder
   builderImageTag: argowf-latest
   pipelineRepoUrl: ""

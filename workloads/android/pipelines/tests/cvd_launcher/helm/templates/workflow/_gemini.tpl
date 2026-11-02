@@ -63,6 +63,12 @@ Description:
         imagePullPolicy: Always
         workingDir: {{ $mono | quote }}
 {{- include "cvd-launcher.cloudEnvFrom" $root | nindent 8 }}
+        env:
+          # Parameters via env vars, never interpolated into the script.
+          - name: TEST_RESULTS_STAGING_GCS_URI
+            value: '{{ "{{" }}inputs.parameters.testResultsStagingGcsUri{{ "}}" }}'
+          - name: BUILD_NUMBER
+            value: '{{ "{{" }}inputs.parameters.buildNumber{{ "}}" }}'
         volumeMounts:
 {{- include "cvd-launcher.pipelineWorkspaceVolumeMounts" $root }}
           - name: gemini-test-results
@@ -83,8 +89,6 @@ Description:
           - |
             export WORKSPACE={{ $mono | quote }}
             export GEMINI_TEST_RESULTS_DIR=/workspace/test-results
-            export TEST_RESULTS_STAGING_GCS_URI='{{ "{{" }}inputs.parameters.testResultsStagingGcsUri{{ "}}" }}'
-            export BUILD_NUMBER='{{ "{{" }}inputs.parameters.buildNumber{{ "}}" }}'
             export GEMINI_PREPARE_MODE=cvd
             bash "${WORKSPACE}/workloads/android/pipelines/tests/gemini_argo_prepare_staging.sh"
 {{- end }}

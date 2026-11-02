@@ -118,19 +118,42 @@ spec:
     - name: log-parameters
       container:
         image: alpine:3.19
+        # Parameters are passed as env vars and read as "$VAR" — never interpolated
+        # into the script, so free-text values cannot break out into command execution.
+        env:
+          - name: SAMPLE_ENV
+            value: '{{ "{{workflow.parameters.sampleEnv}}" }}'
+          - name: SAMPLE_BUILD_ID
+            value: '{{ "{{workflow.parameters.sampleBuildId}}" }}'
+          - name: SAMPLE_NOTE
+            value: '{{ "{{workflow.parameters.sampleNote}}" }}'
+          - name: GCS_BUCKET
+            value: '{{ "{{workflow.parameters.gcsBucket}}" }}'
+          - name: LARGE_UPLOAD_SIZE_MIB
+            value: '{{ "{{workflow.parameters.largeUploadSizeMiB}}" }}'
+          - name: LARGE_UPLOAD_CHUNK_MIB
+            value: '{{ "{{workflow.parameters.largeUploadChunkMiB}}" }}'
+          - name: LARGE_UPLOAD_DELAY_COUNT
+            value: '{{ "{{workflow.parameters.largeUploadDelayCount}}" }}'
+          - name: LARGE_UPLOAD_DELAY_SECONDS
+            value: '{{ "{{workflow.parameters.largeUploadDelaySeconds}}" }}'
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
             echo "WorkflowTemplate: smoke-test"
-            echo "sampleEnv={{ "{{workflow.parameters.sampleEnv}}" }}"
-            echo "sampleBuildId={{ "{{workflow.parameters.sampleBuildId}}" }}"
-            echo "sampleNote={{ "{{workflow.parameters.sampleNote}}" }}"
-            echo "gcsBucket={{ "{{workflow.parameters.gcsBucket}}" }} (sample-data owned bucket; overridable at submit)"
-            echo "largeUploadSizeMiB={{ "{{workflow.parameters.largeUploadSizeMiB}}" }} (optional; 0, empty, or invalid = skip resumable test)"
-            echo "largeUploadChunkMiB={{ "{{workflow.parameters.largeUploadChunkMiB}}" }}"
-            echo "largeUploadDelayCount={{ "{{workflow.parameters.largeUploadDelayCount}}" }} (delays spread evenly; 0 = none)"
-            echo "largeUploadDelaySeconds={{ "{{workflow.parameters.largeUploadDelaySeconds}}" }}"
-            awk -v m="{{ "{{workflow.parameters.largeUploadSizeMiB}}" }}" 'BEGIN {
+            echo "sampleEnv=${SAMPLE_ENV}"
+            echo "sampleBuildId=${SAMPLE_BUILD_ID}"
+            echo "sampleNote=${SAMPLE_NOTE}"
+            echo "gcsBucket=${GCS_BUCKET} (sample-data owned bucket; overridable at submit)"
+            echo "largeUploadSizeMiB=${LARGE_UPLOAD_SIZE_MIB} (optional; 0, empty, or invalid = skip resumable test)"
+            echo "largeUploadChunkMiB=${LARGE_UPLOAD_CHUNK_MIB}"
+            echo "largeUploadDelayCount=${LARGE_UPLOAD_DELAY_COUNT} (delays spread evenly; 0 = none)"
+            echo "largeUploadDelaySeconds=${LARGE_UPLOAD_DELAY_SECONDS}"
+            awk -v m="${LARGE_UPLOAD_SIZE_MIB}" 'BEGIN {
               if (m == "" || m !~ /^[0-9]+([.][0-9]+)?$/ || m + 0 <= 0) exit
               bytes = m * 1048576
               gb = bytes / 1000000000
@@ -158,6 +181,10 @@ spec:
     - name: echo-and-artifact
       container:
         image: alpine:3.19
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
@@ -176,12 +203,20 @@ spec:
     - name: verify-gcs
       container:
         image: alpine:3.19
+        env:
+          # Parameter via env var, not interpolated into the script.
+          - name: LARGE_UPLOAD_SIZE_MIB
+            value: '{{ "{{workflow.parameters.largeUploadSizeMiB}}" }}'
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
             echo "Artifact upload verified by reaching this step."
 {{- if .Values.referenceGcsEnabled }}
-            if awk -v m="{{ "{{workflow.parameters.largeUploadSizeMiB}}" }}" 'BEGIN {
+            if awk -v m="${LARGE_UPLOAD_SIZE_MIB}" 'BEGIN {
               exit (m == "" || m !~ /^[0-9]+([.][0-9]+)?$/ || m + 0 <= 0)
             }'; then
               echo "Large resumable object: sample-smoke-test/{{ "{{workflow.name}}" }}/large-upload.bin"
@@ -228,17 +263,33 @@ spec:
     - name: log-parameters
       container:
         image: alpine:3.19
+        # Parameters via env vars, never interpolated into the script.
+        env:
+          - name: RELEASE_CHANNEL
+            value: '{{ "{{workflow.parameters.releaseChannel}}" }}'
+          - name: TICKET_ID
+            value: '{{ "{{workflow.parameters.ticketId}}" }}'
+          - name: OWNER
+            value: '{{ "{{workflow.parameters.owner}}" }}'
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
             echo "WorkflowTemplate: smoke-test-alt (variant)"
-            echo "releaseChannel={{ "{{workflow.parameters.releaseChannel}}" }}"
-            echo "ticketId={{ "{{workflow.parameters.ticketId}}" }}"
-            echo "owner={{ "{{workflow.parameters.owner}}" }}"
+            echo "releaseChannel=${RELEASE_CHANNEL}"
+            echo "ticketId=${TICKET_ID}"
+            echo "owner=${OWNER}"
             echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: echo-and-artifact
       container:
         image: alpine:3.19
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
@@ -253,6 +304,10 @@ spec:
     - name: verify-gcs
       container:
         image: alpine:3.19
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |

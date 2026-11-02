@@ -50,17 +50,33 @@ spec:
     - name: log-parameters
       container:
         image: alpine:3.19
+        # Parameters via env vars, never interpolated into the script.
+        env:
+          - name: SAMPLE_ENV
+            value: '{{ "{{workflow.parameters.sampleEnv}}" }}'
+          - name: SAMPLE_BUILD_ID
+            value: '{{ "{{workflow.parameters.sampleBuildId}}" }}'
+          - name: SAMPLE_NOTE
+            value: '{{ "{{workflow.parameters.sampleNote}}" }}'
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
             echo "WorkflowTemplate: smoke-test"
-            echo "sampleEnv={{ "{{workflow.parameters.sampleEnv}}" }}"
-            echo "sampleBuildId={{ "{{workflow.parameters.sampleBuildId}}" }}"
-            echo "sampleNote={{ "{{workflow.parameters.sampleNote}}" }}"
+            echo "sampleEnv=${SAMPLE_ENV}"
+            echo "sampleBuildId=${SAMPLE_BUILD_ID}"
+            echo "sampleNote=${SAMPLE_NOTE}"
             echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: echo-and-artifact
       container:
         image: alpine:3.19
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
@@ -75,6 +91,10 @@ spec:
     - name: verify-gcs
       container:
         image: alpine:3.19
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
@@ -119,17 +139,33 @@ spec:
     - name: log-parameters
       container:
         image: alpine:3.19
+        # Parameters via env vars, never interpolated into the script.
+        env:
+          - name: RELEASE_CHANNEL
+            value: '{{ "{{workflow.parameters.releaseChannel}}" }}'
+          - name: TICKET_ID
+            value: '{{ "{{workflow.parameters.ticketId}}" }}'
+          - name: OWNER
+            value: '{{ "{{workflow.parameters.owner}}" }}'
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
             echo "WorkflowTemplate: smoke-test-alt (variant)"
-            echo "releaseChannel={{ "{{workflow.parameters.releaseChannel}}" }}"
-            echo "ticketId={{ "{{workflow.parameters.ticketId}}" }}"
-            echo "owner={{ "{{workflow.parameters.owner}}" }}"
+            echo "releaseChannel=${RELEASE_CHANNEL}"
+            echo "ticketId=${TICKET_ID}"
+            echo "owner=${OWNER}"
             echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: echo-and-artifact
       container:
         image: alpine:3.19
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
@@ -144,6 +180,10 @@ spec:
     - name: verify-gcs
       container:
         image: alpine:3.19
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
