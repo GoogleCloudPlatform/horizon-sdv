@@ -1,0 +1,4 @@
+{
+  "name": "Perfetto_Profiler_Tools",
+  "description": "Plugin for Android App and AAOS Platform Perfetto trace analysis. Provides expert skills for GCS trace staging, SHA-256 verified trace_processor querying, system-wide triage, and root-cause analysis of app startup, UI jank, Binder IPC, CPU scheduling, I/O stalls, and memory/heap regressions."
+}
