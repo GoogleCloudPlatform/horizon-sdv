@@ -74,7 +74,7 @@ We can temporarily enable in system when we wish to reinstate, for now disable i
 
 ---
 
-### R2.0.0: Jenkins Update  
+### HORIZON_RELEASE_2.0.0: Jenkins Update
 
 Reference: TAA-900  
 
@@ -85,7 +85,7 @@ Reference: TAA-900
 
 ---
 
-### R2.0.1: Jenkins Update  
+### HORIZON_RELEASE_2.0.1: Jenkins Update
 
 Reference: TAA-1002
 

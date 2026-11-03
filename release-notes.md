@@ -4601,7 +4601,7 @@ limitations under the License. -->
 <td valign="top" width="10%"><p>TAA-1715</p>
 </td>
 
-<td valign="top" width="24%"><p>[Jenkins] R4.0.0: upgrade Jenkins and current BOM (final)</p>
+<td valign="top" width="24%"><p>[Jenkins] HORIZON_RELEASE_4.0.0: upgrade Jenkins and current BOM (final)</p>
 </td>
 
 <td valign="top" width="51%"><p>Install the JDK with apt using only ${JAVA_VERSION}: add Adoptium apt when the package name starts with temurin-, then apt update/install. Remove Debian bookworm-backports and OpenJDK→Temurin fallback chains; verify with java -version and resolved JAVA_HOME.</p>
@@ -4762,7 +4762,7 @@ limitations under the License. -->
 <td valign="top" width="10%"><p>TAA-1710</p>
 </td>
 
-<td valign="top" width="24%"><p>R4.0.0: Terraform duplicate certificate manager config, blocks deployment</p>
+<td valign="top" width="24%"><p>HORIZON_RELEASE_4.0.0: Terraform duplicate certificate manager config, blocks deployment</p>
 </td>
 
 <td valign="top" width="51%"><p>Terraform duplicate certificate manager config</p>
@@ -5639,7 +5639,7 @@ limitations under the License. -->
 <td valign="top" width="10%"><p>TAA-1761</p>
 </td>
 
-<td valign="top" width="24%"><p>[Security] R4.0.0: upgrade Jenkins plugins to address security issues</p>
+<td valign="top" width="24%"><p>[Security] HORIZON_RELEASE_4.0.0: upgrade Jenkins plugins to address security issues</p>
 </td>
 
 <td valign="top" width="51%"><p>Security issues and bug fixes requiring plugin updates.</p>
@@ -8147,7 +8147,7 @@ limitations under the License. -->
 <td valign="top" width="24%"><p>Extend OpenBSW support with additional features</p>
 </td>
 
-<td valign="top" width="64%"><p>Support for Eclipse Foundation OpenBSW workload features that were not included in Horizon-SDV R2.0.0</p>
+<td valign="top" width="64%"><p>Support for Eclipse Foundation OpenBSW workload features that were not included in HORIZON_RELEASE_2.0.0</p>
 </td>
 </tr>
 
@@ -8956,7 +8956,7 @@ limitations under the License. -->
 <td valign="top" width="24%"><p>Add OpenBSW build targets</p>
 </td>
 
-<td valign="top" width="64%"><p>Eclipse Foundation OpenBSW Workload As part of the R2.0.0 delivery, a new workload has been introduced to support the Eclipse Foundation OpenBSW within the Horizon SDV platform. This workload enables users to work on the OpenBSW stack for build and testing.</p>
+<td valign="top" width="64%"><p>Eclipse Foundation OpenBSW Workload As part of the HORIZON_RELEASE_2.0.0 delivery, a new workload has been introduced to support the Eclipse Foundation OpenBSW within the Horizon SDV platform. This workload enables users to work on the OpenBSW stack for build and testing.</p>
 </td>
 </tr>
 
@@ -8967,7 +8967,7 @@ limitations under the License. -->
 <td valign="top" width="24%"><p>Cloud Android Orchestration - Pt. 1</p>
 </td>
 
-<td valign="top" width="64%"><p>In R2.0.0 Horizon platform introduces significant improvements to Cuttlefish Virtual Devices (CVD). These enhancements include increased support for a larger number of devices, optimized device startup processes, a more robust recovery mechanism and updated the Compatibility Test Suite (CTS) Test Plans and Modules to ensure seamless integration and compatibility with CVD.</p>
+<td valign="top" width="64%"><p>In HORIZON_RELEASE_2.0.0 Horizon platform introduces significant improvements to Cuttlefish Virtual Devices (CVD). These enhancements include increased support for a larger number of devices, optimized device startup processes, a more robust recovery mechanism and updated the Compatibility Test Suite (CTS) Test Plans and Modules to ensure seamless integration and compatibility with CVD.</p>
 </td>
 </tr>
 
@@ -9258,7 +9258,7 @@ limitations under the License. -->
 <td valign="top" width="14%"><p>TAA-863</p>
 </td>
 
-<td valign="top" width="86%"><p>Workloads Guide: updates for R2.0.0</p>
+<td valign="top" width="86%"><p>Workloads Guide: updates for HORIZON_RELEASE_2.0.0</p>
 </td>
 </tr>
 

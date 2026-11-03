@@ -233,7 +233,7 @@ Set ANDROID_CUTTLEFISH_REVISION to v1.1.0
 Select DELETE
 Select Build
 
-- R2.0.0 no longer references this version and as such, this will delete the instance template and disk image for v1.1.0 and save on cost.
+- HORIZON_RELEASE_2.0.0 no longer references this version and as such, this will delete the instance template and disk image for v1.1.0 and save on cost.
 
 Upgrade the main instance template:
 
@@ -255,7 +255,7 @@ Your platform is now updated for latest versions of build images and instance te
 
 #### Release Note
 Eclipse Foundation OpenBSW Workload
-As part of the R2.0.0 delivery, a new workload has been introduced to support the Eclipse Foundation OpenBSW within the Horizon SDV platform. This workload enables users to work on the OpenBSW stack for build and testing.
+As part of the HORIZON_RELEASE_2.0.0 delivery, a new workload has been introduced to support the Eclipse Foundation OpenBSW within the Horizon SDV platform. This workload enables users to work on the OpenBSW stack for build and testing.
 
 #### Workload Processes:
 
@@ -353,9 +353,9 @@ For more information on this update and how to use the new job, please refer to 
 
 #### Release Note
 
-#### Cuttlefish Virtual Devices (CVD) and Compatibility Test Suite (CTS) Enhancements in R2.0.0
+#### Cuttlefish Virtual Devices (CVD) and Compatibility Test Suite (CTS) Enhancements in HORIZON_RELEASE_2.0.0
 
-In the latest release, R2.0.0, we've introduced significant improvements to Cuttlefish Virtual Devices (CVD). These enhancements include increased support for a larger number of devices, optimised device startup processes, and a more robust recovery mechanism. Additionally, we've updated the Compatibility Test Suite (CTS) Test Plans and Modules to ensure seamless integration and compatibility with CVD.
+In the latest release, HORIZON_RELEASE_2.0.0, we've introduced significant improvements to Cuttlefish Virtual Devices (CVD). These enhancements include increased support for a larger number of devices, optimised device startup processes, and a more robust recovery mechanism. Additionally, we've updated the Compatibility Test Suite (CTS) Test Plans and Modules to ensure seamless integration and compatibility with CVD.
 
 #### Summary of Changes:
 
@@ -432,7 +432,7 @@ In the latest release, R2.0.0, we've introduced significant improvements to Cutt
 ##### Management of Jenkins Jobs using CasC: Seeding Workloads
 ###### Jenkins Pipeline Job Configuration Update
 
-In R1.1.0, Jenkins pipeline jobs were configured using the jenkins.yaml file as a Configuration as Code (CasC) approach. However, this method proved to be inconvenient for developers to update parameters, descriptions, and add new jobs.
+In HORIZON_RELEASE_1.1.0, Jenkins pipeline jobs were configured using the jenkins.yaml file as a Configuration as Code (CasC) approach. However, this method proved to be inconvenient for developers to update parameters, descriptions, and add new jobs.
 
 ###### New Approach
 
@@ -754,7 +754,7 @@ This project uses Sphinx to generate project documentation. The documentation is
 | TAA-563   | [Jenkins] Replace gsutils with gcloud storage  |
 | TAA-886   | Conflict Between Role Strategy Plugin and Authorize Project Plugin  |
 | TAA-814   | Android RPi builds failing: requires MESON update |
-| TAA-863   | Workloads Guide: updates for R2.0.0   |
+| TAA-863   | Workloads Guide: updates for HORIZON_RELEASE_2.0.0   |
 | TAA-867   | Gerrit triggers plugin deprecated |
 | TAA-890   | Persistent Storage Audit: Internal tool removal  |
 | TAA-618   | MTK Connect access control for Cuttlefish Devices  |

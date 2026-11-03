@@ -12,7 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. -->
 
-## Gerrit BOM (R3.0.0)
+## Gerrit BOM (HORIZON_RELEASE_3.0.0)
 
 This page documents Horizon SDV Gerrit application component versions so that we can track updates per release.
 
@@ -31,12 +31,12 @@ This page documents Horizon SDV Gerrit application component versions so that we
   - [Problems](#problems)
   - [RefDB issue:](#refdb-issue)
       - [Zookeeper Plugin updates](#zookeeper-plugin-updates)
-      - [R3.0.0](#r300)
-      - [R2.0.1](#r201)
+      - [HORIZON_RELEASE_3.0.0](#r300)
+      - [HORIZON_RELEASE_2.0.1](#r201)
 
 ### Summary
 
-We do need to assess the changes around zookeeper plugin licensing and support if we move to 3.12 and later, to ensure we have no issues. This will be deferred until R4.0.0 because currently there is an bug causing `gerrit-init` and `refdb` that has yet to be backported to versions maintained.
+We do need to assess the changes around zookeeper plugin licensing and support if we move to 3.12 and later, to ensure we have no issues. This will be deferred until HORIZON_RELEASE_4.0.0 because currently there is an bug causing `gerrit-init` and `refdb` that has yet to be backported to versions maintained.
 
 Refer to RefDB issue in Problems below, which describes the problem and identifies the fix, yet to be backported to a compatible release for us to upgrade which describes the problem and identifies the fix, yet to be backported to a compatible release for us to upgrade.
 
@@ -73,7 +73,7 @@ The tags match to shas in the repo and you can determine relationship from that 
 - Use `git describe --always --dirty --abbrev=10` to relate docker images (operator, image, init etc)
 
 - `git show <tag>` shows the change (sha1) the tag relates to.
-- R2.0.1 Operator: `v0.1-767-g7c0185d9` == `sha1 7c0185d9` and contains the change Horizon SDV required to allow gerrit url to use a path prefix.
+- HORIZON_RELEASE_2.0.1 Operator: `v0.1-767-g7c0185d9` == `sha1 7c0185d9` and contains the change Horizon SDV required to allow gerrit url to use a path prefix.
 
 Naming convention: `v0.1-767-g7c0185d9`
 
@@ -88,7 +88,7 @@ Naming convention: `v0.1-767-g7c0185d9`
 
 The Gerrit client version is defined from https://hub.docker.com/r/k8sgerrit/gerrit/tags and [`k8s-gerrit - Git at Google `](https://gerrit.googlesource.com/k8s-gerrit)for repo. This client will start gerrit-init (https://hub.docker.com/r/k8sgerrit/gerrit-init/tags) and version aligns with the client version.
 
--   R2.0.1 Client: `v0.1-764-g2f33a537b8-3.11.1-489-g177cc22f91`
+-   HORIZON_RELEASE_2.0.1 Client: `v0.1-764-g2f33a537b8-3.11.1-489-g177cc22f91`
 
 Naming convention:[`gerrit:v0.1-764-g2f33a537b8-3.11.1-489-g177cc22f91`](https://hub.docker.com/layers/k8sgerrit/gerrit/v0.1-764-g2f33a537b8-3.11.1-489-g177cc22f91/images/sha256-5a81bf7dbb7b81def224a4af4946b332fdd7a8b72aafa521f5a1735d84a5d6ec)
 
@@ -105,7 +105,7 @@ Naming convention:[`gerrit:v0.1-764-g2f33a537b8-3.11.1-489-g177cc22f91`](https:/
 
  **Note :**
   - We have to take care not to move client too far because of changes that have been made around zookeeper refdb based on hosting and licensing updates.
-  - Also, the docker images for 3.11.x only go to 3.11.1-657 and again, if we require download the Gerrit client then that too an R4.0.0 activity to accurately plan the upgrade process.
+  - Also, the docker images for 3.11.x only go to 3.11.1-657 and again, if we require download the Gerrit client then that too an HORIZON_RELEASE_4.0.0 activity to accurately plan the upgrade process.
 
 #### gerrit-oauth-provider
 
@@ -147,7 +147,7 @@ However, for **major upgrades**, a full reset is required, which involves deleti
 
 **Note:** Deleting Gerrit can take a long time, and with shared persistent volumes, **all stored data may be lost**.
 
-Due to these risks, the upgrade is deferred to **R4.0.0**, not only because of existing Gerrit issues that block an immediate upgrade, but also because a **properly defined upgrade plan/procedure is needed**.  
+Due to these risks, the upgrade is deferred to **HORIZON_RELEASE_4.0.0**, not only because of existing Gerrit issues that block an immediate upgrade, but also because a **properly defined upgrade plan/procedure is needed**.
 
 ### Problems
 
@@ -299,9 +299,9 @@ initializer.tasks.download_plugins.MissingRequiredPluginException: Required jar 
  
 > **Note :** Need to check whether 3.12.x requires this change also. But 3.12 is blocked on the RefDB regression.
 
-#### R3.0.0
+#### HORIZON_RELEASE_3.0.0
 
-- Same as R2.0.1, upgrades blocked on Zookeeper RefDB issue and lack of compatible versions, other than 3.13.0-rcX on k8sgerrit/gerrit. No plan to use a release candidate for 3.13 and also we would need to assess Zookeeper licensing updates. Remain on 3.11.1 for R3.0.0.
+- Same as HORIZON_RELEASE_2.0.1, upgrades blocked on Zookeeper RefDB issue and lack of compatible versions, other than 3.13.0-rcX on k8sgerrit/gerrit. No plan to use a release candidate for 3.13 and also we would need to assess Zookeeper licensing updates. Remain on 3.11.1 for HORIZON_RELEASE_3.0.0.
 
 **Gerrit Code Review:** `3.11.1-489-g177cc22f91 ` 
 **Docker Image:** [k8sgerrit/gerrit:v0.1-764-g2f33a537b8-3.11.1-489-g177cc22f91](https://hub.docker.com/layers/k8sgerrit/gerrit/v0.1-764-g2f33a537b8-3.11.1-489-g177cc22f91/images/sha256-5a81bf7dbb7b81def224a4af4946b332fdd7a8b72aafa521f5a1735d84a5d6ec)   
@@ -328,7 +328,7 @@ helm:
 | [healthcheck](https://dev.horizon-sdv.com/gerrit/plugins/healthcheck/Documentation/index.html) | `v3.5.6-49-g8739ef95c7` | `3.12.0-SNAPSHOT` |
 | [zookeeper-refdb](https://dev.horizon-sdv.com/gerrit/plugins/zookeeper-refdb/Documentation/index.html) | `v3.3.0-40-g97923cbd6a` | `3.11.0-SNAPSHOT` |
 
-#### R2.0.1
+#### HORIZON_RELEASE_2.0.1
 
 **Gerrit Code Review:** `3.11.1-489-g177cc22f91`   
 **Docker Image:** [k8sgerrit/gerrit:v0.1-764-g2f33a537b8-3.11.1-489-g177cc22f91](https://hub.docker.com/layers/k8sgerrit/gerrit/v0.1-764-g2f33a537b8-3.11.1-489-g177cc22f91/images/sha256-5a81bf7dbb7b81def224a4af4946b332fdd7a8b72aafa521f5a1735d84a5d6ec)   
