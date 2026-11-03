@@ -48,13 +48,13 @@ locals {
     }
     "gerrit-post" = {
       directory      = "gerrit"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.3"
+      deploy_version = "1.0.3"
     }
     "mtk-connect-post" = {
       directory      = "mtk-connect"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "mtk-connect-post-key" = {
       directory      = "mtk-connect"
@@ -63,8 +63,8 @@ locals {
     }
     "grafana-post" = {
       directory      = "grafana"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-mcp-gateway-registry" = {
       directory      = "keycloak"
@@ -88,18 +88,18 @@ locals {
     }
     "keycloak-post-argocd" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-headlamp" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-mtk-connect" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-grafana" = {
       directory      = "keycloak"
