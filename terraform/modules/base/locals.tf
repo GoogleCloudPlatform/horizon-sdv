@@ -127,18 +127,18 @@ locals {
     }
     "module-manager-app" = {
       directory      = "module-manager"
-      build_version  = "0.3.7"
-      deploy_version = "0.3.7"
+      build_version  = "0.3.8"
+      deploy_version = "0.3.8"
     }
     "workflow-namespace-drain-app" = {
       directory      = "workflow-namespace-drain"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "horizon-api-app" = {
       directory      = "horizon-api"
-      build_version  = "1.1.1"
-      deploy_version = "1.1.1"
+      build_version  = "1.1.2"
+      deploy_version = "1.1.2"
     }
     "kcc-webhook-cert-monitor" = {
       directory      = "kcc-webhook-cert-monitor"

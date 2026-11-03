@@ -14,7 +14,7 @@
 #
 namespace: horizon-api
 # Full image ref; parent Application sets this from config.containerImages.horizonApi.
-image: "horizon-api-app:1.1.1"
+image: "horizon-api-app:1.1.2"
 
 moduleManagerNamespace: module-manager
 moduleManagerStateName: cluster
