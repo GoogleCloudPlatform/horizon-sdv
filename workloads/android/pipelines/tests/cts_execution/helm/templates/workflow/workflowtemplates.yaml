@@ -395,15 +395,21 @@ spec:
       container:
         image: {{ include "cts-execution.builderImage" $root | quote }}
         imagePullPolicy: Always
+        env:
+          # Parameters via env vars, never interpolated into the script.
+          - name: STORAGE_BUCKET_BASE
+            value: '{{ "{{" }}inputs.parameters.storageBucketBase{{ "}}" }}'
+          - name: WF_NAME
+            value: '{{ "{{" }}workflow.name{{ "}}" }}'
         command: [bash, -euo, pipefail, -c]
         args:
           - |
-            _base="{{ "{{" }}inputs.parameters.storageBucketBase{{ "}}" }}"
+            _base="${STORAGE_BUCKET_BASE}"
             if [[ -z "${_base}" ]]; then
               : > /tmp/resolved-staging-uri.txt
               exit 0
             fi
-            _wf="{{ "{{" }}workflow.name{{ "}}" }}"
+            _wf="${WF_NAME}"
             printf '%s' "${_base%/}/$(date +%Y-%m-%d-%H%M%S)_${_wf}" > /tmp/resolved-staging-uri.txt
     - name: run-cts-ephemeral-gce
 {{- include "cts-execution.pipelineWorkspacePodSpecPatch" $root }}
@@ -470,6 +476,9 @@ spec:
             value: "cts"
           - name: CUTTLEFISH_DOWNLOAD_URL
             value: "{{ "{{" }}inputs.parameters.cuttlefishDownloadUrl{{ "}}" }}"
+          # Allowed prefixes (comma-separated) for the artifact download URL.
+          - name: CUTTLEFISH_DOWNLOAD_URL_ALLOW_PREFIXES
+            value: {{ join "," ($root.Values.spec.cuttlefishDownloadUrlAllowPrefixes | default (list "gs://" "https://dl.google.com/")) | quote }}
           - name: CUTTLEFISH_INSTALL_WIFI
             value: "{{ "{{" }}inputs.parameters.cuttlefishInstallWifi{{ "}}" }}"
           - name: CUTTLEFISH_MAX_BOOT_TIME
@@ -524,6 +533,9 @@ spec:
             value: {{ $root.Values.spec.geminiPreviewFeatures | default "true" | quote }}
           - name: GEMINI_LOCATION_GLOBAL
             value: {{ $root.Values.spec.geminiLocationGlobal | default "true" | quote }}
+          # Parameters via env vars, never interpolated into the script.
+          - name: CVD_ARGO_INSTANCE_TEMPLATE
+            value: "{{ "{{" }}inputs.parameters.instanceTemplateName{{ "}}" }}"
 {{- $mtkSecretName := $root.Values.spec.mtkConnectSecretName | default "workflow-mtk-connect-apikey" }}
 {{- if $mtkSecretName }}
           - name: MTK_CONNECT_USERNAME
@@ -567,7 +579,6 @@ spec:
             export CVD_ARGO_SERIAL_PORT={{ $root.Values.spec.guestSerialPort | default 2 }}
             export CVD_ARGO_KCC_WAIT_TIMEOUT={{ $root.Values.spec.kccInstanceWaitTimeout | default "20m" | quote }}
             export CVD_ARGO_GCP_WAIT_TIMEOUT={{ $root.Values.spec.gcpInstanceWaitTimeout | default "15m" | quote }}
-            export CVD_ARGO_INSTANCE_TEMPLATE="{{ "{{" }}inputs.parameters.instanceTemplateName{{ "}}" }}"
             export CVD_ARGO_VM_NAME="cts-{{ "{{" }}workflow.uid{{ "}}" }}"
             export CVD_ARGO_MODE=cts
             _zo={{ $root.Values.spec.cloudZone | default "" | quote }}
@@ -577,6 +588,19 @@ spec:
             if [[ -z "${CVD_ARGO_INSTANCE_TEMPLATE}" ]]; then
               echo "instanceTemplateName is required" >&2
               exit 2
+            fi
+            # Downloaded images are extracted and booted, so the URL must match an allowlist prefix.
+            IFS=',' read -r -a _dl_prefixes <<< "${CUTTLEFISH_DOWNLOAD_URL_ALLOW_PREFIXES}"
+            _url_ok=""
+            for _p in "${_dl_prefixes[@]}"; do
+              if [[ "$CUTTLEFISH_DOWNLOAD_URL" == "${_p}"* ]]; then
+                _url_ok=1
+                break
+              fi
+            done
+            if [[ -z "${_url_ok}" ]]; then
+              echo "cuttlefishDownloadUrl rejected: must start with one of [${CUTTLEFISH_DOWNLOAD_URL_ALLOW_PREFIXES}] (got: ${CUTTLEFISH_DOWNLOAD_URL})" >&2
+              exit 1
             fi
             export CVD_ARGO_LOCAL_ARTIFACT_ROOT=/tmp/cvd-argo-artifacts
             mkdir -p "${CVD_ARGO_LOCAL_ARTIFACT_ROOT}"
@@ -619,6 +643,9 @@ spec:
         env:
           - name: WORKSPACE
             value: {{ $mono | quote }}
+          # Parameter via env var, never interpolated into the script.
+          - name: GEMINI_TEST_RESULTS_STAGING_URI
+            value: '{{ "{{" }}inputs.parameters.stagingUri{{ "}}" }}'
         envFrom:
 {{- if $root.Values.cloudEnvConfigMapName }}
           - configMapRef:
@@ -635,12 +662,11 @@ spec:
         args:
           - |
             export WORKSPACE={{ $mono | quote }}
-            _uri='{{ "{{" }}inputs.parameters.stagingUri{{ "}}" }}'
+            _uri="${GEMINI_TEST_RESULTS_STAGING_URI}"
             if [[ -z "${_uri}" ]]; then
               echo "[cvd-argo-sync] skip (empty staging URI)"
               exit 0
             fi
-            export GEMINI_TEST_RESULTS_STAGING_URI="${_uri}"
             export CVD_ARGO_LOCAL_ARTIFACT_ROOT=/tmp/cvd-argo-artifacts
             bash "${WORKSPACE}/workloads/android/pipelines/tests/cvd_argo_gce/cvd_argo_sync_vm_artifacts_to_staging.sh"
 

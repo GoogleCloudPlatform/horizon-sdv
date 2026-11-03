@@ -44,6 +44,9 @@ Dependencies: requires compute-vars output and clean completion.
         value: "{{ "{{workflow.parameters.manifestUrl}}" }}"
       - name: AAOS_MANIFEST_NAME
         value: "{{ "{{workflow.parameters.manifestName}}" }}"
+      # manifestUrl must match this operator-configured allow prefix.
+      - name: AAOS_MANIFEST_URL_ALLOW_PREFIX
+        value: {{ .Values.spec.manifestUrlAllowPrefix | default "https://android.googlesource.com/" | quote }}
 {{- include "aaos-builder.androidVersionEnv" . | nindent 6 }}
     resources:
       # spec.workflowStepResources.init (repo sync bounded by parallelSyncJobs).
@@ -66,5 +69,10 @@ Dependencies: requires compute-vars output and clean completion.
       - |
         WORKDIR="${PIPELINE_REPO_ROOT:-{{ include "aaos-builder.pipelineMonorepoPath" . }}}"
         export WORKSPACE="${WORKDIR}"
+        # manifestUrl must match the operator allowlist before repo sync.
+        if ! [[ "$AAOS_GERRIT_MANIFEST_URL" == "$AAOS_MANIFEST_URL_ALLOW_PREFIX"* ]]; then
+          echo "manifestUrl rejected: must start with ${AAOS_MANIFEST_URL_ALLOW_PREFIX} (got: ${AAOS_GERRIT_MANIFEST_URL})" >&2
+          exit 1
+        fi
         "${WORKDIR}"/workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
 {{- end }}

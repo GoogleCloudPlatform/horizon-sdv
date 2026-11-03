@@ -86,17 +86,12 @@ export async function readCliJson<T>(resp: Response): Promise<T> {
 }
 
 /**
- * Horizon API via same-origin proxy: only the confidential CI client (K8s secret) talks to Horizon.
- * No browser Bearer — avoids user JWT / refresh issues. On 401 the proxy drops stale CI; retry a few times.
+ * Horizon API via same-origin proxy (user JWT required, same as apiMm).
+ * The proxy verifies the user bearer, then swaps in the confidential CI client (K8s secret).
+ * On 401 fetchWithAuth refreshes the user token and retries; the proxy also drops a stale CI token.
  */
 export async function apiHorizon(path: string, init: RequestInit = {}): Promise<Response> {
   const originBase = getAppOriginBase();
   const url = `${originBase}/api/horizon${path.startsWith('/') ? path : `/${path}`}`;
-  let resp = await fetch(url, { ...init, cache: 'no-store' });
-  for (let i = 0; i < 3 && resp.status === 401; i++) {
-    // Brief pause so the proxy can finish invalidating the CI token before the next fetch.
-    await new Promise((r) => setTimeout(r, 120));
-    resp = await fetch(url, { ...init, cache: 'no-store' });
-  }
-  return resp;
+  return fetchWithAuth(url, init);
 }

@@ -102,7 +102,7 @@ webhookWorkflowParameters:
 kcc:
   instanceTemplates:
     enabled: true
-    # Horizon platform uses cluster-mode Config Connector (gitops/apps/configconnector-operator).
+    # Horizon platform uses cluster-mode Config Connector (gitops/templates/config-connector.yaml).
     # Per-namespace ConfigConnectorContext is rejected in cluster mode and marks workloads-android Degraded.
     # Set true only for namespaced-mode Config Connector installs.
     createConfigConnectorContext: false
@@ -126,6 +126,10 @@ spec:
   dockerArtifactPathName: horizon-sdv/aaos-builder
   # Align with aaos-builder-runtime-image chart default imageTag (not a shared :latest in Artifact Registry).
   builderImageTag: argowf-latest
+  # Submit-time URL allowlists: cuttlefishUrl and ctsAndroid*Url are rejected by the
+  # workflow unless they start with these prefixes (GitOps operators can extend for private mirrors).
+  cuttlefishUrlAllowPrefix: "https://github.com/google/"
+  ctsUrlAllowPrefix: "https://dl.google.com/"
   # WorkflowTemplate for optional runtime image build (DAG templateRef build-defaults; same as aaos-builder).
   aaosBuilderImageWorkflowTemplateName: aaos-builder-runtime-image
   # KCC PreDelete hook Job only (kubectl + gcloud); not used by workflow DAG.
