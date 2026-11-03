@@ -33,7 +33,7 @@ flowchart TB
         spa[SPA UI] --> proxy[Go proxy]
     end
     keycloak[(Keycloak / OIDC)]
-    api["Horizon API<br/>/api/v1 :8082"]
+    api["Horizon API<br/>/v1 :8082"]
     mm["Module Manager<br/>API :8082 + controller"]
     subgraph crds[Module Manager CRDs]
         state["ModuleManagerState CR<br/>enabledModules, revisions"]

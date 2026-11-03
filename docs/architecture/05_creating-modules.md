@@ -156,7 +156,21 @@ Optional:
 
 Catalog name `example` must match labels and Sensor/template ownership. Path must be the parent chart directory, not the `argo-workflows` subchart.
 
-### 7. Ship, sync, and enable
+### 7. Write the module README
+
+Every module must ship a `README.md` at the root of its chart (`gitops/modules/<name>/README.md`) that explains its purpose, prerequisites, configuration and integration points. The README must open with a **Module Metadata** table so its support status, owner and licensing are clear at a glance:
+
+| Metadata Field | Value |
+| :--- | :--- |
+| **STATUS** | `experimental`, `contributor-verified` or `horizon-verified` |
+| **OWNER** | `Accenture`, `Google` or `Contributor` |
+| **CONTACT** | Email or other contact for the module owner |
+| **CHART VERSION** | The module chart version, matching `Chart.yaml` (for example `0.1.0`) |
+| **CONTAINS_COMMERCIAL** | `no`, or `yes` if the module bundles or depends on commercial / non-Apache-2.0 components |
+
+See `gitops/modules/abfs-service-module/README.md` for a worked example of a module README.
+
+### 8. Ship, sync, and enable
 
 1. Commit and push to the branch Argo CD syncs (`repo.revision` / platform branch).
 2. Sync the **module-manager** Application so the `ModuleCatalog` CR updates. The module appears in Administration even before it is enabled.
@@ -179,6 +193,7 @@ To iterate on Git content after enable: pin or follow the platform ref as in [Ch
 - [ ] Overview Service name/namespace match the catalog
 - [ ] WorkflowTemplate names unique; Sensor filter matches; `expose` set only if the template should be submittable
 - [ ] `ModuleCatalog` entry added and synced
+- [ ] `README.md` opens with the **Module Metadata** table (STATUS, OWNER, CONTACT, CHART VERSION, CONTAINS_COMMERCIAL)
 - [ ] Enable in portal reaches READY
 
 ## Workflows via Developer Portal

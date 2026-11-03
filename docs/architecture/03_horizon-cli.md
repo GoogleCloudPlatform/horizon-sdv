@@ -149,7 +149,10 @@ Usage:<br>
 &nbsp;&nbsp;horizon auth &lt;login|logout|refresh|whoami&gt; [flags]<br>
 &nbsp;&nbsp;horizon catalog get [--output text|json] [flags]&nbsp;&nbsp;&nbsp;(default output: text)<br>
 &nbsp;&nbsp;horizon version [--output text|json]<br>
-&nbsp;&nbsp;horizon workflow &lt;submit|wait|logs|abort|delete|show|list|get|running|history|download-artifact&gt; ... [flags]</samp></blockquote>
+&nbsp;&nbsp;horizon workflow &lt;submit|wait|logs|abort|delete|show|list|get|running|history|download-artifact&gt; ... [flags]<br>
+&nbsp;&nbsp;horizon api &lt;list|paths|show|refresh&gt; [flags]<br>
+&nbsp;&nbsp;horizon artifacts &lt;buckets|objects&gt; [flags]<br>
+&nbsp;&nbsp;horizon history [n] [--month YYYY-MM]</samp></blockquote>
 
 ## Quick Start
 
@@ -327,6 +330,8 @@ There are two ways to sign in:
 
 Every command accepts `--domain HOST` and `--api URL` to target a cluster other than the configured one. `horizon ci ...` is an alias for `horizon workflow ...`, kept for existing pipelines.
 
+The following global flags work on any command: `--debug`/`-d` turns on verbose diagnostic output, `--json`/`-j` asks for JSON output where the command supports it, `--no-banner`/`-b` suppresses the ASCII logo and banner, and `--insecure`/`-i` accepts self-signed TLS certificates (development only).
+
 Put flags before positional arguments such as the workflow name, artifact name or config key. The CLI stops reading flags at the first positional argument, so a flag placed after it is ignored without an error: `horizon workflow show --output json "$WF_NAME"` prints JSON, but `horizon workflow show "$WF_NAME" --output json` prints text.
 
 ### `horizon version`
@@ -404,6 +409,30 @@ Fetches one output artifact of a run. Take the artifact name from the `outputArt
 - **With `--generate-signed-url`**, it prints a time-limited GCS URL instead of downloading, so another tool or person can fetch the file. `--duration <seconds>` asks for a different lifetime, which the server may limit.
 
 Sometimes several steps of one workflow produce an artifact with the same name. The API then reports a conflict, and the CLI automatically picks the last matching step and prints a note saying so. To choose a different step, pass `--node-id` with one of the IDs from that note, or `--template-name` with the step's template.
+
+### `horizon api`
+
+Browses the Horizon API's own OpenAPI description, so you can discover operations without leaving the terminal. It reads an OpenAPI snapshot embedded in the CLI, which you can refresh from the live API.
+
+| Command | What it does |
+|---|---|
+| `api list` | Lists API operations with their method, path and summary. Filter with `--tag`, `--method` (for example `--method GET`) and `--path-prefix`. |
+| `api paths` | Lists every unique API path. |
+| `api show <operationId \| METHOD PATH>` | Shows one operation's parameters and an example request. Accepts an operationId, or a method and path such as `api show GET /v1/workflows`. |
+| `api refresh` | Fetches the latest OpenAPI document from `{api}/openapi.json` and caches it, updating the embedded snapshot with live data. |
+
+### `horizon artifacts`
+
+Lists the GCS buckets and objects that the Horizon API exposes, for finding artifacts outside a specific workflow run.
+
+| Command | What it does |
+|---|---|
+| `artifacts buckets` | Lists the GCS buckets reachable through the Horizon API. Only buckets in the API's allowlist or matching a `GCSBucket` resource are returned. |
+| `artifacts objects BUCKET` | Lists objects in `BUCKET`. Narrow the results with `--prefix`, cap them with `--limit`, and page through them with `--page-token`. |
+
+### `horizon history`
+
+Prints your recent CLI invocations from the local history file (`~/.config/horizon/history-YYYY-MM.json`). Pass an optional count `n` to limit how many are shown. Secret flags and token-like values are stored redacted as `***`, and the `history` command itself is not recorded. Use `--month YYYY-MM` to read an earlier month within the retention period. With the global `--json` flag it prints the entries as JSON.
 
 ## Uninstall
 

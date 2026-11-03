@@ -47,7 +47,7 @@ flowchart TB
         spa[SPA UI] --> proxy[Go proxy]
     end
     keycloak[(Keycloak / OIDC)]
-    api["Horizon API<br/>/api/v1 :8082"]
+    api["Horizon API<br/>/v1 :8082"]
     mm["Module Manager<br/>API :8082 + controller"]
     subgraph crds[Module Manager CRDs]
         state["ModuleManagerState CR<br/>enabledModules, revisions"]
@@ -90,8 +90,8 @@ flowchart TB
 Enabling a module in the portal's Administration tab sends a request to Module Manager, which then:
 
 1. Resolves hard dependencies first.
-2. Updates the `ModuleManagerState` CR.
-3. Creates the module's parent Argo CD Application, `mod-<module>`.
+2. Creates the module's parent Argo CD Application, `mod-<module>`.
+3. Updates the `ModuleManagerState` CR, adding the module to `enabledModules` and assigning its moduleId and target revision.
 
 The parent deploys the module chart, which usually creates child Applications for the module's workloads. The module's tab appears in the portal once the workloads are `READY`, and its workflow templates once they also carry the `horizon-sdv.io/expose` label.
 
@@ -108,8 +108,8 @@ sequenceDiagram
     Proxy->>MM: POST /modules/X/enable (Keycloak token)
     MM->>CRs: Read catalog (dependencies of X)
     Note over MM,CRs: Resolve hard dependencies first<br/>(recursively enable required modules)
-    MM->>CRs: Add X and its hard dependencies to enabledModules,<br/>assign moduleId and target revision
     MM->>ArgoCD: Create parent Application mod-X<br/>(gitops/modules/X at revision)
+    MM->>CRs: Add X to enabledModules,<br/>assign moduleId and target revision
     MM-->>Proxy: 200 enabled
     ArgoCD->>WL: Sync and deploy (child Applications, WorkflowTemplates)
     WL-->>ArgoCD: Healthy / READY
@@ -135,7 +135,7 @@ sequenceDiagram
     participant GCS as GCS bucket
 
     User->>Proxy: Open Workflow Templates
-    Proxy->>API: GET /api/v1/catalog (token)
+    Proxy->>API: GET /v1/catalog (token)
     API->>SC: Read enabledModules
     Note over API: Keep templates with the expose label
     API-->>Proxy: Only exposed templates of enabled modules

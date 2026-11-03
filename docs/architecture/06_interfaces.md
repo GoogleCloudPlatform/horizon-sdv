@@ -37,6 +37,8 @@ The Horizon API is served at `https://<your-horizon-domain>/horizon-api`. Every 
 | `GET /v1/workflows/{workflowName}/downloadArtifact/{artifactName}` | Signed URL for an artifact (`durationSeconds`, default 600), or the bytes with `inline=true`. `nodeId` or `templateName` choose between steps that produced the same name. |
 | `POST /v1/workflows/{workflowName}/abort` | Stop a running workflow. |
 | `DELETE /v1/workflows/{workflowName}` | Delete a finished run. Argo Workflows garbage-collects its artifacts in GCS. The call waits until the workflow's finalizers are gone. |
+| `GET /v1/artifacts/buckets` | The GCS buckets reachable through the API: the static `ARTIFACTS_ALLOWED_BUCKETS` allowlist plus `GCSBucket` resources, filtered by bucket-name rules and an optional project-id prefix. |
+| `GET /v1/artifacts/buckets/{bucket}/objects` | Objects in a bucket by name. Takes `prefix`, `pageToken` and `limit` (1–1000). Proxied in-cluster to the storage-gcs module. |
 
 Submissions record where they came from in the `horizon-sdv.io/submitted-from` label on the workflow. Set it with the `X-Horizon-Submitted-From` header: `api` (the default), `developer-portal`, `horizon-cli`, or `custom` together with your integration ID in `X-Horizon-Submitted-From-Detail`. A `horizonSubmittedFrom` parameter in the body overrides the header. The **Workflows visibility** setting in the portal filters runs by this label.
 
