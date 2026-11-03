@@ -24,11 +24,21 @@ Dependencies: outputs sdkAndroidVersion for init/build/storage.
   script:
     image: alpine:3.20
     command: [sh]
+    # Parameters via env vars, never interpolated into the script source.
+    env:
+      - name: ANDROID_REVISION
+        value: '{{ "{{" }}workflow.parameters.androidRevision{{ "}}" }}'
+      - name: LUNCH_TARGET
+        value: '{{ "{{" }}workflow.parameters.lunchTarget{{ "}}" }}'
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
     source: |
       set -euo pipefail
-      revision='{{ "{{" }}workflow.parameters.androidRevision{{ "}}" }}'
+      revision="${ANDROID_REVISION}"
 {{- if eq (include "aaos-builder.isAbfs" .) "true" }}
-      lunch='{{ "{{" }}workflow.parameters.lunchTarget{{ "}}" }}'
+      lunch="${LUNCH_TARGET}"
       case "${lunch}" in
         *rpi*)
           echo "ABFS does not support RPi lunch targets: ${lunch}" >&2

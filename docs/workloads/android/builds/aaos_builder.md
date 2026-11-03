@@ -60,6 +60,8 @@ This provides the URL for the Android repo manifest. Such as:
 - https://dev.horizon-sdv.com/gerrit/android/platform/manifest (default Horizon manifest)
 - https://android.googlesource.com/platform/manifest (Google OSS manifest)
 
+Argo workflow only: the `manifestUrl` parameter must start with one of the prefixes in `spec.manifestUrlAllowPrefixes` of the `aaos-builder` chart (default `https://android.googlesource.com/`) or with the Horizon Gerrit mirror of the deployment (`https://<horizon-domain>/gerrit/`, always allowed). Any other URL is rejected before `repo init`; add further mirrors to that list in GitOps. Jenkins builds are not affected.
+
 ### `AAOS_MANIFEST_NAME`
 
 Manifest XML filename inside the manifest repository. Defaults to `default.xml` when unset.

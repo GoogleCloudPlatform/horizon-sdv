@@ -145,6 +145,8 @@ This provides the URL for the Android repo manifest. Such as:
 
 This is required in order to derive the path to patch within the source tree from the project name.
 
+Argo workflow only: the `manifestUrl` parameter must start with one of the prefixes in `spec.manifestUrlAllowPrefixes` of the `aaos-builder` chart (default `https://android.googlesource.com/`) or with the Horizon Gerrit mirror of the deployment (`https://<horizon-domain>/gerrit/`, always allowed). Any other URL is rejected before the build starts, see [AAOS Builder](aaos_builder.md#environment-variables).
+
 ### `GERRIT_PROJECT` / `GERRIT_CHANGE_NUMBER / GERRIT_PATCHSET_NUMBER / GERRIT_TOPIC`
 
 These are optional but allow the user to fetch a specific Gerrit patchset if required.

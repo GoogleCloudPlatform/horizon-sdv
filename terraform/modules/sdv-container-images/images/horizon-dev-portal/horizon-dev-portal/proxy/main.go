@@ -112,8 +112,8 @@ func main() {
 		serveConfigJS(w, env("PUBLIC_BASE_URL", ""), normalizePublicPath(env("PUBLIC_PATH", "")), env("KEYCLOAK_TOKEN_PATH", "/auth/realms/horizon/protocol/openid-connect/token"), env("KEYCLOAK_CLIENT_ID", "horizon-dev-portal"), ciID, env("HORIZON_VERSION", ""))
 	})
 	mux.Handle("/api/mm/", newMMProxy(mmURL, verifier))
-	mux.Handle("/api/horizon/", newHorizonProxy(haURL, ci))
 	var cliVer bearerVerifier = oidcBearerVerifier{inner: verifier}
+	mux.Handle("/api/horizon/", newHorizonProxy(haURL, ci, verifier))
 	registerCLIRoutes(mux, env("CLI_DIST_DIR", "/cli-dist"), cliVer)
 	mux.Handle("/", spaHandler(htmlBaseTagHref(normalizePublicPath(env("PUBLIC_PATH", "")))))
 
@@ -309,9 +309,23 @@ func (t *retryCI401Transport) RoundTrip(req *http.Request) (*http.Response, erro
 	return nil, fmt.Errorf("retryCI401Transport: internal")
 }
 
-// newHorizonProxy forwards to Horizon API using only the confidential CI client (K8s secret).
-// The browser does not send a user Bearer; ingress same-origin still limits who reaches this service.
-func newHorizonProxy(upstream *url.URL, ci *ciTokenSource) http.Handler {
+// horizonDocsPaths are reachable without a bearer: the embedded Swagger UI iframe cannot send an
+// Authorization header, and the spec it fetches is public developer documentation.
+var horizonDocsPaths = []string{"/api/horizon/swagger", "/api/horizon/openapi.json"}
+
+func isHorizonDocsPath(path string) bool {
+	p := strings.TrimSuffix(path, "/")
+	for _, d := range horizonDocsPaths {
+		if p == d {
+			return true
+		}
+	}
+	return false
+}
+
+// newHorizonProxy forwards to Horizon API with the confidential CI client (K8s secret).
+// The caller must present a valid user bearer (same check as newMMProxy) before the CI swap.
+func newHorizonProxy(upstream *url.URL, ci *ciTokenSource, verifier *oidc.IDTokenVerifier) http.Handler {
 	rp := httputil.NewSingleHostReverseProxy(upstream)
 	rp.Transport = &retryCI401Transport{rt: http.DefaultTransport, ci: ci}
 	// Chunked NDJSON log streams: periodic flush so the browser sees lines without buffering the whole body.
@@ -326,6 +340,17 @@ func newHorizonProxy(upstream *url.URL, ci *ciTokenSource) http.Handler {
 		}
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isHorizonDocsPath(r.URL.Path) {
+			raw, err := bearerToken(r)
+			if err != nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if _, err := verifier.Verify(r.Context(), raw); err != nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
 		tok, err := ci.get(r.Context())
 		if err != nil {
 			http.Error(w, "token exchange failed", http.StatusBadGateway)

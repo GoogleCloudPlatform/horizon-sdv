@@ -115,7 +115,11 @@ function initialise_repo() {
         init_cmd+=" -m ${manifest_name} --depth=1 ${LOCAL_MIRROR_REFERENCE}"
 
         echo "${init_cmd}"
-        if ! eval "${init_cmd}"
+        if ! repo init -u "${AAOS_GERRIT_MANIFEST_URL}" \
+                       -b "${AAOS_REVISION}" \
+                       -m "${manifest_name}" \
+                       --depth=1 \
+                       ${LOCAL_MIRROR_REFERENCE:+--reference "${MIRROR_DIR_FULL_PATH}"}
         then
             echo -e "\033[1;31mERROR: repo init failed, exit!\033[0m"
             exit 1
@@ -248,17 +252,21 @@ function set_repo_path() {
         fi
     else
 
-        # Make this common to topic.
-        # Find the path from manifest
-        mkdir -p "${HOME}"/manifest
-        cd "${HOME}"/manifest || exit
+    # Make this common to topic.
+    # Find the path from manifest
+    mkdir -p "${HOME}"/manifest
+    cd "${HOME}"/manifest || exit
 
-        # FIXME: will use clone in future but for now this is just convenience for commonality.
-        if ! eval "${init_cmd}"
-        then
-            echo -e "\033[1;31mERROR: repo init failed, exit!\033[0m"
-            exit 1
-        fi
+    # FIXME: will use clone in future but for now this is just convenience for commonality.
+    echo "${init_cmd}"
+    if ! repo init -u "${AAOS_GERRIT_MANIFEST_URL}" \
+                   -b "${AAOS_REVISION}" \
+                   -m "${manifest_name}" \
+                   --depth=1
+    then
+        echo -e "\033[1;31mERROR: repo init failed, exit!\033[0m"
+        exit 1
+    fi
 
         PROJECT_PATH=$(find_prj_path_in_manifest "${manifest_name}" "${project}")
         rm -rf  "${HOME}"/manifest

@@ -44,6 +44,7 @@ Dependencies: requires compute-vars output and clean completion.
         value: "{{ "{{workflow.parameters.manifestUrl}}" }}"
       - name: AAOS_MANIFEST_NAME
         value: "{{ "{{workflow.parameters.manifestName}}" }}"
+{{- include "aaos-builder.manifestUrlAllowEnv" . | nindent 6 }}
 {{- include "aaos-builder.androidVersionEnv" . | nindent 6 }}
     resources:
       # spec.workflowStepResources.init (repo sync bounded by parallelSyncJobs).
@@ -66,5 +67,7 @@ Dependencies: requires compute-vars output and clean completion.
       - |
         WORKDIR="${PIPELINE_REPO_ROOT:-{{ include "aaos-builder.pipelineMonorepoPath" . }}}"
         export WORKSPACE="${WORKDIR}"
+        # manifestUrl must match the operator allowlist before repo sync.
+{{- include "aaos-builder.manifestUrlCheck" . | nindent 8 }}
         "${WORKDIR}"/workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
 {{- end }}

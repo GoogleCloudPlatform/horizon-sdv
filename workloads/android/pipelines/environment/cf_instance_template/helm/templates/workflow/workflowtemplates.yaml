@@ -72,7 +72,7 @@ spec:
         description: "android-cuttlefish branch or tag (maps to CUTTLEFISH_REVISION)."
       - name: cuttlefishUrl
         value: "https://github.com/google/android-cuttlefish.git"
-        description: "android-cuttlefish repository URL."
+        description: "android-cuttlefish repository URL (must match the operator allowlist prefix)."
       - name: cuttlefishPostCommand
         value: "grep -q rust.toolchain base/cvd/toolchain/rust.MODULE.bazel || printf '\\nrust = use_extension(\\042@rules_rust//rust:extensions.bzl\\042, \\042rust\\042)\\nrust.toolchain(edition = \\0422021\\042, versions = [\\0421.89.0\\042])\\n' >> base/cvd/toolchain/rust.MODULE.bazel"
         description: "Command to run in the android-cuttlefish repository to workaround issues etc, e.g. pin Rust version."
@@ -428,6 +428,79 @@ spec:
         workingDir: /workspace
         env:
 {{ include "cf-instance-template.placementCloudEnvVars" (dict "root" $root "useArm64" $p.exposeNetworkSubnet) }}
+          # Parameters are passed as env vars (Argo substitutes env
+          # values verbatim), never interpolated into the script below — a value containing
+          # shell metacharacters cannot break out into command execution.
+          - name: ANDROID_CUTTLEFISH_REVISION
+            value: '{{ "{{" }}inputs.parameters.cuttlefishRevision{{ "}}" }}'
+          - name: CUTTLEFISH_REVISION
+            value: '{{ "{{" }}inputs.parameters.cuttlefishRevision{{ "}}" }}'
+          - name: CUTTLEFISH_URL
+            value: '{{ "{{" }}inputs.parameters.cuttlefishUrl{{ "}}" }}'
+          - name: CUTTLEFISH_POST_COMMAND
+            value: '{{ "{{" }}inputs.parameters.cuttlefishPostCommand{{ "}}" }}'
+          - name: CUTTLEFISH_URL_ALLOW_PREFIX
+            value: {{ $root.Values.spec.cuttlefishUrlAllowPrefix | default "https://github.com/google/" | quote }}
+          - name: CUTTLEFISH_INSTANCE_NAME
+            value: '{{ "{{" }}inputs.parameters.cuttlefishInstanceName{{ "}}" }}'
+          - name: MACHINE_TYPE
+            value: '{{ "{{" }}inputs.parameters.machineType{{ "}}" }}'
+          - name: CUSTOM_VM_TYPE
+            value: '{{ "{{" }}inputs.parameters.customVmType{{ "}}" }}'
+          - name: CUSTOM_CPU
+            value: '{{ "{{" }}inputs.parameters.customCpu{{ "}}" }}'
+          - name: CUSTOM_MEMORY
+            value: '{{ "{{" }}inputs.parameters.customMemory{{ "}}" }}'
+          - name: OS_VERSION
+            value: '{{ "{{" }}inputs.parameters.osVersion{{ "}}" }}'
+          - name: OS_PROJECT
+            value: '{{ "{{" }}inputs.parameters.osProject{{ "}}" }}'
+          - name: JAVA_VERSION
+            value: '{{ "{{" }}inputs.parameters.javaVersion{{ "}}" }}'
+          - name: NODEJS_VERSION
+            value: '{{ "{{" }}inputs.parameters.nodejsVersion{{ "}}" }}'
+          - name: WAITON_VERSION
+            value: '{{ "{{" }}inputs.parameters.waitonVersion{{ "}}" }}'
+          - name: AXIOS_VERSION
+            value: '{{ "{{" }}inputs.parameters.axiosVersion{{ "}}" }}'
+          - name: ADDITIONAL_NETWORKING
+            value: '{{ "{{" }}inputs.parameters.additionalNetworking{{ "}}" }}'
+          - name: BOOT_DISK_SIZE
+            value: '{{ "{{" }}inputs.parameters.bootDiskSize{{ "}}" }}'
+          - name: BOOT_DISK_TYPE
+            value: '{{ "{{" }}inputs.parameters.bootDiskType{{ "}}" }}'
+          - name: MAX_RUN_DURATION
+            value: '{{ "{{" }}inputs.parameters.maxRunDuration{{ "}}" }}'
+          - name: PACKER_GOOGLECOMPUTE_VERSION_MIN
+            value: '{{ "{{" }}inputs.parameters.packerGooglecomputeVersionMin{{ "}}" }}'
+          - name: PACKER_GOOGLECOMPUTE_VERSION_MAX
+            value: '{{ "{{" }}inputs.parameters.packerGooglecomputeVersionMax{{ "}}" }}'
+          - name: CTS_ANDROID_16_URL
+            value: '{{ "{{" }}inputs.parameters.ctsAndroid16Url{{ "}}" }}'
+          - name: CTS_ANDROID_15_URL
+            value: '{{ "{{" }}inputs.parameters.ctsAndroid15Url{{ "}}" }}'
+          - name: CTS_ANDROID_14_URL
+            value: '{{ "{{" }}inputs.parameters.ctsAndroid14Url{{ "}}" }}'
+          - name: CTS_URL_ALLOW_PREFIX
+            value: {{ $root.Values.spec.ctsUrlAllowPrefix | default "https://dl.google.com/" | quote }}
+{{- if $p.exposeNetworkSubnet }}
+          # REGION/ZONE already come from placementCloudEnvVars above; submitted values use
+          # distinct names mapped onto REGION/ZONE in the script below (no duplicate env names).
+          - name: SUBNET
+            value: '{{ "{{" }}inputs.parameters.subnet{{ "}}" }}'
+          - name: REGION_SUBMIT
+            value: '{{ "{{" }}inputs.parameters.region{{ "}}" }}'
+          - name: ZONE_SUBMIT
+            value: '{{ "{{" }}inputs.parameters.zone{{ "}}" }}'
+{{- end }}
+          - name: REPO_USERNAME
+            value: '{{ "{{" }}inputs.parameters.repoUsername{{ "}}" }}'
+          - name: REPO_PASSWORD
+            value: '{{ "{{" }}inputs.parameters.repoPassword{{ "}}" }}'
+          - name: UPDATE_SSH_AUTHORIZED_KEYS
+            value: '{{ "{{" }}inputs.parameters.updateSshAuthorizedKeys{{ "}}" }}'
+          - name: DELETE
+            value: '{{ "{{" }}inputs.parameters.delete{{ "}}" }}'
         resources:
 {{- if $root.Values.spec.cfRunPodResources }}
 {{- toYaml $root.Values.spec.cfRunPodResources | nindent 10 }}
@@ -447,42 +520,26 @@ spec:
             export NAMESPACE={{ include "cf-instance-template.publisherIdentityNamespace" $root | quote }}
             # KCC ComputeInstanceTemplate CRs live in workflows.
             export WORKFLOWS_NAMESPACE={{ include "cf-instance-template.workflowNamespace" $root | quote }}
-            export ANDROID_CUTTLEFISH_REVISION="{{ "{{" }}inputs.parameters.cuttlefishRevision{{ "}}" }}"
-            export CUTTLEFISH_REVISION="${ANDROID_CUTTLEFISH_REVISION}"
-            export CUTTLEFISH_URL="{{ "{{" }}inputs.parameters.cuttlefishUrl{{ "}}" }}"
-            export CUTTLEFISH_POST_COMMAND="{{ "{{" }}inputs.parameters.cuttlefishPostCommand{{ "}}" }}"
-            export CUTTLEFISH_INSTANCE_NAME="{{ "{{" }}inputs.parameters.cuttlefishInstanceName{{ "}}" }}"
-            export MACHINE_TYPE="{{ "{{" }}inputs.parameters.machineType{{ "}}" }}"
-            export CUSTOM_VM_TYPE="{{ "{{" }}inputs.parameters.customVmType{{ "}}" }}"
-            export CUSTOM_CPU="{{ "{{" }}inputs.parameters.customCpu{{ "}}" }}"
-            export CUSTOM_MEMORY="{{ "{{" }}inputs.parameters.customMemory{{ "}}" }}"
-            export OS_VERSION="{{ "{{" }}inputs.parameters.osVersion{{ "}}" }}"
-            export OS_PROJECT="{{ "{{" }}inputs.parameters.osProject{{ "}}" }}"
-            export JAVA_VERSION="{{ "{{" }}inputs.parameters.javaVersion{{ "}}" }}"
-            export NODEJS_VERSION="{{ "{{" }}inputs.parameters.nodejsVersion{{ "}}" }}"
-            export WAITON_VERSION="{{ "{{" }}inputs.parameters.waitonVersion{{ "}}" }}"
-            export AXIOS_VERSION="{{ "{{" }}inputs.parameters.axiosVersion{{ "}}" }}"
-            export ADDITIONAL_NETWORKING="{{ "{{" }}inputs.parameters.additionalNetworking{{ "}}" }}"
-            export BOOT_DISK_SIZE="{{ "{{" }}inputs.parameters.bootDiskSize{{ "}}" }}"
-            export BOOT_DISK_TYPE="{{ "{{" }}inputs.parameters.bootDiskType{{ "}}" }}"
-            export MAX_RUN_DURATION="{{ "{{" }}inputs.parameters.maxRunDuration{{ "}}" }}"
+{{- if $p.exposeNetworkSubnet }}
+            # Submitted placement values override the ConfigMap-derived REGION/ZONE
+            # (safe assignment, no interpolation).
+            export REGION="${REGION_SUBMIT}"
+            export ZONE="${ZONE_SUBMIT}"
+{{- end }}
+            # URLs must match the operator-configured allow prefixes.
+            if ! [[ "$CUTTLEFISH_URL" == "$CUTTLEFISH_URL_ALLOW_PREFIX"* ]]; then
+              echo "cuttlefishUrl rejected: must start with ${CUTTLEFISH_URL_ALLOW_PREFIX} (got: ${CUTTLEFISH_URL})" >&2
+              exit 1
+            fi
+            for _cts_url in "$CTS_ANDROID_16_URL" "$CTS_ANDROID_15_URL" "$CTS_ANDROID_14_URL"; do
+              if [ -n "$_cts_url" ] && ! [[ "$_cts_url" == "$CTS_URL_ALLOW_PREFIX"* ]]; then
+                echo "ctsAndroid*Url rejected: must start with ${CTS_URL_ALLOW_PREFIX} (got: ${_cts_url})" >&2
+                exit 1
+              fi
+            done
             export PACKER_USE_IAP="{{ $p.defaults.packerUseIap | default true | toString | lower }}"
             export PACKER_SSH_TIMEOUT={{ $p.defaults.packerSshTimeout | default "15m" | quote }}
             export PACKER_IAP_TUNNEL_LAUNCH_WAIT="{{ $p.defaults.packerIapTunnelLaunchWait | default 300 }}"
-            export PACKER_GOOGLECOMPUTE_VERSION_MIN="{{ "{{" }}inputs.parameters.packerGooglecomputeVersionMin{{ "}}" }}"
-            export PACKER_GOOGLECOMPUTE_VERSION_MAX="{{ "{{" }}inputs.parameters.packerGooglecomputeVersionMax{{ "}}" }}"
-            export CTS_ANDROID_16_URL="{{ "{{" }}inputs.parameters.ctsAndroid16Url{{ "}}" }}"
-            export CTS_ANDROID_15_URL="{{ "{{" }}inputs.parameters.ctsAndroid15Url{{ "}}" }}"
-            export CTS_ANDROID_14_URL="{{ "{{" }}inputs.parameters.ctsAndroid14Url{{ "}}" }}"
-{{- if $p.exposeNetworkSubnet }}
-            export SUBNET="{{ "{{" }}inputs.parameters.subnet{{ "}}" }}"
-            export REGION="{{ "{{" }}inputs.parameters.region{{ "}}" }}"
-            export ZONE="{{ "{{" }}inputs.parameters.zone{{ "}}" }}"
-{{- end }}
-            export REPO_USERNAME="{{ "{{" }}inputs.parameters.repoUsername{{ "}}" }}"
-            export REPO_PASSWORD="{{ "{{" }}inputs.parameters.repoPassword{{ "}}" }}"
-            export UPDATE_SSH_AUTHORIZED_KEYS="{{ "{{" }}inputs.parameters.updateSshAuthorizedKeys{{ "}}" }}"
-            export DELETE="{{ "{{" }}inputs.parameters.delete{{ "}}" }}"
             _delete_norm=$(printf '%s' "${DELETE}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
             _update_ssh_norm=$(printf '%s' "${UPDATE_SSH_AUTHORIZED_KEYS}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
             # Stage selection: 1 when UPDATE_SSH_AUTHORIZED_KEYS is false; 2 when true; 3 when DELETE is true.
