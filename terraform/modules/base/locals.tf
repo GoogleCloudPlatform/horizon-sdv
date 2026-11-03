@@ -33,13 +33,13 @@ locals {
 
     "storage-gcs-module-app" = {
       directory      = "storage-gcs-module"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.3"
+      deploy_version = "1.0.3"
     }
     "cloud-workstations-module-app" = {
       directory      = "cloud-workstations-module"
-      build_version  = "0.2.1"
-      deploy_version = "0.2.1"
+      build_version  = "0.2.2"
+      deploy_version = "0.2.2"
     }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"
