@@ -128,15 +128,15 @@ The following ruleset should be created for release branches.
 | Require signed commits | on | |
 | Restrict tag names / Add restriction / Applies to | Tag name | |
 | Restrict tag names / Add restriction / Requirement | Must match a given regex pattern | |
-| Restrict tag names / Add restriction / Matching pattern | `^(R\d+\.\d+\.\d+\|Rel\d+\.\d+\.\d+-RC\d+)$` | A combined regex is required to ensure that GitHub doesn’t require a tag name to match all regexes simultaneously. |
-| Restrict tag names / Add restriction / Description | Tag name must match one of: `^R\d+\.\d+\.\d+$` , `^Rel\d+\.\d+\.\d+-RC\d+$` (i.e., `R<X>.<Y>.<Z>` or `Rel<X>.<Y>.<Z>-RC<A>` where X, Y, Z, A are numbers) | |
+| Restrict tag names / Add restriction / Matching pattern | `^(HORIZON_RELEASE_\d+\.\d+\.\d+\|HORIZON_RELEASE_\d+\.\d+\.\d+-RC\d+)$` | A combined regex is required to ensure that GitHub doesn’t require a tag name to match all regexes simultaneously. |
+| Restrict tag names / Add restriction / Description | Tag name must match one of: `^HORIZON_RELEASE_\d+\.\d+\.\d+$` , `^HORIZON_RELEASE_\d+\.\d+\.\d+-RC\d+$` (i.e., `HORIZON_RELEASE_<X>.<Y>.<Z>` or `HORIZON_RELEASE_<X>.<Y>.<Z>-RC<A>` where X, Y, Z, A are numbers) | |
 
 ### Allowed Tag Names
 
 | Tag Type | Pattern | Example | Regex |
 | --- | --- | --- | --- |
-| Release | `HORIZON_RELEASE_<X>.<Y>.<Z>` | `HORIZON_RELEASE_1.0.0` | `^R\d+\.\d+\.\d+$` |
-| Release Candidate | `HORIZON_RELEASE_<X>.<Y>.<Z>-RC<A>` | `HORIZON_RELEASE_1.0.0-RC1` | `^Rel\d+\.\d+\.\d+-RC\d+$` |
+| Release | `HORIZON_RELEASE_<X>.<Y>.<Z>` | `HORIZON_RELEASE_1.0.0` | `^HORIZON_RELEASE_\d+\.\d+\.\d+$` |
+| Release Candidate | `HORIZON_RELEASE_<X>.<Y>.<Z>-RC<A>` | `HORIZON_RELEASE_1.0.0-RC1` | `^HORIZON_RELEASE_\d+\.\d+\.\d+-RC\d+$` |
 
 ---
 
