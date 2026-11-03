@@ -63,8 +63,8 @@ locals {
     }
     "grafana-post" = {
       directory      = "grafana"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-mcp-gateway-registry" = {
       directory      = "keycloak"
