@@ -80,7 +80,7 @@ unset BUILD_NUMBER
 # hostname: jenkins-aaos-build-pod
 
 AAOS_DEFAULT_REVISION=$(echo "${AAOS_DEFAULT_REVISION}" | xargs)
-AAOS_DEFAULT_REVISION=${AAOS_DEFAULT_REVISION:-android-16.0.0_r3}
+AAOS_DEFAULT_REVISION=${AAOS_DEFAULT_REVISION:-android-17.0.0_r1}
 
 # Android branch/tag:
 AAOS_REVISION=${AAOS_REVISION:-${AAOS_DEFAULT_REVISION}}
@@ -132,6 +132,9 @@ fi
 # Android Version
 ANDROID_VERSION=${ANDROID_VERSION:-14}
 case "${ANDROID_VERSION}" in
+    17)
+        ANDROID_API_LEVEL=37
+        ;;
     16)
         ANDROID_API_LEVEL=36
         ;;
@@ -402,6 +405,14 @@ case "${AAOS_LUNCH_TARGET}" in
                     "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-16.0/manifest_brcm_rpi.xml --create-dirs"
                     "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-16.0/remove_projects.xml"
                 )
+                ;;
+            *cp2a*)
+                # cp2a fallthrough: android-17.0.0_r1
+                POST_REPO_INITIALISE_COMMANDS_LIST=(
+                    "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-17.0/manifest_brcm_rpi.xml --create-dirs"
+                    "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-17.0/remove_projects.xml"
+                )
+                ;;
         esac
 
         # Clean up the manifests to avoid issues when versions change.
@@ -510,7 +521,11 @@ case "${AAOS_LUNCH_TARGET}" in
                     "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
                 )
                 ;;
-            *bp3a*)
+            *cp2a*)
+                echo -e "\033[1;31m${AAOS_LUNCH_TARGET} is not currently supported on ${AAOS_REVISION}!\033[0m"
+                exit 1
+                ;;
+            *bp2a*|*bp3a*)
                 echo -e "\033[1;31mTAA-1094: ${AAOS_LUNCH_TARGET} is not currently supported on ${AAOS_REVISION}!\033[0m"
                 exit 1
                 ;;

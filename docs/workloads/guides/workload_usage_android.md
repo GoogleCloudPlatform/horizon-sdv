@@ -202,7 +202,7 @@ Android lunch targets are specified by the build parameter [`AAOS_LUNCH_TARGET`]
 
 **Target Architecture** - Whether the target device is `arm` or `x86` also needs to be taken into consideration when the lunch target is specified.
 
-**Android Release Identifier** - The device binaries used are version dependent - determined by the _release identifier_ (or _build release string_) - e.g. `ap1a`, `ap2a`, `ap3a`, `bp1a`, `bp3a`, `bp4a`. Currently-supported values are as follows:
+**Android Release Identifier** - The device binaries used are version dependent - determined by the _release identifier_ (or _build release string_) - e.g. `ap1a`, `ap2a`, `ap3a`, `bp1a`, `bp3a`, `bp4a`, `cp2a`. Currently-supported values are as follows:
 
 | Android Version | Device Binary | Recommended for Use |
 | --- | --- | --- |
@@ -213,6 +213,7 @@ Android lunch targets are specified by the build parameter [`AAOS_LUNCH_TARGET`]
 | android-15.0.0_r36 | `bp1a` | yes |
 | android-16.0.0_r3 | `bp3a` | yes |
 | android-16.0.0_r4 | `bp4a` | no |
+| android-17.0.0_r1 | `cp2a` | yes |
 
 This page lists the [Codenames, tags, and build IDs](https://source.android.com/docs/setup/reference/build-numbers) associated with each version of Android; to determine which _release identifier_ to use, inspect the _Build ID_ associated with the selected android version.
 
@@ -223,19 +224,24 @@ The full list of Android targets supported on this platform for building Android
     -   `sdk_car_x86_64-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `sdk_car_x86_64-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `sdk_car_x86_64-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `sdk_car_x86_64-cp2a-userdebug` (`android-17.0.0_r1`)
     -   `sdk_car_arm64-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `sdk_car_arm64-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `sdk_car_arm64-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `sdk_car_arm64-cp2a-userdebug` (`android-17.0.0_r1`)
 - Cuttlefish Virtual Device
     -   `aosp_cf_x86_64_auto-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_cf_x86_64_auto-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `aosp_cf_x86_64_auto-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_cf_x86_64_auto-cp2a-userdebug` (`android-17.0.0_r1`)
     -   `aosp_cf_arm64_auto-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_cf_arm64_auto-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `aosp_cf_arm64_auto-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_cf_arm64_auto-cp2a-userdebug` (`android-17.0.0_r1`)
 -   Pixel Devices:
     -   `aosp_tangorpro_car-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_tangorpro_car-bp1a-userdebug` (`android-15.0.0_r36` )
+    -   Tangor Pro is not supported for Android 16 (bp3a) or 17 (cp2a); the Jenkins stage is skipped.
 -   Raspberry Pi:
     -   `aosp_rpi4_car-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_rpi5_car-ap1a-userdebug` (`android-14.0.0_r30`)
@@ -243,6 +249,8 @@ The full list of Android targets supported on this platform for building Android
     -   `aosp_rpi5_car-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `aosp_rpi4_car-bp3a-userdebug` (`android-16.0.0_r3`)
     -   `aosp_rpi5_car-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_rpi4_car-cp2a-userdebug` (`android-17.0.0_r1`)
+    -   `aosp_rpi5_car-cp2a-userdebug` (`android-17.0.0_r1`)
 
 <hr width="50%"></details>
 

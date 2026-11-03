@@ -134,6 +134,34 @@ parameters:
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
+  name: {{ .Values.config.namespacePrefix }}reclaimable-storage-class-android-17
+  annotations:
+    reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
+    argocd.argoproj.io/sync-wave: "3"
+provisioner: pd.csi.storage.gke.io
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  type: pd-balanced
+  csi.storage.k8s.io/fstype: ext4
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: {{ .Values.config.namespacePrefix }}reclaimable-storage-class-android-17-rpi
+  annotations:
+    reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
+    argocd.argoproj.io/sync-wave: "3"
+provisioner: pd.csi.storage.gke.io
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  type: pd-balanced
+  csi.storage.k8s.io/fstype: ext4
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
   name: {{ .Values.config.namespacePrefix }}reclaimable-storage-class-android-sdv
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers

@@ -47,8 +47,8 @@ Defined in **`groovy/job.groovy`** (Jenkins UI).
 | Parameter | Description |
 |-----------|-------------|
 | **`AAOS_GERRIT_MANIFEST_URL`** | Repo manifest URL (default: Horizon Gerrit manifest). |
-| **`AAOS_REVISION`** | Branch or tag (default in groovy: `horizon/android-16.0.0_r3`). Must contain `android-14`, `android-15`, or `android-16` so the job can infer the SDK / storage pool when **`ANDROID_VERSION`** is `default` (see **`Jenkinsfile`** `getAndroidVersion()`). |
-| **`ANDROID_VERSION`** | `default` \| `14` \| `15` \| `16`. Selects the build-cache disk pool / `STORAGE_CLASS_SUFFIX` (`android-${version}`). With **`default`**, the job derives the version from **`AAOS_REVISION`**. |
+| **`AAOS_REVISION`** | Branch or tag (default in groovy: `horizon/android-17.0.0_r1`). Must contain `android-14`, `android-15`, `android-16`, or `android-17` so the job can infer the SDK / storage pool when **`ANDROID_VERSION`** is `default` (see **`Jenkinsfile`** `getAndroidVersion()`). |
+| **`ANDROID_VERSION`** | `default` \| `14` \| `15` \| `16` \| `17`. Selects the build-cache disk pool / `STORAGE_CLASS_SUFFIX` (`android-${version}`). With **`default`**, the job derives the version from **`AAOS_REVISION`**. |
 | **`GERRIT_REPO_SYNC_JOBS`** | Parallel jobs for `repo sync` (default from seed / `${REPO_SYNC_JOBS}`). |
 | **`AAOS_CLEAN`** | `NO_CLEAN` \| `CLEAN_BUILD` \| `CLEAN_ALL`. Controls clean behavior across stages (see [Pipeline behavior](#pipeline-behavior)). |
 | **`ARCHIVE_ARTIFACTS`** | If true, artifacts are stored via GCS (`ARTIFACT_STORAGE_SOLUTION=GCS_BUCKET` in **`Jenkinsfile`**); if false, storage is effectively noop for that flag. |
@@ -70,7 +70,7 @@ Single top-level stage **Start Build VM Instance** runs these stages in order:
 3. **Build: aosp_cf_arm64_auto** — Uses **`AAOS_CLEAN_LATER_STAGES`**.
 4. **Build: sdk_car_x86_64** — Sets **`ANDROID_VERSION`** to the resolved SDK version; runs **`aaos_avd_sdk.sh`** (allowed to fail: `|| true`); uses later-stage clean mode.
 5. **Build: sdk_car_arm64** — Same pattern as sdk_car_x86_64.
-6. **Build: aosp_tangorpro_car** — Runs **only if** **`AAOS_REVISION`** does **not** contain **`android-16.0.0_r`** (see `when { expression { ... } }` in **`Jenkinsfile`**).
+6. **Build: aosp_tangorpro_car** — Android 16 and Android 17 revisions are skipped because compatible device binaries are not configured.
 
 Each build stage invokes **`aaos_initialise.sh`**, **`aaos_build.sh`**, and **`aaos_storage.sh`** (and **`aaos_avd_sdk.sh`** where shown), with **`AAOS_LUNCH_TARGET`** and **`AAOS_BUILD_NUMBER`** set per stage. Stages use **`catchError`** so a failure is recorded but later stages may still run depending on Jenkins behavior.
 
@@ -97,8 +97,9 @@ Gerrit credentials: **Initialise** and **sdk_car_x86_64** use **`GERRIT_CREDENTI
 | `android-15.0.0_r36` | `bp1a-` |
 | `android-16.0.0_r3` | `bp3a-` |
 | `android-16.0.0_r4` | `bp4a-` |
+| `android-17.0.0_r1` | `cp2a-` |
 
-If **`AAOS_REVISION`** does not match **`android-14`**, **`android-15`**, or **`android-16`**, the job fails in **`getAndroidVersion()`** when **`ANDROID_VERSION`** is **`default`**.
+If **`AAOS_REVISION`** does not match a supported Android 14–17 revision, the job fails in **`getAndroidVersion()`** when **`ANDROID_VERSION`** is **`default`**.
 
 ## Kubernetes agent
 

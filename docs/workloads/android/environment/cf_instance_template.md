@@ -406,7 +406,7 @@ Both accept a plain version only (`1.2.3`, `1.3`); anything else — a range, an
 
 Read [Pin policy](#pin-policy) before changing either value: the lower bound is a hard requirement and the upper bound is an Argo crash workaround, not a preference. The **Packer binary** version is a separate pin — see [Packer version pinning](#packer-version-pinning).
 
-### `CTS_ANDROID_<14|15|16>_URL`
+### `CTS_ANDROID_<14|15|16|17>_URL`
 
 Defines the URL where to retrieve and install the **Compatibility Test Suite (CTS)** Android test harness. Leave blank if not required, or override the
 current default using your own version, e.g. from bucket storage.

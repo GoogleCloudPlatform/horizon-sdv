@@ -55,8 +55,8 @@ sharedPipelineWorkspace: true
 spec:
   # Cache PVC behavior:
   # - per-workflow: each workflow creates its own PVC via volumeClaimTemplates.
-  lunchTarget: aosp_cf_x86_64_auto-bp3a-userdebug
-  androidRevision: android-16.0.0_r3
+  lunchTarget: aosp_cf_x86_64_auto-cp2a-userdebug
+  androidRevision: android-17.0.0_r1
   # Access mode must match the storage class (RWO or RWX).
   aaosCacheAccessMode: ReadWriteOnce
   # Size for pipeline-workspace PVC (Horizon monorepo checkout only; AOSP stays on aaos-cache).

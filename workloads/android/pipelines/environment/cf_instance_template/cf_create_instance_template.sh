@@ -846,6 +846,7 @@ function build_image_with_packer() {
             -var "nodejs_version=${NODEJS_VERSION}" \
             -var "curl_update_command=${CURL_UPDATE_COMMAND}" \
             -var "os_version=${OS_VERSION}" \
+            -var "cts_android_17_url=${CTS_ANDROID_17_URL}" \
             -var "cts_android_16_url=${CTS_ANDROID_16_URL}" \
             -var "cts_android_15_url=${CTS_ANDROID_15_URL}" \
             -var "cts_android_14_url=${CTS_ANDROID_14_URL}" \

@@ -84,6 +84,8 @@ webhookWorkflowParameters:
     bodyKey: packerGooglecomputeVersionMin
   - name: packerGooglecomputeVersionMax
     bodyKey: packerGooglecomputeVersionMax
+  - name: ctsAndroid17Url
+    bodyKey: ctsAndroid17Url
   - name: ctsAndroid16Url
     bodyKey: ctsAndroid16Url
   - name: ctsAndroid15Url
@@ -201,6 +203,7 @@ workflowProfiles:
       waitonVersion: "9.0.4"
       axiosVersion: "1.15.0"
       # groovy/job.groovy CTS_ANDROID_*_URL defaults (linux_x86-x86).
+      ctsAndroid17Url: "https://dl.google.com/dl/android/cts/android-cts-17_r2-linux_x86-x86.zip"
       ctsAndroid16Url: "https://dl.google.com/dl/android/cts/android-cts-16_r5-linux_x86-x86.zip"
       ctsAndroid15Url: "https://dl.google.com/dl/android/cts/android-cts-15_r8-linux_x86-x86.zip"
       ctsAndroid14Url: "https://dl.google.com/dl/android/cts/android-cts-14_r12-linux_x86-x86.zip"
@@ -229,6 +232,7 @@ workflowProfiles:
       axiosVersion: "1.15.0"
       # subnet/region/zone: WorkflowTemplate defaults come from chart arm64.* (GitOps config.arm64).
       # groovy/job_arm.groovy CTS_ANDROID_*_URL defaults (linux_x86-arm).
+      ctsAndroid17Url: "https://dl.google.com/dl/android/cts/android-cts-17_r2-linux_x86-arm.zip"
       ctsAndroid16Url: "https://dl.google.com/dl/android/cts/android-cts-16_r5-linux_x86-arm.zip"
       ctsAndroid15Url: "https://dl.google.com/dl/android/cts/android-cts-15_r8-linux_x86-arm.zip"
       ctsAndroid14Url: "https://dl.google.com/dl/android/cts/android-cts-14_r12-linux_x86-arm.zip"

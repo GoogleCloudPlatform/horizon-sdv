@@ -66,14 +66,16 @@ Manifest XML filename inside the manifest repository. Defaults to `default.xml` 
 
 ### `AAOS_REVISION`
 
-The Android revision, i.e. branch or tag to build. Tested versions are below:
+The Android revision, i.e. branch or tag to build. Configured revisions include:
 
 - `horizon/android-14.0.0_r30` (ap1a)
 - `horizon/android-15.0.0_r36` (bp1a)
-- `horizon/android-16.0.0_r3` (bp3a - default)
+- `horizon/android-16.0.0_r3` (bp3a)
+- `horizon/android-17.0.0_r1` (cp2a - default)
 - `android-14.0.0_r30` (ap1a)
 - `android-15.0.0_r36` (bp1a)
 - `android-16.0.0_r3` (bp3a)
+- `android-17.0.0_r1` (cp2a)
 
 ### `AAOS_LUNCH_TARGET` <a name="targets"></a>
 
@@ -87,18 +89,23 @@ Examples:
     -   `sdk_car_x86_64-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `sdk_car_x86_64-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `sdk_car_x86_64-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `sdk_car_x86_64-cp2a-userdebug` (`android-17.0.0_r1`)
     -   `sdk_car_arm64-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `sdk_car_arm64-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `sdk_car_arm64-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `sdk_car_arm64-cp2a-userdebug` (`android-17.0.0_r1`)
     -   `aosp_cf_x86_64_auto-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_cf_x86_64_auto-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `aosp_cf_x86_64_auto-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_cf_x86_64_auto-cp2a-userdebug` (`android-17.0.0_r1`)
     -   `aosp_cf_arm64_auto-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_cf_arm64_auto-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `aosp_cf_arm64_auto-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_cf_arm64_auto-cp2a-userdebug` (`android-17.0.0_r1`)
 -   Pixel Devices:
     -   `aosp_tangorpro_car-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_tangorpro_car-bp1a-userdebug` (`android-15.0.0_r36` )
+    -   Tangor Pro is not supported for Android 17 (cp2a); the Jenkins stage is skipped.
 -   Raspberry Pi:
     -   `aosp_rpi4_car-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_rpi5_car-ap1a-userdebug` (`android-14.0.0_r30`)
@@ -106,6 +113,8 @@ Examples:
     -   `aosp_rpi5_car-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `aosp_rpi4_car-bp3a-userdebug` (`android-16.0.0_r3`)
     -   `aosp_rpi5_car-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_rpi4_car-cp2a-userdebug` (`android-17.0.0_r1`)
+    -   `aosp_rpi5_car-cp2a-userdebug` (`android-17.0.0_r1`)
 
 ### `AAOS_BUILD_CTS`
 
@@ -113,7 +122,7 @@ This builds the Android Automotive Compatibility Test Suite ([CTS](https://sourc
 
 ### `ANDROID_VERSION`
 
-This specifies which build disk pool to use for build cache. If `default` then the job will determine the pool based on `AAOS_REVISION` and target. For sdk AVD targets, this is also used to derive the Android API version for the SDK addons and device files.
+This specifies which build disk pool to use for build cache. If `default` then the job will determine the pool based on `AAOS_REVISION` and target. For sdk AVD targets, this is also used to derive the Android API version for the SDK addons and device files; Android 17 maps to API level 37.
 
 ### `POST_REPO_INITIALISE_COMMAND`
 

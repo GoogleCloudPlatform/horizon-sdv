@@ -135,6 +135,9 @@ spec:
       - name: packerGooglecomputeVersionMax
         value: {{ $p.defaults.packerGooglecomputeVersionMax | default "1.2.5" | quote }}
         description: "Highest hashicorp/googlecompute Packer plugin version, not included (PACKER_GOOGLECOMPUTE_VERSION_MAX). Capped below 1.2.5 because v1.2.5 crashes with SIGSEGV in StepImportOSLoginSSHKey on Argo; raise it once that is fixed upstream."
+      - name: ctsAndroid17Url
+        value: {{ $p.defaults.ctsAndroid17Url | quote }}
+        description: "CTS Android 17 R2 zip URL (CTS_ANDROID_17_URL)."
       - name: ctsAndroid16Url
         value: {{ $p.defaults.ctsAndroid16Url | quote }}
         description: "CTS Android 16 zip URL (CTS_ANDROID_16_URL)."
@@ -327,6 +330,8 @@ spec:
                   value: '{{ "{{" }}workflow.parameters.packerGooglecomputeVersionMin{{ "}}" }}'
                 - name: packerGooglecomputeVersionMax
                   value: '{{ "{{" }}workflow.parameters.packerGooglecomputeVersionMax{{ "}}" }}'
+                - name: ctsAndroid17Url
+                  value: '{{ "{{" }}workflow.parameters.ctsAndroid17Url{{ "}}" }}'
                 - name: ctsAndroid16Url
                   value: '{{ "{{" }}workflow.parameters.ctsAndroid16Url{{ "}}" }}'
                 - name: ctsAndroid15Url
@@ -382,6 +387,7 @@ spec:
           - name: maxRunDuration
           - name: packerGooglecomputeVersionMin
           - name: packerGooglecomputeVersionMax
+          - name: ctsAndroid17Url
           - name: ctsAndroid16Url
           - name: ctsAndroid15Url
           - name: ctsAndroid14Url
@@ -471,6 +477,7 @@ spec:
             export PACKER_IAP_TUNNEL_LAUNCH_WAIT="{{ $p.defaults.packerIapTunnelLaunchWait | default 300 }}"
             export PACKER_GOOGLECOMPUTE_VERSION_MIN="{{ "{{" }}inputs.parameters.packerGooglecomputeVersionMin{{ "}}" }}"
             export PACKER_GOOGLECOMPUTE_VERSION_MAX="{{ "{{" }}inputs.parameters.packerGooglecomputeVersionMax{{ "}}" }}"
+            export CTS_ANDROID_17_URL="{{ "{{" }}inputs.parameters.ctsAndroid17Url{{ "}}" }}"
             export CTS_ANDROID_16_URL="{{ "{{" }}inputs.parameters.ctsAndroid16Url{{ "}}" }}"
             export CTS_ANDROID_15_URL="{{ "{{" }}inputs.parameters.ctsAndroid15Url{{ "}}" }}"
             export CTS_ANDROID_14_URL="{{ "{{" }}inputs.parameters.ctsAndroid14Url{{ "}}" }}"

@@ -40,6 +40,7 @@ Dependencies: outputs sdkAndroidVersion for init/build/storage.
         *android-14*) android_version="14" ;;
         *android-15*) android_version="15" ;;
         *android-16*) android_version="16" ;;
+        *android-17*) android_version="17" ;;
         *)
           echo "Failed to determine Android version from revision: ${revision}" >&2
           exit 1

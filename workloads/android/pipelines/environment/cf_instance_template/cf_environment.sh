@@ -62,6 +62,7 @@ OS_VERSION=${OS_VERSION:-}
 # Android CTS test harness URLs, installed on host.
 # Allow override - users may install their own. Defaults set in Groovy.
 # https://source.android.com/docs/compatibility/cts/downloads
+CTS_ANDROID_17_URL=${CTS_ANDROID_17_URL:-}
 CTS_ANDROID_16_URL=${CTS_ANDROID_16_URL:-}
 CTS_ANDROID_15_URL=${CTS_ANDROID_15_URL:-}
 CTS_ANDROID_14_URL=${CTS_ANDROID_14_URL:-}
@@ -82,6 +83,7 @@ CUTTLEFISH_LATEST_SHA1_FILENAME="android-cuttlefish-sha1.txt"
 # Show variables.
 VARIABLES="Environment:
         OS_VERSION=${OS_VERSION}
+        CTS_ANDROID_17_URL=${CTS_ANDROID_17_URL}
         CTS_ANDROID_16_URL=${CTS_ANDROID_16_URL}
         CTS_ANDROID_15_URL=${CTS_ANDROID_15_URL}
         CTS_ANDROID_14_URL=${CTS_ANDROID_14_URL}

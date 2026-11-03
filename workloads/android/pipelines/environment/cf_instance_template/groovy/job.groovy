@@ -303,6 +303,16 @@ the repo credentials, i.e.
     }
 
     stringParam {
+      name('CTS_ANDROID_17_URL')
+      defaultValue("https://dl.google.com/dl/android/cts/android-cts-17_r2-linux_x86-x86.zip")
+      description('''<p>Android 17 CTS R2 host package. Leave blank to skip baking Android 17 CTS into the image, or specify your preferred version.<br/>
+      Either download from official site, or from a local bucket if stored locally to improve download times, e.g.
+      <ul><li>Official downloads: <code>https://dl.google.com/dl/android/cts/android-cts-17_r2-linux_x86-x86.zip</code></li>
+          <li>Local GCS bucket download: <code>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/CTS/android-cts-17_r2-linux_x86-x86.zip</code></li></ul></p>''')
+      trim(true)
+    }
+
+    stringParam {
       name('CTS_ANDROID_16_URL')
       defaultValue("https://dl.google.com/dl/android/cts/android-cts-16_r5-linux_x86-x86.zip")
       description('''<p>Leave blank if the version is not needed, or specify your preferred version.<br/>

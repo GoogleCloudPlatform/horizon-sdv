@@ -22,6 +22,8 @@ def getAndroidVersion(revision) {
     return "15"
   } else if (revision =~ "android-16") {
     return "16"
+  } else if (revision =~ "android-17") {
+    return "17"
   } else {
     currentBuild.result = 'FAILURE'
     error "Failed to extract Android version from revision: ${revision}"
@@ -201,10 +203,12 @@ pipeline {
                   if ( "${env.GERRIT_BRANCH}" =~ "android-15.0.0_r36" ) env.ANDROID_BUILD_ID="bp1a-"
                   if ( "${env.GERRIT_BRANCH}" =~ "android-16.0.0_r3" ) env.ANDROID_BUILD_ID="bp3a-"
                   if ( "${env.GERRIT_BRANCH}" =~ "android-16.0.0_r4" ) env.ANDROID_BUILD_ID="bp4a-"
+                  if ( "${env.GERRIT_BRANCH}" =~ "android-17.0.0_r1" ) env.ANDROID_BUILD_ID="cp2a-"
 
                   if ( "$ANDROID_BUILD_ID" =~ "bp1a" ) env.ANDROID_VERSION=15
                   if ( "$ANDROID_BUILD_ID" =~ "bp3a" ) env.ANDROID_VERSION=16
                   if ( "$ANDROID_BUILD_ID" =~ "bp4a" ) env.ANDROID_VERSION=16
+                  if ( "$ANDROID_BUILD_ID" =~ "cp2a" ) env.ANDROID_VERSION=17
                 }
                 sh '''
                   set +x
@@ -427,7 +431,7 @@ pipeline {
                 expression { env.GERRIT_CHANGE_NUMBER }
                 expression { env.GERRIT_TOPIC }
               }
-              expression { !(env.GERRIT_BRANCH ?: '').contains('android-16.0.0_r') }
+              expression { !(env.GERRIT_BRANCH ?: '').contains('android-16.0.0_r') && !(env.GERRIT_BRANCH ?: '').contains('android-17.0.0_r') }
             }
           }
           steps {

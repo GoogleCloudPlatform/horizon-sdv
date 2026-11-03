@@ -96,6 +96,7 @@ pipeline {
               ADDITIONAL_NETWORKING="${ADDITIONAL_NETWORKING}" \
               BOOT_DISK_SIZE="${BOOT_DISK_SIZE}" \
               BOOT_DISK_TYPE="${BOOT_DISK_TYPE}" \
+              CTS_ANDROID_17_URL="${CTS_ANDROID_17_URL}" \
               CTS_ANDROID_16_URL="${CTS_ANDROID_16_URL}" \
               CTS_ANDROID_15_URL="${CTS_ANDROID_15_URL}" \
               CTS_ANDROID_14_URL="${CTS_ANDROID_14_URL}" \

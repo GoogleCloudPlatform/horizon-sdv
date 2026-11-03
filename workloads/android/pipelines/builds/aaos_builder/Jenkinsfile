@@ -22,6 +22,8 @@ def getAndroidVersion(revision) {
     return "15"
   } else if (revision =~ "android-16") {
     return "16"
+  } else if (revision =~ "android-17") {
+    return "17"
   } else {
     currentBuild.result = 'FAILURE'
     error "Failed to determine Android version from revision: ${revision}"

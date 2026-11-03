@@ -124,6 +124,11 @@ variable "os_version" {
   type = string
 }
 
+variable "cts_android_17_url" {
+  type = string
+  default = ""
+}
+
 variable "cts_android_16_url" {
   type = string
   default = ""
@@ -229,6 +234,7 @@ build {
       "CURL_UPDATE_COMMAND=${var.curl_update_command}",
       "DEFAULT_USER=${var.default_user}",
       "OS_VERSION=${var.os_version}",
+      "CTS_ANDROID_17_URL=${var.cts_android_17_url}",
       "CTS_ANDROID_16_URL=${var.cts_android_16_url}",
       "CTS_ANDROID_15_URL=${var.cts_android_15_url}",
       "CTS_ANDROID_14_URL=${var.cts_android_14_url}",
