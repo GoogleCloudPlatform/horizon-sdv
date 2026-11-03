@@ -102,7 +102,7 @@ spec:
         # when it does not. The ConfigMap is in another namespace, so kubectl
         # loads it.
         - name: select-uploader-config
-          image: {{ .Values.license.validation.image | quote }}
+          image: {{ required "license.validation.image is set by the abfs-service-module Application" .Values.license.validation.image | quote }}
           imagePullPolicy: IfNotPresent
           {{- with .Values.restrictedSecurityContext }}
           securityContext:

@@ -92,7 +92,7 @@ spec:
         # Read the active uploader row before waiting for the server.
         # Uploader ConfigMap is in another namespace, so this container loads it with kubectl.
         - name: select-uploader-config
-          image: {{ .Values.license.validation.image | quote }}
+          image: {{ required "license.validation.image is set by the abfs-service-module Application" .Values.license.validation.image | quote }}
           imagePullPolicy: IfNotPresent
           securityContext:
             {{- toYaml .Values.restrictedSecurityContext | nindent 12 }}

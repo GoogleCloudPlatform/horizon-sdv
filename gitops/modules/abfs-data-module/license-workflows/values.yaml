@@ -42,6 +42,4 @@ mainEnv: true
 # WI → gke-argo-workflows-elevated-sa (kubectl delete ContainerNodePool; Secret patch).
 jobServiceAccountName: workflow-executor-elevated
 
-# google-cloud-cli image (gcloud + kubectl via debian_component_based).
-# Pinned by digest (SDK 591.0.0): newer builds of this tag have no python3 on PATH, which the ABFS scripts need. Bump digest and re-test before changing.
-cloudSdkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based@sha256:f455f6bfd3d66abe3131ddff47d95c5f01061e8e91937285adcf2a86b5c82e48
+# cloudSdkImage is set by the abfs-data-module Application.

@@ -44,6 +44,7 @@ spec:
         eventsNamespace: {{ .Values.config.namespacePrefix }}argo-events
         uploaderConfigMapName: abfs-uploader-config
         jobServiceAccountName: workflow-executor-elevated
+        cloudSdkImage: {{ .Values.cloudSdkImage | quote }}
         abfsNamespace: {{ .Values.abfsNamespace | default "abfs" | quote }}
         uploaderStatefulSetName: abfs-gerrit-uploader
   destination:

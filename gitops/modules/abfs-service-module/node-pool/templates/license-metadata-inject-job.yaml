@@ -58,7 +58,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: reconcile
-          image: {{ .Values.license.cloudSdkImage | quote }}
+          image: {{ required "license.cloudSdkImage is set by the abfs-service-module Application" .Values.license.cloudSdkImage | quote }}
           imagePullPolicy: IfNotPresent
           env:
             - name: PROJECT_ID
@@ -191,7 +191,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: verify
-          image: {{ .Values.license.cloudSdkImage | quote }}
+          image: {{ required "license.cloudSdkImage is set by the abfs-service-module Application" .Values.license.cloudSdkImage | quote }}
           imagePullPolicy: IfNotPresent
           env:
             - name: PROJECT_ID

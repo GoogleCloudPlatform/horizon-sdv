@@ -42,7 +42,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: validate
-          image: {{ .Values.license.validation.image | quote }}
+          image: {{ required "license.validation.image is set by the abfs-service-module Application" .Values.license.validation.image | quote }}
           imagePullPolicy: IfNotPresent
           securityContext:
             {{- toYaml .Values.restrictedSecurityContext | nindent 12 }}

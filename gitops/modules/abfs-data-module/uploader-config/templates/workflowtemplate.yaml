@@ -121,7 +121,7 @@ spec:
           - name: Configuration
             value: "{{ "{{workflow.parameters.Configuration}}" }}"
       container:
-        image: {{ .Values.cloudSdkImage | quote }}
+        image: {{ required "cloudSdkImage is set by the abfs-data-module Application" .Values.cloudSdkImage | quote }}
         imagePullPolicy: IfNotPresent
         env:
           - name: HORIZON_NAMESPACE

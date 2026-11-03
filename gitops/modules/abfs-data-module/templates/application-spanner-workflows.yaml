@@ -41,6 +41,7 @@ spec:
         horizonNamespace: {{ .Values.config.namespacePrefix }}horizon
         projectID: {{ .Values.config.projectID | quote }}
         jobServiceAccountName: workflow-executor-elevated
+        cloudSdkImage: {{ .Values.cloudSdkImage | quote }}
         spanner:
           instanceId: abfs
           databaseId: abfs

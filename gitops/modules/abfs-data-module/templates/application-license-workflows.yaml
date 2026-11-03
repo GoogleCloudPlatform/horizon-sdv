@@ -56,6 +56,7 @@ spec:
           - abfs-data-uploader-node-pool
         mainEnv: {{ not (default false .Values.config.isSubEnvironment) }}
         jobServiceAccountName: workflow-executor-elevated
+        cloudSdkImage: {{ .Values.cloudSdkImage | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.config.namespacePrefix }}workflows
