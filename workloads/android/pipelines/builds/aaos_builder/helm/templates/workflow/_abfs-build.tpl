@@ -65,6 +65,7 @@ currentBuild.currentResult.
         value: "{{ "{{workflow.parameters.manifestUrl}}" }}"
       - name: AAOS_MANIFEST_NAME
         value: "{{ "{{workflow.parameters.manifestName}}" }}"
+{{- include "aaos-builder.manifestUrlAllowEnv" . | nindent 6 }}
       # AI review. Prompt and skills paths in values start with /workspace;
       # the script below maps them onto the pipeline checkout of this pod.
       - name: AI_REVIEW_RUNTIME
@@ -137,6 +138,9 @@ currentBuild.currentResult.
         export WORKSPACE="${REPO}"
         RESULT=SUCCESS
         stage() { echo; echo "=================== $* ==================="; }
+
+        # manifestUrl must match the operator allowlist before the sources are touched.
+{{- include "aaos-builder.manifestUrlCheck" . | nindent 8 }}
 
         stage "Initialise"
         "${SCRIPTS}/aaos_initialise.sh" || RESULT=FAILURE

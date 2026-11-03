@@ -34,6 +34,9 @@ spec:
             path: /tmp/upload.tgz
       container:
         image: curlimages/curl:8.5.0
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
         env:
           - name: STORAGE_GCS_API_TOKEN
             valueFrom:
@@ -82,6 +85,9 @@ spec:
           - name: objectPath
       container:
         image: curlimages/curl:8.5.0
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
         env:
           - name: STORAGE_GCS_API_TOKEN
             valueFrom:

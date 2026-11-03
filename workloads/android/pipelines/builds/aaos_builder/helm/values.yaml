@@ -80,6 +80,11 @@ spec:
   cloudRegion: europe-west1
   cloudZone: europe-west1-d
   manifestUrl: https://android.googlesource.com/platform/manifest
+  # Submit-time allowlist for manifestUrl: the value must start with one of these
+  # prefixes or with the Horizon Gerrit mirror of this deployment
+  # (https://<horizonDomain>/gerrit/, always allowed). Rejected before repo init.
+  manifestUrlAllowPrefixes:
+    - "https://android.googlesource.com/"
   # Android Manifest Filename
   manifestName: default.xml
   # Pipeline repo for Argo git artifacts when not using localRepoHostPath / localRepoPvcName.

@@ -121,3 +121,55 @@ envFrom:
 - name: SDK_ANDROID_VERSION
   value: '{{ "{{" }}inputs.parameters.sdkAndroidVersion{{ "}}" }}'
 {{- end }}
+
+{{/*
+Comma-separated manifestUrl allowlist: spec.manifestUrlAllowPrefixes plus the
+Horizon Gerrit mirror of this deployment (https://<spec.horizonDomain>/gerrit/).
+*/}}
+{{- define "aaos-builder.manifestUrlAllowPrefixes" -}}
+{{- $prefixes := list -}}
+{{- if .Values.spec.horizonDomain -}}
+{{- $prefixes = append $prefixes (printf "https://%s/gerrit/" .Values.spec.horizonDomain) -}}
+{{- end -}}
+{{- range (.Values.spec.manifestUrlAllowPrefixes | default (list "https://android.googlesource.com/")) -}}
+{{- $prefixes = append $prefixes . -}}
+{{- end -}}
+{{- join "," $prefixes -}}
+{{- end }}
+
+{{/*
+Env entry carrying the manifestUrl allowlist to the init and abfs-build steps.
+*/}}
+{{- define "aaos-builder.manifestUrlAllowEnv" -}}
+# manifestUrl must start with one of these prefixes (checked before repo init).
+- name: AAOS_MANIFEST_URL_ALLOW_PREFIXES
+  value: {{ include "aaos-builder.manifestUrlAllowPrefixes" . | quote }}
+{{- end }}
+
+{{/*
+Shell snippet: reject AAOS_GERRIT_MANIFEST_URL unless it starts with one of the
+allowed prefixes. Trims whitespace like aaos_environment.sh; an empty value keeps
+the aaos_environment.sh default (Google OSS manifest); an empty allowlist fails.
+*/}}
+{{- define "aaos-builder.manifestUrlCheck" -}}
+_manifest_url="$(printf '%s' "${AAOS_GERRIT_MANIFEST_URL:-}" | xargs)"
+if [ -z "${_manifest_url}" ]; then
+  _manifest_url="https://android.googlesource.com/platform/manifest"
+fi
+if [ -z "${AAOS_MANIFEST_URL_ALLOW_PREFIXES:-}" ]; then
+  echo "AAOS_MANIFEST_URL_ALLOW_PREFIXES is empty, refusing to run" >&2
+  exit 1
+fi
+IFS=',' read -r -a _allow_prefixes <<< "${AAOS_MANIFEST_URL_ALLOW_PREFIXES}"
+_manifest_url_ok=""
+for _prefix in "${_allow_prefixes[@]}"; do
+  if [ -n "${_prefix}" ] && [[ "${_manifest_url}" == "${_prefix}"* ]]; then
+    _manifest_url_ok=1
+    break
+  fi
+done
+if [ -z "${_manifest_url_ok}" ]; then
+  echo "manifestUrl rejected: must start with one of [${AAOS_MANIFEST_URL_ALLOW_PREFIXES}] (got: ${_manifest_url})" >&2
+  exit 1
+fi
+{{- end }}
