@@ -120,7 +120,7 @@ This allows the user to install Wifi utility APK on all Cuttlefish virtual devic
 
 ### `ANDROID_VERSION`
 
-Defines the Android and thus CTS version to use. Cuttlefish instance templates bake CTS under **`/opt/android-cts_<version>/android-cts`** (see **`cf_host_initialise.sh`**). At runtime, **`cts_initialise.sh`** symlinks **`/opt/android-cts`** to **`/opt/android-cts_<version>`** so Tradefed sees the standard layout **`/opt/android-cts/android-cts/{tools,jdk,results,...}`** (Jenkins and Argo; not configurable).
+Defines the Android and thus CTS version to use. Android 17 uses CTS package R2 (`android-cts-17_r2`); this CTS package revision is independent of the Android source branch `android-17.0.0_r1`. Cuttlefish instance templates bake CTS under **`/opt/android-cts_<version>/android-cts`** (see **`cf_host_initialise.sh`**). At runtime, **`cts_initialise.sh`** symlinks **`/opt/android-cts`** to **`/opt/android-cts_<version>`** so Tradefed sees the standard layout **`/opt/android-cts/android-cts/{tools,jdk,results,...}`** (Jenkins and Argo; not configurable).
 
 ### `CTS_DOWNLOAD_URL`
 

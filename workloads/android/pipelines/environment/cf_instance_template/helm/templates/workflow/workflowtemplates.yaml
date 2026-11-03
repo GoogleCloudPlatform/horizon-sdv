@@ -135,6 +135,9 @@ spec:
       - name: packerGooglecomputeVersionMax
         value: {{ $p.defaults.packerGooglecomputeVersionMax | default "1.2.5" | quote }}
         description: "Highest hashicorp/googlecompute Packer plugin version, not included (PACKER_GOOGLECOMPUTE_VERSION_MAX). Capped below 1.2.5 because v1.2.5 crashes with SIGSEGV in StepImportOSLoginSSHKey on Argo; raise it once that is fixed upstream."
+      - name: ctsAndroid17Url
+        value: {{ $p.defaults.ctsAndroid17Url | quote }}
+        description: "CTS Android 17 R2 zip URL (CTS_ANDROID_17_URL)."
       - name: ctsAndroid16Url
         value: {{ $p.defaults.ctsAndroid16Url | quote }}
         description: "CTS Android 16 zip URL (CTS_ANDROID_16_URL)."
@@ -327,6 +330,8 @@ spec:
                   value: '{{ "{{" }}workflow.parameters.packerGooglecomputeVersionMin{{ "}}" }}'
                 - name: packerGooglecomputeVersionMax
                   value: '{{ "{{" }}workflow.parameters.packerGooglecomputeVersionMax{{ "}}" }}'
+                - name: ctsAndroid17Url
+                  value: '{{ "{{" }}workflow.parameters.ctsAndroid17Url{{ "}}" }}'
                 - name: ctsAndroid16Url
                   value: '{{ "{{" }}workflow.parameters.ctsAndroid16Url{{ "}}" }}'
                 - name: ctsAndroid15Url
@@ -382,6 +387,7 @@ spec:
           - name: maxRunDuration
           - name: packerGooglecomputeVersionMin
           - name: packerGooglecomputeVersionMax
+          - name: ctsAndroid17Url
           - name: ctsAndroid16Url
           - name: ctsAndroid15Url
           - name: ctsAndroid14Url

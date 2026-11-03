@@ -154,8 +154,8 @@ pipelineJob('Android/Tests/CTS Execution') {
 
     choiceParam {
       name('ANDROID_VERSION')
-      choices(['16', '15', '14'])
-      description('''<p>Select Android version: Android 16, 15 or 14<br/>
+      choices(['17', '16', '15', '14'])
+      description('''<p>Select Android version: Android 17, 16, 15 or 14<br/>
         Essential for picking the correct test hardness</p>''')
     }
 

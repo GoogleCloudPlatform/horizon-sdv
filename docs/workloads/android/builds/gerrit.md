@@ -24,19 +24,21 @@ It supports the following branches:
 -   `horizon/android-14.0.0_r30`
 -   `horizon/android-15.0.0_r36`
 -   `horizon/android-16.0.0_r3`
+-   `horizon/android-17.0.0_r1`
 
 The branch is used to derive the full name (build identifier) of the build targets, e.g.
 
 -   `android-14.0.0_r30` -> `sdk_car_x86_64-ap1a-userdebug`
 -   `android-15.0.0_r36` -> `sdk_car_x86_64-bp1a-userdebug`
 -   `android-16.0.0_r3` -> `sdk_car_x86_64-bp3a-userdebug`
+-   `android-17.0.0_r1` -> `sdk_car_x86_64-cp2a-userdebug`
 
 It builds the following targets:
 
 -   `sdk_car_x86_64`
 -   `sdk_car_arm64`
 -   `aosp_cf_x86_64_auto`
--   `aosp_tangorpro_car`
+-   `aosp_tangorpro_car` (not built for Android 16 or Android 17)
 
 Once completed the build artifacts are available to test within the GCS bucket. Artifact summaries are provided stored with the job to provide details of the location of these artifacts.
 

@@ -50,7 +50,7 @@ pipelineJob('Android/Builds/AAOS Builder') {
 
     stringParam {
       name('AAOS_REVISION')
-      defaultValue('horizon/android-16.0.0_r3')
+      defaultValue('horizon/android-17.0.0_r1')
       description('''<p>Android revision tag/branch name.</p>''')
       trim(true)
     }
@@ -83,11 +83,12 @@ pipelineJob('Android/Builds/AAOS Builder') {
       description('''<p>Version of disk pool to use for the build cache, select from one of the following options:</p>
           <ul>
             <li>default: let job determine pool.</li>
+            <li>17: Use the Android 17 disk pool, if target is for RPi the Android 17 RPi pool will be used.</li>
             <li>16: Use the Android 16 disk pool, if target is for RPi the Android 16 RPi pool will be used.</li>
             <li>15: Use the Android 15 disk pool, if target is for RPi the Android 15 RPi pool will be used.</li>
             <li>14: Use the Android 14 disk pool, if target is for RPi the Android 14 RPi pool will be used.</li>
           </ul>''')
-      choices(['default', '16', '15', '14'])
+      choices(['default', '17', '16', '15', '14'])
     }
 
     stringParam {
