@@ -145,7 +145,7 @@ The run dialog shows the template, run name, who submitted it and from where, an
 - **Open live stream** (or **Open stream** for a finished run) streams the logs of the whole run, each line tagged with its step. Once the run has finished and its pods are gone, the stream is empty; use the per-step logs instead.
 - The steps table lists each step with its phase and pod. **Show** streams that step's logs while it runs and loads the archived log from Cloud Storage once it has finished. **GCS** and **Download** in this table refer to the step's archived log.
 
-The log viewer keeps the number of lines set in **Max lines** (see [Settings](#settings)). When the limit is reached, the oldest lines are dropped.
+The log viewer keeps the number of lines set in **Max lines** (see [Settings](#settings)). When the limit is reached, lines are dropped from the step producing the most output first, so a single noisy step cannot crowd out the others.
 
 ### Tools
 

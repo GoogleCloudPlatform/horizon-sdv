@@ -259,7 +259,7 @@ Disabling a module is guarded by hard-dependency checks: if the module is still 
 2. Its parent Argo CD Application is deleted.
 3. Argo CD cascades the deletion to the child Applications and prunes the workloads.
 
-For `workloads-android`, `workloads-common` and `remotive-topology`, Module Manager also tears down the child Application and waits for their Config Connector resources to be removed.
+For `workloads-android`, `workloads-common` and `remotive-topology`, Module Manager also tears down the child Application explicitly. For `workloads-android` and `remotive-topology` it then waits for their Config Connector resources (such as the `ComputeInstanceTemplate`) to be removed, and for `workloads-android` it also waits for the `ConfigConnectorContext` to go; `workloads-common` has no Config Connector resources to wait for.
 
 Afterwards:
 

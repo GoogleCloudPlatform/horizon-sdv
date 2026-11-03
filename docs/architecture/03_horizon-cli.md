@@ -58,8 +58,8 @@ horizon workflow submit --module <module> --template <template> \
 | Exit code | Meaning |
 |---|---|
 | `0` | The workflow succeeded. |
-| `1` | The workflow failed or errored, or the CLI hit an error. |
-| `2` | The workflow was aborted, or the command was used incorrectly. |
+| `1` | The workflow failed or errored, or the CLI hit an error (including a usage or argument error). |
+| `2` | The workflow was aborted. |
 
 ## Installation
 
@@ -140,19 +140,22 @@ horizon version
 horizon --help
 ```
 
-**Expected:** `horizon <version> (built <DD/MM/YYYY>)` matches the version and build date on the Tools tab, and the usage text starts with:
+**Expected:** `horizon version` prints `horizon <version> (built <DD/MM/YYYY>)`, matching the version and build date on the Tools tab. `horizon --help` prints the Horizon banner, a `Horizon CLI <version> (built <DD/MM/YYYY>)` line, and then the usage followed by the available commands:
 
-<blockquote><samp>horizon — Horizon API CLI<br>
+<blockquote><samp>Usage:<br>
+&nbsp;&nbsp;horizon [command] [flag]<br>
 <br>
-Usage:<br>
-&nbsp;&nbsp;horizon config &lt;init|get|set&gt; ...<br>
-&nbsp;&nbsp;horizon auth &lt;login|logout|refresh|whoami&gt; [flags]<br>
-&nbsp;&nbsp;horizon catalog get [--output text|json] [flags]&nbsp;&nbsp;&nbsp;(default output: text)<br>
-&nbsp;&nbsp;horizon version [--output text|json]<br>
-&nbsp;&nbsp;horizon workflow &lt;submit|wait|logs|abort|delete|show|list|get|running|history|download-artifact&gt; ... [flags]<br>
-&nbsp;&nbsp;horizon api &lt;list|paths|show|refresh&gt; [flags]<br>
-&nbsp;&nbsp;horizon artifacts &lt;buckets|objects&gt; [flags]<br>
-&nbsp;&nbsp;horizon history [n] [--month YYYY-MM]</samp></blockquote>
+Available Commands:<br>
+&nbsp;&nbsp;api&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Discover Horizon API paths and examples<br>
+&nbsp;&nbsp;artifacts&nbsp;&nbsp;List GCS buckets and objects via Horizon API<br>
+&nbsp;&nbsp;auth&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Authentication commands<br>
+&nbsp;&nbsp;catalog&nbsp;&nbsp;&nbsp;Inspect the Horizon workflow catalog<br>
+&nbsp;&nbsp;config&nbsp;&nbsp;&nbsp;&nbsp;View or set configuration<br>
+&nbsp;&nbsp;history&nbsp;&nbsp;&nbsp;Show recent CLI invocations<br>
+&nbsp;&nbsp;version&nbsp;&nbsp;&nbsp;Show CLI version<br>
+&nbsp;&nbsp;workflow&nbsp;&nbsp;Workflow/job commands</samp></blockquote>
+
+(Cobra also lists its built-in `completion` and `help` commands. Run `horizon <command> --help`, for example `horizon workflow --help`, to see a command's subcommands and flags.)
 
 ## Quick Start
 
@@ -328,11 +331,11 @@ There are two ways to sign in:
 
 ## Command reference
 
-Every command accepts `--domain HOST` and `--api URL` to target a cluster other than the configured one. `horizon ci ...` is an alias for `horizon workflow ...`, kept for existing pipelines.
+The `workflow`, `catalog`, `auth`, `artifacts` and `api` commands accept `--domain HOST` and `--api URL` to target a cluster other than the configured one (`config`, `history` and `version` don't take them). `horizon ci ...` is an alias for `horizon workflow ...`, kept for existing pipelines.
 
 The following global flags work on any command: `--debug`/`-d` turns on verbose diagnostic output, `--json`/`-j` asks for JSON output where the command supports it, `--no-banner`/`-b` suppresses the ASCII logo and banner, and `--insecure`/`-i` accepts self-signed TLS certificates (development only).
 
-Put flags before positional arguments such as the workflow name, artifact name or config key. The CLI stops reading flags at the first positional argument, so a flag placed after it is ignored without an error: `horizon workflow show --output json "$WF_NAME"` prints JSON, but `horizon workflow show "$WF_NAME" --output json` prints text.
+Flags and positional arguments such as the workflow name, artifact name or config key can be given in any order. The CLI parses flags wherever they appear, so `horizon workflow show --output json "$WF_NAME"` and `horizon workflow show "$WF_NAME" --output json` both print JSON.
 
 ### `horizon version`
 
@@ -405,7 +408,7 @@ The lists include runs from every source (portal, API and CLI) that carry a `sub
 Fetches one output artifact of a run. Take the artifact name from the `outputArtifact:` lines that `show` prints. The command has three modes:
 
 - **With no output option**, it downloads the file into the current directory under its original name, showing progress on standard error.
-- **With `-o <path>`**, it writes to that path. With `-stdout`, it writes the bytes to standard output so you can pipe them.
+- **With `-o <path>`**, it writes to that path. With `--stdout`, it writes the bytes to standard output so you can pipe them.
 - **With `--generate-signed-url`**, it prints a time-limited GCS URL instead of downloading, so another tool or person can fetch the file. `--duration <seconds>` asks for a different lifetime, which the server may limit.
 
 Sometimes several steps of one workflow produce an artifact with the same name. The API then reports a conflict, and the CLI automatically picks the last matching step and prints a note saying so. To choose a different step, pass `--node-id` with one of the IDs from that note, or `--template-name` with the step's template.
