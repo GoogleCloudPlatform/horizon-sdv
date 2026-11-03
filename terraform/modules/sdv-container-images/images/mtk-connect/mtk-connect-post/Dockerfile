@@ -22,6 +22,11 @@ RUN echo "deb http://security.debian.org/debian-security bookworm-security main"
     apt update -y && apt upgrade -y && \
     apt install vim curl skopeo jq -y && \
     apt clean && rm -rf /var/lib/apt/lists/*
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-RUN mv /kubectl /usr/local/bin && chmod +x /usr/local/bin/kubectl && chmod +x /root/configure.sh
+# Pin to the GKE 1.34 client already used by the Cloud Workstations workflow image.
+ARG KUBECTL_VERSION=v1.34.12
+RUN curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+    curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" | \
+      awk '{print $1"  /usr/local/bin/kubectl"}' | sha256sum -c - && \
+    chmod +x /usr/local/bin/kubectl && \
+    chmod +x /root/configure.sh
 CMD ["/bin/bash", "-c", "/root/configure.sh"]
