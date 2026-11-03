@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 
 # Build the Cloud Workstations Module controller binary
-FROM --platform=linux/amd64 golang:1.25-alpine AS builder
+FROM --platform=linux/amd64 golang:1.27.2-alpine AS builder
 
 WORKDIR /src
 

@@ -62,7 +62,13 @@ resource "docker_image" "sdv-container-images" {
 
   name = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"
   build {
-    no_cache = true
+    # Reuse finished layers when deploy.sh is run again. triggers still rebuild
+    # the image when the Dockerfile, context, build args, or platform change.
+    # pull_parent refreshes each FROM image so a moved parent tag is not served
+    # from the local Docker cache. An apk/apt upgrade step stays cached until
+    # that instruction or its parent layer changes.
+    no_cache    = false
+    pull_parent = true
 
     context    = local.docker_context[each.key]
     tag        = ["${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"]
