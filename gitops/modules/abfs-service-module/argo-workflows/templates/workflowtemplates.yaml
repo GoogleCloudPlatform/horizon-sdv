@@ -20,7 +20,7 @@ metadata:
   labels:
     app.kubernetes.io/name: smoke-test
     horizon-sdv.io/expose: "true"
-    horizon-sdv.io/module: abfs
+    horizon-sdv.io/module: abfs-service-module
   annotations:
     argocd.argoproj.io/sync-wave: "7"
 spec:
@@ -51,17 +51,33 @@ spec:
     - name: log-parameters
       container:
         image: alpine:3.19
+        # Parameters via env vars, never interpolated into the script.
+        env:
+          - name: ABFS_ENV
+            value: '{{ "{{workflow.parameters.abfsEnv}}" }}'
+          - name: ABFS_BUILD_ID
+            value: '{{ "{{workflow.parameters.abfsBuildId}}" }}'
+          - name: ABFS_NOTE
+            value: '{{ "{{workflow.parameters.abfsNote}}" }}'
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
             echo "WorkflowTemplate: abfs-smoke-test"
-            echo "abfsEnv={{ "{{workflow.parameters.abfsEnv}}" }}"
-            echo "abfsBuildId={{ "{{workflow.parameters.abfsBuildId}}" }}"
-            echo "abfsNote={{ "{{workflow.parameters.abfsNote}}" }}"
+            echo "abfsEnv=${ABFS_ENV}"
+            echo "abfsBuildId=${ABFS_BUILD_ID}"
+            echo "abfsNote=${ABFS_NOTE}"
             echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: echo-and-artifact
       container:
         image: alpine:3.19
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
@@ -76,6 +92,10 @@ spec:
     - name: verify-abfs-service
       container:
         image: alpine:3.19
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         command: [sh, -c]
         args:
           - |
