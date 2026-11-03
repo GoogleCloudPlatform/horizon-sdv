@@ -12,16 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 node:22-alpine
-RUN apk update && apk upgrade && apk add --no-cache bash vim curl jq
-WORKDIR /home/node
-ADD --chown=node:node configure.sh ./
-# Pin to the GKE 1.34 client already used by the Cloud Workstations workflow image.
+FROM --platform=linux/amd64 alpine:3.24
 ARG KUBECTL_VERSION=v1.34.12
-RUN curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+RUN apk upgrade --no-cache && \
+    apk add --no-cache bash && \
+    apk add --no-cache --virtual .build-deps curl && \
+    curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
     curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" | \
       awk '{print $1"  /usr/local/bin/kubectl"}' | sha256sum -c - && \
     chmod +x /usr/local/bin/kubectl && \
-    chmod +x configure.sh
+    apk del .build-deps && \
+    addgroup -g 1000 node && \
+    adduser -u 1000 -G node -s /bin/bash -D node
+WORKDIR /home/node
+COPY --chown=node:node configure.sh ./
+# Legacy builder (Terraform docker provider) does not support COPY --chmod.
+RUN chmod +x configure.sh
 USER node
 CMD ["/bin/bash", "-c", "/home/node/configure.sh"]
