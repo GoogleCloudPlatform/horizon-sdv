@@ -17,6 +17,8 @@ import type { KeycloakTokenParsed } from 'keycloak-js';
 import { config } from './config';
 import { getRouterBasename } from './publicPath';
 
+const PORTAL_ACCESS_COOKIE = 'horizon_portal_access';
+
 const SK_TOKEN = 'kc-devportal-token';
 const SK_REFRESH = 'kc-devportal-refresh';
 const SK_ID = 'kc-devportal-id-token';
@@ -48,6 +50,24 @@ function tokenEndpoint(): string {
 function loginPath(): string {
   const base = getRouterBasename();
   return `${base}/login`;
+}
+
+/**
+ * Mirrors the user access token into a cookie scoped to the Horizon proxy so browser
+ * navigations (embedded Swagger) present the same Keycloak token as fetch() calls.
+ */
+function syncPortalAccessCookie(token: string | undefined): void {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  const path = `${getRouterBasename()}/api/horizon`;
+  const clear = `${PORTAL_ACCESS_COOKIE}=; Path=${path}; Max-Age=0; SameSite=Strict${secure}`;
+  if (!token || token.length > 3800) {
+    document.cookie = clear;
+    return;
+  }
+  const parsed = decodeJwtPayload(token);
+  const exp = typeof parsed?.exp === 'number' ? parsed.exp : 0;
+  const maxAge = exp > 0 ? Math.max(30, exp - Math.floor(Date.now() / 1000)) : 300;
+  document.cookie = `${PORTAL_ACCESS_COOKIE}=${encodeURIComponent(token)}; Path=${path}; Max-Age=${maxAge}; SameSite=Strict${secure}`;
 }
 
 /** Decode JWT payload (no signature verification — display/session use only). */
@@ -91,6 +111,7 @@ class AuthService {
     sessionStorage.removeItem(SK_TOKEN);
     sessionStorage.removeItem(SK_REFRESH);
     sessionStorage.removeItem(SK_ID);
+    syncPortalAccessCookie(undefined);
   }
 
   async init(): Promise<boolean> {
@@ -146,6 +167,7 @@ class AuthService {
       if (this.keycloak.idToken) {
         sessionStorage.setItem(SK_ID, this.keycloak.idToken);
       }
+      syncPortalAccessCookie(this.keycloak.token);
     } else if (!hasCallback) {
       this.clearStoredSession();
     }
@@ -177,6 +199,7 @@ class AuthService {
     if (this.keycloak.idToken) {
       sessionStorage.setItem(SK_ID, this.keycloak.idToken);
     }
+    syncPortalAccessCookie(this.keycloak.token);
   }
 
   /**
@@ -311,6 +334,11 @@ class AuthService {
   getUsername(): string | null {
     const tp = this.keycloak.tokenParsed as Record<string, string> | undefined;
     return tp?.preferred_username ?? tp?.name ?? tp?.sub ?? null;
+  }
+
+  /** Parsed access-token claims for the portal access mock. Display and role resolution only. */
+  getTokenClaims(): Record<string, unknown> {
+    return (this.keycloak.tokenParsed ?? {}) as Record<string, unknown>;
   }
 
   /**

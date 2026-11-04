@@ -18,6 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { buildPortalAccess, identityFromToken } from './src/rbac/portalAccess';
 
 type CliArtifact = {
   os: string;
@@ -136,6 +137,34 @@ function horizonCliDevApi(): Plugin {
   };
 }
 
+/**
+ * Mock GET /api/horizon/v1/portal/access during `npm run dev` when the Go proxy is not
+ * the process answering /api. The production image serves the same contract from the proxy.
+ */
+function portalAccessDevApi(): Plugin {
+  return {
+    name: 'horizon-portal-access-dev-api',
+    configureServer(server) {
+      server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          next();
+          return;
+        }
+        const pathOnly = (req.url ?? '').split('?')[0];
+        if (!pathOnly.endsWith('/api/horizon/v1/portal/access')) {
+          next();
+          return;
+        }
+        const header = req.headers.authorization ?? '';
+        const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
+        const override = req.headers['x-horizon-portal-role'];
+        const roleOverride = Array.isArray(override) ? override[0] : override;
+        sendJson(res, 200, buildPortalAccess(identityFromToken(token), roleOverride));
+      });
+    },
+  };
+}
+
 /** Relative base so the same build can be mounted at any HTTP path (set at runtime via config.js `publicPath`). */
 export default defineConfig({
   base: './',
@@ -165,5 +194,5 @@ export default defineConfig({
       },
     },
   },
-  plugins: [horizonCliDevApi(), react()],
+  plugins: [portalAccessDevApi(), horizonCliDevApi(), react()],
 });

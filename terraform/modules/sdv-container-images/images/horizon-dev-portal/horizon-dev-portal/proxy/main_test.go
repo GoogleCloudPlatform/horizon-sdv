@@ -535,17 +535,10 @@ func TestNewHorizonProxy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ts, log := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-		if call.id != "ci-id" || call.secret != "ci-sec" {
-			http.Error(w, "bad client", http.StatusUnauthorized)
-			return
-		}
-		writeTokenJSON(w, fmt.Sprintf("ci-%d", n), 3600, "", 0)
-	})
-	ci := newCITokenSource(ts.URL, "ci-id", "ci-sec")
 	issuer := newTestOIDC(t)
-	h := newHorizonProxy(upURL, ci, issuer.verifier)
+	h := newHorizonProxy(upURL, issuer.verifier, true)
 	raw := issuer.sign(t, time.Hour)
+	beforeTokens := issuer.tokenHits.Load()
 
 	for _, header := range []string{"", "Basic abc", "Bearer not-a-token"} {
 		rec := httptest.NewRecorder()
@@ -576,8 +569,11 @@ func TestNewHorizonProxy(t *testing.T) {
 	gotCalls := append([]string(nil), calls...)
 	gotAuths := append([]string(nil), auths...)
 	upstreamMu.Unlock()
-	if len(gotAuths) != 1 || gotAuths[0] != "Bearer ci-1" {
+	if len(gotAuths) != 1 || gotAuths[0] != "Bearer "+raw {
 		t.Fatalf("auth %#v", gotAuths)
+	}
+	if issuer.tokenHits.Load() != beforeTokens {
+		t.Fatal("horizon proxy exchanged a client-credentials token")
 	}
 	if gotCalls[0] != "/v1/catalog?q=1#" {
 		t.Fatalf("forwarded %q", gotCalls[0])
@@ -604,38 +600,32 @@ func TestNewHorizonProxy(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/api/horizon/retry", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("retry status %d body %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("upstream 401 status %d body %s", rec.Code, rec.Body.String())
 	}
 	upstreamMu.Lock()
 	gotCalls = append([]string(nil), calls...)
 	gotAuths = append([]string(nil), auths...)
 	upstreamMu.Unlock()
-	if len(gotCalls)-before != 2 {
-		t.Fatalf("retry calls %d", len(gotCalls)-before)
+	if len(gotCalls)-before != 1 {
+		t.Fatalf("401 calls %d", len(gotCalls)-before)
 	}
-	if gotAuths[len(gotAuths)-2] == gotAuths[len(gotAuths)-1] {
-		t.Fatalf("expected a refreshed token, auths %#v", gotAuths[len(gotAuths)-2:])
-	}
-	if grants := log.grants(); len(grants) < 2 {
-		t.Fatalf("grants %#v", grants)
+	if gotAuths[len(gotAuths)-1] != "Bearer "+raw {
+		t.Fatalf("401 auth %q", gotAuths[len(gotAuths)-1])
 	}
 
-	dead := newCITokenSource("http://127.0.0.1:1", "id", "sec")
 	rec = httptest.NewRecorder()
-	silent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("upstream called after token failure")
-	}))
-	defer silent.Close()
-	silentURL, err := url.Parse(silent.URL)
-	if err != nil {
-		t.Fatal(err)
+	req = httptest.NewRequest(http.MethodGet, "/api/horizon/from-cookie", nil)
+	req.AddCookie(&http.Cookie{Name: "horizon_portal_access", Value: raw})
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cookie status %d", rec.Code)
 	}
-	deadReq := httptest.NewRequest(http.MethodGet, "/api/horizon/x", nil)
-	deadReq.Header.Set("Authorization", "Bearer "+raw)
-	newHorizonProxy(silentURL, dead, issuer.verifier).ServeHTTP(rec, deadReq)
-	if rec.Code != http.StatusBadGateway {
-		t.Fatalf("token failure status %d", rec.Code)
+	upstreamMu.Lock()
+	gotAuths = append([]string(nil), auths...)
+	upstreamMu.Unlock()
+	if gotAuths[len(gotAuths)-1] != "Bearer "+raw {
+		t.Fatalf("cookie auth %q", gotAuths[len(gotAuths)-1])
 	}
 
 	rec = httptest.NewRecorder()
@@ -662,9 +652,37 @@ func TestNewHorizonProxy(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	upstreamMu.Lock()
 	lastCall := calls[len(calls)-1]
+	lastAuth := auths[len(auths)-1]
 	upstreamMu.Unlock()
-	if rec.Code != http.StatusOK || lastCall != "/#gone" {
-		t.Fatalf("delete status %d forwarded %q", rec.Code, lastCall)
+	if rec.Code != http.StatusOK || lastCall != "/#gone" || lastAuth != "Bearer "+raw {
+		t.Fatalf("delete status %d forwarded %q auth %q", rec.Code, lastCall, lastAuth)
+	}
+
+	upstreamMu.Lock()
+	beforeAccess := len(calls)
+	upstreamMu.Unlock()
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/horizon/v1/portal/access", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set(portalRoleOverrideHeader, "admin")
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"role":"admin"`) || !strings.Contains(rec.Body.String(), `"mock":true`) {
+		t.Fatalf("access status %d body %s", rec.Code, rec.Body.String())
+	}
+	upstreamMu.Lock()
+	afterAccess := len(calls)
+	upstreamMu.Unlock()
+	if afterAccess != beforeAccess {
+		t.Fatal("mock access endpoint called Horizon API")
+	}
+
+	forward := newHorizonProxy(upURL, issuer.verifier, false)
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/horizon/v1/portal/access", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	forward.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "upstream:" {
+		t.Fatalf("forwarded access status %d body %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -683,12 +701,9 @@ func TestNewHorizonProxyDocsPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts, _ := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-		writeTokenJSON(w, fmt.Sprintf("ci-%d", n), 3600, "", 0)
-	})
-	ci := newCITokenSource(ts.URL, "ci-id", "ci-sec")
 	issuer := newTestOIDC(t)
-	h := newHorizonProxy(upURL, ci, issuer.verifier)
+	h := newHorizonProxy(upURL, issuer.verifier, true)
+	raw := issuer.sign(t, time.Hour)
 
 	for _, path := range []string{"/api/horizon/swagger", "/api/horizon/openapi.json", "/api/horizon/swagger/"} {
 		rec := httptest.NewRecorder()
@@ -700,8 +715,30 @@ func TestNewHorizonProxyDocsPaths(t *testing.T) {
 	gotMu.Lock()
 	auth := gotAuth
 	gotMu.Unlock()
-	if auth != "Bearer ci-1" {
-		t.Fatalf("docs forwarded with CI token %q", auth)
+	if auth != "" {
+		t.Fatalf("anonymous docs forwarded with auth %q", auth)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/horizon/swagger", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("authed docs status %d", rec.Code)
+	}
+	gotMu.Lock()
+	auth = gotAuth
+	gotMu.Unlock()
+	if auth != "Bearer "+raw {
+		t.Fatalf("authed docs forwarded %q", auth)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/horizon/openapi.json", nil)
+	req.Header.Set("Authorization", "Bearer not-a-token")
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid docs bearer status %d", rec.Code)
 	}
 }
 
@@ -1196,11 +1233,26 @@ func TestProxyMainSmoke(t *testing.T) {
 	haMu.Lock()
 	gotHAAuth := haAuth
 	haMu.Unlock()
-	if gotHAAuth != "Bearer smoke-access" {
+	if gotHAAuth != "Bearer "+raw {
 		t.Fatalf("horizon auth %q", gotHAAuth)
 	}
-	if issuer.tokenHits.Load() <= before {
-		t.Fatal("main did not call the derived token endpoint")
+	if issuer.tokenHits.Load() != before {
+		t.Fatal("main exchanged a client-credentials token for Horizon API")
+	}
+
+	accReq, err := http.NewRequest(http.MethodGet, base+"/api/horizon/v1/portal/access", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accReq.Header.Set("Authorization", "Bearer "+raw)
+	accResp, err := client.Do(accReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accBody, _ := io.ReadAll(accResp.Body)
+	accResp.Body.Close()
+	if accResp.StatusCode != http.StatusOK || !strings.Contains(string(accBody), `"role":"developer"`) || !strings.Contains(string(accBody), "Open Admin applications") {
+		t.Fatalf("portal access %d %s\n%s", accResp.StatusCode, accBody, logs.String())
 	}
 }
 

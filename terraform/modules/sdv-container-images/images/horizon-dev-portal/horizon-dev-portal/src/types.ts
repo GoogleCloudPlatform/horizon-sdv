@@ -21,7 +21,10 @@ export interface AppConfig {
   publicPath?: string;
   keycloakUrl?: string;
   keycloakClientId?: string;
-  /** Keycloak OAuth client id used for client-credentials calls to Horizon API via this app's proxy (not the SPA login client). */
+  /**
+   * Legacy display value. Horizon API calls use the signed-in user's Keycloak token;
+   * the proxy does not swap in this client.
+   */
   horizonApiOAuthClientId?: string;
   /** Horizon platform version from versions.yaml (components.horizoncore), served by the proxy from HORIZON_VERSION. */
   horizonVersion?: string;

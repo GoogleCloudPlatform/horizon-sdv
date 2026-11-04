@@ -83,14 +83,11 @@ func parseJWTExpiry(accessToken string) (time.Time, bool) {
 func main() {
 	addr := env("LISTEN_ADDR", ":8080")
 	issuer := mustEnv("OIDC_ISSUER_URL")
-	tokenURL := env("KEYCLOAK_TOKEN_URL", "")
-	if tokenURL == "" {
-		tokenURL = strings.TrimSuffix(issuer, "/") + "/protocol/openid-connect/token"
-	}
 	mmBase := mustEnv("MODULE_MANAGER_BASE_URL")
 	haBase := mustEnv("HORIZON_API_BASE_URL")
-	ciID := mustEnv("HORIZON_API_CI_CLIENT_ID")
-	ciSecret := mustEnv("HORIZON_API_CI_CLIENT_SECRET")
+	// Display-only. Horizon API calls use the signed-in user's Keycloak token.
+	ciID := env("HORIZON_API_CI_CLIENT_ID", "")
+	mockAccess := !strings.EqualFold(env("PORTAL_ACCESS_MOCK", "true"), "false")
 
 	ctx := context.Background()
 	provider, err := oidc.NewProvider(ctx, issuer)
@@ -101,7 +98,6 @@ func main() {
 
 	mmURL := mustParseURL(mmBase)
 	haURL := mustParseURL(haBase)
-	ci := newCITokenSource(tokenURL, ciID, ciSecret)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +109,7 @@ func main() {
 	})
 	mux.Handle("/api/mm/", newMMProxy(mmURL, verifier))
 	var cliVer bearerVerifier = oidcBearerVerifier{inner: verifier}
-	mux.Handle("/api/horizon/", newHorizonProxy(haURL, ci, verifier))
+	mux.Handle("/api/horizon/", newHorizonProxy(haURL, verifier, mockAccess))
 	registerCLIRoutes(mux, env("CLI_DIST_DIR", "/cli-dist"), cliVer)
 	mux.Handle("/", spaHandler(htmlBaseTagHref(normalizePublicPath(env("PUBLIC_PATH", "")))))
 
@@ -229,6 +225,24 @@ func bearerToken(r *http.Request) (string, error) {
 	return t, nil
 }
 
+// userBearer is the caller's Keycloak access token. Fetch sends Authorization.
+// The Swagger iframe cannot set that header, so the SPA also mirrors the same token
+// into a SameSite cookie scoped to /api/horizon.
+func userBearer(r *http.Request) (string, error) {
+	if raw, err := bearerToken(r); err == nil {
+		return raw, nil
+	}
+	c, err := r.Cookie("horizon_portal_access")
+	if err != nil {
+		return "", fmt.Errorf("missing bearer")
+	}
+	v, err := url.QueryUnescape(strings.TrimSpace(c.Value))
+	if err != nil || v == "" {
+		return "", fmt.Errorf("missing bearer")
+	}
+	return v, nil
+}
+
 func newMMProxy(upstream *url.URL, verifier *oidc.IDTokenVerifier) http.Handler {
 	rp := httputil.NewSingleHostReverseProxy(upstream)
 	rp.Director = func(req *http.Request) {
@@ -254,8 +268,8 @@ func newMMProxy(upstream *url.URL, verifier *oidc.IDTokenVerifier) http.Handler 
 	})
 }
 
-// retryCI401Transport retries GET/HEAD after upstream 401: ci.invalidate() then ci.get() prefers
-// refresh_token (if Keycloak issued one), else client_credentials.
+// retryCI401Transport retries GET/HEAD after upstream 401 by refreshing a client-credentials token.
+// The Horizon proxy does not install it. Horizon API receives the caller's Keycloak token.
 type retryCI401Transport struct {
 	rt http.RoundTripper
 	ci *ciTokenSource
@@ -323,11 +337,13 @@ func isHorizonDocsPath(path string) bool {
 	return false
 }
 
-// newHorizonProxy forwards to Horizon API with the confidential CI client (K8s secret).
-// The caller must present a valid user bearer (same check as newMMProxy) before the CI swap.
-func newHorizonProxy(upstream *url.URL, ci *ciTokenSource, verifier *oidc.IDTokenVerifier) http.Handler {
+// newHorizonProxy verifies the caller's Keycloak token and forwards that same token.
+// It does not exchange the token for the horizon-api-ci client.
+// Swagger and OpenAPI stay reachable without a bearer, matching the embedded docs iframe.
+// When a user token is present on those paths it is verified and forwarded.
+// mockAccess serves GET /v1/portal/access locally.
+func newHorizonProxy(upstream *url.URL, verifier *oidc.IDTokenVerifier, mockAccess bool) http.Handler {
 	rp := httputil.NewSingleHostReverseProxy(upstream)
-	rp.Transport = &retryCI401Transport{rt: http.DefaultTransport, ci: ci}
 	// Chunked NDJSON log streams: periodic flush so the browser sees lines without buffering the whole body.
 	rp.FlushInterval = 100 * time.Millisecond
 	rp.Director = func(req *http.Request) {
@@ -340,27 +356,36 @@ func newHorizonProxy(upstream *url.URL, ci *ciTokenSource, verifier *oidc.IDToke
 		}
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isHorizonDocsPath(r.URL.Path) {
-			raw, err := bearerToken(r)
+		docs := isHorizonDocsPath(r.URL.Path)
+		raw, err := userBearer(r)
+		var idToken *oidc.IDToken
+		if err == nil {
+			idToken, err = verifier.Verify(r.Context(), raw)
 			if err != nil {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
-			if _, err := verifier.Verify(r.Context(), raw); err != nil {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-		}
-		tok, err := ci.get(r.Context())
-		if err != nil {
-			http.Error(w, "token exchange failed", http.StatusBadGateway)
+		} else if !docs {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		r2 := r.Clone(r.Context())
-		r2.Header.Del("Authorization")
-		r2.Header.Set("Authorization", "Bearer "+tok)
+		upstreamPath := strings.TrimPrefix(r.URL.Path, "/api/horizon")
+		if upstreamPath == "" {
+			upstreamPath = "/"
+		}
+		if idToken != nil && mockAccess && r.Method == http.MethodGet && (upstreamPath == portalAccessPath || upstreamPath == portalAccessPath+"/") {
+			writePortalAccess(w, r, idToken)
+			return
+		}
 
-		// Allow retryCI401Transport to replay POST/PUT/PATCH/DELETE after refreshing the CI token (same as GET catalog).
+		r2 := r.Clone(r.Context())
+		if r2.Header == nil {
+			r2.Header = make(http.Header)
+		}
+		if idToken != nil {
+			r2.Header.Set("Authorization", "Bearer "+raw)
+		}
+
 		if r2.Body != nil && (r2.Method == http.MethodPost || r2.Method == http.MethodPut || r2.Method == http.MethodPatch || r2.Method == http.MethodDelete) {
 			const maxBody = 4 << 20
 			b, err := io.ReadAll(io.LimitReader(r2.Body, maxBody+1))
