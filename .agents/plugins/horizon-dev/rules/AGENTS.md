@@ -30,6 +30,8 @@ limitations under the License. -->
 
 4. **Git Branching & Pull Requests**:
    - Follow `docs/contributing.md` and `docs/branching_strategy.md`. Read them before creating a branch or pull request.
+   - External contribution branches must be named **`contrib/feature/<title>`** or **`contrib/fix/<title>`** (internal: `feature/<ticketID>-<title>` or `fix/<ticketID>-<title>`); use `__` for multi-part changes.
+   - All PRs must target **`main`**, and all commits must be signed.
 
 5. **Module Naming & Identification**:
    - Module identifiers must be strictly lowercase kebab-case (`^[a-z0-9-]+$`).

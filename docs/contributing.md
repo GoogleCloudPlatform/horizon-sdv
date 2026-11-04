@@ -38,25 +38,67 @@ This requirement ensures that contributors have first-hand experience with the d
 
 * **Follow the Deployment Guide:** Refer to the [Deployment Guide](deployment_guide.md) to set up your own environment.
 * **Verify your Instance:** Ensure your deployment is healthy and that you can access the core services before beginning your development work.
-* **Local Testing:** Use your deployed instance to test your changes. We generally require proof that your changes have been successfully applied and verified in a live environment.
+* **Test on your Instance:** Use your deployed instance to test your changes. We generally require proof that your changes have been successfully applied and verified in a live environment. For a change to a single module, you can pin that module to your branch from **Administration → Modules** in the Developer Portal; see [Change git ref in developer portal](architecture/05_creating-modules.md#change-git-ref-in-developer-portal).
 
-## **Pull Request Workflow & Release Cycle**
+## **Branches and Pull Requests**
 
-Horizon SDV follows a structured release cycle. To maintain quality and compatibility, we manage contributions by incorporating them into specific future releases.
+Horizon SDV uses a single permanent branch, `main`. All changes, however small, are developed on a branch and merged to `main` through a reviewed Pull Request. The full process is described in the [Git Branching Strategy](branching_strategy.md); the rules that apply to external contributors are summarised here.
 
-### **How to Submit a PR**
+* **Fork:** Unless you have write access to the Horizon SDV repository, [fork it](https://docs.github.com/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) and work on a branch in your fork.
+* **Target branch:** Create your branch from an up-to-date `main` and raise your Pull Request against `main` of the Horizon SDV repository.
+* **Branch name:** Use `contrib/feature/<title>` for features and `contrib/fix/<title>` for fixes, for example `contrib/fix/BuildManifestError`. For a change with multiple parts, separate the part with `__`, for example `contrib/feature/CustomBuildManifest__ParamCreation`. Use these names in your fork too; the Horizon SDV repository rejects any other branch name.
+* **Trivial changes:** Typo and documentation fixes follow the same process, using a `contrib/fix/<title>` branch.
+* **Signed commits:** All commits must be signed.
+* **Rebase:** Rebase your branch against `main` before final testing and again if `main` moves on before approval, so that what you tested is exactly what will land on `main`.
+* **Draft first:** Open the Pull Request as a draft early, and mark it *Ready for review* once testing is complete.
 
-* **Targeting Releases:** When you open a Pull Request, please indicate which feature set or fix you are addressing.
-* **Communication:** Our maintainers will review your PR and determine the appropriate release version for your changes. We will communicate this target release directly within the PR thread.
-* **Testing:** Please provide logs, screenshots, or testing steps performed on your self-deployed instance to demonstrate that your changes work as expected. Alternatively, a virtual meet can be scheduled to walk through your changes.
+### **Pull Request contents**
+
+The Pull Request title and description become the commit message on `main` (changes are squash merged), so complete the [Pull Request template](../.github/pull_request_template.md) carefully:
+
+* **Title:** names the feature or fix.
+* **Purpose and Concise Description:** why the change is needed and what it does.
+* **Dependencies:** any hard or soft dependencies, or N/A.
+* **Open Source Component Changes:** any open source components added, updated or modified, with the reason, or N/A.
+* **Suggested Release Note:** wording for the release notes.
+* **Testing:** logs, screenshots, or testing steps performed on your self-deployed instance, posted as a PR comment. Alternatively, a virtual meet can be scheduled to walk through your changes.
+
+### **Review and release cycle**
+
+* **Reviewers:** Each Pull Request is reviewed by at least one Code Owner, one Release Manager, and one reviewer who checks the functioning of the change.
+* **Target release:** Our maintainers will determine the appropriate release version for your changes and communicate it in the PR thread.
+* **Release freeze:** While a release branch (`rel/<X>.<Y>.<Z>`) is open, new changes are not merged to `main`. A Pull Request raised during a release may wait until the release is complete and need another rebase before approval.
+
+### **Copyright headers**
+
+Every new source file needs a copyright header naming you or your employer, followed by the Apache 2.0 licence notice. Match the comment style of the file type, for example:
+
+```yaml
+# Copyright (c) 2026 <Your Name or Company>, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+```
 
 ## **Contribution Checklist**
 
 When submitting a Pull Request, confirm the following:
 
 * [ ] I have deployed Horizon SDV on my own GCP project.
-* [ ] I have tested my changes on my deployed instance.
-* [ ] My PR description clearly states the purpose of the change.
+* [ ] I have tested my changes on my deployed instance, after rebasing on `main`.
+* [ ] My branch is named `contrib/feature/<title>` or `contrib/fix/<title>` and targets `main`.
+* [ ] All my commits are signed.
+* [ ] I have completed the Pull Request template, and posted testing evidence as a comment.
+* [ ] New files carry a copyright header and the Apache 2.0 licence notice.
 * [ ] I understand that my PR will be reviewed and assigned to a specific Horizon SDV release cycle.
 
 ## **Getting Help**
@@ -66,83 +108,25 @@ If you encounter issues during your initial deployment or have questions about t
 * Review the [Troubleshooting](deployment_guide.md#section-6---troubleshooting) section in the documentation.
 * Reach out to the team at [horizon-sdv@google.com](mailto:horizon-sdv@google.com) for consultation regarding setup or specific technical blockers.
 
-# **Contribution process**
+# **Partner Contributions**
 
-## **Code Reviews**
+To further enhance Horizon project capabilities and foster a collaborative ecosystem, partners can contribute external tools, components, and integrations to the Horizon SDV repository. Partner contributions follow the same branch and Pull Request process as any other contribution.
 
-All submissions, including submissions by project members, require review. We use [GitHub pull requests](https://docs.github.com/articles/about-pull-requests) for this purpose.
+## **Where contributions go**
 
-# **Github Collaboration Rules For External Contributors**
-
-*  Pull Requests that contain functionality changes shall be raised against branch “devel” [GitHub \- GoogleCloudPlatform/horizon-sdv at devel](https://github.com/GoogleCloudPlatform/horizon-sdv/tree/devel) . Pull Requests raised against branch “main” [GitHub \- GoogleCloudPlatform/horizon-sdv](https://github.com/GoogleCloudPlatform/horizon-sdv/tree/main) will be considered as a mistake and shall be rebased onto branch “devel”.  
-* Functionality changes branches shall follow a naming convention “contrib/\*”. Trivial changes that don’t impact the functionality can be contributed as regular commits.
-
-**Partner Contribution Repository Integration Rules**
-
-To further enhance Horizon project capabilities and foster a collaborative ecosystem, we outline strategies for effectively integrating contributions from partners into the Horizon SDV repository. The goal is to ensure that external tools, components, and integrations can be incorporated seamlessly, maintaining the project’s modularity while clearly separating core Horizon efforts from partner contributions.
-
-## **Proposed Contribution Structure**
-
-The top-level directory structure for external contributions:
-
-* The third\_party/ directory will be specifically reserved for dependencies that cannot be licensed under Apache 2.0.  
-* The partner/ directory serves as a dedicated location for all partner-specific contributions. Each partner will have a named subfolder within this directory (e.g., partner/\<partner\_name\>/\<solution\_name\>/).
-
-Contributions are also expected in other functional areas within the Horizon SDV repository, such as workloads/android/pipelines.
-
-partner/\<partner\_name\>/ **Structure**
-
-Within each partner/\<partner\_name\>/\<solution\_name\>/ directory, contributions are expected to be organized logically by their functional domain. While the specific subfolder structure within a partner’s directory can be flexible, common categories will include:
-
-### **Virtual Device Contributions**
-
-**Purpose:** To encompass contributions related to virtual device environments provided by a specific partner.
-
-**Examples:**
-
-*  partner/\<partner\_name\>/\<solution\_name\>/virtual\_devices/targets/: Configurations for new Android launch targets or specific virtual hardware configurations introduced by the partner (e.g., custom Cuttlefish configurations, unique Android Virtual Devices).  
-* partner/\<partner\_name\>/\<solution\_name\>/virtual\_devices/emulators/: Custom emulator images, specific configurations for various virtual device types, or scripts for launching and managing bespoke virtual device environments.
-
-To better organize partner-specific virtual device configurations, a virtual\_vendor directory will be introduced within the partner’s virtual device contributions. For example, specific QEMU configurations and instance configurations from SOC vendors would reside in
-
-partner/\<partner\_name\>/\<solution\_name\>/virtual\_devices/virtual\_vendor/.
-
-### **CI/CT Integrations**
-
-**Purpose:** For extensions and integrations with the CI/CT toolchain specific to a partner’s offerings.
-
-**Examples:**
-
-* partner/\<partner\_name\>/\<solution\_name\>/ci\_ct\_integrations/ci\_addons/: Custom CI addons or Groovy scripts that contribute to existing build and test pipelines relevant to the partner.  
-* partner/\<partner\_name\>/\<solution\_name\>/ci\_ct\_integrations/gitops\_addons/: Custom Argo CD applications, specialized sync hooks for partner-specific GitOps flows.  
-* partner/\<partner\_name\>/\<solution\_name\>/ci\_ct\_integrations/workflow\_templates/: Reusable workflow templates that encapsulate common partner-specific CI/CT patterns.
-
-### **Infrastructure Modules**
-
-**Purpose:** For Infrastructure as Code (IaC) components that provision partner-specific infrastructure.
-
-**Examples:**
-
-* partner/\<partner\_name\>/\<solution\_name\>/infrastructure\_modules/gcp\_resources/: Terraform modules for new Google Cloud Platform (GCP) services or custom configurations that support partner workflows.
-
-### **License Terms & Files**
-
-**Purpose:** For specialized license terms and trial license files that need to be included or populated in pre-deployment steps
-
-**Examples:**
-
-*  partner/\<partner\_name\>/\<solution\_name\>/LICENSE: For specific LICENSE terms need to be stated \- type of software etc  
-* partner/\<partner\_name\>/\<solution\_name\>/license.json: For pre-canned trial licenses or as placeholder to retrieve a trial license from the partner.
+* **Modules:** New capabilities are contributed as Horizon modules. A module is a Helm chart under `gitops/modules/<name>/`, registered in the `ModuleCatalog` (`gitops/apps/module-manager/templates/module-catalog.yaml`), that can be enabled and disabled from **Administration → Modules** without affecting the rest of the platform. Follow [How to create a new module](architecture/05_creating-modules.md), including its checklist. For the concepts behind modules, see the [Horizon modules overview](architecture/01_overview.md).
+* **Workload pipelines:** Workflow definitions, scripts, and images that a module deploys live under `workloads/<area>/`, for example `workloads/android/pipelines`.
+* **Third-party licences:** The `third_party/` directory is reserved for dependencies that cannot be licensed under Apache 2.0. Put their licence terms, and any trial licence files needed before deployment (for example `license.json`), in `third_party/<vendor>/<component>/`.
 
 ## **Key Integration Principles**
 
 ### **Clear and Comprehensive Documentation**
 
-Every contribution must include thorough and concise README.md files within its respective subfolder. Documentation should detail the component’s purpose, prerequisites, usage instructions, and clearly identify its integration points within the broader Horizon SDV framework.
+Every contribution must include thorough and concise README.md files within its respective subfolder. Documentation should detail the component’s purpose, prerequisites, usage instructions, and clearly identify its integration points within the broader Horizon SDV framework. A module also provides an overview page, shown on its tab in the Developer Portal.
 
 ### **Modularity and Self-Containment**
 
-Contributions should be designed as modular, self-contained units, ensuring easy integration and subsequent removal or updating without breaking core functionalities of Horizon core.
+Contributions should be designed as modular, self-contained units that can be enabled, disabled, and updated without breaking core functionalities of Horizon core. Declare dependencies on other modules in the `ModuleCatalog` rather than assuming they are present, and expose only the workflow templates and applications intended for users.
 
 ### **Prioritize Configuration over Custom Code**
 
