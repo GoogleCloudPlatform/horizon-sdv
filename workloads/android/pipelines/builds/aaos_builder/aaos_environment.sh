@@ -215,6 +215,19 @@ if [ -d "${AAOS_CACHE_DIRECTORY}" ]; then
                     USAGE=$(df -h "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print "Used " $3 " of " $2}')
                     echo "WARNING: Insufficient disk space - ${USED_PERCENTAGE}% (${USAGE})"
 
+                    # Builds written a real "out/" while OUT_DIR was unset. It is not a
+                    # per-target cache, and it is newer than the out_sdv-* trees, so the
+                    # oldest-directory search below never selects it. -type d does not
+                    # match the arm64 "out" symlink, so this does not follow that link
+                    # into out_sdv-<target>.
+                    ORPHAN_OUT=$(find "${AAOS_CACHE_DIRECTORY}"/aaos_builds* -mindepth 1 -maxdepth 1 \
+                        -type d -name 'out' -print -quit 2>/dev/null || true)
+                    if [ -n "${ORPHAN_OUT}" ]; then
+                        echo "WARNING: Removing orphaned ${ORPHAN_OUT} ..."
+                        find "${ORPHAN_OUT}" -delete
+                        continue
+                    fi
+
                     # List the oldest target directory (exclude current lunch target)
                     OLDEST_DIR=$(find "${AAOS_CACHE_DIRECTORY}"/aaos_builds* -mindepth 1 -maxdepth 1 -type d -name 'out_sdv*' ! -name "out_sdv-${AAOS_LUNCH_TARGET}" -exec ls -drt {} + | head -1)
                     if [ -z "${OLDEST_DIR}" ]; then
@@ -813,8 +826,8 @@ function create_workspace() {
     cd "${WORKSPACE}" || true
 
     if [[ "${ABFS_BUILDER}" == "false" ]]; then
-        # TAA-2378: a dangling "out" symlink left behind by an earlier TAA-1095
-        # run makes Soong's "mkdir out" fail for every later build on this
+        # A dangling "out" symlink left behind by any previous build
+        # makes Soong's "mkdir out" fail for every later build on this
         # cache volume, whatever the target or AAOS_CLEAN mode. Drop it.
         if [[ -L out && ! -e out ]]; then
             echo "Removing dangling out symlink -> $(readlink out)"
