@@ -33,7 +33,7 @@ licenseSecretName: abfs-license
 # Jobs need gcloud + kubectl. Use debian_component_based so kubectl can be
 # installed at runtime (google-cloud-cli:stable does not ship kubectl).
 jobServiceAccountName: workflow-executor-elevated
-cloudSdkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based
+# cloudSdkImage is set by the abfs-data-module Application.
 
 # KCC StorageBucket — parent sets bucketResourceID (<projectID>-abfs) and location.
 gcs:

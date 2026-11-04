@@ -55,6 +55,7 @@ spec:
           statusConfigMapName: abfs-license-metadata-status
           workflowsNamespace: {{ .Values.config.namespacePrefix }}workflows
           jobServiceAccountName: workflow-executor-elevated
+          cloudSdkImage: {{ .Values.license.validation.image | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.abfsNamespace }}

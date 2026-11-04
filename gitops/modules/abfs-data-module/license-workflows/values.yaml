@@ -42,5 +42,4 @@ mainEnv: true
 # WI → gke-argo-workflows-elevated-sa (kubectl delete ContainerNodePool; Secret patch).
 jobServiceAccountName: workflow-executor-elevated
 
-# google-cloud-cli image (gcloud + kubectl via debian_component_based).
-cloudSdkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based
+# cloudSdkImage is set by the abfs-data-module Application.

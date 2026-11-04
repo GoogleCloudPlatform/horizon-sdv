@@ -37,7 +37,7 @@ spanner:
 # IAM policy on a service account or a Spanner instance.
 jobServiceAccountName: workflow-executor-elevated
 
-cloudSdkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based
+# cloudSdkImage is set by the abfs-data-module Application.
 
 # Sub-environments reuse the main environment's account and workflows.
 mainEnv: true

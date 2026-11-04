@@ -92,7 +92,7 @@ spec:
         # Read the active uploader row before waiting for the server.
         # Uploader ConfigMap is in another namespace, so this container loads it with kubectl.
         - name: select-uploader-config
-          image: {{ .Values.license.validation.image | quote }}
+          image: {{ required "license.validation.image is set by the abfs-service-module Application" .Values.license.validation.image | quote }}
           imagePullPolicy: IfNotPresent
           securityContext:
             {{- toYaml .Values.restrictedSecurityContext | nindent 12 }}
@@ -112,6 +112,10 @@ spec:
           command: ["/bin/bash", "-euo", "pipefail", "-c"]
           args:
             - |
+              # google-cloud-cli images since SDK 592 have no python3 on PATH; use the one bundled with gcloud.
+              if ! command -v python3 >/dev/null 2>&1; then
+                export PATH="$(dirname "$(gcloud info --format='value(basic.python_location)')"):${PATH}"
+              fi
               if ! command -v kubectl >/dev/null 2>&1; then
                 echo "Installing kubectl (gcloud components)..."
                 gcloud components install kubectl --quiet

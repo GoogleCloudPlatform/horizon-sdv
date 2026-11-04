@@ -51,7 +51,7 @@ spec:
           - name: licensePayload
             value: "{{ "{{workflow.parameters.licensePayload}}" }}"
       container:
-        image: {{ .Values.cloudSdkImage | quote }}
+        image: {{ required "cloudSdkImage is set by the abfs-data-module Application" .Values.cloudSdkImage | quote }}
         imagePullPolicy: IfNotPresent
         env:
           - name: HORIZON_NAMESPACE
@@ -113,7 +113,7 @@ spec:
           - name: confirm
             value: "{{ "{{workflow.parameters.confirm}}" }}"
       container:
-        image: {{ .Values.cloudSdkImage | quote }}
+        image: {{ required "cloudSdkImage is set by the abfs-data-module Application" .Values.cloudSdkImage | quote }}
         imagePullPolicy: IfNotPresent
         env:
           - name: HORIZON_NAMESPACE
