@@ -37,7 +37,6 @@ source "$(dirname "${BASH_SOURCE[0]}")"/aaos_environment.sh "$0"
 if [ -n "${AAOS_MAKE_CMDLINE}" ]; then
     # Set environment variables and build target
     # shellcheck disable=SC1091
-    unset OUT_DIR
     alias python=python3
     source build/envsetup.sh
     #  if ! lunch "${AAOS_LUNCH_TARGET}"
