@@ -813,10 +813,20 @@ function create_workspace() {
     cd "${WORKSPACE}" || true
 
     if [[ "${ABFS_BUILDER}" == "false" ]]; then
-        if [[ "${AAOS_LUNCH_TARGET}" =~ "aosp_cf_arm64" ]]; then
-            # TAA-1095 workaround
-            BUG_FIX="rm -rf out && ln -sf ${OUT_DIR} out"
-            echo -e "\033[1;31mTAA-1095: workaround for Android 16 OUT_DIR issue:\033[0m"
+        # TAA-2378: a dangling "out" symlink left behind by an earlier TAA-1095
+        # run makes Soong's "mkdir out" fail for every later build on this
+        # cache volume, whatever the target or AAOS_CLEAN mode. Drop it.
+        if [[ -L out && ! -e out ]]; then
+            echo "Removing dangling out symlink -> $(readlink out)"
+            rm -f out
+        fi
+        if [[ "${AAOS_LUNCH_TARGET}" =~ "aosp_cf_arm64" && "${OUT_DIR}" != "out" ]]; then
+            # TAA-1095 workaround: aosp_cf_arm64 build steps write to ./out
+            # regardless of OUT_DIR, so point out at OUT_DIR. Create OUT_DIR
+            # first, otherwise the link is dangling until Soong creates it
+            # and Soong refuses to create a directory over a symlink (TAA-2378).
+            BUG_FIX="mkdir -p ${OUT_DIR} && rm -rf out && ln -sfn ${OUT_DIR} out"
+            echo -e "\033[1;31mTAA-1095: workaround for aosp_cf_arm64 OUT_DIR issue:\033[0m"
             echo "${BUG_FIX}"
             eval "${BUG_FIX}"
         fi
