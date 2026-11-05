@@ -51,6 +51,8 @@ Four child Applications (main environment only; skipped for sub-environments):
 | `mod-abfs-data-uploader-config` | `uploader-config/` | ConfigMap `abfs-uploader-config` (manifest table), WorkflowTemplate `abfs-uploader-config-select` + Sensor |
 | `mod-abfs-data-spanner-workflows` | `spanner-workflows/` | WorkflowTemplate `abfs-spanner-backup-schedule` + Sensor |
 
+The parent Application also creates the namespace `abfs` (`abfsNamespace`) before the child Applications (sync-wave -1): `license-workflows` and `uploader-config` deploy RBAC into it. The namespace is shared with `abfs-service-module` and is annotated `Prune=false,Delete=false`: disabling abfs-data does not delete it.
+
 ### Resources (`{prefix}horizon`)
 
 | Resource | Name / ID | On disable |
