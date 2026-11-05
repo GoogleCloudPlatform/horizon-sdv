@@ -67,6 +67,8 @@ import * as React from 'react';
 import { ToolsPage } from './pages/ToolsPage.tsx';
 import HorizonCliTab from './pages/tools/HorizonCliTab.tsx';
 import HorizonApiTab from './pages/tools/HorizonApiTab.tsx';
+import { AccessProvider } from './rbac/AccessProvider';
+import { YourAccessButton } from './rbac/YourAccess';
 
 const drawerWidth = 260;
 
@@ -254,6 +256,7 @@ function ShellLayout() {
               Horizon Developer Portal
             </Typography>
           </Box>
+          <YourAccessButton />
           <Typography variant="body2" sx={{ mr: 2, display: { xs: 'none', sm: 'block' } }}>
             {authService.getUsername()}
           </Typography>
@@ -364,7 +367,9 @@ export default function App() {
           <Route
             element={
               <RequireAuth>
-                <ShellLayout />
+                <AccessProvider>
+                  <ShellLayout />
+                </AccessProvider>
               </RequireAuth>
             }
           >
