@@ -13,16 +13,23 @@ You must follow this workflow sequentially without requiring human intervention 
 
 ## 0. Bootstrap SHA-256 Verified `trace_processor` (`v59.1`) & Stage Trace from GCS
 
-1. **Bootstrap & Verify `trace_processor` (`v59.1`)**:
-   Download the official Google Perfetto `v59.1` `trace_processor` wrapper (pinned to commit `f5cb5074e59208ec89c65aeeed53cc9cf6204cd5`) into `/tmp/perfetto-traces/bin/trace_processor` and verify its SHA-256 checksum before executing. On first invocation, `trace_processor` automatically downloads and verifies the platform `trace_processor_shell` binary against its built-in SHA-256 manifest (`2434129a3af4dc9e2034a476f7b76447b490975213e301769310d3bd0d5d6458` for `linux-amd64`):
+1. **Bootstrap & Verify `trace_processor` (`v59.1` Release Tag)**:
+   Download the official Google Perfetto `v59.1` release binary directly from Google's Perfetto release bucket into `/tmp/perfetto-traces/bin/trace_processor` and verify its SHA-256 checksum (`2434129a3af4dc9e2034a476f7b76447b490975213e301769310d3bd0d5d6458`) with explicit failure handling before marking it executable:
 
    ```bash
+   set -euo pipefail
+   PERFETTO_VERSION="v59.1"
+   PERFETTO_SHA256="2434129a3af4dc9e2034a476f7b76447b490975213e301769310d3bd0d5d6458"
    mkdir -p /tmp/perfetto-traces/bin
    export PATH="/tmp/perfetto-traces/bin:$PATH"
    if [ ! -x /tmp/perfetto-traces/bin/trace_processor ]; then
-     curl -fsSL "https://raw.githubusercontent.com/google/perfetto/f5cb5074e59208ec89c65aeeed53cc9cf6204cd5/tools/trace_processor" \
+     curl -fsSL "https://commondatastorage.googleapis.com/perfetto-luci-artifacts/${PERFETTO_VERSION}/linux-amd64/trace_processor_shell" \
        -o /tmp/perfetto-traces/bin/trace_processor
-     echo "f4acbe5388d8e5d9f3aac9c509026902a1cf6e50ad0b888bdba9acc12b83d886  /tmp/perfetto-traces/bin/trace_processor" | sha256sum -c -
+     if ! echo "${PERFETTO_SHA256}  /tmp/perfetto-traces/bin/trace_processor" | sha256sum -c -; then
+       rm -f /tmp/perfetto-traces/bin/trace_processor
+       echo "ERROR: SHA-256 checksum verification failed for Perfetto ${PERFETTO_VERSION}." >&2
+       exit 1
+     fi
      chmod +x /tmp/perfetto-traces/bin/trace_processor
    fi
    trace_processor --version
@@ -34,10 +41,19 @@ You must follow this workflow sequentially without requiring human intervention 
      ```bash
      gcloud storage ls -l "gs://<bucket-name>/<optional-prefix>"
      ```
-   - Stage the target trace into `/tmp/perfetto-traces/` and verify its size and checksum:
+   - Stage the target trace into `/tmp/perfetto-traces/`, enforce the **1 GB (`1073741824` bytes) maximum trace size limit**, and compute its SHA-256 checksum:
      ```bash
-     gcloud storage cp "gs://<bucket-name>/path/to/<trace-file>" /tmp/perfetto-traces/
-     ls -lh "/tmp/perfetto-traces/<trace-file>"
+     set -euo pipefail
+     MAX_TRACE_BYTES=1073741824  # 1 GB max trace size limit
+     LOCAL_TRACE="/tmp/perfetto-traces/<trace-file>"
+     gcloud storage cp "gs://<bucket-name>/path/to/<trace-file>" "${LOCAL_TRACE}"
+     TRACE_BYTES="$(stat -c %s "${LOCAL_TRACE}")"
+     if [ "${TRACE_BYTES}" -gt "${MAX_TRACE_BYTES}" ]; then
+       rm -f "${LOCAL_TRACE}"
+       echo "ERROR: Trace size (${TRACE_BYTES} bytes) exceeds the 1 GB limit (${MAX_TRACE_BYTES} bytes)." >&2
+       exit 1
+     fi
+     sha256sum "${LOCAL_TRACE}"
      ```
 
 3. **Start a Warm `trace_processor` Daemon Session**:
