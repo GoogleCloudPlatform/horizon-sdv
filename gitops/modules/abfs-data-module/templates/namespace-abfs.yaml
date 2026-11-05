@@ -17,7 +17,7 @@
 # The child Applications license-workflows and uploader-config deploy RBAC into this
 # namespace (pool recreate, uploader restart) while their destination is workflows/horizon,
 # so CreateNamespace=true on them never creates it. Without it their sync fails with
-# "error running rbacReconcile: ... namespaces \"abfs\" not found" (TAA-2383).
+# "error running rbacReconcile: ... namespaces \"abfs\" not found".
 # abfs-data is the first ABFS module to be enabled, so it creates the namespace here, synced
 # with the parent module Application before the child Applications (sync-wave -1).
 #
