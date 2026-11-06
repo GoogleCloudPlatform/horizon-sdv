@@ -16,6 +16,8 @@ pipelineJob('Android/Environment/CF Instance Template') {
     <br/><h3 style="margin-bottom: 10px;">GCE x86_64 Instance Template Creation Job</h3>
     <p>Use this job to build and manage the x86_64 Cuttlefish instance template consumed by test pipelines (CVD Launcher, CTS, Gerrit test stage, etc.).</p>
 
+    <p><b>WARNING:</b> Never build this job (or the equivalent ARM64 job) when a build of either job is already running from the Developer Portal.</p>
+
     <h4 style="margin-bottom: 10px;">How to use this job</h4>
     <ol>
       <li><b>Build or update template (normal path)</b>
