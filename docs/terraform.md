@@ -326,13 +326,12 @@ Initializes Terraform and runs `terraform destroy -auto-approve`.
 
 **Containerized**:
 ```shell
-./container-deploy.sh -d
+./container-deploy.sh --destroy
 ```
 
 **Host Machine**:
 ```shell
-./deploy.sh -d
+./deploy.sh --destroy
 ```
-> Note: You can also use `--destroy`.
 
 For more details about Terraform please reach the official documentation: https://cloud.google.com/docs/terraform/terraform-overview

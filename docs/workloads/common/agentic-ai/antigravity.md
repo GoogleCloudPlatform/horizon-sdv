@@ -63,7 +63,7 @@ Image jobs under `Cloud Workstations → Workstation Images` copy `common-utils/
 - **Antigravity CLI (`agy`)** — **Horizon Code OSS**. Provide `ANTIGRAVITY_CLI_VERSION`, `ANTIGRAVITY_CLI_TARBALL_URL`, and `ANTIGRAVITY_CLI_SHA256`. Release assets and SHA-256 digests are listed on the [Antigravity CLI releases](https://github.com/google-antigravity/antigravity-cli/releases) page.
 - **Antigravity 2.0 Agent** (desktop) — **Horizon GNOME** (inherited by Android Studio and ASfP). Provide `ANTIGRAVITY_2_VERSION`, `ANTIGRAVITY_2_TARBALL_URL`, and `ANTIGRAVITY_2_TARBALL_SHA256`.
 
-| Parameter | Horizon GNOME (base) | Code OSS |
+| Parameter | Horizon GNOME, Android Studio and ASfP | Code OSS |
 |-----------|-----------------------|----------|
 | `INSTALL_ANTIGRAVITY_AGENT` | Required, default `true` | — |
 | `ANTIGRAVITY_2_VERSION` | Required (e.g. `2.2.1`) | — |
