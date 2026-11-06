@@ -359,47 +359,6 @@ limitations under the License. -->
 </td>
 </tr>
 
-<tr>
-<td valign="top" width="12%">
-<p>TAA-2320</p>
-</td>
-
-<td valign="top" width="24%">
-<p><strong>[AI AGENT PLUGINS]: Add Perfetto Profiler plugin for Android App and AAOS trace analysis</strong></p>
-</td>
-
-<td valign="top" width="64%">
-<p>Provide a first-party, Apache-2.0 Perfetto trace analysis agent plugin (<code>agent-plugins/perfetto-profiler</code>) for both Android Application (<code>horizon-android-studio</code>) and AAOS Platform (<code>horizon-asfp</code>) Cloud Workstations using Antigravity 2.0, Antigravity CLI, and Antigravity SDK.</p>
-
-<ul>
-<li>
-<p>Adds <code>agent-plugins/perfetto-profiler/</code> (<code>Perfetto_Profiler_Tools</code>) following the exact 3-file structure of <code>openbsw-platform</code> and <code>aaos-platform</code>:</p>
-</li>
-</ul>
-
-<ol>
-<li>
-<p><code>agent-plugins/perfetto-profiler/plugin.json</code></p>
-</li>
-<li>
-<p><code>agent-plugins/perfetto-profiler/rules/AGENTS.md</code></p>
-</li>
-<li>
-<p><code>agent-plugins/perfetto-profiler/skills/perfetto-trace-analyzer/SKILL.md</code></p>
-</li>
-</ol>
-
-<ul>
-<li>
-<p>Bootstraps the official Google Perfetto <code>v59.1</code> <code>trace_processor</code> wrapper on demand with strict SHA-256 verification (<code>f4acbe5388d8e5d9f3aac9c509026902a1cf6e50ad0b888bdba9acc12b83d886</code>, which in turn verifies the platform <code>trace_processor_shell</code> binary against its SHA-256 manifest) and stages trace files from Google Cloud Storage (<code>gs://</code>) into <code>/tmp/perfetto-traces/</code>.</p>
-</li>
-<li>
-<p>Provides end-to-end PerfettoSQL triage and root-cause workflows for app/IVI startup latency, UI frame jank, ANRs, Binder IPC contention, CPU scheduling, I/O stalls, and memory/heap regressions, writing reproducible <code>[SQL]</code>/<code>[INFERRED]</code>/<code>[GAP]</code> RCA reports to <code>antigravity-fixes/</code>.</p>
-</li>
-</ul>
-</td>
-</tr>
-
 </tbody>
 </table>
 
@@ -1051,59 +1010,6 @@ limitations under the License. -->
 
 <tr>
 <td valign="top" width="10%">
-<p>TAA-2115</p>
-</td>
-
-<td valign="top" width="24%">
-<p>[ADM] Missing abfs-license verification in import workflow</p>
-</td>
-
-<td valign="top" width="51%">
-<ul>
-<li>
-<p>Import and Change now verify the pasted ABFS licence when Apply is clicked, and write Secret <code>abfs-license</code> only when every check passes.</p>
-</li>
-<li>
-<p>Verification stops at the first failure. The workflow log prints one error and the Secret is left unchanged.</p>
-</li>
-<li>
-<p>The checker accepts the Google licence shape: the service-account unique ID is a key in <code>allowed_service_accounts</code>, and the project number is a key in <code>allowed_project_numbers</code>.   A licence is stored only when all of these are true:</p>
-</li>
-<li>
-<p><code>audience</code> is <code>abfs-user</code>, otherwise <code>license type unknown</code></p>
-</li>
-<li>
-<p><code>allowed_service_accounts</code> contains the unique ID of <code>abfs-license@&lt;project&gt;.iam.gserviceaccount.com</code>, otherwise <code>license service account incorrect</code></p>
-</li>
-<li>
-<p><code>allowed_project_numbers</code> contains this GCP project number, otherwise <code>license not applicable to this project</code></p>
-</li>
-<li>
-<p><code>expiry_threshold</code> is not in the past, otherwise <code>license already expired</code>   The expected unique ID is read from ConfigMap <code>abfs-license-sa-identity</code>, or from <code>gcloud iam service-accounts describe</code> when that value is missing. The project number comes from <code>gcloud projects describe</code>. Clear is unchanged and does not verify.</p>
-</li>
-</ul>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>bb56e777f9248e0d8dfff72831f82077b04550bd</p>
-</li>
-<li>
-<p>6d72ffe95a27438274784d1884a0f1e49b63444b</p>
-</li>
-<li>
-<p>d45da28396bb6f061d328aa4d2cd1d9e437f287e</p>
-</li>
-<li>
-<p>cb586defc361e1960f1714d77d6e3d1e8298acf7</p>
-</li>
-</ul>
-</td>
-</tr>
-
-<tr>
-<td valign="top" width="10%">
 <p>TAA-2215</p>
 </td>
 
@@ -1206,81 +1112,6 @@ limitations under the License. -->
 <ul>
 <li>
 <p>47aa8012b2e76d0c2f8e2aed88f52b2c95b3ace5</p>
-</li>
-</ul>
-</td>
-</tr>
-
-<tr>
-<td valign="top" width="10%">
-<p>TAA-2238</p>
-</td>
-
-<td valign="top" width="24%">
-<p>[ADM] Licence workflows use incorrect pool name abfs-data-node-pool</p>
-</td>
-
-<td valign="top" width="51%">
-<p>The licence workflows (<code>abfs-license-import</code> / <code>abfs-license-clear</code>) wrote the Secret and then asked Argo CD to sync <code>mod-abfs-service-module-node-pool</code>, expecting its PostSync Job to stamp the licence on the ABFS pools.</p>
-
-<p>On sbx, with abfs-service-module enabled, that sync never ran the hooks:</p>
-
-<ul>
-<li>
-<p>the node-pool Application has automated sync with selfHeal;</p>
-</li>
-<li>
-<p>Argo CD merged the workflow&#39;s operation into a selfHeal auto-sync with a <code>resources</code> list, i.e. a partial sync;</p>
-</li>
-<li>
-<p>partial syncs skip PreSync/PostSync, so the Secret changed but the pools and <code>abfs-license-metadata-status</code> did not, and the workflow failed.   Observed: <code>initiatedBy.automated: true</code>, <code>autoHealAttemptsCount: 1</code>, <code>resources: [8 objects]</code>, <code>successfully synced (no more tasks)</code> after 8 s, no hook Jobs.  The workflows no longer request an Argo CD sync. After the Secret write they stamp the pools themselves, like the node-pool PostSync Job does on enable:</p>
-</li>
-</ul>
-
-<ol>
-<li>
-<p>Read the pool names from the node-pool Application&#39;s resources, so no pool names are kept in the workflows. 2. Wait while a sync runs on the node-pool Application. 3. For each pool whose licence in GKE differs from the Secret:</p>
-</li>
-</ol>
-
-<ul>
-<li>
-<p>recreate the ContainerNodePool with the licence in <code>nodeConfig.metadata</code>;</p>
-</li>
-<li>
-<p>delete a GKE pool left behind;</p>
-</li>
-<li>
-<p>wait until KCC reports Ready. 4. If KCC reports <code>UpdateFailed … already exists</code> while GKE already runs the pool with the right licence, re-adopt it: <code>deletion-policy: abandon</code>, delete the CR, create it again. 5. Wait for any Argo CD sync started meanwhile, then check both pools in GKE again, for up to 3 rounds. Argo CD auto-syncs the app when a CR is deleted after the target revision moved, and its hooks touch the same pools. 6. Write <code>abfs-license-metadata-status</code> (<code>applied</code> / <code>cleared</code>) in the same format as the PostSync Job.</p>
-</li>
-</ul>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>2ac8a172f4ba43a2f20ac527e0b2e6a32f46f0b6</p>
-</li>
-<li>
-<p>ba74e9fd4f41131619b5c43866aee88918c9b7e8</p>
-</li>
-<li>
-<p>64e09ba9b43ca4695ee7dc9057c812f3ae6b8afb</p>
-</li>
-<li>
-<p>2e2a4a39dc043981ff45f3f4bb2e1e0a278b70b4</p>
-</li>
-<li>
-<p>2240161e6ae85200a5d9e7bd424beadf4aad2ad4</p>
-</li>
-<li>
-<p>21a8aacf0948c0b10233f8d419c0d20634866426</p>
-</li>
-<li>
-<p>f108cd1f2194ea405119a8da942ffd7dc8cc31e3</p>
-</li>
-<li>
-<p>93d1785105d0599e2f7b9c641f0c305b1b0e0583</p>
 </li>
 </ul>
 </td>
@@ -1430,11 +1261,107 @@ limitations under the License. -->
 </td>
 
 <td valign="top" width="51%">
-<p></p>
+<p><code>abfs-smoke-test</code> is invisible in the Portal/CLI catalog: the WorkflowTemplate carries the label <code>horizon-sdv.io/module: abfs</code>, but the module is registered in ModuleCatalog (and everywhere else in the module chart) as <code>abfs-service-module</code>. The Horizon API catalog skips exposed templates whose module label does not match an enabled module name, so the template never enters the catalog.</p>
+
+<p>WorkflowTemplate label corrected to <code>horizon-sdv.io/module: abfs-service-module</code>, matching the ModuleCatalog registration (<code>moduleName: "abfs-service-module"</code>) and the sibling manifests in the same chart.</p>
+
+<p>Additionally, the parameters were still substituted directly into the <code>sh -c</code> script (the same injection class as the TAA-2315 hardening). Since the template becomes catalog-visible with this fix, they are now passed as container env vars and read via <code>"$VAR"</code>, and all three steps run non-root with <code>runAsNonRoot</code> and no privilege escalation.</p>
 </td>
 
 <td valign="top" width="15%">
-<p></p>
+<ul>
+<li>
+<p>3e530bb8c521a41d7346aeacfd333d1e722ae52c</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2355</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[ABFS] pin gcloud CLI image to SDK 591.0.0 and fall back to bundled python3</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Fix ABFS module enablement broken by the <code>gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based</code> image rebuilt on 2026-10-30 (SDK 592.0.0), which no longer ships <code>python3</code> on PATH. The ABFS scripts (pusher config, uploader config, licence import/clear, node-pool licence metadata) call <code>python3</code>, so on a fresh enable the <code>abfs-pusher-config</code> Job failed with exit 127, the data-plane app went Degraded and no uploader StatefulSet was created.</p>
+
+<ul>
+<li>
+<p>Pin <code>cloudSdkImage</code> by digest to the SDK 591.0.0 build of the same tag (<code>@sha256:f455f6bf...</code>), the same gcloud version TAA-2316 pinned for the builder images, in all ABFS charts (<code>abfs-data-module/*</code>, <code>abfs-service-module</code>, <code>abfs-service-module/abfs</code>, <code>abfs-service-module/node-pool</code>, and the Helm defaults in <code>application-abfs.yaml</code>). A comment next to each pin says why and to re-test before bumping.</p>
+</li>
+<li>
+<p>Add a 4-line guard at the start of every ABFS script that uses <code>python3</code>: when <code>python3</code> is not on PATH, put the interpreter bundled with gcloud (<code>gcloud info --format='value(basic.python_location)'</code>) on PATH. This keeps the scripts working when the digest is bumped to an SDK &gt;= 592 build.</p>
+</li>
+</ul>
+</td>
+
+<td valign="top" width="15%">
+<ul>
+<li>
+<p>aa45d56f522fca857ab6da4eeba150f9a3c782c9</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2378</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[Android] fix dangling out symlink on aosp_cf_arm64 and restore OUT_DIR for Jenkins builds</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Fix Warm Build Caches and AAOS Builder failing immediately on <code>aosp_cf_arm64*</code> targets with <code>mkdir: cannot create directory '.../out': File exists</code> (TAA-2378), and restore the per-target <code>out_sdv-&lt;lunch_target&gt;</code> output directory for Jenkins builds.</p>
+
+<p>Since TAA-1931 (<a href="https://github.com/GoogleCloudPlatform/horizon-sdv/pull/99">#99</a>) <code>aaos_build.sh</code> unsets <code>OUT_DIR</code> before <code>lunch</code>/<code>m</code>, so Jenkins builds write to <code>out</code> instead of <code>out_sdv-&lt;lunch_target&gt;</code>. The TAA-1095 arm64 workaround (<code>rm -rf out &amp;&amp; ln -sf out_sdv-&lt;target&gt; out</code>) therefore points at a directory that is never created: Soong's <code>mkdir out</code> hits the dangling symlink and the build dies in seconds. The symlink survives <code>CLEAN_BUILD</code> (which removes <code>out_sdv-*</code>, not <code>out</code>), so every later build on that cache volume fails too.</p>
+
+<ul>
+<li>
+<p><code>aaos_build.sh</code>: do not unset <code>OUT_DIR</code>. Jenkins builds use <code>out_sdv-&lt;lunch_target&gt;</code> again, matching <code>AAOS_ARTIFACT_LIST</code> and <code>CLEAN_BUILD</code>. ABFS builds are unaffected: that mode sets <code>OUT_DIR=out</code> explicitly.</p>
+</li>
+<li>
+<p><code>aaos_environment.sh</code> (<code>create_workspace</code>, non-ABFS only): remove a dangling <code>out</code> symlink left by an earlier run, for any target and clean mode, so already poisoned cache volumes heal themselves; make the TAA-1095 workaround create <code>OUT_DIR</code> before linking (<code>mkdir -p … &amp;&amp; ln -sfn</code>), and apply it only when <code>OUT_DIR</code> differs from <code>out</code>.</p>
+</li>
+</ul>
+</td>
+
+<td valign="top" width="15%">
+<ul>
+<li>
+<p>44fb54e5f8dfb4c7c75c55f80694c9a06c771a1b</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2383</p>
+</td>
+
+<td valign="top" width="24%">
+<p>TAA-2383: [ABFS] create the abfs namespace in the abfs-data module chart</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Fix issue with missing abfs namespace during abfs-data module first enable on fresh enviornment.</p>
+
+<p>The abfs-data child Applications <code>mod-abfs-data-license-workflows</code> and <code>mod-abfs-data-uploader-config</code> deploy RBAC (RoleBindings) into the <code>abfs</code> namespace while their destination namespace is <code>workflows</code> / <code>horizon</code>, so <code>CreateNamespace=true</code> never creates <code>abfs</code>. On a fresh environment both stay <code>OutOfSync</code> with <code>error running rbacReconcile: error running kubectl auth reconcile: error getting namespace abfs: namespaces "abfs" not found</code>, the Developer Portal shows the module as UPDATE IN PROGRESS and ABFS cannot be used.</p>
+</td>
+
+<td valign="top" width="15%">
+<ul>
+<li>
+<p>7677c3622f36571a8c6962862d7eb6d49312cae2</p>
+</li>
+</ul>
 </td>
 </tr>
 
