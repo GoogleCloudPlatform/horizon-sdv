@@ -224,18 +224,19 @@ function ShellLayout() {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
-        <Toolbar>
+        <Toolbar sx={{ px: { xs: 1, sm: 2 }, gap: 0.5 }}>
           <IconButton
             color="inherit"
-            edge="start"
+            aria-label="Open navigation"
             onClick={() => setMobileOpen(!mobileOpen)}
-            sx={{ mr: 2, display: { sm: 'none' } }}
+            sx={{ ml: 0, mr: { xs: 0.5, sm: 1 }, display: { sm: 'none' } }}
           >
             <MenuIcon />
           </IconButton>
           <Box
             component={Link}
             to="/"
+            aria-label="Horizon Developer Portal"
             sx={{
               flexGrow: 1,
               display: 'flex',
@@ -252,12 +253,34 @@ function ShellLayout() {
               alt=""
               sx={{ height: 34, width: 'auto', flexShrink: 0 }}
             />
-            <Typography variant="h6" component="span" noWrap>
+            <Typography
+              variant="h6"
+              component="span"
+              noWrap
+              sx={{
+                display: { xs: 'none', sm: 'block' },
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
               Horizon Developer Portal
             </Typography>
           </Box>
           <YourAccessButton />
-          <Typography variant="body2" sx={{ mr: 2, display: { xs: 'none', sm: 'block' } }}>
+          <Typography
+            variant="body2"
+            noWrap
+            title={authService.getUsername() || undefined}
+            sx={{
+              mr: 1,
+              minWidth: 0,
+              maxWidth: { sm: 120, md: 220 },
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: { xs: 'none', sm: 'block' },
+            }}
+          >
             {authService.getUsername()}
           </Typography>
           <Tooltip title={darkMode ? 'Light mode' : 'Dark mode'}>
@@ -302,7 +325,8 @@ function ShellLayout() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          minWidth: 0,
+          p: { xs: 2, sm: 3 },
           // Leave room for the fixed version tag so it does not cover the bottom of the page.
           pb: 7,
           width: { sm: `calc(100% - ${drawerWidth}px)` },

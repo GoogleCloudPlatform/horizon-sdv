@@ -42,14 +42,16 @@ export function YourAccessButton() {
         startIcon={<PersonOutlineIcon />}
         endIcon={<ArrowDropDownIcon />}
         sx={{
-          mr: 1.5,
+          mr: { xs: 0.5, sm: 1.5 },
           color: 'primary.main',
           bgcolor: 'common.white',
           borderRadius: 999,
           textTransform: 'none',
           fontWeight: 600,
-          px: 1.25,
+          px: { xs: 1, sm: 1.25 },
+          flexShrink: 0,
           minWidth: 0,
+          '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inline-flex' } },
           '&:hover': { bgcolor: 'grey.100' },
         }}
       >
@@ -59,11 +61,19 @@ export function YourAccessButton() {
         open={open}
         anchorEl={anchor}
         onClose={() => setAnchor(null)}
+        marginThreshold={8}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{
           paper: {
-            sx: { mt: 1, width: 460, maxWidth: 'calc(100vw - 24px)', borderRadius: 2 },
+            sx: {
+              mt: 1,
+              width: { xs: 'calc(100vw - 16px)', sm: 460 },
+              maxWidth: 'calc(100vw - 16px)',
+              maxHeight: 'calc(100dvh - 24px)',
+              overflow: 'auto',
+              borderRadius: 2,
+            },
           },
         }}
       >
@@ -80,7 +90,7 @@ function YourAccessPanel() {
   }
   const signedIn = access.email || access.subject;
   return (
-    <Box sx={{ p: 2.25 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 2.25 } }}>
       <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
         Your access
       </Typography>
@@ -107,18 +117,37 @@ function YourAccessPanel() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: `minmax(0, 1.7fr) repeat(${Math.max(access.roles.length, 1)}, 68px)`,
+          gridTemplateColumns: `minmax(0, 1fr) repeat(${Math.max(access.roles.length, 1)}, minmax(44px, 64px))`,
           alignItems: 'center',
           columnGap: 0.5,
           rowGap: 0.75,
         }}
       >
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            fontWeight: 600,
+            position: 'sticky',
+            left: 0,
+            zIndex: 1,
+            bgcolor: 'background.paper',
+          }}
+        >
           Function
         </Typography>
         {access.roles.map((role) => (
           <AccessCell key={role.id} current={role.id === access.role} header>
-            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 600,
+                fontSize: '0.68rem',
+                lineHeight: 1.1,
+                textAlign: 'center',
+                px: 0.25,
+              }}
+            >
               {role.label}
             </Typography>
           </AccessCell>
@@ -166,7 +195,13 @@ function SectionRows({
       <Typography
         variant="caption"
         color="primary"
-        sx={{ gridColumn: '1 / -1', fontWeight: 700, letterSpacing: 0.4, mt: 1 }}
+        sx={{
+          gridColumn: '1 / -1',
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          mt: 1,
+          overflowWrap: 'anywhere',
+        }}
       >
         {section.title}
       </Typography>
@@ -196,7 +231,18 @@ function FunctionRow({
 }) {
   return (
     <>
-      <Typography variant="body2" sx={{ pr: 1, py: 0.25 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          pr: 1,
+          py: 0.25,
+          position: 'sticky',
+          left: 0,
+          zIndex: 1,
+          bgcolor: 'background.paper',
+          overflowWrap: 'anywhere',
+        }}
+      >
         {label}
       </Typography>
       {roles.map((role) => (
