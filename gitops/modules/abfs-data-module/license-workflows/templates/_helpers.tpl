@@ -20,6 +20,10 @@
 # `gcloud container node-pools update --metadata` (flag does not exist).
 
 {{- define "license.ensureKubectl" -}}
+# google-cloud-cli images since SDK 592 have no python3 on PATH; use the one bundled with gcloud.
+if ! command -v python3 >/dev/null 2>&1; then
+  export PATH="$(dirname "$(gcloud info --format='value(basic.python_location)')"):${PATH}"
+fi
 # google-cloud-cli images no longer ship kubectl (unlike legacy cloud-sdk tags).
 if ! command -v kubectl >/dev/null 2>&1; then
   echo "Installing kubectl (gcloud components)..."

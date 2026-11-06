@@ -1,17 +1,16 @@
-[Copyright (c) 2026 Accenture, All Rights Reserved.]::
+<!-- Copyright (c) 2026 Accenture, All Rights Reserved.
 
-[Licensed under the Apache License, Version 2.0 (the 'License');]::
-[you may not use this file except in compliance with the License.]::
-[  You may obtain a copy of the License at]::
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-[          http://www.apache.org/licenses/LICENSE-2.0]::
+        http://www.apache.org/licenses/LICENSE-2.0
 
-[  Unless required by applicable law or agreed to in writing, software]::
-[  distributed under the License is distributed on an 'AS IS' BASIS,]::
-[WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.]::
-[  See the License for the specific language governing permissions and]::
-[  limitations under the License.]::
-
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
 
 # <span style="color:#335bff">Workload Usage</span>
 
@@ -128,7 +127,7 @@ _Note: The output is intended as a starting point for triage - not a substitute 
 <details id="ai-review-jobs"><summary>Supported Jobs</summary><hr width="50%">
 
 The following Jenkins pipeline jobs implement an `AI Review` stage:
-- _Android Workflows_: [AAOS Builder](../android/builds/aaos_builder.md), [AAOS ABFS Builder](../android/builds/aaos_abfs_builder.md), [CTS Execution](../android/tests/cts_execution.md), [CVD Launcher](../android/tests/cvd_launcher.md) 
+- _Android Workflows_: [AAOS Builder](../android/builds/aaos_builder.md), [AAOS Builder ABFS](../android/builds/aaos_abfs_builder.md), [CTS Execution](../android/tests/cts_execution.md), [CVD Launcher](../android/tests/cvd_launcher.md) 
 - _OpenBSW Workflows_ → [BSW Builder](../openbsw/builds/bsw_builder.md) 
 
 In addition, a standalone [Gemini AI Assistant](../utilities/gemini_ai_assistant.md) job is available in the _Utilities_ area for ad-hoc analysis of user-provided artifacts (e.g. fetched from a GCS bucket).
@@ -252,7 +251,7 @@ The table below shows the templates and machine types used for the Android workf
 | `Android Workflows / Environment / CF Instance Template`          |     | ✅ <sup>1</sup>|    |
 | `Android Workflows / Environment / Delete Cuttlefish VM Instance` |     | ✅ <sup>1</sup>|    |
 | `Android Workflows / Environment / Delete MTK Connect Testbench`  |     | ✅ <sup>1</sup>|    |
-| `Android Workflows / Environment / Development Instance`          |     | ✅ <sup>2</sup>|    |
+| `Android Workflows / Environment / Development Build Instance` and `Development Test Instance`          |     | ✅ <sup>2</sup>|    |
 | `Android Workflows / Environment / Warm Build Caches`             |     | ✅ <sup>2</sup>|    |
 | `Android Workflows / Builds / AAOS Builder`                       |     | ✅ <sup>2</sup>|    |
 | `Android Workflows / Tests / CTS Execution`                       |     | ✅ <sup>1</sup>| ✅ <sup>3</sup> |
@@ -277,16 +276,16 @@ To read more on how the machine types are configured, refer to the following wit
   - Refer to `resources`, `limits` and `requests` in the Jenkinsfile. These are optimised to the Jenkins pipeline builds and
     need for additional resources for the Jenkins agent etc. You may adjust to your machine limits.
   - `workloads/android/pipelines/environment/warm_build_caches/Jenkinsfile`
-  - `workloads/android/pipelines/environment/dev_instance/Jenkinsfile`
+  - `workloads/android/pipelines/environment/dev_instance_build/Jenkinsfile`
   - `workloads/android/pipelines/builds/aaos_builder/Jenkinsfile`
 
 <hr width="25%"></details>
 
 [ --- Collapsing SubSection --- ]::
-<details><summary>OpenBSW Build Jobs: ~_n1-standard-8_</summary><hr width="25%">
+<details><summary>OpenBSW Build Jobs: ~_c2d-highcpu-8_</summary><hr width="25%">
 
-- `./terraform/env/main.tf`: `sdv_openbsw_build_node_pool_machine_type   = "n1-standard-8"`
-- `./terraform/modules/base/variables.tf`: ` default     = "n1-standard-8"`
+- `./terraform/env/main.tf`: `sdv_openbsw_build_node_pool_machine_type   = "c2d-highcpu-8"`
+- `./terraform/modules/base/variables.tf`: ` default     = "n1-standard-16"`
   - Re-run the deployment script to apply any Terraform changes.
 
 <hr width="25%"></details>
@@ -331,7 +330,7 @@ When running build and test jobs from Jenkins, you have the option to extend the
 
 For more information on how to do so, refer to the documentation in the OSS repository: [horizon-sdv](https://github.com/googlecloudplatform/horizon-sdv).
 
-Helper jobs are provided in the _Android_ and _OpenBSW_ Workload areas (`Environment` → `Development Instance`) to aid with creating your own build instance and running scripts/jobs locally.
+Helper jobs are provided in the _Android_ and _OpenBSW_ Workload areas (`Environment` → `Development Build Instance` and `Development Test Instance`) to aid with creating your own build instance and running scripts/jobs locally.
 
 <hr width="50%"></details>
 

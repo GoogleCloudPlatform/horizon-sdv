@@ -51,7 +51,7 @@ The Jenkins folder `Cloud Workstations > Config Admin Operations` provides a set
 
 One-time setup requirements. Before running these pipelines:
   - Ensure that the following template has been created by running the corresponding job: `Cloud Workstations > Environment > Docker Image Template`
-  - Ensure the Cluster has been created by running the corresponding job: `Cloud Workstations > Cluster Admin Operations > Create Cluster`
+  - Ensure the Cluster has been created by running the corresponding job: `Cloud Workstations > Cluster Admin Operations > Create New Cluster`
 
 ## Pipelines<a name="pipelines"></a>
 
@@ -61,7 +61,7 @@ Here are details about the six pipelines for Config Admin Operations:
 - This job creates a new Configuration for Cloud Workstations in your existing GCP project.
 - This job fails if:
   - A configuration with same name already exists.
-  - The Workstation Cluster does not exists. (Run `Create Cluster` operation pipeline in that case)
+  - The Workstation Cluster does not exists. (Run `Create New Cluster` operation pipeline in that case)
   
 ### Delete Existing Configuration<a name="pipelines-delete-existing-configuration"></a>
 - This job deletes the specified Configuration.
@@ -119,8 +119,8 @@ Here are details about the six pipelines for Config Admin Operations:
 - Default: 43200 = 12 hrs
 
 #### `WS_REPLICA_ZONES`
-- Optional: Comma-separated list of two zones in the europe-west1 region.
-- Default: `europe-west1-b, europe-west1-d`
+- Optional: Comma-separated list of two zones in the `${CLOUD_REGION}` region.
+- Default: the first two zones of `${CLOUD_REGION}`
 - Note:
   - EXACTLY TWO zones required, separated by a comma.
   - NO enclosing brackets or quotes allowed.
@@ -323,7 +323,7 @@ These are as follows:
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
 
-Below variables have their values defined in `gitops/values.yaml` and then referenced in Jenkins CasC `values-jenkins.yaml`.
+Below variables have their values defined under `config.workloads.cloudWorkstations` in `gitops/workloads/values-jenkins.yaml` (CasC) and are exposed as Jenkins global environment variables.
 
 -   `CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME`
     - Name of the Docker image on GCP Artifact registry, that is used as an environment for Cloud Workstations workload pipelines.
@@ -345,7 +345,7 @@ Below variables have their values defined in `gitops/values.yaml` and then refer
 Currently, the Terraform configuration for Cloud Workstations available as part of `google-beta` provider, does not have a `force` or `cascade` delete option, and hence if the configuration has child resources (workstations) then simply running `Delete Existing Configuration` pipeline won't delete all of its resources.
 - Follow below steps in order to delete a Config with existing workstations:
     1. **Delete Child Workstations**
-        - Run the job `Config Admin Operations > Get Workstations by Configuration` to get the list of all existing workstations for the specified config.
+        - Run the job `Config Admin Operations > List Workstations by Configuration` to get the list of all existing workstations for the specified config.
         - Run the job `Workstation Admin Operations > Delete Existing Workstation` for every Cloud Workstation present in the list you got in the previous step.
     2. **Delete Configurations**
         - Run the job `Config Admin Operations > Delete Existing Configuration` for the configuration you want to delete, finally.

@@ -56,11 +56,11 @@ In the Horizon SDV platform, GitOps is used to manage applications and their dep
 
 Project executes successively following files and performs operations defined inside.
 
-1. Create `terraform.tfvars` file at path `terraform/env/` if it does not exist already by copying `terraform/env/terraform.tfvars.sample` file.
+1. Prerequisite: create `terraform/env/terraform.tfvars` by copying `terraform/env/terraform.tfvars.sample`. `deploy.sh` does not create this file.
 2. Update `terraform.tfvars` with actual configuration values.
 3. Execute file `tools/scripts/deployment/deploy.sh`:
     1. Check if the tools with required versions have been installed.
-    2. Create `terraform.tfvars` file if missing. It is required to update this file with actual configuration values.
+    2. Exit with an error if `terraform/env/terraform.tfvars` is missing or still contains `<REQUIRED>` placeholders.
     3. Check if authenticate to Google Cloud Platform via `gcloud` CLI.
     4. Initialize Terraform.
     5. Execute `terraform apply` or `terraform destroy` based on supplied argument.
@@ -77,16 +77,16 @@ Project executes successively following files and performs operations defined in
 
 ### Input parameters
 
-To start GitOps deployment process it is required to provide list of configure parameters. They are used to create applications in the Horizon SDV platform. These parameters are provided as environment variables. List of input configuration parameters is provided below:
+To start GitOps deployment process it is required to provide list of configure parameters. They are used to create applications in the Horizon SDV platform. These parameters are set in `terraform/env/terraform.tfvars`. List of input configuration parameters is provided below:
 
-- GIT_REPO_NAME (repository name, without https://github.com prefix)
-- GIT_REPO_BRANCH_NAME (repository branch to be used for deployment)
-- GCP_PROJECT_ID (GCP Project ID)
-- GCP_CLOUD_REGION (GCP Cloud Region)
-- GCP_CLOUD_ZONE (GCP Cloud Zone)
-- GCP_BACKEND_BUCKET_NAME (GCP Bucket used to store tfstate)
-- GIT_ENV_NAME (Environment name, also used as a subdomain)
-- GIT_DOMAIN_NAME (top level domain name)
+- `scm_repo_url` (repository URL)
+- `scm_repo_branch` (repository branch to be used for deployment)
+- `sdv_gcp_project_id` (GCP Project ID)
+- `sdv_gcp_region` (GCP Cloud Region)
+- `sdv_gcp_zone` (GCP Cloud Zone)
+- `sdv_gcp_backend_bucket` (GCP Bucket used to store tfstate)
+- `sdv_env_name` (Environment name, also used as a subdomain)
+- `sdv_root_domain` (top level domain name)
 
 
 ## ArgoCD overview

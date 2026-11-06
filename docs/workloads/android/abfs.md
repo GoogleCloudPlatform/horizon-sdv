@@ -95,7 +95,7 @@ workloads-android ──WorkflowTemplate aaos-builder-abfs──▶ pod on abfs-
 
 ## Prerequisites <a name="prerequisites"></a>
 
-1. **Horizon SDV deployed** with Module Manager and the Developer Portal; `workloads-common` and `workloads-android` enabled (see [Developer Portal user guide, Module manager](../../developer_portal_user_guide.md#module-manager)).
+1. **Horizon SDV deployed** with Module Manager and the Developer Portal; `workloads-common` and `workloads-android` enabled (see [Developer Portal guide, Administration](../../architecture/02_horizon-portal.md#administration)).
 2. **GCP quotas** in the cluster region for the node pools: `n2-highmem-64` (server, max 2), `n2-standard-32` (uploaders, max 5), `c2d-highcpu-112` (builds, max 20, 112 vCPU each), Persistent Disk for 1 Ti per uploader plus build caches, one regional Spanner node.
 3. **Config Connector** (KCC) in cluster mode, as deployed by the Horizon Terraform. The ABFS node pools, Spanner, GCS bucket and IAM are KCC resources.
 4. **Google allow-listing** of the license service account for Artifact Registry projects `abfs-binaries` (images and apt packages). The account is created by `abfs-data` (see [Import the ABFS license](#license)); the former Jenkins-era account `abfs-server` is no longer used.
@@ -311,5 +311,5 @@ For ABFS itself, reach out to Google: [horizon-sdv@google.com](mailto:horizon-sd
 - [abfs-client-ubuntu module README](../../../gitops/modules/abfs-client-module-ubuntu/README.md)
 - [ABFS Builder (Argo and Jenkins parameters)](builds/aaos_abfs_builder.md)
 - [ABFS Docker Image Template](environment/abfs/docker_image_template.md)
-- [Developer Portal user guide](../../developer_portal_user_guide.md)
+- [Developer Portal guide](../../architecture/02_horizon-portal.md)
 - Google's standalone ABFS guides (reference only, not the Horizon deployment): `experimental/kcc-google-abfs/docs/`

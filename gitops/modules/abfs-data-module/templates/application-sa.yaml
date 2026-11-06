@@ -49,6 +49,7 @@ spec:
         serviceAccountId: abfs-license
         identityConfigMapName: abfs-license-sa-identity
         licenseSecretName: abfs-license
+        cloudSdkImage: {{ .Values.cloudSdkImage | quote }}
         gcs:
           bucketName: abfs
           bucketResourceID: {{ .Values.config.projectID }}-abfs

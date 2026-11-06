@@ -94,4 +94,4 @@ license:
   workflowsNamespace: workflows
   # WI → gke-argo-workflows-elevated-sa (roles/container.admin for gcloud describe).
   jobServiceAccountName: workflow-executor-elevated
-  cloudSdkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based
+  # cloudSdkImage is set by the abfs-service-module Application.

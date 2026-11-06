@@ -60,7 +60,7 @@ spec:
             enabled: {{ if and .Values.license (kindIs "map" .Values.license) .Values.license.validation (hasKey .Values.license.validation "enabled") }}{{ .Values.license.validation.enabled }}{{ else }}true{{ end }}
             namespace: {{ .Values.abfsNamespace }}
             serviceAccountName: {{ if and .Values.license (kindIs "map" .Values.license) .Values.license.validation }}{{ .Values.license.validation.serviceAccountName | default "abfs-license-validator" }}{{ else }}abfs-license-validator{{ end }}
-            image: {{ if and .Values.license (kindIs "map" .Values.license) .Values.license.validation }}{{ .Values.license.validation.image | default "gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based" | quote }}{{ else }}"gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based"{{ end }}
+            image: {{ .Values.license.validation.image | quote }}
         ui:
           enabled: {{ if and .Values.ui (kindIs "map" .Values.ui) (hasKey .Values.ui "enabled") }}{{ .Values.ui.enabled }}{{ else }}false{{ end }}
         tests:

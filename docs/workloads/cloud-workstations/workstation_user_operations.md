@@ -22,13 +22,13 @@ limitations under the License. -->
   - [List Workstations](#pipelines-list-workstations)
   - [Get Workstation Configuration](#pipelines-get-workstation-configuration)
   - [Start Workstation](#pipelines-start-workstation)
-  - [Stop Workstation](#pipelines-start-workstation)
+  - [Stop Workstation](#pipelines-stop-workstation)
 - [Environment Variables/Parameters](#environment-variables)
   - [Get Workstation Details](#environment-variables-get-workstation-details)
   - [List Workstations](#environment-variables-list-workstations)
   - [Get Workstation Configuration](#environment-variables-get-workstation-configuration)
   - [Start Workstation](#environment-variables-start-workstation)
-  - [Stop Workstation](#environment-variables-start-workstation)
+  - [Stop Workstation](#environment-variables-stop-workstation)
 - [System Variables](#system-variables)
 
 ## Introduction <a name="introduction"></a>
@@ -47,7 +47,7 @@ The Jenkins folder `Cloud Workstations > Workstation User Operations` provides a
 
 One-time setup requirements. Before running these pipelines:
   - Ensure that the following template has been created by running the corresponding job: `Cloud Workstations > Environment > Docker Image Template`
-  - Ensure the Cluster has been created by running the corresponding job: `Cloud Workstations > Cluster Admin Operations > Create Cluster`
+  - Ensure the Cluster has been created by running the corresponding job: `Cloud Workstations > Cluster Admin Operations > Create New Cluster`
 
 ## Pipelines<a name="pipelines"></a>
 
@@ -132,7 +132,7 @@ These are as follows:
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
 
-Below variables have their values defined in `gitops/values.yaml` and then referenced in Jenkins CasC `values-jenkins.yaml`.
+Below variables have their values defined under `config.workloads.cloudWorkstations` in `gitops/workloads/values-jenkins.yaml` (CasC) and are exposed as Jenkins global environment variables.
 
 -   `CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME`
     - Name of the Docker image on GCP Artifact registry, that is used as an environment for Cloud Workstations workload pipelines.

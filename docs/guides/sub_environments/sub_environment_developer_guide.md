@@ -164,8 +164,8 @@ One set of secrets is created per sub-environment. All secret IDs are prefixed w
 
 In addition, Git authentication secrets are created per sub-environment, prefixed with `<env>-`:
 
-- **GitHub App** (`github_auth_method = "app"`): `<env>-github-app-id-b64`, `<env>-github-app-installation-id-b64`, `<env>-github-app-private-key-b64`, `<env>-github-app-private-key-pkcs8-b64`
-- **GitHub PAT** (`github_auth_method = "pat"`): `<env>-git-pat-b64`
+- **GitHub App** (`scm_auth_method = "app"`): `<env>-github-app-id-b64`, `<env>-github-app-installation-id-b64`, `<env>-github-app-private-key-b64`, `<env>-github-app-private-key-pkcs8-b64`
+- **Username/password or token** (`scm_auth_method = "userpass"`): `<env>-scm-password-b64`
 
 Secrets that can be set manually (instead of auto-generated) are identified by their legacy `s5`/`s6`/`s9`/`s12`/`s14`/`s17` keys in the `manual_secrets` map within `sdv_sub_env_configs`.
 
@@ -183,9 +183,9 @@ This parameter is consumed by the deployment workflow and can be referenced at r
 
 For each sub-environment, the `sdv-certificate-manager` module creates:
 
-- A **DNS authorisation** resource named `horizon-sdv-auth-<env>` for the domain `<env>.<SUB_DOMAIN>.<HORIZON_DOMAIN>`.
+- A **DNS authorisation** resource named `horizon-sdv-dns-auth-<env>` for the domain `<env>.<SUB_DOMAIN>.<HORIZON_DOMAIN>`, created when `certificate_authorization_type = "dns"`.
 - A **certificate** named `horizon-sdv-<env>` covering both the domain and its wildcard (`*.<env>.<SUB_DOMAIN>.<HORIZON_DOMAIN>`), backed by the DNS authorisation above.
-- A **certificate map entry** named `horizon-sdv-entry-<env>` in the shared certificate map, matching requests by hostname.
+- **Certificate map entries** `horizon-sdv-entry-<env>` (apex) and `horizon-sdv-entry-<env>-wildcard` (DNS auth), or `horizon-sdv-entry-<env>-mcp` (load-balancer auth), in the shared certificate map, matching requests by hostname.
 
 The main environment certificate uses the key `main` (e.g. `horizon-sdv-main`).
 
@@ -205,10 +205,10 @@ The `sdv-gke-apps` Terraform module provisions the following Kubernetes resource
 |---------------------------------------|---------------------------------------------------------------|
 | `kubernetes_namespace`                | `dev-argocd`                                                  |
 | `kubernetes_service_account`          | `argocd-sa` in `dev-argocd`                                   |
-| `kubernetes_secret` (Git creds)       | `argocd-git-creds` in `dev-argocd`                            |
+| `kubernetes_secret` (Git creds)       | `argocd-scm-creds` in `dev-argocd`                            |
 | `kubernetes_secret` (ArgoCD admin)    | `argocd-secret` in `dev-argocd`                               |
 | `kubectl_manifest` (SecretStore)      | `argocd-secret-store` in `dev-argocd`                         |
-| `kubectl_manifest` (ExternalSecret)   | `argocd-git-creds` ExternalSecret in `dev-argocd`             |
+| `kubectl_manifest` (ExternalSecret)   | `argocd-scm-creds` ExternalSecret in `dev-argocd`             |
 | `kubectl_manifest` (ExternalSecret)   | `argocd-secret` ExternalSecret in `dev-argocd`                |
 | `kubectl_manifest` (AppProject)       | `dev-horizon-sdv` AppProject in `dev-argocd`                  |
 | `kubectl_manifest` (Application)      | `dev-horizon-sdv` Application in `dev-argocd`                 |
@@ -232,7 +232,7 @@ locals {
         subdomain        = var.subdomain_name
         is_main          = true
         env_name         = "main"
-        branch           = var.git_repo_branch
+        branch           = var.scm_repo_branch
       }
     },
     {
@@ -242,7 +242,7 @@ locals {
         subdomain        = "${env}.${var.subdomain_name}"
         is_main          = false
         env_name         = env
-        branch           = lookup(var.sub_env_branches, env, var.git_repo_branch)
+        branch           = lookup(var.sub_env_branches, env, var.scm_repo_branch)
       }
     }
   )
@@ -481,12 +481,12 @@ The table below summarises the naming conventions used for all sub-environment r
 | ArgoCD Application name           | `horizon-sdv`                        | `dev-horizon-sdv`                         |
 | ArgoCD AppProject name            | `horizon-sdv`                        | `dev-horizon-sdv`                         |
 | GCP IAM SA (Jenkins)              | `gke-jenkins-sa`                     | `gke-dev-jenkins-sa`                      |
-| GCP IAM SA (monitoring)           | `dev-monitoring-sa`                  | `dev-monitoring-sa` *(per-sub-env only)*  |
+| GCP IAM SA (monitoring)           | `monitoring-sa`                      | `dev-monitoring-sa`                       |
 | GCP Secret (ArgoCD admin)         | `argocd-admin-password-b64`          | `dev-argocd-admin-password-b64`           |
-| GCP Secret (Git PAT)              | `git-pat-b64`                        | `dev-git-pat-b64`                         |
+| GCP Secret (SCM password/token)   | `scm-password-b64`                   | `dev-scm-password-b64`                    |
 | Certificate Manager certificate   | `horizon-sdv-main`                   | `horizon-sdv-dev`                         |
-| Certificate Manager DNS auth      | `horizon-sdv-auth-main`              | `horizon-sdv-auth-dev`                    |
-| Certificate map entry             | `horizon-sdv-entry-main`             | `horizon-sdv-entry-dev`                   |
+| Certificate Manager DNS auth      | `horizon-sdv-dns-auth`               | `horizon-sdv-dns-auth-dev`                |
+| Certificate map entry             | `horizon-sdv-entry-main` and `horizon-sdv-entry-main-wildcard` or `horizon-sdv-entry-main-mcp` | `horizon-sdv-entry-dev` and `horizon-sdv-entry-dev-wildcard` or `horizon-sdv-entry-dev-mcp` |
 | Sub-domain                        | `<SUB_DOMAIN>.<HORIZON_DOMAIN>`      | `dev.<SUB_DOMAIN>.<HORIZON_DOMAIN>`       |
 | StorageClass (Gerrit)             | `gerrit-rwx`                         | `dev-gerrit-rwx`                          |
 | ClusterRole (Terraform workloads) | `terraform-workloads-writer-cluster-role` | `dev-terraform-workloads-writer-cluster-role` |

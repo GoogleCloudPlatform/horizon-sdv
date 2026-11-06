@@ -37,7 +37,7 @@ When **Gemini AI Review** is enabled and the build **fails**, the **Diagnostics*
 
 ### Jenkins pipeline and shared library <a name="jenkins-pipeline-and-shared-library"></a>
 
-The job **`Jenkinsfile`** (`workloads/android/pipelines/tests/cvd_launcher/Jenkinsfile`) calls **`cvdPipeline`** with **`aiReview`** (`preset: 'cvd'`) only — it does **not** pass **`preLaunchStages`** or **`postMtkConnectStages`**. Those optional hooks are used by [CTS Execution](../cts_execution/README.md#jenkins-pipeline-and-shared-library-hooks) to plug list-tests and CTS run stages into the same shared pipeline.
+The job **`Jenkinsfile`** (`workloads/android/pipelines/tests/cvd_launcher/Jenkinsfile`) calls **`cvdPipeline`** with **`aiReview`** (`preset: 'cvd'`) only — it does **not** pass **`preLaunchStages`** or **`postMtkConnectStages`**. Those optional hooks are used by [CTS Execution](cts_execution.md#jenkins-pipeline-and-shared-library-hooks) to plug list-tests and CTS run stages into the same shared pipeline.
 
 See **`workloads/common/jenkins/shared-libraries/cvd-pipeline-shared-library/vars/README.md`** for stage order, `config` keys, and **`ctsCvdPipelineHooks`**.
 
@@ -74,7 +74,7 @@ One-time setup requirements.
 This is the label that identifies the GCE Cloud label which will be used to identify the Cuttlefish VM instance, e.g.
 
 - `cuttlefish-vm-main`
-- `cuttlefish-vm-v1180`
+- `cuttlefish-vm-v1553`
 
 Note: The value provided must correspond to a cloud instance or the job will hang.
 
@@ -165,7 +165,7 @@ AAOS SDV:
 
 ### `ENABLE_GEMINI_AI_ASSISTANT` <a name="enable_gemini_ai_assistant"></a>
 
-Enable Gemini **AI Review** in the shared `cvd-pipeline-shared-library` **Diagnostics** stage (`cvdPipeline`, same family as [CTS Execution](../cts_execution/README.md)). The **AI Review** sub-stage runs only when **`ENABLE_GEMINI_AI_ASSISTANT`** is **`true`**, the overall pipeline result is **`FAILURE`**, and **`MTK_CONNECT_STAGE_FAILED`** is not **`true`** (see `cvdPipeline.groovy`). This job does **not** use **`requireCtsNotListOnly`** (that gate applies only to CTS Execution).
+Enable Gemini **AI Review** in the shared `cvd-pipeline-shared-library` **Diagnostics** stage (`cvdPipeline`, same family as [CTS Execution](cts_execution.md)). The **AI Review** sub-stage runs only when **`ENABLE_GEMINI_AI_ASSISTANT`** is **`true`**, the overall pipeline result is **`FAILURE`**, and **`MTK_CONNECT_STAGE_FAILED`** is not **`true`** (see `cvdPipeline.groovy`). This job does **not** use **`requireCtsNotListOnly`** (that gate applies only to CTS Execution).
 
 The **`Jenkinsfile`** sets **`aiReview`** with **`preset: 'cvd'`**: artifact collection uses the shared Cuttlefish patterns (`**/wifi*.log`, `**/cvd*.log`, `**/cts*.txt`, `**/cuttlefish*.zip`) and **does not** add the CTS Execution extras (`**/*.zip`, `**/invocation_summary.txt`, `**/test_result*.html`).
 
@@ -177,13 +177,13 @@ When **`true`**, the shared pipeline’s **Diagnostics → AI Review** stage is 
 
 The sequenced prompts and **`triage-cvd` / `rca-cvd` / `fix-cvd`** skills recognise both outcomes via a **Phase 0 — CVD boot preflight**. Triage emits a **`## CVD boot preflight`** header with **`CVD_STATUS`** (`BOOT_OK` / `BOOT_FAILED` / `BOOT_UNKNOWN`) derived from `"status": "Running"` in host CVD JSON logs and **`VIRTUAL_DEVICE_BOOT_COMPLETED`** per guest. On **`BOOT_OK`**, bootconfig warnings are **informational** and runtime/logcat findings are **primary**; if no actionable issue is found, Step 1 emits a single **`[CVD_HEALTHY]`** row, Step 2 confirms no root cause, and Step 3 writes a single observations note (or returns `FIX_UNKNOWN`). On **`BOOT_FAILED`** / **`BOOT_UNKNOWN`**, the existing boot-first priority is preserved.
 
-**Offline analysis via Gemini AI Assistant (success or failure).** The [Utilities / Gemini AI Assistant](../utilities/gemini_ai_assistant.md) job can run the **same** CVD Launcher sequenced prompts and `skills.yaml` against archived `test-results/` for any previous CVD Launcher **or** CTS Execution build — pipeline **passed or failed**, devices **booted or not**. Always use the **CVD Launcher** prompts (not the CTS Execution set) whenever the focus is CVD / Cuttlefish behaviour: the same prompts cover both the boot-failure lane and the runtime-health lane via Phase 0. Upload `step1_triage.txt`, `step2_rca.txt`, `step3_fixes.txt`, and `skills.yaml` from `workloads/android/pipelines/tests/cvd_launcher/prompt/sequenced/`, and set `GEMINI_ARTIFACTS_COMMAND` to the archived results location (e.g. `gcloud storage cp -r gs://.../<BUILD_NUMBER>/test-results/ .`). Phase 0 classifies `CVD_STATUS` from artifacts only (no pipeline state) and routes triage to the correct lane — useful both when a failed pipeline needs deeper CVD triage and when a passed pipeline masked questionable device behaviour.
+**Offline analysis via Gemini AI Assistant (success or failure).** The [Utilities / Gemini AI Assistant](../../utilities/gemini_ai_assistant.md) job can run the **same** CVD Launcher sequenced prompts and `skills.yaml` against archived `test-results/` for any previous CVD Launcher **or** CTS Execution build — pipeline **passed or failed**, devices **booted or not**. Always use the **CVD Launcher** prompts (not the CTS Execution set) whenever the focus is CVD / Cuttlefish behaviour: the same prompts cover both the boot-failure lane and the runtime-health lane via Phase 0. Upload `step1_triage.txt`, `step2_rca.txt`, `step3_fixes.txt`, and `skills.yaml` from `workloads/android/pipelines/tests/cvd_launcher/prompt/sequenced/`, and set `GEMINI_ARTIFACTS_COMMAND` to the archived results location (e.g. `gcloud storage cp -r gs://.../<BUILD_NUMBER>/test-results/ .`). Phase 0 classifies `CVD_STATUS` from artifacts only (no pipeline state) and routes triage to the correct lane — useful both when a failed pipeline needs deeper CVD triage and when a passed pipeline masked questionable device behaviour.
 
 Notes:
 
 - AI Review still requires **`ENABLE_GEMINI_AI_ASSISTANT=true`**.
 - When **`GEMINI_ANALYSE_ON_SUCCESS=true`**, a failing Gemini step in AI Review can still mark the overall job **`FAILURE`** (same `catchError` behaviour as when AI Review runs after a failed pipeline).
-- **Post-hoc analysis of a successful boot (recommended):** rather than re-running the pipeline with `GEMINI_ANALYSE_ON_SUCCESS=true`, use [**Workloads → Utilities → Gemini AI Assistant**](../utilities/gemini_ai_assistant.md) against the archived artifacts. Point **`GEMINI_ARTIFACTS_COMMAND`** at the CVD Launcher build's Cuttlefish/CVD artifacts (e.g. `gcloud storage cp -r gs://<bucket>/<path>/ .`), upload the three CVD Launcher sequenced prompts as **`GEMINI_PROMPT_FILE`** / **`GEMINI_PROMPT_FILE_2`** / **`GEMINI_PROMPT_FILE_3`** from `workloads/android/pipelines/tests/cvd_launcher/prompt/sequenced/step{1,2,3}_*.txt`, and upload the matching **`skills.yaml`** as **`GEMINI_SKILLS_YAML`**. The **Phase 0 — CVD boot preflight** will classify the run as **`BOOT_OK`** and route Gemini into the runtime-health lane, highlighting logcat/WiFi/late-kernel issues observed on booted devices without re-running the build.
+- **Post-hoc analysis of a successful boot (recommended):** rather than re-running the pipeline with `GEMINI_ANALYSE_ON_SUCCESS=true`, use [**Workloads → Utilities → Gemini AI Assistant**](../../utilities/gemini_ai_assistant.md) against the archived artifacts. Point **`GEMINI_ARTIFACTS_COMMAND`** at the CVD Launcher build's Cuttlefish/CVD artifacts (e.g. `gcloud storage cp -r gs://<bucket>/<path>/ .`), upload the three CVD Launcher sequenced prompts as **`GEMINI_PROMPT_FILE`** / **`GEMINI_PROMPT_FILE_2`** / **`GEMINI_PROMPT_FILE_3`** from `workloads/android/pipelines/tests/cvd_launcher/prompt/sequenced/step{1,2,3}_*.txt`, and upload the matching **`skills.yaml`** as **`GEMINI_SKILLS_YAML`**. The **Phase 0 — CVD boot preflight** will classify the run as **`BOOT_OK`** and route Gemini into the runtime-health lane, highlighting logcat/WiFi/late-kernel issues observed on booted devices without re-running the build.
 
 ### `GEMINI_COMMAND_LINE`
 
@@ -203,7 +203,7 @@ Where to upload Gemini outputs after analysis (for example `GCS_BUCKET`, or empt
 
 ### `STORAGE_BUCKET_DESTINATION`
 
-Optional override for Gemini artifact destination; align with [CTS Execution](../cts_execution/README.md) if you use bucket overrides there.
+Optional override for Gemini artifact destination; align with [CTS Execution](cts_execution.md) if you use bucket overrides there.
 
 ### `STORAGE_LABELS`
 
@@ -211,11 +211,11 @@ Optional GCS object metadata labels for stored Gemini artifacts.
 
 ### Gemini prompts and AI Review <a name="gemini-prompts-and-ai-review"></a>
 
-Default sequenced prompts and `skills.yaml` for this job live under `workloads/android/pipelines/tests/cvd_launcher/prompt/sequenced/` (CVD host/guest/kernel/logcat-focused skills: `triage-cvd`, `rca-cvd`, `fix-cvd`). See `workloads/android/pipelines/tests/cvd_launcher/prompt/sequenced/README_SKILLS.md` for loading behavior. [CTS Execution](../cts_execution/README.md) continues to use `cts_execution/prompt/sequenced` for suite + CVD correlation.
+Default sequenced prompts and `skills.yaml` for this job live under `workloads/android/pipelines/tests/cvd_launcher/prompt/sequenced/` (CVD host/guest/kernel/logcat-focused skills: `triage-cvd`, `rca-cvd`, `fix-cvd`). See `workloads/android/pipelines/tests/cvd_launcher/prompt/sequenced/README_SKILLS.md` for loading behavior. [CTS Execution](cts_execution.md) continues to use `cts_execution/prompt/sequenced` for suite + CVD correlation.
 
-Cuttlefish/CVD line-number grep guidance (example failure buckets, log paths, and substrings, plus what to do when the failure is non-obvious) is under `skills.yaml` → `global_constraints` → **“CVD errors — what to do”**; the same subsection is duplicated under [CTS Execution](../cts_execution/README.md#gemini-prompts-and-artifacts) `skills.yaml` for **CVD-only** parity.
+Cuttlefish/CVD line-number grep guidance (example failure buckets, log paths, and substrings, plus what to do when the failure is non-obvious) is under `skills.yaml` → `global_constraints` → **“CVD errors — what to do”**; the same subsection is duplicated under [CTS Execution](cts_execution.md#gemini-prompts-and-artifacts) `skills.yaml` for **CVD-only** parity.
 
-**CVD logs and devices that do not boot:** This job does **not** run Tradefed. When Gemini is enabled and the build **fails**, AI Review analyzes the copied Cuttlefish/CVD material to explain **launch and runtime** problems—especially **guest `kernel.log`** (bootconfig, panics, early boot), **`launcher.log`** (crosvm / assemble), workspace **`cvd*.log`**, Wi‑Fi logs, and **`cuttlefish_logs*.zip`**—not Compatibility Test assertions. That is the right diagnostic path when virtual devices **fail to boot**, **fail to stabilize**, or **never become usable** before any CTS run would matter. For failures that also require **which CTS tests failed** and Tradefed HTML/XML, use [CTS Execution](../cts_execution/README.md) (`preset: 'cts'`).
+**CVD logs and devices that do not boot:** This job does **not** run Tradefed. When Gemini is enabled and the build **fails**, AI Review analyzes the copied Cuttlefish/CVD material to explain **launch and runtime** problems—especially **guest `kernel.log`** (bootconfig, panics, early boot), **`launcher.log`** (crosvm / assemble), workspace **`cvd*.log`**, Wi‑Fi logs, and **`cuttlefish_logs*.zip`**—not Compatibility Test assertions. That is the right diagnostic path when virtual devices **fail to boot**, **fail to stabilize**, or **never become usable** before any CTS run would matter. For failures that also require **which CTS tests failed** and Tradefed HTML/XML, use [CTS Execution](cts_execution.md) (`preset: 'cts'`).
 
 For AI Review, the shared library copies artifacts using the **CVD** filter: `**/wifi*.log`, `**/cvd*.log`, `**/cts*.txt`, `**/cuttlefish*.zip`. Cuttlefish zips are unpacked under `test-results/cvd` before review. The job definition grants **Copy Artifact** permission on itself so the Diagnostics stage can copy from the same build.
 
@@ -223,7 +223,7 @@ For AI Review, the shared library copies artifacts using the **CVD** filter: `**
 
 The following examples show how the scripts may be used standalone on a test instance.
 
-From `Workloads/Android/Environment/CF Instance Template` create a Cuttlefish test instance:
+From `Android Workflows/Environment/CF Instance Template` create a Cuttlefish test instance:
 
 - `ANDROID_CUTTLEFISH_REVISION`: choose the version you wish to build the template from
 - `CUTTLEFISH_INSTANCE_NAME` : provide a unique name, starting with cuttlefish-vm, e.g. `cuttlefish-vm-test-instance-v110.`
@@ -305,7 +305,7 @@ When testing is complete, it is advisable to stop the instance, e.g.
 
 When entirely finished with the instance, delete it. e.g.
 
-From `Workloads/Android/Environment/CF Instance Template` delete the Cuttlefish test instance:
+From `Android Workflows/Environment/CF Instance Template` delete the Cuttlefish test instance:
 
 - `CUTTLEFISH_INSTANCE_NAME` : provide a unique name, starting with cuttlefish-vm, e.g. `cuttlefish-vm-test-instance-v110.`
 - `DELETE` : This ensures the instance template, disk image and VM instance are deleted.

@@ -59,7 +59,7 @@ One-time setup requirements.
 
 The Android revision, i.e. branch or tag to build. It must be seeded into ABFS (see Prerequisites). Tested versions:
 
-- `android-14.0.0_r30` (ap2a)
+- `android-14.0.0_r30` (ap1a)
 - `android-15.0.0_r36` (bp1a)
 - `android-16.0.0_r3` (bp3a)
 
@@ -225,7 +225,7 @@ Enable Gemini AI to support in diagnosis of build and test failures.
 
 ### Gemini prompts
 
-The job uses the prompt file from the repository only; there is no Jenkins parameter to override it (default: `build_prompt_v2.txt`).
+The job uses the prompt file from the repository only; there is no Jenkins parameter to override it (sequenced: `aaos_builder/prompt/sequenced/step1_triage.txt`, `step2_rca.txt`, `step3_fixes.txt`).
 
 ### `GEMINI_COMMAND_LINE`
 
@@ -236,7 +236,7 @@ Note: Prompts are piped via `stdin` and output is redirected to a JSON file. Ant
 
 ### `AI_REVIEW_RUNTIME`
 
-`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. This job has no Argo workflow.
+`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. The Argo equivalent is WorkflowTemplate `aaos-builder-abfs`.
 
 ### `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES`
 

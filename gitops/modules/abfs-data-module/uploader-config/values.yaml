@@ -18,7 +18,7 @@ horizonNamespace: horizon
 workflowNamespace: workflows
 eventsNamespace: argo-events
 jobServiceAccountName: workflow-executor-elevated
-cloudSdkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based
+# cloudSdkImage is set by the abfs-data-module Application.
 uploaderConfigMapName: abfs-uploader-config
 abfsNamespace: abfs
 uploaderStatefulSetName: abfs-gerrit-uploader

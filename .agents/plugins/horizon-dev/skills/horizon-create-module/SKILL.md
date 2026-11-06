@@ -446,5 +446,5 @@ Open `gitops/apps/module-manager/templates/module-catalog.yaml` and add the new 
 - **[03_argo_workflows_and_events.md](./references/03_argo_workflows_and_events.md)** — WorkflowTemplates (`init` + `execute`), parameters, artifacts, and Argo Events Sensors.
 - **[04_gke_apps_and_gateway.md](./references/04_gke_apps_and_gateway.md)** — GKE workloads, Gateway API HTTPRoute, HealthCheckPolicy, and NetworkPolicy.
 - **[05_module_catalog_registration.md](./references/05_module_catalog_registration.md)** — ModuleCatalog CR, hard/soft dependencies, and portal HTML overview.
-- **[06_partner_contributions.md](./references/06_partner_contributions.md)** — Partner contribution workflow, module placement in `gitops/modules/`, Apache 2.0 license requirement, and CLA. File locations, branch and PR rules: see `docs/contributing.md` and `docs/branching_strategy.md`.
+- **[06_partner_contributions.md](./references/06_partner_contributions.md)** — Partner contribution workflow, module placement in `gitops/modules/`, Apache 2.0 license requirement, branch rules (`contrib/feature/*` or `contrib/fix/*` -> `main`), and CLA. File locations, branch and PR rules: see `docs/contributing.md` and `docs/branching_strategy.md`.
 - **[07_testing_and_verification.md](./references/07_testing_and_verification.md)** — Linting, Argo CD sync, KCC status checks, and Horizon CLI commands.

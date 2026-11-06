@@ -74,7 +74,7 @@ license:
     namespace: abfs
     serviceAccountName: abfs-license-validator
     # Needs bash + kubectl; google-cloud-cli:stable has no kubectl.
-    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based
+    # image is set by the abfs-service-module Application.
 
 # Spanner and GCS are managed by abfs-data-module. These values configure
 # the ABFS server connection; keep them aligned with that module.

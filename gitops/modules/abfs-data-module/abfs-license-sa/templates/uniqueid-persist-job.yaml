@@ -42,7 +42,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: persist
-          image: {{ .Values.cloudSdkImage | quote }}
+          image: {{ required "cloudSdkImage is set by the abfs-data-module Application" .Values.cloudSdkImage | quote }}
           imagePullPolicy: IfNotPresent
           env:
             - name: PROJECT_ID

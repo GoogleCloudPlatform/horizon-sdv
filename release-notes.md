@@ -33,6 +33,1286 @@ limitations under the License. -->
 <td valign="top" width="14%"><p><strong>Version</strong></p>
 </td>
 
+<td valign="top" width="86%"><p><strong>Release 5.0.0</strong></p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="14%"><p><strong>Date</strong></p>
+</td>
+
+<td valign="top" width="86%"><p><strong>30.10.2026</strong></p>
+</td>
+</tr>
+
+</tbody>
+</table>
+<h2>Summary</h2>
+<p><strong>Horizon SDV 5.0.0</strong> is the major release which extends the new Horizon architecture with ABFS modules set and Cloud workstation module. ABFS solution in Rel.5.0.0 is upgraded to ver.0.1.14 that changes ABFS backend architecture and introduces a new Kubernetes node pool where ABFS server and Uploader nodes are running. Rel.5.0.0 provides with migration track for AI agent used to automated analysis of build or testing issues of Android or Open BSW, hence user can decide to use legacy Gemini agent or new Antigravity for potential problem triage.</p>
+
+<p><strong>Horizon SDV 5.0.0</strong> also delivers several feature improvements in Developer Portal application, MTKC implementation and important bug fixes including security fixes for vulnerable open-source modules used in Horizon.</p>
+
+<p><strong>Horizon SDV 5.0.0</strong> package offers fully verified and documented upgrade patch (from Rel.4.3.0 to Rel.5.0.0). (see details in /docs/guides/upgrade_guide_4_3_0_to_5_0_0.md)</p>
+
+<h2>New Features</h2>
+
+<table width="100%">
+
+<tbody>
+
+<tr>
+<th valign="top" width="12%"><p><strong>ID</strong></p>
+</th>
+
+<th valign="top" width="24%"><p><strong>Feature</strong></p>
+</th>
+
+<th valign="top" width="64%"><p><strong>Description</strong></p>
+</th>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-1931</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>ABFS modularize and update to v0.1.14</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p><strong>Summary</strong></p>
+
+<p>Horizon SDV 5.0.0 upgrades the Android Build File System (ABFS) integration from 0.0.33 to ABFS/CASFS 0.1.14.</p>
+
+<p>ABFS infrastructure is now managed through Horizon modules and the Developer Portal, replacing the previous Terraform-based integration and 29 Jenkins administrative jobs.</p>
+
+<p>The release adds Argo Workflows for ABFS-powered AAOS builds, ABFS Docker image creation and Spanner backup scheduling. The existing Jenkins build jobs remain available.</p>
+
+<p>The ABFS builder selects the build/soong sandbox fix from AAOS_REVISION instead of shipping Android 15 cherry-picks as the POST_REPO_COMMAND default. Android 14, 15 and 16 tagged releases build on ABFS with an empty POST_REPO_COMMAND; the field is again free for user commands.</p>
+
+<p><strong>New Features and Improvements</strong></p>
+
+<p><strong>ABFS infrastructure management</strong></p>
+
+<ul>
+<li>
+<p>Introduces <code>abfs-data-module</code>, <code>abfs-service-module</code> and <code>abfs-client-module-ubuntu</code>.</p>
+</li>
+<li>
+<p>Moves ABFS infrastructure provisioning and configuration to Horizon modules managed through the Developer Portal.</p>
+</li>
+<li>
+<p>Adds license import and clear workflows, including license content verification.</p>
+</li>
+<li>
+<p>Adds an uploader configuration workflow to select the Android revision, manifest URL and AndroidCustom configuration.</p>
+</li>
+<li>
+<p>Adds Spanner backup scheduling and portal overview pages for Spanner, the ABFS server and uploaders.</p>
+</li>
+<li>
+<p>Deploys the ABFS server and three uploaders through Argo CD and KCC on dedicated node pools.</p>
+</li>
+<li>
+<p>Keeps the GCS bucket when the data module is disabled.   <strong>AAOS build integration</strong></p>
+</li>
+<li>
+<p>Provides the <code>aaos-builder-abfs</code> Argo Workflow alongside the existing Jenkins job.</p>
+</li>
+<li>
+<p>Upgrades the ABFS build client to 0.1.14.</p>
+</li>
+<li>
+<p>Supports branch-based ABFS mounts and configurable server, client flags, cache settings, cache cleanup, cacheman timeout and parallel build jobs.</p>
+</li>
+<li>
+<p>Adds an ABFS Docker Image Template workflow using the 0.1.14 apt repository, alongside the existing Jenkins job.</p>
+</li>
+<li>
+<p>Verifies ABFS-powered builds for Android 14, Android 15 and Android 16, including Cuttlefish and SDK targets.   <strong>Android build compatibility</strong></p>
+</li>
+<li>
+<p>Android 14 (<code>android-14.0.0_r30</code>) builds without a Soong patch.</p>
+</li>
+<li>
+<p>Android 15 (<code>android-15.0.0_r36</code>) builds with three <code>build/soong</code> cherry-picks.</p>
+</li>
+<li>
+<p>Android 16 (<code>android-16.0.0_r3</code>) builds with a two-line <code>sed</code> patch in <code>ui/build/soong.go</code>.</p>
+</li>
+<li>
+<p>The A15/A16 Soong sandbox fix is being automated per lunch target in PR #1332. Until that change is merged, the tested fix may require the existing build configuration.   <strong>Build performance</strong>  Reference Android 15 builds completed in approximately 40 minutes on the first build and 5-12 minutes on subsequent builds with a warmed cache. Actual build times depend on the Android target, cache state and build environment.  <strong>Known Limitations</strong></p>
+</li>
+<li>
+<p>The COS client module is implemented but hidden from the Developer Portal. CASFS 0.1.14 crashes on COS 129 with GKE 1.36. Follow-up: TAA-2291.</p>
+</li>
+<li>
+<p>ABFS client authentication and TLS are not enabled in the current integration. Follow-up: TAA-2294.</p>
+</li>
+<li>
+<p>License import and clear recreate the ABFS server and uploader node pools to apply license metadata. Directly stamping the license from the workflows is postponed. Follow-up: TAA-2238.</p>
+</li>
+<li>
+<p>AndroidCustom configuration may be replaced with its default value. Follow-up: TAA-2241.</p>
+</li>
+<li>
+<p>Git LFS integration and repository support are unchanged.</p>
+</li>
+<li>
+<p>The license is bound to the service account email. Recreating the service account can invalidate the license.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-1842</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>Cloud Workstation module for new Horizon architecture</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Add Cloud Workstations as an experimental Horizon module. Once enabled in the Developer Portal, users run Portal workflows to manage workstation configurations, workstations and workstation images. It runs alongside the Jenkins Cloud Workstations jobs and does not replace them yet.</p>
+
+<p>The Jenkins jobs and the Jenkins cluster <code>sdv-cloud-ws-cluster</code> are not changed.</p>
+
+<p><strong>Config Connector</strong></p>
+
+<ul>
+<li>
+<p>Config Connector is installed as a Git-pinned operator (<code>1.156.0</code>, vendored release bundle, image tag and digest pinned) in <code>gitops/apps/configconnector-operator</code>, replacing the GKE add-on. Terraform keeps the add-on disabled (<code>config_connector_config.enabled = false</code>). Cluster mode and <code>gke-config-connector-sa</code> are unchanged.   <strong>Module</strong> <code>cloud-workstations</code> (main environment only, hard dependency on <code>workloads-common</code>)</p>
+</li>
+<li>
+<p>App-of-apps chart with child Applications <code>mod-cloud-workstations-core</code> and <code>mod-cloud-workstations-argo-workflows</code>, a Portal overview page, and the <code>cloud-workstations</code> namespace with default-deny NetworkPolicies.</p>
+</li>
+<li>
+<p>Horizon CRDs <code>WorkstationCluster</code>, <code>WorkstationConfig</code> and <code>Workstation</code>, and a controller (<code>cloud-workstations-module-app:0.2.1</code>).</p>
+<ul>
+<li>
+<p>The controller writes the matching Config Connector objects.</p>
+</li>
+<li>
+<p>Through the Workstations API, it applies the fields Config Connector does not own: config posture (<code>disableSsh</code>, <code>allowedPorts</code>, <code>ephemeralDirectories</code>) and the unconditional admin and user IAM bindings.</p>
+</li>
+<li>
+<p>Ready requires the Config Connector object, posture and IAM to be in sync. Conditions include <code>observedGeneration</code>.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Enabling the module creates the cluster <code>horizon-sdv-ws-cluster</code>. Disabling it deletes workstations, then configurations, then the cluster, and waits for each step in Google Cloud.</p>
+</li>
+<li>
+<p>Module Manager <code>0.3.7</code>:</p>
+<ul>
+<li>
+<p>RBAC to clean up the module&#39;s resources and CRDs.</p>
+</li>
+<li>
+<p>Dependents are drained before their dependencies.</p>
+</li>
+<li>
+<p>A <code>platform-drain-gate</code> ConfigMap disables enabled modules before the rest of the platform is deleted on <code>terraform destroy</code>. <code>terraform destroy</code> waits up to 120 minutes.   <strong>Portal workflows</strong> (WorkflowTemplate and Sensor each)</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Configurations: <code>cws-create-config</code>, <code>cws-update-config</code>, <code>cws-delete-config</code>, <code>cws-get-config</code>, <code>cws-list-configs</code>, <code>cws-list-workstations-by-config</code>.</p>
+</li>
+<li>
+<p>Workstations (admin): <code>cws-admin-create-workstation</code>, <code>cws-admin-delete-workstation</code>, <code>cws-admin-get-workstation</code>, <code>cws-admin-list-workstations</code>, <code>cws-admin-add-workstation-users</code>, <code>cws-admin-remove-workstation-users</code>.</p>
+</li>
+<li>
+<p>Workstations (user): <code>cws-user-list-usable-workstations</code>, <code>cws-user-get-workstation</code>, <code>cws-user-get-workstation-configuration</code>, <code>cws-user-start-workstation</code>, <code>cws-user-stop-workstation</code>. User workflows match the hidden <code>submittedBy</code> field (the signed-in username) against the workstation&#39;s users.</p>
+</li>
+<li>
+<p>Images: <code>cws-image-build</code> builds preflight, GNOME, Code OSS, Android Studio, ASfP and the workflow step image through <code>common-docker-image-build</code>, and prints the pushed digests.</p>
+</li>
+<li>
+<p>Behaviour:</p>
+<ul>
+<li>
+<p>Parameters, defaults and validation messages follow the Jenkins jobs.</p>
+</li>
+<li>
+<p>Writes lock per configuration or per workstation, not globally.</p>
+</li>
+<li>
+<p>Deletes require <code>confirmDelete=true</code>.</p>
+</li>
+<li>
+<p>Start and stop use a dedicated identity.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Step image: every workflow except <code>cws-image-build</code> runs on <code>horizon-sdv/cloud-ws-workloads/cws-workflow:latest</code> (Debian, gcloud, kubectl, jq), built by <code>cws-image-build</code>. It must be built once per environment before the other workflows run.   <strong>Terraform</strong></p>
+</li>
+<li>
+<p>Service accounts <code>gke-cws-module-sa</code> (controller), <code>gke-cws-host-vm-sa</code> (workstation VMs) and <code>gke-cws-workstation-power-sa</code> (start and stop).</p>
+</li>
+<li>
+<p>Custom roles <code>horizonCloudWorkstationsController</code> and <code>horizonCloudWorkstationsPower</code>.</p>
+</li>
+<li>
+<p>The <code>cloudWorkstations</code> cluster config is passed through the root Application to Module Manager.</p>
+</li>
+<li>
+<p>Image versions: controller image <code>0.2.1</code>, Module Manager image <code>0.3.7</code>.   <strong>Other</strong></p>
+</li>
+<li>
+<p><code>common-docker-image-build</code> has an optional <code>androidPool</code> parameter (default <code>false</code>) to schedule a build on the android node pool.</p>
+</li>
+<li>
+<p><code>deploy.sh</code> requires <code>curl</code>.</p>
+</li>
+<li>
+<p>Docs:</p>
+<ul>
+<li>
+<p>Module README, workflow guides and field ownership.</p>
+</li>
+<li>
+<p>Config Connector operator, drain gate and deployment guide updates.</p>
+</li>
+</ul>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-1858</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>Upgrade Gemini CLI usage in pipelines to Antigravity SDK integration</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Replace the Gemini CLI in the AI Review stage with the Antigravity SDK. This keeps the review on the current agent runtime (antigravity SDK 0.1.16) and covers the Gemini CLI end of life. Additionally update default Gemini model from <code>gemini-2.5-pro</code> to <code>gemini-3.8-flash</code>, as the first was decommissioned on 20 Oct 2026 .</p>
+
+<p>Adds Antigravity SDK support to pipeline AI Review. Antigravity (AGY) uses Vertex AI authentication. The model comes from <code>GEMINI_MODEL</code> when that variable is set; otherwise the SDK default (<code>gemini 3.8 flash</code>) is used. AGY is selectable alongside Gemini CLI through <code>AI_REVIEW_RUNTIME</code>.</p>
+
+<p>The AGY runtime authenticates to Vertex AI and analyzes the CI logs and test-results already staged for the job. It decides the domain from those artifacts and loads the matching skill. Skills for each individual classification domain (AAOS, CTS, CVD, OpenBSW) are optimised with domain-specific procedures, gating criteria, and evidence hierarchies. Strict constraints prevent timeouts / excessively large log dumps and minimise token usage to prevent limits being exceeded.</p>
+
+<p>The agent is limited to read-only workspace tools. Commands that run a shell, edit or delete files, or start a subagent are denied. Recommended fixes are proposals only and are not applied. Each finding includes evidence from logs or source paths. The result is validated as a <code>HorizonAnalysis</code></p>
+
+<p><strong>Artifacts</strong></p>
+
+<ul>
+<li>
+<p>gemini assist/agy_analysis_and_proposed_fix.md</p>
+</li>
+<li>
+<p>traces/agent_trace_&lt;workflow_id&gt;_&lt;session_id&gt;.json, including model turns and steps</p>
+</li>
+<li>
+<p>Cloud Logging log name sdlc-agent-runtime   <strong>Jobs</strong></p>
+</li>
+<li>
+<p>AAOS Builder, CTS Execution and CVD Launcher (Jenkins and ArgoWorkflows pipelines):</p>
+<ul>
+<li>
+<p>Jenkins: AI_REVIEW_RUNTIME=agy</p>
+</li>
+<li>
+<p>Helm/Argo Workflows pipelines: aiReviewRuntime: agy</p>
+</li>
+</ul>
+</li>
+<li>
+<p>AAOS ABFS Builder, and OpenBSW BSW Builder (Jenkins only):</p>
+<ul>
+<li>
+<p>AI_REVIEW_RUNTIME=agy</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Gemini AI Assistant utility: choose agy. A prompt file and skills.yaml are not required.   GEMINI_ARTIFACTS_COMMAND is still required. Pipeline images that enable the Gemini AI assistant include <code>google-antigravity</code> SDK version 0.1.16 and <code>google-cloud-logging</code>.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2321</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>[AI AGENT PLUGINS]: Existing agentic workflows as agent plugins</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Providing the existing agentic workflows as agent plugins, easily usable with Antigravity 2.0, Antigravity CLI and Antigravity SDK.</p>
+
+<p>Creating the folder structure and the first plugins, to easily allow adding further plugins and skills.</p>
+
+<p>At a later point, existing CI workflows will be migrated to Antigravity leveraging the plugins</p>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+<h2>Improved Features</h2>
+
+<table width="100%">
+
+<tbody>
+
+<tr>
+<th valign="top" width="12%"><p><strong>ID</strong></p>
+</th>
+
+<th valign="top" width="24%"><p><strong>Feature</strong></p>
+</th>
+
+<th valign="top" width="64%"><p><strong>Description</strong></p>
+</th>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-1888</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>MTK Connect upgrade to V1.13</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Upgrade MTK Connect from v1.12.1 to v1.13.0 so Horizon SDV can use the latest MTK Connect features, improvements, and bug fixes.</p>
+
+<p>MTK Connect is not published as an upstream helm chart. It is deployed from the in-repo chart gitops/apps/mtk-connect, which pins each server component image individually. The upgrade therefore consists of bumping every component image to the tag shipped with v1.13.0, and updating the MTK Connect version string passed to the devices service.</p>
+
+<p>The v1.13.0 component set was confirmed against the MTK Connect Harbor registry (<a href="http://harbor.scpmtk.com/mtk-connect">harbor.scpmtk.com/mtk-connect</a>). mtk-connect-docs:v2.0.19 is the first docs image that includes the v1.13.0 release notes, and mtk-connect-installers:v1.13.0 serves the v1.13 agent installers.</p>
+
+<p>gitops/values.yaml - Updates chartVersions.mtkconnect.version from v1.12.1 to v1.13.0. This is the value the root chart passes to the mtk-connect Argo CD Application and is the one used at deployment. gitops/apps/mtk-connect/values.yaml - Updates the default chartVersions.mtkconnect.version to v1.13.0 and bumps the component images:</p>
+
+<ul>
+<li>
+<p>mtk-connect-router: v2.5.1 -&gt; v2.6.0</p>
+</li>
+<li>
+<p>mtk-connect-authenticator: v5.2.0 -&gt; v5.2.1</p>
+</li>
+<li>
+<p>mtk-connect-wamprouter: v3.0.33 -&gt; v3.0.34</p>
+</li>
+<li>
+<p>mtk-connect-devices: v9.1.0 -&gt; v9.3.1</p>
+</li>
+<li>
+<p>mtk-connect-portal: v7.1.1 -&gt; v7.2.0</p>
+</li>
+<li>
+<p>mtk-connect-docs: v2.0.18 -&gt; v2.0.19</p>
+</li>
+<li>
+<p>mtk-connect-installers: v1.12.0 -&gt; v1.13.0 gitops/apps/mtk-connect/Chart.yaml - Bumps appVersion from 1.12.1 to 1.13.0.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2204</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>[MTK Connect] Add MTK Connect exec interface to Cuttlefish device config</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Add the exec interface introduced in MTK Connect v1.13 to the standard Cuttlefish device configuration, so Horizon users can use the new MTK Connect features with Cuttlefish devices.</p>
+
+<p>The exec interface runs a command on a device and streams stdout/stderr back in real time, with stdin forwarded to the remote process. It is the interface used by the mtkc CLI exec command and by the exec_command tool of the mtkc MCP server. Without it, Cuttlefish devices expose no exec type and mtkc cannot run commands on them.</p>
+
+<p>workloads/common/mtk-connect/create-testbench.js - Adds an exec interface to the adb device configuration, using the adb driver.</p>
+
+<p>The adb device configuration is applied to every Cuttlefish device on each run, so existing testbenches pick up the interface the next time a pipeline creates or updates them. Host-only devices and the dedicated tunnel device have no adb connection and are unchanged.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-1671</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>Horizon CLI enhancements</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Users need a Horizon CLI that can discover the Horizon API, list GCS artifacts, current version and keep a local command history, with the API and cluster wiring required to list allowed buckets and objects.</p>
+
+<p>Refactor <code>tools/horizon</code> on Cobra (<code>github.com/spf13/cobra</code>) and move shared code into <code>tools/horizon/internal</code>. Existing auth, config, catalog, version, and workflow commands are preserved. <code>workflow</code> keeps the <code>ci</code> and <code>job</code> aliases. <code>workflow poll</code> and <code>workflow finalize</code> remain removed and point users at <code>wait</code> and <code>show</code>.</p>
+
+<p>New CLI surface:</p>
+
+<ul>
+<li>
+<p>Global flags: <code>--debug</code> / <code>-d</code>, <code>--json</code> / <code>-j</code>, <code>--no-banner</code> / <code>-b</code>, <code>--insecure</code> / <code>-i</code>.</p>
+</li>
+<li>
+<p><code>horizon api list|paths|show|refresh</code> - browse Horizon OpenAPI (embedded snapshot, refreshable from <code>{api}/openapi.json</code>).</p>
+</li>
+<li>
+<p><code>horizon artifacts buckets</code> and <code>horizon artifacts objects</code> - list allowed GCS buckets and objects (<code>--prefix</code>, <code>--limit</code>, <code>--page-token</code>).</p>
+</li>
+<li>
+<p><code>horizon history</code> - recent invocations in <code>~/.config/horizon/history-YYYY-MM.json</code> (default 10, max 100). Secret flags and JWT-like values are stored as <code>***</code>. The <code>history</code> command itself is not recorded.   Fixes included with the CLI tests:</p>
+</li>
+<li>
+<p>Byte sizes at or above 1 KiB were labeled one unit too high (<code>formatIECBytes</code>).</p>
+</li>
+<li>
+<p>History file rotation by size used the display cap (10) instead of the file cap (1000). Rotation now keeps the newest 1000 entries.   Horizon API (<code>horizon-api-app</code> 1.0.1 -&gt; 1.1.1):</p>
+</li>
+<li>
+<p><code>GET /v1/artifacts/buckets</code> and <code>GET /v1/artifacts/buckets/{bucket}/objects</code> (<code>prefix</code>, <code>pageToken</code>, <code>limit</code>), documented in OpenAPI.</p>
+</li>
+<li>
+<p>Allowlist is the static <code>ARTIFACTS_ALLOWED_BUCKETS</code> list plus <code>GCSBucket</code> CR <code>spec.bucketName</code> values, filtered by bucket-name rules and an optional project-id prefix.</p>
+</li>
+<li>
+<p>Object listing is proxied over in-cluster HTTPS to storage-gcs-module, with a 60s timeout.   storage-gcs-module:</p>
+</li>
+<li>
+<p><code>GET /api/v1/buckets/{bucket}/objects-list</code> lists objects by name prefix (<code>prefix</code>, <code>pageToken</code>, <code>pageSize</code> 1-1000, default 1000). An empty prefix lists from the start of the bucket.   GitOps / Terraform:</p>
+</li>
+<li>
+<p>horizon-api Role/RoleBinding to get/list/watch <code>gcsbuckets</code> in the GCS buckets namespace.</p>
+</li>
+<li>
+<p>Deployment args for the artifacts module URL, GCS project id, and optional static allowlist. The module API token and TLS CA are mounted from secrets copied into the horizon-api namespace.</p>
+</li>
+<li>
+<p>NetworkPolicy egress from horizon-api to storage-gcs-module port 8443, and a matching ingress rule on the module.</p>
+</li>
+<li>
+<p>Parent Application sets <code>artifactsModuleUrl</code> and <code>artifactsGcsProjectId</code>.</p>
+</li>
+<li>
+<p>Image versions: <code>horizon-api-app</code> 1.1.1, <code>horizon-dev-portal</code> 4.3.0 -&gt; 5.0.0 (portal application source is unchanged; the tag bump is for a rebuilt image that ships the CLI).   <code>docs/developer_portal_user_guide.md</code> documents the Cobra help text, <code>history</code>, <code>api</code>, and <code>artifacts</code>.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2211</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>Update default Cuttlefish version from v1.41.0 to v1.55.3</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Default Cuttlefish instance templates move from v1.41.0 (<code>cuttlefish-vm-v1410</code> and <code>cuttlefish-vm-v1410-arm64</code>) to v1.55.3 (<code>cuttlefish-vm-v1553</code> and <code>cuttlefish-vm-v1553-arm64</code>). Jenkins cloud labels and the GitOps Cuttlefish tag follow that name. CF Instance Template builds pin the Rust toolchain to 1.89.0 when it is not already pinned, so the v1.55.3 host-tools build succeeds with the current uuid crate. Rebuild the v1.55.3 instance templates before using the new cloud labels.</p>
+
+<p>The previous default version of Cuttlefish v1.41.0 is now problematic</p>
+
+<ul>
+<li>
+<p>in x86, an out-of-date repo link for bazel is used</p>
+</li>
+<li>
+<p>in x86 and arm, the Rust compiler and the uuid crate do not match   Cuttlefish v1.55.3 fixes the out-of-date repo for x86, but the Rust compiler and the uuid crate still do not match; it builds with Rust 1.86, whereas the latest crate (1.28) requires a minimum of Rust 1.89 (Note: latest crate is used due to lack of <code>Cargo.lock</code> to pin it). Therefore, in order to build successfully with Cuttlefish v1.55.3, the Rust version needs to be pinned to 1.89.  This change moves the default version of Cuttlefish from v1.41.0 to v1.55.3 and includes a default pinning of Rust to 1.89 if a pinning is not already done; this is achieved using the build parameter <code>ANDROID_CUTTLEFISH_POST_COMMAND</code> (Jenkins) / <code>cuttlefishPostCommand</code> (Developer Portal) for the jobs which build the cuttlefish instance templates.  Default Jenkins Cloud names are also modified accordingly.  <strong>Dependencies</strong></p>
+</li>
+<li>
+<p>v1.55.3 tag must be available from <code>ANDROID_CUTTLEFISH_REPO_URL</code> (public android-cuttlefish, or a private fork of that tag).</p>
+</li>
+<li>
+<p><code>GitOps config.workloads.android.cuttlefish.tag</code> is now v1553, so the Jenkins clouds resolve to <code>cuttlefish-vm-v1553</code> and <code>cuttlefish-vm-v1553-arm64</code>. Sync GitOps and confirm the templates exist (or create them) before running CTS, CVD, or dev-instance jobs that take the new default label.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2134</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>Update Jenkins Version</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Update Jenkins to address security issues. As of this commit, the latest LTS version of Jenkins is 2.568.3. This version was first included in helm chart version jenkins-5.9.56.</p>
+
+<p>The chart version jenkins-5.9.63 was the latest version at the time of this commit. It uses the same LTS version and includes additional bug fixes.</p>
+
+<p>Plugin versions are pinned explicitly in values-jenkins.yaml, so a chart upgrade on its own cannot change them. The 5.9.63 release notes update the kubernetes plugin to 4557.ve746270f672f, but the pin at 4423.vb_59f230b_ce53 overrode it, so the chart bump alone did not deliver that change. The pinned plugins are therefore updated alongside the chart.</p>
+
+<p>gitops/values.yaml - Updates the Jenkins helm chart from 5.9.18 to 5.9.63. gitops/workloads/values-jenkins.yaml - Updates pinned plugin versions. Candidates were taken from the update site scoped to the deployed core, which only lists releases declaring compatibility with 2.568.3.</p>
+
+<p>keycloak requires a newer jackson2-api, which requires a newer jakarta-xml-bind-api, and workflow-multibranch requires a newer cloudbees-folder. These are pinned explicitly so the resolver cannot bump them silently and leave the running controller out of step with values-jenkins.yaml.</p>
+
+<p><strong>List of resolved vulnerabilities</strong></p>
+
+<p>Jenkins core 2.568.3 resolves 14 issues (8 High, 6 Medium) from <a href="https://www.jenkins.io/security/advisory/2026-09-02/">https://www.jenkins.io/security/advisory/2026-09-02/</a> :</p>
+
+<ul>
+<li>
+<p>SECURITY-3972 / <a href="https://github.com/advisories/GHSA-g5fg-fmcm-8xx6">CVE-2026-84645</a> (High): Deserialization vulnerability</p>
+</li>
+<li>
+<p>SECURITY-3908 / <a href="https://github.com/advisories/GHSA-8wrx-j32g-7fcf">CVE-2026-84646</a> (Medium): Lack of type restriction in deserialization allows creating user objects</p>
+</li>
+<li>
+<p>SECURITY-3915 / <a href="https://github.com/advisories/GHSA-45rc-jrc6-vpjg">CVE-2026-84647</a> (High): Instantiation of any types related to configuration</p>
+</li>
+<li>
+<p>SECURITY-3967 / <a href="https://github.com/advisories/GHSA-qgwr-f9q8-fxgq">CVE-2026-84648</a> (High): Stored XSS vulnerability in system log viewer</p>
+</li>
+<li>
+<p>SECURITY-3878 / <a href="https://github.com/advisories/GHSA-hxvq-fvg2-gh6m">CVE-2026-84649</a> (High): Cross-origin exposure of CSRF token</p>
+</li>
+<li>
+<p>SECURITY-4032 / <a href="https://github.com/advisories/GHSA-6q2p-xwgj-7xw4">CVE-2026-84650</a> (High): Unsafe deserialization allows overwriting configuration objects</p>
+</li>
+<li>
+<p>SECURITY-4025 / <a href="https://github.com/advisories/GHSA-j4r9-h92x-jjh3">CVE-2026-84651</a> (Medium): Unsafe deserialization allows overwriting other agents</p>
+</li>
+<li>
+<p>SECURITY-4016 / <a href="https://github.com/advisories/GHSA-42rh-v5qm-8p5w">CVE-2026-84652</a> (High): Session fixation vulnerability</p>
+</li>
+<li>
+<p>SECURITY-3981 / <a href="https://github.com/advisories/GHSA-r4vq-pcpc-w89c">CVE-2026-84653</a> (Medium): Incorrect permission check in Appearance configuration page</p>
+</li>
+<li>
+<p>SECURITY-3926 / <a href="https://github.com/advisories/GHSA-jrvc-6cvv-qqx5">CVE-2026-84654</a> (Medium): Form submission data binding can set static fields</p>
+</li>
+<li>
+<p>SECURITY-3879 / <a href="https://github.com/advisories/GHSA-g8v4-mgp3-5f84">CVE-2026-84655</a> (Medium): Injection vulnerability in REST API</p>
+</li>
+<li>
+<p>SECURITY-4006 / <a href="https://github.com/advisories/GHSA-9v33-56f7-qg5c">CVE-2026-84656</a> (Medium): Missing permission check allows reading build parameters</p>
+</li>
+<li>
+<p>SECURITY-4015 / <a href="https://github.com/advisories/GHSA-c5q4-vhqv-p6fj">CVE-2026-84657</a> (Medium): Missing permission check allows canceling builds</p>
+</li>
+<li>
+<p>SECURITY-4038 / <a href="https://github.com/advisories/GHSA-m2jq-fx7h-7hr9">CVE-2026-84677</a> (Medium): Stored XSS vulnerability in update-center2   <strong>Open Source Component Changes</strong>  Jenkins helm chart updated from 5.9.18 to 5.9.63 (Jenkins LTS 2.568.3). Pinned plugins updated: cloudbees-folder, configuration-as-code, credentials-binding, git-client, jackson2-api, jakarta-xml-bind-api, pipeline-build-step, pipeline-groovy-lib, script-security, workflow-cps, workflow-multibranch, file-parameters, github-branch-source, keycloak, and kubernetes.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2218</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>[Security] Upgrade go toolchain and patch golang modules</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Fix known vulnerabilities in the Go standard library and <a href="http://golang.org/x">http://golang.org/x</a></p>
+
+<p>modules, and move every Go module off unsupported Go releases (1.22 and 1.25 are end of support; 1.26 builder tags were floating).</p>
+
+<p>Also fix container deployments failing with "Call to function "fileset" failed: function returned an inconsistent result" in sdv-container-images/main.tf. The deployer clones the repository fresh, so the dev portal&#39;s cli/ directory does not exist at plan time. local_file.horizon_cli_docker_src creates it during apply, after which fileset() over the portal context returns more files than it did at plan, and Terraform 1.14 aborts. The issue exists on main since TAA-1841.</p>
+
+<p>Go upgrade:</p>
+
+<ul>
+<li>
+<p>All six Go modules (tools/horizon, horizon-api, horizon-dev-portal proxy, module-manager, storage-gcs-module, workflow-namespace-drain) set <code>go 1.27.0</code> and <code>toolchain go1.27.2</code>.</p>
+</li>
+<li>
+<p>Every Go builder stage uses golang:1.27.2-alpine (golang:1.27.2-bookworm for storage-gcs-module), including the dev portal CLI stage and the sample pipeline image.</p>
+</li>
+<li>
+<p>horizon-api and storage-gcs-module move to <a href="http://golang.org/x/net">http://golang.org/x/net</a> v0.61.0; tools/horizon moves to <a href="http://golang.org/x/sys">http://golang.org/x/sys</a> v0.49.0 and <a href="http://golang.org/x/term">http://golang.org/x/term</a> v0.47.0.</p>
+</li>
+<li>
+<p>Image versions bumped: horizon-api-app 1.0.2, horizon-dev-portal 4.3.1, module-manager-app 0.3.4, workflow-namespace-drain-app 1.0.1, storage-gcs-module-app 1.0.1.</p>
+</li>
+<li>
+<p>Fixed TestWorkflowDrainerOldDeletingWorkflowClearsFinalizer, which failed on main since 4.0.0: once the last finalizer of a deleting Workflow is cleared the object is removed, so Drain correctly reports done.</p>
+</li>
+<li>
+<p>Developer portal user guide: building the CLI from source needs Go 1.27+.   Dev portal build context:</p>
+</li>
+<li>
+<p>For horizon-dev-portal, the trigger hash lists files with the patterns "*", "proxy/<strong>", "public/</strong>" and "src/<strong>" instead of "</strong>", so cli/ is never scanned. Other images still hash their whole context.</p>
+</li>
+<li>
+<p>The CLI sources remain covered by the existing horizon_cli_sha trigger.</p>
+</li>
+<li>
+<p>The portal hash no longer includes .vscode/ editor settings.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2188</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>Add new "Horizon API" tab to the Developer Portal</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Horizon API is added as a tab to Portal Tools Page. Developer Portal User Guide is updated.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2180</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>Add ArgoWorkflows as an app on Portal Landing page</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>Argo Workflows tile is included in Admin zone of Landing Page. New icons applied to both ArgoCD and ArgoWorkflows.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2168</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>Review Existing Horizon Skills</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p><code>horizon-ops</code> aligned with <code>deploy.sh</code>, with fixed <code>scm_password</code> guidance and troubleshooting steps. <code>horizon-dev</code> now defers to <code>docs/contributing.md</code> and <code>docs/branching_strategy.md</code> for branches, PRs and file locations; <code>scaffold-module.sh</code> argument handling, quoting and cleanup fixed; <code>lint-values.yaml</code> added for parent chart lint; KCC, pipeline, layout, catalog, NetworkPolicy and portal-exposure references corrected to match the repo. Full Apache 2.0 headers added to <code>.agents</code> files and to scaffold-generated files (copyright holder left as a placeholder).</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2169</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>Add Skill for debugging live cluster</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>New <code>horizon-debug</code> plugin and <code>horizon-debug-cluster</code> skill. Connects through GKE Fleet Connect Gateway from a cluster URL or a GCP project ID, confirms the target before creating kubectl credentials, then runs a read-only sanity check. A full <code>cluster-health.sh</code> check runs only if the user asks. Reads may run unasked; GCP, cluster and repo changes need explicit approval.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="12%">
+<p>TAA-2315</p>
+</td>
+
+<td valign="top" width="24%">
+<p><strong>[Developer Portal] Require sign-in on /api/horizon proxy; harden workflow template parameters</strong></p>
+</td>
+
+<td valign="top" width="64%">
+<p>The Developer Portal <code>/api/horizon</code> proxy attached the <code>horizon-api-ci</code> service account token to every request without verifying the caller, so anyone reaching the portal could call Horizon API unauthenticated (catalog reads, workflow submits/aborts/deletes, forged submitter) and, through free-text template parameters, achieve command execution in workflow pods holding GCP credentials.</p>
+
+<p><strong>Portal:</strong> <code>newHorizonProxy</code> requires a valid user bearer and returns 401 before the CI token swap (same check as <code>newMMProxy</code>); the Swagger UI docs paths stay reachable (the embedded iframe cannot send an Authorization header). <code>apiHorizon</code> sends the user bearer via <code>fetchWithAuth</code>. Unit tests cover the missing/invalid bearer 401 cases; the pre-existing <code>serveConfigJS</code> test breakage is fixed.</p>
+
+<p><strong>Templates:</strong> submitter-controlled parameters are passed as container env vars and never interpolated into shell scripts (sample, sample-soft, sample-hard, storage-gcs, cf-instance-template, aaos_builder incl. the ABFS variant, cvd_launcher, cts_execution). Sample/storage steps run non-root. URL parameters (cuttlefishUrl, ctsAndroid*Url, manifestUrl, cuttlefishDownloadUrl in both cvd_launcher and cts_execution) must match operator-configurable allowlist prefixes enforced before anything runs.</p>
+
+<p><code>aaos_initialise.sh</code>: <code>initialise_repo</code> and <code>set_repo_path</code> call <code>repo init</code> directly with quoted arguments instead of <code>eval</code> of the constructed command, so a malicious manifest URL or revision fails <code>repo init</code> instead of executing shell code.</p>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+<h2>Documentation update</h2>
+
+<p>Rel.5.0.0 provides updates in Horizon documentation.</p>
+
+<ul>
+
+<li>
+<p>Upgrade guide for Horizon SDV 4.3.0 to 5.0.0 (<code>docs/guides/upgrade_guide_4_3_0_to_5_0_0.md</code>), including the Config Connector move from the GKE add-on to the Git-pinned operator.</p>
+</li>
+
+<li>
+<p>[TAA-1973] ABFS documentation update - documentation updated for ABFS 0.1.14 and the module-based architecture (abfs-data, abfs-service-module, abfs-client-ubuntu):</p>
+<ul>
+<li>
+<p>resource split between the modules, how they interact, and the procedures to enable ABFS,</p>
+</li>
+<li>
+<p>import the license,</p>
+</li>
+<li>
+<p>seed a new AAOS revision</p>
+</li>
+<li>
+<p>prepare the Docker image template</p>
+</li>
+<li>
+<p>run an AAOS build with ABFS</p>
+</li>
+<li>
+<p>migrate an existing Spanner database.</p>
+</li>
+<li>
+<p>New README for abfs-client-module-ubuntu.</p>
+</li>
+</ul>
+</li>
+
+<li>
+<p>[TAA-2301] Refresh Module documentation</p>
+<ul>
+<li>
+<p>Module documentation has been restructured into a numbered set of guides under <code>docs/architecture/</code> (overview, Horizon Portal, Horizon CLI, module architecture, creating modules and interfaces), replacing <code>docs/developer_portal_user_guide.md</code>.</p>
+</li>
+<li>
+<p>The contribution guide has been updated for the module architecture and the <code>main</code>-only branching strategy: pull requests target <code>main</code>, branches use <code>contrib/feature/*</code> or <code>contrib/fix/*</code>, and new capabilities are contributed as modules under <code>gitops/modules/</code>.</p>
+</li>
+</ul>
+</li>
+
+<li>
+<p>[TAA-2098] New Cloud Workstation documentation how to use the Cloud Workstations module and its Portal workflows, which writer owns each field, and that the module is experimental because any signed-in user can run every workflow.</p>
+<ul>
+<li>
+<p>Added a user-facing module README. It covers enable and disable, main-environment only, the <code>cloud-workstations</code> namespace, cluster-scoped CRDs, and that the Portal uses the existing catalog and workflow submit endpoint. There is no Cloud Workstations API.</p>
+</li>
+<li>
+<p>Added workflow guides for configurations, workstations, and image build. They are named <code>_README.md</code> so Helm does not render them as manifests.</p>
+</li>
+<li>
+<p>Added <code>core/README.md</code> with the field-ownership matrix for Config Connector <code>1.156.0</code>. Config Connector fields and Workstations API fields are listed separately. Start and stop are workflows, not spec fields.</p>
+</li>
+<li>
+<p>Delete-configuration docs state that child workstations must be gone first. The controller finalizer waits until those workstations and their Config Connector objects are gone. Google Cloud does not cascade the delete.</p>
+</li>
+<li>
+<p>The Config Connector operator README says not to set <code>cnrm.cloud.google.com/reconcile-interval-in-seconds: "0"</code> to protect API-owned fields. That value stops reconciliation of the whole object.</p>
+</li>
+<li>
+<p>The Portal overview says the module is experimental. Any signed-in user can run every workflow, including create, delete, and changing who can use a workstation. User workflows only show and start workstations that list the signed-in username. Access in Google Cloud still follows the users and admins set on the workstation.</p>
+</li>
+</ul>
+</li>
+
+<li>
+<p>[TAA-2304] Add the Accenture contact address to the Horizon README so community users can send setup questions, use-case questions, and feedback to the Accenture team as well as the Google team.</p>
+</li>
+
+</ul>
+
+<h2>Bug Fixes</h2>
+
+<table width="100%">
+
+<tbody>
+
+<tr>
+<td valign="top" width="10%"><p><strong>ID</strong></p>
+</td>
+
+<td valign="top" width="24%"><p><strong>Bug</strong></p>
+</td>
+
+<td valign="top" width="51%"><p><strong>Description</strong></p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-1242</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[Jenkins] Final folder / breadcrumb is not selectable for page refresh</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Since the Jenkins update to 2.528.1 LTS, the last entry of the breadcrumb bar (the current folder, job or build) is plain text instead of a link. It can no longer be clicked to reload the page, users have to click the parent entry or use the browser refresh.</p>
+
+<p>This is an intentional change in Jenkins core (commit 82e2830be, JENKINS-75851, jenkinsci/jenkins PR #10803), not a plugin regression, so no comparison of plugin versions between releases is needed. The change is still present in the latest Jenkins core and cannot be turned off by configuration. Restore the link on the last breadcrumb entry in the browser:</p>
+
+<ul>
+<li>
+<p>Add simple-theme-plugin, which loads a script on every Jenkins page.</p>
+</li>
+<li>
+<p>Add a groovy init script that writes the script to $JENKINS_HOME/userContent/horizon-breadcrumb-last-link.js on every controller start, as the plugin only accepts a URL for JavaScript.</p>
+</li>
+<li>
+<p>Add a JCasC appearance entry that loads the script from userContent.   The script turns the last breadcrumb entry back into a link to the current page. It does nothing if the entry is already a link, so no action is needed if Jenkins restores the link in a later version.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2202</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[SECURITY] Fix predictable gerrit-admin HTTP password</p>
+</td>
+
+<td valign="top" width="51%">
+<p>The Gerrit admin HTTP password was derived deterministically from the deployment SSH private key, producing a predictable credential that was identical across every deployment and sub-environment using the default (HRZ-SEC-2026-001). This change removes the predictable derivation, rotates any legacy predictable password on upgrade, and documents the issue and remediation.</p>
+
+<ul>
+<li>
+<p><code>gerrit-post/configure.sh</code>: generate a random 32-character admin HTTP password instead of deriving it from the SSH private key; detect and rotate the legacy predictable password on upgrade; quote base64 handling.</p>
+</li>
+<li>
+<p>Bump the <code>gerrit-post</code> image <code>build_version</code>/<code>deploy_version</code> from <code>1.0.1</code> to <code>1.0.2</code> so the fixed image is rolled out.</p>
+</li>
+<li>
+<p>Add security bulletin <code>docs/security/HRZ-SEC-2026-001.md</code> and the remediation script <code>docs/security/HRZ-SEC-2026-001.sh</code>.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2122</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[Security] OSS psf-requests module update to 2.34.2</p>
+</td>
+
+<td valign="top" width="51%">
+<p>psf-requests module updated to version 2.34.2 in mtk-connect-post-key to resolve known vulnerabilities <a href="https://github.com/advisories/GHSA-gc5v-m9x4-r6x2">CVE-2026-25645</a> and <a href="https://github.com/advisories/GHSA-9wx4-h78v-vm56">CVE-2024-35195</a><code>.</code></p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2123</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[Security] <a href="http://golang.org/x/net">http://golang.org/x/net</a> module update (v0.54.0-v0.61.0)</p>
+</td>
+
+<td valign="top" width="51%">
+<p>golang.org/x/net module updated to version v0.55.0 in module-manager and workflow-namespace-drain to resolve known vulnerabilities <a href="https://github.com/advisories/GHSA-w2q5-6q6x-x959">CVE-2026-39821</a> and GO-2026-5026.</p>
+
+<p><a href="http://golang.org/x/net">http://golang.org/x/net</a> module updated to version v0.61.0 in module-manager and workflow-namespace-drain to resolve <a href="https://github.com/advisories/GHSA-w2q5-6q6x-x959">CVE-2026-39821</a>,<a href="https://github.com/advisories/GHSA-w2q5-6q6x-x959">CVE-2026-39821</a>,<a href="https://github.com/advisories/GHSA-gg3m-vvp2-p2c5">CVE-2026-46600</a>.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2127</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[Security] gorilla/ module update (1.5.0 -&gt; 1.5.3)</p>
+</td>
+
+<td valign="top" width="51%">
+<p>storage-gcs-module-app client-go updated to v0.35.5 so gorilla/websocket moves off v1.5.0 and resolves BDSA-2026-30093.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2209</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[Security] OSS source-map-js module update to 1.2.2</p>
+</td>
+
+<td valign="top" width="51%">
+<p>source-map-js module updated to version 1.2.2 to resolve known vulnerability <a href="https://github.com/advisories/GHSA-68fv-2mgg-jv7q">CVE-2026-93749</a>.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2215</p>
+</td>
+
+<td valign="top" width="24%">
+<p>MTKC CLI installation does not work in Linux with MTKC v1.13</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Fix MTK Connect CLI (mtkc) installation on Linux with MTK Connect 1.13. The documented install command piped the installer script from /mtk-connect/get-cli into bash, but the request was redirected to the Keycloak SAML login page, so bash received HTML instead of the script and failed with "syntax error near unexpected token `newline&#39;".</p>
+
+<p>The MTK Connect router only exposed the installer script routes /get-agent, /get-tunnel and /get-guacd without authentication. The /get-cli route introduced with MTK Connect 1.13 was missing, so it fell through to the authenticated catch-all and was redirected to SAML.</p>
+
+<p>Changes introduced to resolve it:</p>
+
+<ul>
+<li>
+<p>added the /get-cli route to the router configuration, forwarded to the installers service and marked as not authenticated, in line with the other installer script routes   The installer script itself still downloads the CLI binary through the authenticated /api/v1/installer endpoint using the user&#39;s API key.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2179</p>
+</td>
+
+<td valign="top" width="24%">
+<p>Expose GCS bucket/object listing, browse build artifacts via Horizon</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Users need a Horizon CLI that can discover the Horizon API, list GCS artifacts, current version and keep a local command history, with the API and cluster wiring required to list allowed buckets and objects.</p>
+
+<p>Refactor <code>tools/horizon</code> on Cobra (<code>github.com/spf13/cobra</code>) and move shared code into <code>tools/horizon/internal</code>. Existing auth, config, catalog, version, and workflow commands are preserved. <code>workflow</code> keeps the <code>ci</code> and <code>job</code> aliases. <code>workflow poll</code> and <code>workflow finalize</code> remain removed and point users at <code>wait</code> and <code>show</code>.</p>
+
+<p>New CLI surface:</p>
+
+<ul>
+<li>
+<p>Global flags: <code>--debug</code> / <code>-d</code>, <code>--json</code> / <code>-j</code>, <code>--no-banner</code> / <code>-b</code>, <code>--insecure</code> / <code>-i</code>.</p>
+</li>
+<li>
+<p><code>horizon api list|paths|show|refresh</code> - browse Horizon OpenAPI (embedded snapshot, refreshable from <code>{api}/openapi.json</code>).</p>
+</li>
+<li>
+<p><code>horizon artifacts buckets</code> and <code>horizon artifacts objects</code> - list allowed GCS buckets and objects (<code>--prefix</code>, <code>--limit</code>, <code>--page-token</code>).</p>
+</li>
+<li>
+<p><code>horizon history</code> - recent invocations in <code>~/.config/horizon/history-YYYY-MM.json</code> (default 10, max 100). Secret flags and JWT-like values are stored as <code>***</code>. The <code>history</code> command itself is not recorded.   Fixes included with the CLI tests:</p>
+</li>
+<li>
+<p>Byte sizes at or above 1 KiB were labeled one unit too high (<code>formatIECBytes</code>).</p>
+</li>
+<li>
+<p>History file rotation by size used the display cap (10) instead of the file cap (1000). Rotation now keeps the newest 1000 entries.   Horizon API (<code>horizon-api-app</code> 1.0.1 -&gt; 1.1.1):</p>
+</li>
+<li>
+<p><code>GET /v1/artifacts/buckets</code> and <code>GET /v1/artifacts/buckets/{bucket}/objects</code> (<code>prefix</code>, <code>pageToken</code>, <code>limit</code>), documented in OpenAPI.</p>
+</li>
+<li>
+<p>Allowlist is the static <code>ARTIFACTS_ALLOWED_BUCKETS</code> list plus <code>GCSBucket</code> CR <code>spec.bucketName</code> values, filtered by bucket-name rules and an optional project-id prefix.</p>
+</li>
+<li>
+<p>Object listing is proxied over in-cluster HTTPS to storage-gcs-module, with a 60s timeout.   storage-gcs-module:</p>
+</li>
+<li>
+<p><code>GET /api/v1/buckets/{bucket}/objects-list</code> lists objects by name prefix (<code>prefix</code>, <code>pageToken</code>, <code>pageSize</code> 1-1000, default 1000). An empty prefix lists from the start of the bucket.   GitOps / Terraform:</p>
+</li>
+<li>
+<p>horizon-api Role/RoleBinding to get/list/watch <code>gcsbuckets</code> in the GCS buckets namespace.</p>
+</li>
+<li>
+<p>Deployment args for the artifacts module URL, GCS project id, and optional static allowlist. The module API token and TLS CA are mounted from secrets copied into the horizon-api namespace.</p>
+</li>
+<li>
+<p>NetworkPolicy egress from horizon-api to storage-gcs-module port 8443, and a matching ingress rule on the module.</p>
+</li>
+<li>
+<p>Parent Application sets <code>artifactsModuleUrl</code> and <code>artifactsGcsProjectId</code>.</p>
+</li>
+<li>
+<p>Image versions: <code>horizon-api-app</code> 1.1.1, <code>horizon-dev-portal</code> 4.3.0 -&gt; 5.0.0 (portal application source is unchanged; the tag bump is for a rebuilt image that ships the CLI).   <code>docs/developer_portal_user_guide.md</code> documents the Cobra help text, history, api, and artifacts.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2296</p>
+</td>
+
+<td valign="top" width="24%">
+<p>go test ./... fails in horizon-dev-portal/proxy because the frontend dist folder is missing</p>
+</td>
+
+<td valign="top" width="51%">
+<p><code>go test</code> in the developer portal proxy failed to compile because <code>//go:embed all:dist</code> requires a <code>dist</code> directory, and <code>**/dist/</code> is gitignored. That directory exists only after the frontend image build, so a clean checkout could not run the proxy tests.</p>
+
+<ul>
+<li>
+<p>The proxy embeds a committed fixture at <code>proxy/spa</code> instead of <code>dist</code>. <code>**/dist/</code> stays ignored.</p>
+</li>
+<li>
+<p><code>spaHandler</code> reads that embed root. The image build copies the Vite output over <code>./spa</code> before <code>go build</code>, so the container still ships the real frontend.</p>
+</li>
+<li>
+<p>Added <code>main_test.go</code> and <code>cli_test.go</code> for JWT expiry, config and HTML base handling, bearer auth, the module-manager and Horizon proxies (including CI token refresh), the SPA handler, CLI manifest and download routes, and a process-level smoke test of <code>main</code>.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2267</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[Security] MTK admin API key written in plaintext to GCS</p>
+</td>
+
+<td valign="top" width="51%">
+<p>The Remotive launcher and the Android CVD/CTS ephemeral GCE flows wrote the MTK Connect admin key, and for Remotive the Remotive Cloud token, into a job environment file in the project aaos bucket. Those objects were never deleted, so anyone with read access to the bucket could reuse a live credential.</p>
+
+<p>Remove MTK_CONNECT_USERNAME, MTK_CONNECT_PASSWORD, and REMOTIVE_CLOUD_AUTH_TOKEN from the uploaded job environment. Pass them as base64 instance metadata on the ephemeral VM, and have the guest read and export them at startup. Deleting the VM removes the metadata.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2241</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[ABFS] Fix AndroidCustom config presented in abfs-uploader-config-select workflow</p>
+</td>
+
+<td valign="top" width="51%">
+<p>The change fixes handling of AndroidCustom configuration in abfs-uploader-config-select workflow exposed by abfs-data-module. Previously workflow submit page always presented default configuration record, regardless if any custom configuration was already applied or not. Change of custom configuration required to recreate it each time. After this change, the workflow submit page presents to the end user the currently stored/applied AndroidCustom config record, so that it can be updated.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2298</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[Cloud Workstations] keep false values for boolean workstation config options</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Fix how false values for booloean Cloud Workstation config options are handled, so that unchecking HOST_DISABLE_SSH or HOST_DISABLE_PUBLIC_IP_ADDRESSES in the Create/Update Config jobs works as expected.</p>
+
+<p>Unchecking HOST_DISABLE_SSH or HOST_DISABLE_PUBLIC_IP_ADDRESSES in the Create/Update Config jobs had no effect. <code>params.X?.toBoolean() ?: null</code> turns false into null (Groovy&#39;s Elvis treats false as falsy), and Terraform then applies the optional() default of true, so SSH and public IPs could never be enabled through the pipelines.</p>
+
+<p>The same happened when the config jobs re-read the other existing configs from tfstate: <code>disable_ssh // null</code> in jq also maps false to null, so running any config job silently reset other configs back to the defaults.</p>
+
+<p>Pass the booleans through unchanged in both places. Missing values still resolve to null and fall back to the Terraform defaults.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2316</p>
+</td>
+
+<td valign="top" width="24%">
+<p>Update outdated gcloud cli and kubectl versions</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Bump up gcloudCliVersion and kubectlVersion defaults to newer stable releases, to prevent docker image templates depending on these tools from failing at build time.</p>
+
+<p>Old google-cloud-cli 545.0.0-0 and kubectl 1:545.0.0-0 are no longer available in the Cloud SDK apt repository (<a href="http://packages.cloud.google.com">packages.cloud.google.com</a> keeps only the last ~12 months of releases), causing docker image template builds to fail on apt-get install.</p>
+
+<p>Bump gcloudCliVersion and kubectlVersion defaults from 545.0.0-0 to 591.0.0-0 across the builder images (aaos_builder, abfs and non-ABFS docker_image_template, cloud-workstations environment Dockerfile) and the seed Jenkinsfile defaults.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2319</p>
+</td>
+
+<td valign="top" width="24%">
+<p>Fix visibility of abfs-smoke-test in abfs-service-module</p>
+</td>
+
+<td valign="top" width="51%">
+<p><code>abfs-smoke-test</code> is invisible in the Portal/CLI catalog: the WorkflowTemplate carries the label <code>horizon-sdv.io/module: abfs</code>, but the module is registered in ModuleCatalog (and everywhere else in the module chart) as <code>abfs-service-module</code>. The Horizon API catalog skips exposed templates whose module label does not match an enabled module name, so the template never enters the catalog.</p>
+
+<p>WorkflowTemplate label corrected to <code>horizon-sdv.io/module: abfs-service-module</code>, matching the ModuleCatalog registration (<code>moduleName: "abfs-service-module"</code>) and the sibling manifests in the same chart.</p>
+
+<p>Additionally, the parameters were still substituted directly into the <code>sh -c</code> script (the same injection class as the TAA-2315 hardening). Since the template becomes catalog-visible with this fix, they are now passed as container env vars and read via <code>"$VAR"</code>, and all three steps run non-root with <code>runAsNonRoot</code> and no privilege escalation.</p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2355</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[ABFS] pin gcloud CLI image to SDK 591.0.0 and fall back to bundled python3</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Fix ABFS module enablement broken by the <code>gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based</code> image rebuilt on 2026-10-30 (SDK 592.0.0), which no longer ships <code>python3</code> on PATH. The ABFS scripts (pusher config, uploader config, licence import/clear, node-pool licence metadata) call <code>python3</code>, so on a fresh enable the <code>abfs-pusher-config</code> Job failed with exit 127, the data-plane app went Degraded and no uploader StatefulSet was created.</p>
+
+<ul>
+<li>
+<p>Pin <code>cloudSdkImage</code> by digest to the SDK 591.0.0 build of the same tag (<code>@sha256:f455f6bf...</code>), the same gcloud version TAA-2316 pinned for the builder images, in all ABFS charts (<code>abfs-data-module/*</code>, <code>abfs-service-module</code>, <code>abfs-service-module/abfs</code>, <code>abfs-service-module/node-pool</code>, and the Helm defaults in <code>application-abfs.yaml</code>). A comment next to each pin says why and to re-test before bumping.</p>
+</li>
+<li>
+<p>Add a 4-line guard at the start of every ABFS script that uses <code>python3</code>: when <code>python3</code> is not on PATH, put the interpreter bundled with gcloud (<code>gcloud info --format='value(basic.python_location)'</code>) on PATH. This keeps the scripts working when the digest is bumped to an SDK &gt;= 592 build.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2378</p>
+</td>
+
+<td valign="top" width="24%">
+<p>[Android] fix dangling out symlink on aosp_cf_arm64 and restore OUT_DIR for Jenkins builds</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Fix Warm Build Caches and AAOS Builder failing immediately on <code>aosp_cf_arm64*</code> targets with <code>mkdir: cannot create directory '.../out': File exists</code> (TAA-2378), and restore the per-target <code>out_sdv-&lt;lunch_target&gt;</code> output directory for Jenkins builds.</p>
+
+<p>Since TAA-1931 (<a href="https://github.com/GoogleCloudPlatform/horizon-sdv/pull/99">#99</a>) <code>aaos_build.sh</code> unsets <code>OUT_DIR</code> before <code>lunch</code>/<code>m</code>, so Jenkins builds write to <code>out</code> instead of <code>out_sdv-&lt;lunch_target&gt;</code>. The TAA-1095 arm64 workaround (<code>rm -rf out &amp;&amp; ln -sf out_sdv-&lt;target&gt; out</code>) therefore points at a directory that is never created: Soong's <code>mkdir out</code> hits the dangling symlink and the build dies in seconds. The symlink survives <code>CLEAN_BUILD</code> (which removes <code>out_sdv-*</code>, not <code>out</code>), so every later build on that cache volume fails too.</p>
+
+<ul>
+<li>
+<p><code>aaos_build.sh</code>: do not unset <code>OUT_DIR</code>. Jenkins builds use <code>out_sdv-&lt;lunch_target&gt;</code> again, matching <code>AAOS_ARTIFACT_LIST</code> and <code>CLEAN_BUILD</code>. ABFS builds are unaffected: that mode sets <code>OUT_DIR=out</code> explicitly.</p>
+</li>
+<li>
+<p><code>aaos_environment.sh</code> (<code>create_workspace</code>, non-ABFS only): remove a dangling <code>out</code> symlink left by an earlier run, for any target and clean mode, so already poisoned cache volumes heal themselves; make the TAA-1095 workaround create <code>OUT_DIR</code> before linking (<code>mkdir -p … &amp;&amp; ln -sfn</code>), and apply it only when <code>OUT_DIR</code> differs from <code>out</code>.</p>
+</li>
+</ul>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="10%">
+<p>TAA-2383</p>
+</td>
+
+<td valign="top" width="24%">
+<p>TAA-2383: [ABFS] create the abfs namespace in the abfs-data module chart</p>
+</td>
+
+<td valign="top" width="51%">
+<p>Fix issue with missing abfs namespace during abfs-data module first enable on fresh enviornment.</p>
+
+<p>The abfs-data child Applications <code>mod-abfs-data-license-workflows</code> and <code>mod-abfs-data-uploader-config</code> deploy RBAC (RoleBindings) into the <code>abfs</code> namespace while their destination namespace is <code>workflows</code> / <code>horizon</code>, so <code>CreateNamespace=true</code> never creates <code>abfs</code>. On a fresh environment both stay <code>OutOfSync</code> with <code>error running rbacReconcile: error running kubectl auth reconcile: error getting namespace abfs: namespaces "abfs" not found</code>, the Developer Portal shows the module as UPDATE IN PROGRESS and ABFS cannot be used.</p>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+<h2>Known Issues</h2>
+
+<ul>
+
+<li>
+<p><strong>ABFS</strong></p>
+<ul>
+<li>
+<p>The COS client module is implemented but hidden from the Developer Portal. CASFS 0.1.14 crashes on COS 129 with GKE 1.36.</p>
+</li>
+<li>
+<p>ABFS client authentication and TLS are not tested and disabled by default in the current integration.</p>
+</li>
+<li>
+<p>The license is bound to the service account email. Recreating the service account can invalidate the license.</p>
+</li>
+<li>
+<p>License import and clear recreate the ABFS server and uploader node pools to apply license metadata. Directly stamping the license from the workflows is postponed.</p>
+</li>
+<li>
+<p>Node pools can be left behind on module disable, the pools will scale down, but can remain undeleted..</p>
+</li>
+<li>
+<p>Git LFS integration and repository support are unchanged.</p>
+</li>
+</ul>
+</li>
+
+<li>
+<p><strong>Cloud Workstations module.</strong></p>
+<ul>
+<li>
+<p>Cloud Workstation module is experimental. It does not replace the Jenkins workstation cluster (<code>sdv-cloud-ws-cluster</code>).</p>
+</li>
+<li>
+<p>Create and update of a configuration require at least one admin. An empty admin or user list removes every unconditional member of <code>roles/workstations.admin</code> or <code>roles/workstations.user</code>, including members granted outside Horizon. Conditional grants and other roles stay.</p>
+</li>
+<li>
+<p>On platform destroy, after the cluster has been deleted, Argo CD can create it again before the module application is gone. Commit and push workstation work before disable. A running workstation is not a safe place to leave uncommitted work.</p>
+</li>
+</ul>
+</li>
+
+<li>
+<p><strong>Horizon API</strong></p>
+<ul>
+<li>
+<p>There is no Cloud Workstations API. Create, update, delete, list, start, and stop are workflow submits on the existing catalog endpoint.</p>
+</li>
+<li>
+<p>Any caller with a valid Keycloak token can submit any exposed Cloud Workstations workflow, including the admin workflows. The API does not check groups.</p>
+</li>
+<li>
+<p><code>submittedBy</code> is taken from the request when the caller sets it. A client that is not the Portal form can name a different user. User workflows then list or start workstations for that name.</p>
+</li>
+</ul>
+</li>
+
+<li>
+<p><strong>Developer Portal</strong></p>
+<ul>
+<li>
+<p>There is no separate admin and user permission. Every signed-in user sees every Cloud Workstations workflow, including create, delete, and user-list changes.</p>
+</li>
+<li>
+<p>Inputs are plain text fields. The form does not ask for an email on the user workflows.</p>
+</li>
+<li>
+<p>The form hides <code>submittedBy</code> and sends the signed-in username (<code>preferred_username</code>, otherwise <code>name</code>, otherwise <code>sub</code>). The user cannot change that value in the form.</p>
+</li>
+<li>
+<p><code>cws-update-config</code> replaces the form. A blank field is reset to its default. It does not mean "leave this unchanged". <code>containerImage</code>, <code>pdRequired</code>, and <code>edRequired</code> have no default on update, so a blank value fails the run or would change the image or remove a disk.</p>
+</li>
+<li>
+<p>Workstation admin and user access in Google Cloud is still applied from the lists on the configuration and the workstation. The Portal is not a role boundary for those actions.</p>
+</li>
+</ul>
+</li>
+
+</ul>
+
+<hr>
+<table width="100%">
+<tbody>
+<tr>
+<td valign="top" width="14%"><p><strong>Platform</strong></p>
+</td>
+
+<td valign="top" width="86%"><p><strong>Horizon SDV</strong></p>
+</td>
+</tr>
+
+<tr>
+<td valign="top" width="14%"><p><strong>Version</strong></p>
+</td>
+
 <td valign="top" width="86%"><p><strong>Release 4.3.0</strong></p>
 </td>
 </tr>
@@ -342,7 +1622,8 @@ limitations under the License. -->
 
 <td valign="top" width="15%">
 <ul>
-<li><p><em>pending merge</em></p>
+<li>
+<p>386ff6e9a01cf72940e5cffe13fe8dd779f001c5</p>
 </li>
 </ul>
 </td>
@@ -363,7 +1644,8 @@ limitations under the License. -->
 
 <td valign="top" width="15%">
 <ul>
-<li><p><em>pending merge</em></p>
+<li>
+<p>386ff6e9a01cf72940e5cffe13fe8dd779f001c5</p>
 </li>
 </ul>
 </td>
@@ -384,7 +1666,8 @@ limitations under the License. -->
 
 <td valign="top" width="15%">
 <ul>
-<li><p><em>pending merge</em></p>
+<li>
+<p>386ff6e9a01cf72940e5cffe13fe8dd779f001c5</p>
 </li>
 </ul>
 </td>
@@ -405,7 +1688,11 @@ limitations under the License. -->
 
 <td valign="top" width="15%">
 <ul>
-<li><p><em>pending merge</em></p>
+<li>
+<p>082573e5c995258c25387b5d968e8b31e2a0ff42</p>
+</li>
+<li>
+<p>90b1a82697969d9a018a9999d37f4fe096ff71b3</p>
 </li>
 </ul>
 </td>
@@ -426,7 +1713,11 @@ limitations under the License. -->
 
 <td valign="top" width="15%">
 <ul>
-<li><p><em>pending merge</em></p>
+<li>
+<p>082573e5c995258c25387b5d968e8b31e2a0ff42</p>
+</li>
+<li>
+<p>90b1a82697969d9a018a9999d37f4fe096ff71b3</p>
 </li>
 </ul>
 </td>
@@ -453,7 +1744,8 @@ limitations under the License. -->
 
 <td valign="top" width="15%">
 <ul>
-<li><p><code>491b4f171</code></p>
+<li>
+<p>597b3d6a842a372a9fbd6edfd73d0a011c2efe90</p>
 </li>
 </ul>
 </td>

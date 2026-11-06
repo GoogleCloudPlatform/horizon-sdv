@@ -30,7 +30,7 @@ It should be noted that custom metadata in GCP is subject to a [size limit](http
 GCP Storage uses the concept of virtual folders where folders themselves don't actually exist and are simulated as a result of hierarchical naming of objects (e.g. *Android/Builds/AAOSBuilder/01/build_info.txt*); as a result, custom metadata can only be applied to objects, not folders. Instead of tagging an entire folder, all objects in the folder can be tagged.
 
 ### Setting / Manipulation of Custom Metadata On New Objects:
-The following build jobs provide a parameter ``STORAGE LABELS`` which allows users to add labels to the artifacts being uploaded to storage buckets. When using the GCP storage option, these labels are implemented as custom metadata.
+The following build jobs provide a parameter ``STORAGE_LABELS`` which allows users to add labels to the artifacts being uploaded to storage buckets. When using the GCP storage option, these labels are implemented as custom metadata.
 
 - Android / AAOS Builder
 - Android / AAOS Builder ABFS

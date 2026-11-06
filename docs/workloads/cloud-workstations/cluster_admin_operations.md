@@ -18,19 +18,19 @@ limitations under the License. -->
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
 - [Pipelines](#pipelines)
-  - [Create Cluster](#pipelines-create-cluster)
-  - [Delete Cluster](#pipelines-delete-cluster)
+  - [Create New Cluster](#pipelines-create-cluster)
+  - [Delete Existing Cluster](#pipelines-delete-cluster)
 - [Environment Variables/Parameters](#environment-variables)
-  - [Create Cluster](#environment-variables-create-cluster)
-  - [Delete Cluster](#environment-variables-delete-cluster)
+  - [Create New Cluster](#environment-variables-create-cluster)
+  - [Delete Existing Cluster](#environment-variables-delete-cluster)
 - [System Variables](#system-variables)
 - [Known Issues](#known-issues)
 
 ## Introduction <a name="introduction"></a>
 
 The Jenkins folder `Cloud Workstations > Cluster Admin Operations` provides a set of two admin-level pipelines to manage the Cloud Workstation Cluster - which is a logical grouping of Cloud Workstations resources on GCP. These pipelines use `Terraform` to manage infrastructure resources on GCP. The two pipelines are:
-  - `Create Cluster`
-  - `Delete Cluster`
+  - `Create New Cluster`
+  - `Delete Existing Cluster`
 
 ### References
 - [Terraform for Workstation Cluster](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/workstations_workstation_cluster)
@@ -46,13 +46,13 @@ One-time setup requirements.
 
 Here are details about the two pipelines for Cluster Admin Operations:
 
-### Create Cluster<a name="pipelines-create-cluster"></a>
+### Create New Cluster<a name="pipelines-create-cluster"></a>
 - This job creates a new Cluster for Cloud Workstations in your existing GCP project.
 - It need only be run once when getting started with Cloud Workstations.
 - At any time, only one cluster is allowed.
 - And hence, all of the Cluster properties are preset.
   
-### Delete Cluster<a name="pipelines-delete-cluster"></a>
+### Delete Existing Cluster<a name="pipelines-delete-cluster"></a>
 - This job deletes the only existing Cloud Workstations Cluster.
 - This job fails if the Cluster has child resources (e.g. Config or Workstations), and won't delete the Cluster or any of its resources. (See [Known Issues](#known-issues) section)
 
@@ -60,11 +60,11 @@ Here are details about the two pipelines for Cluster Admin Operations:
 
 **Jenkins Parameters:** Below are the parameters defined in the groovy job definition `groovy/job.groovy` for each of the pipelines.
 
-### Create Cluster<a name="environment-variables-create-cluster"></a>
+### Create New Cluster<a name="environment-variables-create-cluster"></a>
 
 This pipeline takes **no parameters** as its properties have been preset and are displayed on the Jenkins pipeline page.
 
-### Delete Cluster<a name="environment-variables-delete-cluster"></a>
+### Delete Existing Cluster<a name="environment-variables-delete-cluster"></a>
 This pipeline takes only **one parameter**:
 
 #### `CONFIRM_DELETE`
@@ -95,7 +95,7 @@ These are as follows:
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
 
-Below variables have their values defined in `gitops/values.yaml` and then referenced in Jenkins CasC `values-jenkins.yaml`.
+Below variables have their values defined under `config.workloads.cloudWorkstations` in `gitops/workloads/values-jenkins.yaml` (CasC) and are exposed as Jenkins global environment variables.
 
 -   `CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME`
     - Name of the Docker image on GCP Artifact registry, that is used as an environment for Cloud Workstations workload pipelines.
@@ -113,8 +113,8 @@ Below variables have their values defined in `gitops/values.yaml` and then refer
     - A preset property for Cloud Workstations Cluster.
 
 ## Known Issues
-### Delete Cluster
-Currently, the Terraform configuration for Cloud Workstations available as part of `google-beta` provider, does not have a `force` or `cascade` delete option, and hence if the cluster has child resources then simply running `Delete Cluster` pipeline won't delete all of its resources.
+### Delete Existing Cluster
+Currently, the Terraform configuration for Cloud Workstations available as part of `google-beta` provider, does not have a `force` or `cascade` delete option, and hence if the cluster has child resources then simply running `Delete Existing Cluster` pipeline won't delete all of its resources.
 - Follow below steps in order to delete the Cloud Workstations Cluster:
     1. **Delete All Workstations**
         - Run the job `Workstation Admin Operations > List Workstations` to get the list of all existing workstations.
@@ -122,4 +122,4 @@ Currently, the Terraform configuration for Cloud Workstations available as part 
     2. **Delete All Configurations**
         - Run the job `Config Admin Operations > List Configurations` to get the list of all existing configurations.
         - Run the job `Config Admin Operations > Delete Existing Configuration` for every configuration present in the list you got in the previous step.
-    3. **Delete Cluster** by running this `Delete Cluster` pipeline, finally.
+    3. **Delete Existing Cluster** by running this `Delete Existing Cluster` pipeline, finally.

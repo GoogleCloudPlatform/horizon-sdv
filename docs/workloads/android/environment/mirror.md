@@ -19,7 +19,7 @@ limitations under the License. -->
 - Prerequisites
 - Pipelines
   - 1. Docker Image Template
-  - 2. Create Mirror Infrastructure
+  - 2. Create Mirror Infra
   - 3. Sync Mirror
   - 4. Delete Mirror
 - System Variables
@@ -31,7 +31,7 @@ This document describes the Jenkins pipelines for managing an NFS-based mirror i
 ## Prerequisites<a name="prerequisites"></a>
 
 - Before running any mirror pipeline, ensure that the `Android Workflows/Environment/Mirror/Docker Image Template` pipeline has been run to build the necessary container image.
-- The `Create Mirror Infrastructure` pipeline must be run before any sync operations can be performed.
+- The `Create Mirror Infra` pipeline must be run before any sync operations can be performed.
 
 ## Pipelines
 
@@ -49,8 +49,8 @@ Buildkit version to use for building the image.
 #### `NO_PUSH`
 If true, the image will be built but not pushed to the artifact registry.
 
-### 2. Create Mirror Infrastructure <a name="2-create-mirror-infrastructure"></a>
-**Path:** `Android Workflows/Environment/Mirror/Create Mirror Infrastructure`
+### 2. Create Mirror Infra <a name="2-create-mirror-infrastructure"></a>
+**Path:** `Android Workflows/Environment/Mirror/Create Mirror Infra`
 
 This pipeline automates the provisioning of high-performance NFS storage for Git mirrors. It dynamically allocates a Google Cloud Filestore instance and configures the necessary Kubernetes Persistent Volume (PV) and Claim (PVC) to make the storage available to the cluster.
 
@@ -148,9 +148,9 @@ These are as follows:
 -   `MIRROR_WORKLOADS_ENV_IMAGE_NAME`
     - The name of the Docker image repository in the Artifact Registry.
 
--   `BUILDKIT_RELEASE_TAG`
+-   `BUILDKIT_RELEASE_TAG` (Seed job parameter, not a CasC system variable)
     - The version of Buildkit to use to build the container image.
 
--   `DOCKER_CREDENTIALS_URL`
+-   `DOCKER_CREDENTIALS_URL` (Seed job parameter, not a CasC system variable)
     - URL of Google docker credentials helper, required to allow access to the project artifact registry.
     
