@@ -22,7 +22,7 @@ limitations under the License. -->
 
 ## Introduction <a name="introduction"></a>
 
-This pipeline builds the container image used on Kubernetes for jobs that modify the platform networking configuration.
+This pipeline builds the container image used on Kubernetes by the Utilities jobs (GCS storage utilities, Gemini AI Assistant).
 
 This need only be run once, or when Dockerfile is updated. There is an option not to push the resulting image to the registry, so that devs can test their changes before committing the image.
 
@@ -82,7 +82,7 @@ These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jen
 These are as follows:
 
 -   `UTILITIES_DOCKER_ARTIFACT_PATH_NAME`
-    - Defines the registry path where the Docker image used to create the ABFS Server and Uploader VM instances.
+    - Defines the registry path of the Utilities Docker image used by the Utilities pipeline jobs (GCS storage jobs, Gemini AI Assistant).
 
 -   `CLOUD_PROJECT`
     - The GCP project, unique to each project. Important for bucket, registry paths used in pipelines.

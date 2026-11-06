@@ -69,7 +69,7 @@ These are as follows:
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
 
-Below variables have their values defined in `gitops/values.yaml` and then referenced in Jenkins CasC `jenkins.yaml`.
+Below variables have their values defined in `gitops/workloads/values-jenkins.yaml` (`config.workloads.cloudWorkstations.workloadEnv.image`).
 
 -   `CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME`
     - Name of the Docker image on GCP Artifact registry, that is used as an environment for Cloud Workstations workload pipelines.

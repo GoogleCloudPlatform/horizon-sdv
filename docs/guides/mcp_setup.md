@@ -65,7 +65,7 @@ Workstation images install a shared MCP core (`mcp_registry_client` under `commo
 
 ### Step 1: Enable MCP Servers in MCP Gateway Registry
 
-1. Log in to MCP Gateway Registry at `https://mcp.<SUB_DOMAIN>.<HORIZON_DOMAIN>/` as an admin using your Keycloak credentials.
+1. Log in to MCP Gateway Registry at `https://mcp.<HORIZON_DOMAIN>/` as an admin using your Keycloak credentials.
 2. Navigate to the "MCP Servers" section.
 3. In order to access any MCP server, including the pre-registered `gerrit-mcp-server`, make sure that it is ENABLED on the app (bottom right toggle button in server card). By default, newly registered MCP servers are disabled.
 

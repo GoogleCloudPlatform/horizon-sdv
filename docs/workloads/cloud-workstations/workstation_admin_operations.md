@@ -50,7 +50,7 @@ The Jenkins folder `Cloud Workstations > Workstation Admin Operations` provides 
 
 One-time setup requirements. Before running these pipelines:
   - Ensure that the following template has been created by running the corresponding job: `Cloud Workstations > Environment > Docker Image Template`
-  - Ensure the Cluster has been created by running the corresponding job: `Cloud Workstations > Cluster Admin Operations > Create Cluster`
+  - Ensure the Cluster has been created by running the corresponding job: `Cloud Workstations > Cluster Admin Operations > Create New Cluster`
 
 Also ensure that the configuration you are going to specify for a workstation, exists.
 
@@ -174,7 +174,7 @@ These are as follows:
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
 
-Below variables have their values defined in `gitops/values.yaml` and then referenced in Jenkins CasC `values-jenkins.yaml`.
+Below variables have their values defined under `config.workloads.cloudWorkstations` in `gitops/workloads/values-jenkins.yaml` (CasC) and are exposed as Jenkins global environment variables.
 
 -   `CLOUD_WS_WORKLOADS_ENV_IMAGE_NAME`
     - Name of the Docker image on GCP Artifact registry, that is used as an environment for Cloud Workstations workload pipelines.

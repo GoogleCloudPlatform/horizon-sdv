@@ -104,7 +104,7 @@ To remediate a nginx CVE (Type B base bump):
 
 1. Set `common_nginx_version` in [`terraform/modules/base/locals.tf`](../../terraform/modules/base/locals.tf) to the fixed Docker Hub tag (for example `1.31.2-alpine3.23`).
 2. Commit, push, and deploy ([Section #1](#section-1---version-bump-upgrade) steps 2–5).
-3. Verify with `nginx -v` on landingpage, token-injector, and module-overview pods (all should report the same nginx binary version). The probe script in [Section #4](#section-4---testing) covers **landingpage-app** in the registry; Docker Hub sidecars need a live `kubectl exec ... nginx -v` check.
+3. Verify with `nginx -v` on token-injector and module-overview pods (both should report the same nginx binary version). Both are Docker Hub consumers, so use a live `kubectl exec ... nginx -v` check. The probe script in [Section #4](#section-4---testing) does not cover nginx.
 
 > [!IMPORTANT]
 > Do **not** hardcode `nginx:<tag>` in GitOps templates. Always consume `config.nginx` so every Horizon nginx consumer stays on the same pin.
@@ -118,7 +118,7 @@ To remediate a nginx CVE (Type B base bump):
 - You operate a **fork/mirror** and deploy from your own branch (see [deployment_guide.md - Fork the Repository](../deployment_guide.md#section-5d---fork-the-repository)). Below, `upstream` = the public Horizon repository; `origin` = your fork.
 - The existing environment is healthy: Argo CD applications `Synced` and `Healthy`.
 - You can run [`deploy.sh`](../../tools/scripts/deployment/deploy.sh) (native) or [`container-deploy.sh`](../../tools/scripts/deployment/container-deploy.sh) (containerized) from `tools/scripts/deployment/`.
-- Tooling: Terraform `>= 1.14.2`, Docker, `gcloud`, `kubectl` (minimums enforced by `deploy.sh`).
+- Tooling: Terraform `>= 1.14.2`, Docker `>= 29.1.3`, `gcloud >= 549.0.1`, curl (minimums enforced by `deploy.sh`). `kubectl` is needed separately for the Section #4 test script.
 
 ---
 
@@ -333,8 +333,6 @@ Every flagged package should have moved from its old version to the patched one.
 | Alpine `libssl3` / `libcrypto3` | `3.5.5-r0` | `3.5.6-r0` |
 | Alpine `vim` | older | `>= 9.2.0321-r0` |
 | Debian `libssl3` / `openssl` | older `~deb12u*` | latest `~deb12u*` |
-| **landingpage-app** `nginx` | older pin (e.g. `1.28.1-r1`) | current `common_nginx_version` (e.g. `1.31.2-r*`) |
-| **landingpage-app** `libexpat` / `libpng` | `2.7.3` / `1.6.54` | `2.7.5-r0` / `1.6.58-r1` |
 | **keycloak-post-gerrit** `openssh` | `10.2_p1-r0` | `10.3_p1-r0` |
 | **mtk-connect-post-key** Python | `3.12.x` | `3.13.x` |
 
@@ -349,9 +347,10 @@ Probing `:$NEW_TAG` proves the **registry image** is patched. To prove the **run
 ```
 
 By default this checks:
-- **landingpage** Deployment (namespace `horizon`) — Type B; nginx + Alpine packages in the running pod
 - **gerrit-mcp-server** Deployment (namespace `gerrit`) — Type A; Debian openssl packages
 - **mtk-connect-api-key-config** CronJob (namespace `mtk-connect`) — Type B; forced one-off run on Python 3.13 image
+
+`--horizon-ns` is accepted by the script and is not used.
 
 When validating an nginx base bump, also confirm Docker Hub consumers that share `config.nginx` (not covered by the probe script's Artifact Registry list):
 

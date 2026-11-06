@@ -118,7 +118,7 @@ These are as follows:
     - The branch name the job will be configured for from `HORIZON_SCM_URL`.
 
 -   `JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX`
-    - This identifies the Persistent Volume Claim (PVC) prefix that is used to provision persistent storage for build cache, ensuring efficient reuse of cached resources across builds.  The default is [`pd-balanced`](https://cloud.google.com/compute/docs/disks/performance), which strikes a balance between optimal performance and cost-effectiveness.
+    - This identifies the Persistent Volume Claim (PVC) prefix that is used to provision persistent storage for build cache, ensuring efficient reuse of cached resources across builds.  The default is `reclaimable-storage-class` (StorageClasses `reclaimable-storage-class-android-<version>`, disk type [`pd-balanced`](https://cloud.google.com/compute/docs/disks/performance)).
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
@@ -126,5 +126,3 @@ These are as follows:
 -    `MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER`
 
 -    `MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME`
-
--    `MIRROR_DIR_NAME`

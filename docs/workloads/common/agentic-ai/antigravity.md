@@ -18,14 +18,14 @@ Horizon integrates two **separate** Google Antigravity products into workstation
 
 | Product | Version line | Purpose | Images |
 |---------|--------------|---------|--------|
-| **Antigravity 2.0 Agent** (desktop) | 2.x | GUI agent via GNOME app menu | `horizon-gnome` base (inherited by `horizon-android-studio`; `horizon-asfp` installs it directly until it migrates onto the `horizon-gnome` base) |
+| **Antigravity 2.0 Agent** (desktop) | 2.x | GUI agent via GNOME app menu | `horizon-gnome` base (inherited by `horizon-android-studio` and `horizon-asfp`) |
 | **Antigravity CLI (`agy`)** | 1.x | Terminal agent | `horizon-code-oss` (required) |
 
 Antigravity IDE is **not** installed. Gemini Code Assist on workstation images is **unchanged** by Antigravity tooling.
 
 For MCP Gateway Registry setup with Antigravity, use `antigravity-mcp-agent` (Antigravity Agent and CLI). Gemini clients continue to use `gemini-mcp-agent`. See [MCP Setup and Usage Guide](../../../guides/mcp_setup.md#mcp-client--tool-mapping) and the [image matrix](#image-matrix) below.
 
-**Architecture note:** the Agent is a single, shared build step baked into the `horizon-gnome` base image (behind `INSTALL_ANTIGRAVITY_AGENT`, default `true`) so every GNOME thin-child inherits it without re-installing. `horizon-android-studio` is a thin child of `horizon-gnome` and no longer installs the Agent itself. `horizon-asfp` has not yet migrated onto `horizon-gnome` and still installs the Agent directly in its own Dockerfile; when it migrates, that duplicate install should be removed in favor of inheriting it from the base. `horizon-code-oss` does not derive from `horizon-gnome` and is unaffected - it only installs the CLI.
+**Architecture note:** the Agent is a single, shared build step baked into the `horizon-gnome` base image (behind `INSTALL_ANTIGRAVITY_AGENT`, default `true`) so every GNOME thin-child inherits it without re-installing. `horizon-android-studio` and `horizon-asfp` are thin children of `horizon-gnome` and inherit the Agent; neither child installs it itself. `horizon-code-oss` does not derive from `horizon-gnome` and is unaffected - it only installs the CLI.
 
 Install scripts live under:
 
@@ -35,7 +35,7 @@ Build-time install scripts for **Antigravity 2.0 Agent** (desktop) and **Antigra
 
 | Script | Used on | Installs |
 |---|---|---|
-| `install-antigravity-agent.sh` | `horizon-gnome` base image (inherited by Android Studio); `horizon-asfp` directly until migrated | Antigravity **2.0 Agent** (not IDE) |
+| `install-antigravity-agent.sh` | `horizon-gnome` base image (inherited by Android Studio and ASfP) | Antigravity **2.0 Agent** (not IDE) |
 | `install-antigravity-cli.sh` | on Code OSS image | `agy` CLI (pinned GitHub release tarball) |
 
 Scripts run at **image build time** (root). **OAuth / first sign-in** happen at **runtime** in the browser (Chrome is in GNOME images).
@@ -49,7 +49,7 @@ Scripts run at **image build time** (root). **OAuth / first sign-in** happen at 
 |-------------------|-----------------|-------------|----------------|
 | Horizon GNOME (base) | Yes (source of the install) | Yes (bundled with the agent) | N/A (base image only) |
 | Horizon Android Studio | Yes (inherited from `horizon-gnome`) | Yes (bundled with the agent) | GNOME menu → Antigravity 2.0 |
-| Horizon Android Studio for Platform (ASfP) | Yes (installed directly, not yet migrated) | Yes (bundled with the agent) | GNOME menu → Antigravity 2.0 |
+| Horizon Android Studio for Platform (ASfP) | Yes (inherited from `horizon-gnome`) | Yes (bundled with the agent) | GNOME menu → Antigravity 2.0 |
 | Horizon Code OSS | No | Yes | N/A (terminal: `agy`) |
 
 **Note:** `agy` still appears on GNOME workstations (e.g. `/usr/bin/agy`) from Google’s CLI installer. It is installed by default. That is independent of `install-antigravity-cli.sh`, which installs to `/usr/local/bin/agy`.
@@ -61,19 +61,19 @@ Scripts run at **image build time** (root). **OAuth / first sign-in** happen at 
 Image jobs under `Cloud Workstations → Workstation Images` copy `common-utils/antigravity/` at build time. Set versions from each job’s **Build with Parameters**:
 
 - **Antigravity CLI (`agy`)** — **Horizon Code OSS**. Provide `ANTIGRAVITY_CLI_VERSION`, `ANTIGRAVITY_CLI_TARBALL_URL`, and `ANTIGRAVITY_CLI_SHA256`. Release assets and SHA-256 digests are listed on the [Antigravity CLI releases](https://github.com/google-antigravity/antigravity-cli/releases) page.
-- **Antigravity 2.0 Agent** (desktop) — **Horizon Android Studio** and **Horizon Android Studio for Platform (ASfP)** (GNOME-based IDE images). Provide `ANTIGRAVITY_2_VERSION`, `ANTIGRAVITY_2_TARBALL_URL`, and `ANTIGRAVITY_2_TARBALL_SHA256`.
+- **Antigravity 2.0 Agent** (desktop) — **Horizon GNOME** (inherited by Android Studio and ASfP). Provide `ANTIGRAVITY_2_VERSION`, `ANTIGRAVITY_2_TARBALL_URL`, and `ANTIGRAVITY_2_TARBALL_SHA256`.
 
-| Parameter | Horizon GNOME (base) | ASfP (not yet migrated) | Code OSS |
-|-----------|-----------------------|--------------------------|----------|
-| `INSTALL_ANTIGRAVITY_AGENT` | Required, default `true` | N/A | — |
-| `ANTIGRAVITY_2_VERSION` | Required (e.g. `2.2.1`) | Required (e.g. `2.2.1`) | — |
-| `ANTIGRAVITY_2_TARBALL_URL` | Linux x64 tarball URL | Linux x64 tarball URL | — |
-| `ANTIGRAVITY_2_TARBALL_SHA256` | SHA-256 of that tarball (lowercase hex) | SHA-256 of that tarball (lowercase hex) | — |
-| `ANTIGRAVITY_CLI_VERSION` | — | — | Required (e.g. `1.1.0`) |
-| `ANTIGRAVITY_CLI_TARBALL_URL` | — | — | GitHub release asset URL (e.g. `agy_cli_linux_x64.tar.gz`) |
-| `ANTIGRAVITY_CLI_SHA256` | — | — | SHA-256 of that tarball (lowercase hex) |
+| Parameter | Horizon GNOME (base) | Code OSS |
+|-----------|-----------------------|----------|
+| `INSTALL_ANTIGRAVITY_AGENT` | Required, default `true` | — |
+| `ANTIGRAVITY_2_VERSION` | Required (e.g. `2.2.1`) | — |
+| `ANTIGRAVITY_2_TARBALL_URL` | Linux x64 tarball URL | — |
+| `ANTIGRAVITY_2_TARBALL_SHA256` | SHA-256 of that tarball (lowercase hex) | — |
+| `ANTIGRAVITY_CLI_VERSION` | — | Required (e.g. `1.1.0`) |
+| `ANTIGRAVITY_CLI_TARBALL_URL` | — | GitHub release asset URL (e.g. `agy_cli_linux_x64.tar.gz`) |
+| `ANTIGRAVITY_CLI_SHA256` | — | SHA-256 of that tarball (lowercase hex) |
 
-`horizon-android-studio` no longer has its own `ANTIGRAVITY_2_*` parameters - it consumes whatever Agent build was baked into the `horizon-gnome` image it references via `BASE_IMAGE`. To upgrade the Agent version for Android Studio, rebuild/republish `horizon-gnome` with the new `ANTIGRAVITY_2_*` parameters first, then point Android Studio's `BASE_IMAGE` at the new base tag/digest.
+`horizon-android-studio` and `horizon-asfp` do not have their own `ANTIGRAVITY_2_*` parameters. Both consume the Agent baked into the `horizon-gnome` image they reference via `BASE_IMAGE`. To upgrade the Agent, rebuild and republish `horizon-gnome` with the new `ANTIGRAVITY_2_*` parameters first, then point each child's `BASE_IMAGE` at the new base tag or digest.
 
 Defaults are set in each image `Dockerfile` and matching Jenkins `job.groovy`.
 
@@ -85,7 +85,7 @@ When changing either the CLI or the Agent version, you **must** supply all three
 
 ### Desktop Agent (AS / ASfP)
 
-1. Open workstation via noVNC.
+1. Open the workstation in the browser (Guacamole over RDP).
 2. Launch **Antigravity 2.0** from the app menu (no autostart).
 3. Complete Google sign-in in Chrome when prompted.
 
@@ -107,7 +107,7 @@ Without PD, expect sign-in again after restart.
 
 ## Install scripts
 ### `install-antigravity-agent.sh`
-Desktop 2.0 Agent with a GPU-safe X11 wrapper, compatible with both TigerVNC/X11 (ASfP, standalone) and RDP/XWayland (GNOME-based images such as Android Studio).
+Desktop 2.0 Agent with a GPU-safe X11 wrapper, compatible with RDP/XWayland on the GNOME-based images (Android Studio and ASfP).
 ```bash
 ANTIGRAVITY_2_INSTALL_MODE=tarball \
 ANTIGRAVITY_2_VERSION=2.2.1 \

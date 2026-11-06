@@ -18,7 +18,7 @@ limitations under the License. -->
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
 - [Groovy Definitions](#definitions)
-- [Creating / Editing Job](#editing)
+- [Creating / Editing Job](#edits)
 - [Seed Job](#seed)
 
 ## Overview <a name="overview"></a>
@@ -52,7 +52,7 @@ To run pipeline jobs, users must have access to Jenkins and be granted permissio
 > [!IMPORTANT]
 > **Persistence**
 >
-> These manually updated permissions do not persist across a Jenkins restart. To ensure persistence, we recommend adding users to the `gitops/templates/jenkins.yaml` file, e.g..
+> These manually updated permissions do not persist across a Jenkins restart. To ensure persistence, we recommend adding users to the `gitops/workloads/values-jenkins.yaml` file, e.g..
 > - Update `authorizationStrategy` → `roleBased` → `roles` → `global`:
 >   - Add the user to the respective group entry, e.g.
 > ```
@@ -67,9 +67,9 @@ To run pipeline jobs, users must have access to Jenkins and be granted permissio
 > [!NOTE]
 > **Disabling the plugin**
 >
-> If user wishes to disable the plugin, then remove the plugin and configuration from `gitops/templates/jenkins.yaml`:
+> If user wishes to disable the plugin, then remove the plugin and configuration from `gitops/workloads/values-jenkins.yaml`:
 > - Remove the plugin from the `additionalPlugins` section:
->   - `role-strategy:743.v142ea_b_d5f1d3`
+>   - `role-strategy:848.va_a_ea_673cf0b_c`
 >
 > - Replace all within `authorizationStrategy` with the following default values:
 > ```
@@ -157,7 +157,7 @@ For more detailed information on each of these components, refer to existing Gro
 > Environment variables can be referenced in Groovy files, but they are replaced with their actual values before the Groovy files are executed by the seed job. This approach avoids the need for explicit script approval, which is required when using the `getProperty` Groovy method to resolve environment variables.
 > The replacement of environment variables with their actual values is performed in the _"Prepare Groovy files"_ stage of the seed job. Therefore, it is crucial to update the replacements list in the Jenkinsfile whenever new environment variables are added to Groovy scripts.
 > To ensure that environment variables are properly replaced, please refer to the [Seed Workloads](../seed.md#groovymethods) documentation for more information on how to update the replacements list in the Jenkinsfile.
-> Environment variables are defined in the `gitops/templates/jenkins.yaml` file (CasC).
+> Environment variables are defined in the `gitops/workloads/values-jenkins.yaml` file (CasC).
 
 
 ### Update Existing Jobs

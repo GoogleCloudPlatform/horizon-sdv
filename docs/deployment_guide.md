@@ -99,8 +99,7 @@ It is required to replace them with actual values as you follow the setup instru
 | `GCP_PROJECT_ID`     | Your GCP Project ID. ([more](#section-1b---gcp-project-details))                     | `my-cloud-project-abc-123`                |
 | `REPOSITORY_URL`     | The URL of your git repository.                                                       | `https://github.com/your-org/horizon-sdv` |
 | `BRANCH_NAME`        | The branch of your repository to use for deployment.                                  | `feature-xyz` or `main`                   |
-| `GIT_REPO_OWNER`     | Your git repository owner (user or organization name). ([more](#section-2c---configure-terraform-variables)) | `your-org`      |
-| `GIT_REPO_NAME`      | Your git repository name. ([more](#section-2c---configure-terraform-variables))       | `horizon-sdv`                             |
+| `scm_repo_url`       | Full git repository URL. Set in [Section #2c - Configure Terraform Variables](#section-2c---configure-terraform-variables). `GIT_REPO_OWNER` and `GIT_REPO_NAME` are not Terraform variables. | `https://github.com/your-org/horizon-sdv` |
 
 ## Section #1 - GCP Foundation Setup
 This section covers creation and configuration of required Google Cloud Platform (GCP) services.
@@ -365,12 +364,11 @@ Steps to start the Terraform workflow.
 > [!Important]
 > Use this deployment method ONLY on **Linux** (Ubuntu or Debian based distros), not tested on WSL or other platforms.
 
-1. The below listed tools are required to be installed.
-   1. [Kubectl](https://kubernetes.io/docs/tasks/tools/)
-   2. [Terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
-   3. Docker - [Linux](https://docs.docker.com/engine/install/)
-   4. [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/install-sdk)
-   5. curl
+1. The below listed tools are required to be installed. kubectl is not required to run `./deploy.sh`. It is required later, in [Section #3c - Connect to GKE via Connect Gateway](#section-3c---connect-to-gke-via-connect-gateway).
+   1. [Terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
+   2. Docker - [Linux](https://docs.docker.com/engine/install/)
+   3. [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/install-sdk)
+   4. curl
 2. Navigate to `tools/scripts/deployment`
 3. Provisioning can be done by running `./deploy.sh [options]` (Requires all above-mentioned tools to be installed on the machine).
 >**Options :**
@@ -589,9 +587,9 @@ Below table details the Keycloak to jenkins RBAC mapping with their access level
 
 | Keycloak Group                                 | Jenkins Role                         | Access Level                           |
 |------------------------------------------------|--------------------------------------|----------------------------------------|
-| `administrators`                               | Global: Admin                        | Full admin access                      |
-| `developers`                                   | Item: workloads-developers           | Full build/config rights for Workloads |
-| `viewers`                                      | Item: workloads-viewers              | Limited build access for Workloads     |
+| `administrators`                               | Global: administrators               | Full admin access                      |
+| `developers`                                   | Global: developers, Item: developers | Full build/config rights for Workloads |
+| `viewers`                                      | Global: viewers, Item: viewers       | View-only access to jobs               |
 
 #### Steps to Assign a User to a Group
 >[!NOTE]
@@ -607,10 +605,10 @@ Follow the below steps to assign a user to required Keycloak group,
    - Use the search bar to locate the user.
    - Click on the username to open their details.
 3. Assign the Group
-   - **admininstrators**
+   - **administrators**
       - Click on the **Groups** tab.
       - Click on **Join Group** which opens a new pop-up window.
-      - Select the group `admininstrators`.
+      - Select the group `administrators`.
       - Click **Join**.   
          <img src="images/keycloak-jenkins-groups-1.png" width="325" />
    - **developers**
@@ -652,10 +650,10 @@ Follow the below steps to assign a user to required Keycloak group,
    - Use the search bar to locate the user.
    - Click on the username to open their details.
 3. Assign the Group
-   - **admininstrators**
+   - **administrators**
       - Click on the **Groups** tab.
       - Click on **Join Group** which opens a new pop-up window.
-      - Select the group `admininstrators`.
+      - Select the group `administrators`.
       - Click **Join**.   
          <img src="images/keycloak-argocd-groups-1.png" width="325" />
 4. Verify Group Assignment
@@ -685,10 +683,10 @@ Follow the below steps to assign a user to required Keycloak group,
    - Use the search bar to locate the user.
    - Click on the username to open their details.
 3. Assign the Group
-   - **admininstrators**
+   - **administrators**
       - Click on the **Groups** tab.
       - Click on **Join Group** which opens a new pop-up window.
-      - Select the group `admininstrators`.
+      - Select the group `administrators`.
       - Click **Join**.
          <img src="images/keycloak-headlamp-groups-1.png" width="325" />
 4. Verify Group Assignment
@@ -719,10 +717,10 @@ Follow the below steps to assign a user to required Keycloak group,
    - Use the search bar to locate the user.
    - Click on the username to open their details.
 3. Assign the Group
-   - **admininstrators** or **viewers**
+   - **administrators** or **viewers**
       - Click on the **Groups** tab.
       - Click on **Join Group** which opens a new pop-up window.
-      - Select the group `admininstrators` or `viewers`.
+      - Select the group `administrators` or `viewers`.
       - Click **Join**.   
          <img src="images/keycloak-grafana-groups-1.png" width="325" />
 4. Verify Group Assignment
@@ -756,7 +754,7 @@ Follow the below steps to assign a user to required Keycloak group,
    - **administrators** or **viewers**
       - Click on the **Groups** tab.
       - Click on **Join Group** which opens a new pop-up window.
-      - Select the group `administratord` or `viewers`.
+      - Select the group `administrators` or `viewers`.
       - Click **Join**.   
          <img src="images/keycloak_mcp_gateway_registry_groups.png" width="325" />
 4. Verify Group Assignment
@@ -839,9 +837,7 @@ Keycloak is the Identity and Access Management (IAM) application provides featur
    <img src="images/keycloak_launch.png" width="325" />
 2. Log-in to Keycloak using the credentials configured in [Section #2c - Configure Terraform Variables](#section-2c---configure-terraform-variables).
 
-Refer section [Section #3d - Setup Keycloak](#section-3d---setup-keycloak) for steps to create and manage users.   
-   
-<img src="images/keycloak_homepage.png" width="750" />
+Refer section [Section #3d - Setup Keycloak](#section-3d---setup-keycloak) for steps to create and manage users.
 
 ### Section #4d - Gerrit
 Gerrit is a web-based code review tool built on top of the git version control system.
@@ -1073,7 +1069,7 @@ Follow post-install steps as shown in [Manage Docker as a non-root user](https:/
 A manual workaround for this error, run the below command,
 
 ```shell
-gcloud compute ssl-policies delete gke-ssl-policy --global --project=sdva-2108202401
+gcloud compute ssl-policies delete gke-ssl-policy --global --project=<GCP_PROJECT_ID>
 ```
 
 ### Section #6f - Homepage not reachable after deployment
