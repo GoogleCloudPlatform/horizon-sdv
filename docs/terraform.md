@@ -16,24 +16,24 @@ limitations under the License. -->
 # Terraform
 
 ## Table of contents
-- [Introduction](#Introduction)
-- [Overview](#Overview)
-- [Modules Overview](#ModulesOverview)
-- [Modules Decription](#ModulesDecription)
-- [Module - env](#Module-env)
-- [Module - base](#Module-base)
-- [Module - sdv-apis](#Module-sdv-apis)
-- [Module - sdv-artifact-registry](#Module-sdv-artifact-registry)
-- [Module - sdv-certificate-manager](#[Module-sdv-certificate-manager)
-- [Module - sdv-gcs](#Module-sdv-gcs)
-- [Module - sdv-gke-cluster](#Module-sdv-gke-cluster)
-- [Module - sdv-iam](#Module-sdv-iam)
-- [Module - sdv-network](#Module-sdv-network)
-- [Module - sdv-sa-key-secret](#Module-sdv-sa-key-secret)
-- [Module - sdv-secrets](#Module-sdv-secrets)
-- [Module - sdv-ssl-policy](#Module-sdv-ssl-policy)
-- [Module - sdv-wi](#Module-sdv-wi)
-- [Execute terraform scripts](#Executeterraformscripts)
+- [Introduction](#introduction)
+- [Overview](#overview)
+- [Modules Overview](#modules-overview)
+- [Modules Description](#modules-description)
+- [Module - env](#module---env)
+- [Module - base](#module---base)
+- [Module - sdv-apis](#module---sdv-apis)
+- [Module - sdv-artifact-registry](#module---sdv-artifact-registry)
+- [Module - sdv-certificate-manager](#module---sdv-certificate-manager)
+- [Module - sdv-gcs](#module---sdv-gcs)
+- [Module - sdv-gke-cluster](#module---sdv-gke-cluster)
+- [Module - sdv-iam](#module---sdv-iam)
+- [Module - sdv-network](#module---sdv-network)
+- [Module - sdv-sa-key-secret](#module---sdv-sa-key-secret)
+- [Module - sdv-secrets](#module---sdv-secrets)
+- [Module - sdv-ssl-policy](#module---sdv-ssl-policy)
+- [Module - sdv-wi](#module---sdv-wi)
+- [Execute terraform scripts](#execute-terraform-scripts)
 
 
 
@@ -51,11 +51,13 @@ Terraform use declarative language to describe the desired state of infrastructu
 GCP is used as a cloud platform for creating and configuring infrastructure, hosts, and other services that are needed by Horizon SDV platform. Google Cloud is also used in the Horizon SDV project for managing secrets and running scripts that interact with the Standard GKE cluster through Fleet. 
 Main list of resources created by terraform scripts in the GCP Cloud is mentioned below:
 
-- GKE Cluster (Google Kubernetes Engine Cluster) with 2 node pool:
+- GKE Cluster (Google Kubernetes Engine Cluster) with 4 node pools:
   - sdv-node-pool - used for Horizon SDV services
-  - sdv-build-node-pool - used for workloads
+  - sdv-build-node-pool - used for Android workloads
+  - sdv-openbsw-build-node-pool - used for OpenBSW workloads
+  - sdv-utility-node-pool - used for Gemini/Vertex utility workloads
 - Main Horizon SDV Service Account, required secrets and other Service Accounts for GKE (Google Kubernetes Engine)
-- Artifact Registry to store, docker images for services eg. Landing Paga, Post Jobs, Cron Jobs and AAOS Builder
+- Artifact Registry to store docker images for services, for example the Horizon Developer Portal (`horizon-dev-portal`), Post Jobs, Cron Jobs and AAOS Builder
 - Certificate Manager, Certificate Manager Map and DNS authorization resources - for managing the TLS certificate
 - GCS (Google Cloud Storage) - storage bucket that stores Android build output results, infastructure state and deployment helper script
 - IAM (Identity and Access Management) area that helps managing IAM roles for users and Service Accounts
@@ -149,7 +151,7 @@ Contains main configuration file , which contains GCP project details such as  p
 - The configuration uses a module 'base' sourced from ../modules/base and sets up various parameters such as project ID, region, zone, network, and subnetwork.
 - Defines a list of GCP APIs to be enabled, including Compute, DNS, Monitoring, Secret Manager, IAM, and more.
 - It sets up service accounts for many purposes, such as Jenkins, ArgoCD, Keycloak, and Gerrit, with specific roles and permissions.
-- Defines a cluster named sdv-cluster with a node pool named sdv-node-pool. Additional configurations are also provided for the build node pool and Fleet-based cluster access.
+- Defines a cluster named sdv-cluster with four node pools: sdv-node-pool, sdv-build-node-pool, sdv-openbsw-build-node-pool, and sdv-utility-node-pool. Additional configurations are also provided for Fleet-based cluster access.
 - Configuration includes a map of secrets with their IDs, values, and access rules for different GKE (Google Kubernetes Engine) namespaces and service accounts. Secrets include GitHub App ID, installation ID, private key, initial passwords for ArgoCD, Jenkins, Keycloak, etc.
  
 ## Module - base
@@ -158,7 +160,7 @@ Module `base` is responsible to set and config following parts:
 
 - Modules - The configuration uses multiple modules eg ../sdv-apis, ../sdv-secrets, ../sdv-wi, ../sdv-gcs, ../sdv-network, etc. Each module is responsible for specific tasks such as managing APIs, secrets, parameters service accounts, GCS buckets (`{project_id}-aaos`, `{project_id}-openbsw`), network configurations, DNS Zone management, GKE cluster setup, artifact registry, Container images, certificate management, SSL policy, and IAM roles. Additional buckets (`{project_id}-sample-workloads-data` via `sample-data` after `storage-gcs`; `{project_id}-argo-workflows` via `gitops/templates/argo-workflows-bucket.yaml` in the root `horizon-sdv` app) are provisioned via Argo CD.
 - Service Accounts and IAM Roles - Sets up IAM roles for the service account ${var.sdv_gcp_compute_sa_email} including roles/storage.objectUser, roles/compute.instanceAdmin.v1, roles/compute.networkAdmin, roles/iap.tunnelResourceAccessor, and roles/iam.serviceAccountUser.
-- GKE Cluster Configuration - It defines a GKE cluster with a default node pool and a build node pool. The node pools sets specific configurations for machine types, node counts, and locations.
+- GKE Cluster Configuration - It defines a GKE cluster with four node pools: main, Android build, OpenBSW build, and utility. The node pools set specific configurations for machine types, node counts, and locations.
 - Secrets Management - The configuration includes a module for managing secrets with a map of secrets and their access rules for different GKE namespaces and service accounts.
 - Network configuration - Sets up a network and subnetwork with a router for network egress. A custom VPN firewall rule is defined to allow TCP port 22 for the service account ${var.sdv_gcp_compute_sa_email}.
 - Artifact Registry and Certificate Management - The configuration includes modules for setting up an artifact registry and managing SSL certificates with specific parameters like sdv_artifact_registry_repository_id, location, ssl_certificate_name or domain_name.
@@ -171,9 +173,9 @@ Creates Google Artifact Registry repository for docker repository for Horizon SD
 
 ## Module - sdv-certificate-manager
 - Certificate Manager Certificate - The configuration creates a google_certificate_manager_certificate resource named horizon_sdv_cert. It specifies the project ID, certificate name, and scope as "DEFAULT". The certificate is managed with domains and DNS authorizations provided by the google_certificate_manager_dns_authorization resource.
-- DNS Authorization - A google_certificate_manager_dns_authorization resource named instance is created. It specifies the name as "horizon-sdv-dns-auth" and the domain from the variable var.domain.
+- DNS Authorization - A google_certificate_manager_dns_authorization resource is created only when `certificate_authorization_type = "dns"`. One authorization is created per entry in `var.domains`, named `horizon-sdv-dns-auth` for the main environment and `horizon-sdv-dns-auth-<env>` for sub-environments.
 - Certificate Map - The configuration creates a google_certificate_manager_certificate_map resource named horizon_sdv_map. It includes the project ID, map name, and a description "Certificate Manager Map for Horizon SDV".
-- Certificate Map Entry- A google_certificate_manager_certificate_map_entry resource named horizon_sdv_map_entry is created. It specifies the map entry name, description, map name, certificates, and matcher as "PRIMARY".
+- Certificate Map Entry- A google_certificate_manager_certificate_map_entry is created per domain. Entries match by hostname. One entry is created for the apex, plus `*.<domain>` when DNS authorization is used, or `mcp.<domain>` when load-balancer authorization is used.
 
 ## Module - sdv-container-images
 Builds and pushes the required container images to Google Artifact Registry. Detects changes in container build files within `images/`, rebuilds and pushes images to Google Artifact Registry.
@@ -193,11 +195,11 @@ Deploys and configures required Kubernetes resources post Standard GKE Cluster c
 
 ## Module - sdv-gke-cluster
 Creates and manages a Google Kubernetes Engine (GKE) cluster along with its node pools.
-This terraform configuration sets up a GKE cluster with specific configurations for network, security, maintenance, and add-ons (Config Connector GKE add-on is **disabled**; KCC is GitOps-pinned), along with two node pools (main and build) with their respective configurations.
+This terraform configuration sets up a GKE cluster with specific configurations for network, security, maintenance, and add-ons (Config Connector GKE add-on is **disabled**; KCC is GitOps-pinned), along with four node pools (main, Android build, OpenBSW build, utility) with their respective configurations.
 
 Resource "google_container_cluster" "sdv_cluster" defines a GKE cluster with various configurations:
 - Project and Location: Specifies the project ID, cluster name, location, network, and subnetwork.
-- Node Pool Management: Removes the default node pool and prepares to create 2 main Horizon SDV node pools.
+- Node Pool Management: Removes the default node pool and prepares to create 4 Horizon SDV node pools.
 - Workload Identity: Enables Workload Identity for the cluster.
 - Network Configuration: Disables public CIDR access and configures IP allocation policies.
 - Private Cluster: Enables private nodes and private endpoint with a specified master IPv4 CIDR block.
@@ -207,10 +209,10 @@ Resource "google_container_cluster" "sdv_cluster" defines a GKE cluster with var
 - Add-ons: Enables Load Balancing and the Filestore CSI driver. The Config Connector GKE add-on is disabled (`config_connector_config.enabled = false`); do not re-enable it after the Git-pinned operator is in place (CRD downgrade is unsupported).
 - Autoscaling is disabled.
 
-Resource "google_container_node_pool" "sdv_main_node_pool", "google_container_node_pool" "sdv_build_node_pool" and "google_container_node_pool" "sdv_openbsw_build_node_pool" define a main node pool, Android and OpenBSW build node pools for the GKE cluster with the configurations:
+Resource "google_container_node_pool" "sdv_main_node_pool", "google_container_node_pool" "sdv_build_node_pool", "google_container_node_pool" "sdv_openbsw_build_node_pool" and "google_container_node_pool" "sdv_utility_node_pool" define a main node pool, Android build, OpenBSW build, and utility node pools for the GKE cluster with the configurations:
 - Node Pool Details: configures the name, location, cluster, node count, and node locations.
 - Node Configuration: specifies the machine type, service account, OAuth scopes, and workload metadata.
-- Autoscaling: Configures autoscaling with minimum and maximum node counts (for sdv_build_node_pool qnd sdv_openbsw_node_pool).
+- Autoscaling: Configures autoscaling with minimum and maximum node counts (for `sdv_main_node_pool`, `sdv_build_node_pool`, `sdv_openbsw_build_node_pool` and `sdv_utility_node_pool`).
 
 ## Module - sdv-iam
 Module updates IAM policy to grant a role to a member or Service Account.
@@ -218,7 +220,7 @@ Module updates IAM policy to grant a role to a member or Service Account.
 ## Module - sdv-network
 Module creates and manages a Virtual Private Cloud (VPC) network in GCP. Sets project ID, network name, and routing mode for the VPC.
 Defines a subnet within the VPC with the following configurations:
-- Private IP Google Access: Disables private IP Google access.
+- Private IP Google Access: Enables private IP Google access.
 
 Module defines secondary IP ranges (secondary_ranges) for the subnet, which are used to differentiate GKE internal resources within the Cluster such as pod ranges and services ranges.
 Module configure also route within the VPC with the following configurations:
@@ -271,7 +273,7 @@ The automated deployment scripts are located in `tools/scripts/deployment/`. The
 There are two ways to run the deployment. Via Docker and Host Machine.
 
 #### Docker
-This runs the deployment script within a containerized environment. You do not need to install Terraform, Kubectl, or the specific Gcloud CLI version on your local machine, only Docker is required.
+This runs the deployment script within a containerized environment. You do not need to install Terraform, the Docker CLI, or the specific Gcloud CLI version on your local machine, only Docker is required.
 
 **Script Path**: `/tools/scripts/deployment/`
 **Dockerfile Path**: `/tools/scripts/deployment/container/`
@@ -280,7 +282,7 @@ This runs the deployment script within a containerized environment. You do not n
 ./container-deploy.sh [args]
 ```
 
-1. Builds the horizon-sdv-deployer Docker container image with pinned tool versions (Terraform, Kubectl, gcloud).
+1. Builds the horizon-sdv-deployer Docker container image with pinned tool versions (Terraform 1.14.2, Docker CLI 29.1.3, gcloud 549.0.1).
 2. Creates a persistent Docker Volume to store `gcloud` login credentials.
 3. Mounts current code (repository) directory into the container.
 4. Executes `deploy.sh` within the container.
@@ -292,8 +294,9 @@ Runs the script directly on host machine. Ensure all the tools with the required
 
 **Prerequisites**:
 - Terraform `v1.14.2+`
-- Kubectl `v1.34.3+`
+- Docker `v29.1.3+`
 - Google Cloud CLI `v549.0.1+`
+- curl
 - Authenticated gcloud session (gcloud auth login)
 
 **Script Path**: `/tools/scripts/deployment`
@@ -310,12 +313,12 @@ Both scripts (Containerized and Host Machine) accept the same arguments, which a
 
 **Containerized**:
 ```shell
-./container-deploy.sh
+./container-deploy.sh --apply
 ```
 
 **Host Machine**:
 ```shell
-./deploy.sh
+./deploy.sh --apply
 ```
 
 ### Destroy (Teardown):
@@ -323,13 +326,12 @@ Initializes Terraform and runs `terraform destroy -auto-approve`.
 
 **Containerized**:
 ```shell
-./container-deploy.sh -d
+./container-deploy.sh --destroy
 ```
 
 **Host Machine**:
 ```shell
-./deploy.sh -d
+./deploy.sh --destroy
 ```
-> Note: You can also use `--destroy`.
 
 For more details about Terraform please reach the official documentation: https://cloud.google.com/docs/terraform/terraform-overview

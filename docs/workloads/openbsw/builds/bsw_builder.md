@@ -19,7 +19,7 @@ limitations under the License. -->
 - [Prerequisites](#prerequisites)
 - [Rust reference build (step by step)](#rust-reference-build-step-by-step)
 - [Environment Variables/Parameters](#environment-variables)
-  * [Targets](#targets)
+  * [RTOS_PLATFORM](#rtos_platform)
 - [System Variables](#system-variables)
 - [Known Limitations](#known-limitations)
 
@@ -72,7 +72,7 @@ One-time setup requirements.
 
 ## Rust reference build (step by step) <a name="rust-reference-build-step-by-step"></a>
 
-**Rust** here means the **`posix-rust`** (on Linux/POSIX) and **`s32k148-rust-gcc`** (on NXP) builds. For **why Rust needs an extra line in the POSIX test config file**, read [POSIX Target Test — simple explanation](../../tests/posix/README.md#why-the-rust-toml-snippet-matters-plain-english).
+**Rust** here means the **`posix-rust`** (on Linux/POSIX) and **`s32k148-rust-gcc`** (on NXP) builds. For **why Rust needs an extra line in the POSIX test config file**, read [POSIX Target Test — simple explanation](../tests/posix.md#why-the-rust-toml-snippet-matters-plain-english).
 
 ### Build in Jenkins
 
@@ -301,10 +301,6 @@ These are as follows:
 - **Experimental:** Gemini-assisted diagnosis in this pipeline is experimental; behavior, quality, and availability can change without notice.
 - **Examples only:** Repository prompts and skills are **illustrative examples**—tune, replace, or disable them for your environment.
 - **Upstream issues:** Problems may come from [Gemini CLI](https://github.com/google-gemini/gemini-cli) itself; see [open issues](https://github.com/google-gemini/gemini-cli/issues) for known bugs and workarounds.
-
-**Document Generation:**
-
-This will be added in future releases.
 
 **Repository Access Control:**
 

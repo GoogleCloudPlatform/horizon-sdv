@@ -289,7 +289,7 @@ The CLI reads its settings from three places. Command-line flags win over enviro
 
 1. Flags on the command, such as `--domain`, `--api`, `--module` and `--template`.
 2. Environment variables.
-3. The config file `~/.config/horizon/config.yaml` (on Windows, `%APPDATA%\horizon\config.yaml`).
+3. The config file: `~/.config/horizon/config.yaml` on Linux (`$XDG_CONFIG_HOME/horizon/config.yaml` when that variable is set), `~/Library/Application Support/horizon/config.yaml` on macOS, and `%APPDATA%\horizon\config.yaml` on Windows.
 
 The most useful environment variables are:
 
@@ -470,9 +470,14 @@ script file, or operable program.
 
 ### Remove configuration and cached tokens
 
-- Linux/macOS:
+- Linux:
 ```bash
 rm -rf ~/.config/horizon/
+```
+- macOS:
+```bash
+rm -rf ~/.config/horizon/
+rm -rf ~/Library/Application\ Support/horizon
 ```
 - Windows:
 ```powershell
@@ -484,9 +489,14 @@ This deletes both `config.yaml` and `token.json`.
 
 ### Verify removal
 
-- Linux/macOS:
+- Linux:
 ```bash
 ls ~/.config/horizon/
+```
+- macOS:
+```bash
+ls ~/.config/horizon/
+ls ~/Library/Application\ Support/horizon
 ```
 - Windows:
 ```powershell
@@ -496,8 +506,11 @@ Test-Path "$HOME\.config\horizon"
 
 **Expected:**
 
-- Linux/macOS:
+- Linux:
 <blockquote><samp>ls: cannot access '/home/&lt;user&gt;/.config/horizon/': No such file or directory</samp></blockquote>
+- macOS:
+<blockquote><samp>ls: /Users/&lt;user&gt;/.config/horizon/: No such file or directory<br>
+ls: /Users/&lt;user&gt;/Library/Application Support/horizon: No such file or directory</samp></blockquote>
 - Windows:
 <blockquote><samp>False<br>
 False</samp></blockquote>

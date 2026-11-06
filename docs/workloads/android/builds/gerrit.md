@@ -55,11 +55,11 @@ One-time setup requirements.
     - The CF job now uses a Packer-based build flow for template creation.
     - Script stage mapping is `1=build`, `2=ssh refresh`, `3=delete` (documented in `docs/workloads/android/environment/cf_instance_template.md`).
 
-To successfully run the pipeline, ensure that the referenced Cuttlefish instance template exists, as specified in the `JENKINS_GCE_CLOUD_LABEL` variable defined in the Android Seed job. If the template is missing, the job will fail. The variable must reference align with the `computeEngine` label of the instance you intend to use.
+To successfully run the pipeline, ensure that the referenced Cuttlefish instance template exists, as specified in the `CUTTLEFISH_GCE_CLOUD_LABEL` parameter of the Seed job (substituted into `${JENKINS_GCE_CLOUD_LABEL}`). If the template is missing, the job will fail. The variable must reference align with the `computeEngine` label of the instance you intend to use.
 
 ## Gerrit Triggers
 
-The pipeline is triggered by a Gerrit patchset change, or topic update based on Gerrit Triggers plugin. It uses the Horizon default path and branch name prefixes:
+The pipeline is triggered by a Ready-for-Build +1 vote, after a 120-second quiet period, based on the Gerrit Triggers plugin. It uses the Horizon default path and branch name prefixes:
 - Project prefix path: `android` separates projects into Android workload.
 - Branch prefix path: `horizon` and separates branch names from upstream branches.
 
@@ -90,7 +90,10 @@ properties{
           }
         }
         triggerOnEvents{
-          patchsetCreated()
+          commentAdded{
+            commentAddedTriggerApprovalValue('+1')
+            verdictCategory('Ready-for-Build')
+          }
         }
       }
     }
@@ -124,9 +127,6 @@ These are as follows:
 -   `GERRIT_CREDENTIALS_ID`
     - The credential for access to Gerrit, required for build pipelines.
 
--   `GERRIT_CUTTLEFISH_INSTANCE_TEMPLATE_LABEL`
-    - The name of the Cuttlefish instance template to use for the pipeline.
-
 -   `HORIZON_DOMAIN`
     - The URL domain which is required by pipeline jobs to derive URL for tools and GCP.
 
@@ -137,7 +137,7 @@ These are as follows:
     - The branch name the job will be configured for from `HORIZON_SCM_URL`.
 
 -   `JENKINS_AAOS_BUILD_CACHE_STORAGE_PREFIX`
-    - This identifies the Persistent Volume Claim (PVC) prefix that is used to provision persistent storage for build cache, ensuring efficient reuse of cached resources across builds.  The default is [`pd-balanced`](https://cloud.google.com/compute/docs/disks/performance), which strikes a balance between optimal performance and cost-effectiveness.
+    - This identifies the Persistent Volume Claim (PVC) prefix that is used to provision persistent storage for build cache, ensuring efficient reuse of cached resources across builds.  The default is `reclaimable-storage-class` (StorageClasses `reclaimable-storage-class-android-<version>`, disk type [`pd-balanced`](https://cloud.google.com/compute/docs/disks/performance)).
 
 -   `JENKINS_SERVICE_ACCOUNT`
     - Service account to use for pipelines. Required to ensure correct roles and permissions for GCP resources.
@@ -145,8 +145,6 @@ These are as follows:
 -    `MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER`
 
 -    `MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME`
-
--    `MIRROR_DIR_NAME`
 
 ## KNOWN ISSUES <a name="known-issues"></a>
 

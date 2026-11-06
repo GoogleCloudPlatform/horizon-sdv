@@ -29,7 +29,7 @@ It includes pointers to workload documentation under [`docs/workloads/`](../../w
   - [Gerrit access (optional)](#access-gerrit)
 - [Gerrit setup (optional)](#gerrit-setup)
   - [Project Fork Creation](#gerrit-fork-creation)
-  - [Patches](gerrit-patches)
+  - [Patches](#gerrit-patches)
 - [Workload setup](#workload)
   - [Seed Jenkins jobs](#workloads-jenkins-jobs)
   - [Docker image template](#workloads-docker-image-template)
@@ -107,8 +107,8 @@ The **administrator role** needs to be assigned in order for a user to perform c
 
   - In `Jenkins` → `Manage Jenkins` → `Manage and Assign Roles` → `Assign Roles`.
     - Available Roles: 
-        - Global: _administrators_, _developers_, _users_
-        - Item: _workloads-developers_, _workloads-users_
+        - Global: _administrators_, _developers_, _viewers_
+        - Item: _developers_, _viewers_
   - Add the user to appropriate Global / Item Role(s):
     - In the appropriate section, select `Add User`, enter the email address of the user and select the appropriate role(s).
     - Select `Save`
@@ -119,7 +119,7 @@ The **administrator role** needs to be assigned in order for a user to perform c
 
 <details id="change-roles-perm"><summary>Change RBAC Roles in Jenkins - Perisistent</summary><hr width="50%">
 
-  To ensure persistence of RBAC Roles, we recommend adding users to the `gitops/templates/jenkins.yaml` file, e.g..
+  To ensure persistence of RBAC Roles, we recommend adding users to the `gitops/workloads/values-jenkins.yaml` file, e.g..
   - Update `authorizationStrategy` → `roleBased` → `roles` → `global`:
     - Add the user to the respective group entry, e.g. ` - user: "john.example.doe@accenture.com"`
   - Update `authorizationStrategy` → `roleBased` → `roles` → `items`:
@@ -129,9 +129,9 @@ The **administrator role** needs to be assigned in order for a user to perform c
 
 <details id="disable-rbac-plugin"><summary>OPTIONAL: Disabling the RBAC plugin</summary><hr width="50%">
 
-  If user wishes to disable the rbac plugin, then remove the plugin and configuration from `gitops/templates/jenkins.yaml`:
+  If user wishes to disable the rbac plugin, then remove the plugin and configuration from `gitops/workloads/values-jenkins.yaml`:
   - Remove the plugin from the `additionalPlugins` section:
-    - `role-strategy:743.v142ea_b_d5f1d3`
+    - `role-strategy:848.va_a_ea_673cf0b_c`
 
   - Replace all within `authorizationStrategy` with the following default values:
   ```
@@ -230,7 +230,7 @@ All users of Gerrit need to create their own HTTP Token/Password:
 ## <span style="color:#335bff">GERRIT SETUP<a name="gerrit-setup"></a></span>
 
 The setup of a Gerrit repo is <b>OPTIONAL</b> - it should be done only if a private repo is required. Once set up, the private gerrit repo manifest can be used in build jobs instead of a public manifest.
-- E.g. For an Android build, the parameter `AAOS_MANIFEST_URL` can be set to `https://example.horizon-sdv.com/gerrit/android/platform/manifest` instead of the public `https://android.googlesource.com/platform/manifest`. 
+- E.g. For an Android build, the parameter `AAOS_GERRIT_MANIFEST_URL` can be set to `https://example.horizon-sdv.com/gerrit/android/platform/manifest` instead of the public `https://android.googlesource.com/platform/manifest`. 
 
 The setup instructions below are for the Android projects which are required by the [Gerrit](../android/builds/gerrit.md) job in the Android Workload area, but the process can be used to set up repositories for use in any Workload area.
 
@@ -247,9 +247,9 @@ The following Android projects will be forked from upstream [Google AOSP](https:
 
 | Source Projects | Branches |
 | --- | --- |
-| `platform/manifest`<br>`platform/frameworks/native`<br>`platform/packages/ervices/ar`<br>`platform/platform_testing`<br>`platform/hardware/interfaces`<br>`platform/packages/apps/Car/Launcher` | `android-14.0.0_r30`<br>`android-15.0.0_r36`<br>`android-16.0.0_r3` |
+| `platform/manifest`<br>`platform/frameworks/native`<br>`platform/packages/services/Car`<br>`platform/platform_testing`<br>`platform/hardware/interfaces`<br>`platform/packages/apps/Car/Launcher` | `android-14.0.0_r30`<br>`android-15.0.0_r36`<br>`android-16.0.0_r3` |
 
-For clarity, the names of the projects and branches in Gerrit will be prefixed with `android/`. (e.g. `platform/manifest` becomes `android/platform/manifest` and `android-14.0.0_r30` becomes `horizon/android-14.0.0_r30`)
+For clarity, project names in Gerrit are prefixed with `android/` and branch names with `horizon/`. (e.g. `platform/manifest` becomes `android/platform/manifest` and `android-14.0.0_r30` becomes `horizon/android-14.0.0_r30`)
 
 
 <details id="gerrit-create-empty-repo"><summary>Create Empty Gerrit Repos</summary><hr width="50%">
@@ -502,8 +502,8 @@ Build times are improved by pre-warming the build caches (i.e. the persistent vo
 
 Perform the following actions for each branch that is required for building:
   - Click on `Build with Parameters`
-  - Accept default `ANDROID_MANIFEST_URL` (i.e. gerrit manifest URL)
-  - Set `ANDROID_REVISION` as required (e.g. `horizon/android-16.0.0_r2`)
+  - Accept default `AAOS_GERRIT_MANIFEST_URL` (i.e. gerrit manifest URL)
+  - Set `AAOS_REVISION` as required (e.g. `horizon/android-16.0.0_r2`)
   - Select `Build`
   - Repeat job N times (max 20 due to kubernetes cap):
     - N is the number of persistent volumes you want warmed - set it to max allowed number of parallel builds plus 25%

@@ -59,7 +59,7 @@ These are defined in Jenkins CasC `values-jenkins.yaml` and can be viewed in Jen
 These are as follows:
 
 -   `UTILITIES_DOCKER_ARTIFACT_PATH_NAME`
-    - Defines the registry path where the Docker image used to create the ABFS Server and Uploader VM instances.
+    - Defines the registry path of the Utilities Docker image used by the Utilities pipeline jobs (GCS storage jobs, Gemini AI Assistant).
 
 -   `CLOUD_PROJECT`
     - The GCP project, unique to each project. Important for bucket, registry paths used in pipelines.

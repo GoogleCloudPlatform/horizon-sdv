@@ -36,7 +36,7 @@ This pipeline creates or deletes **x86_64** and **ARM64** Cuttlefish **Google Co
 **Machine type:** use a standard **`MACHINE_TYPE`**, or leave it empty and set the custom fields:
 
 - `CUSTOM_VM_TYPE`
-- `CUSTOM_CPUS`
+- `CUSTOM_CPU`
 - `CUSTOM_MEMORY`
 
 **Artifacts:** Packer bakes a **disk image**; the **instance template** is applied as a **`ComputeInstanceTemplate`** custom resource via **Config Connector (KCC)**, not `gcloud compute instance-templates create`.
@@ -320,7 +320,7 @@ Command to run in the `ANDROID_CUTTLEFISH_REPO_URL` defined repo. e.g.
 
 ### `MACHINE_TYPE`
 
-The machine type to be used for the VM instance. For x86, the default is `n1-standard-64`. Whereas ARM64 currently only `c4a-highmem-96-metal` is available.
+The machine type to be used for the VM instance. For x86, the default is `n2-standard-32`. Whereas ARM64 currently only `c4a-highmem-96-metal` is available.
 
 Defines the [`--machine-type`](https://cloud.google.com/compute/docs/general-purpose-machines) parameter.
 
@@ -367,7 +367,7 @@ User may disable by setting the value to 0, but they must be aware of any costs 
 Exact **Debian/Ubuntu apt package name** for the **Java Development Kit (JDK)** (no hidden fallbacks). Match the Java major to your Jenkins controller (e.g. **2.555+** agents need **21**).
 
 - **Debian** GCE images (`debian-cloud`, bookworm, etc.): use **`temurin-21-jdk`** (Eclipse Temurin / Adoptium JDK 21). Names starting with **`temurin-`** cause provisioning to add the **Adoptium** apt repo, then **`apt install ${JAVA_VERSION}`**.
-- **Ubuntu** (default for x86 and ARM64 jobs today): use **`openjdk-21-jdk-headless`** from Ubuntu main unless you intentionally want Temurin, in which case set **`temurin-21-jdk`** the same way as on Debian.
+- **Ubuntu** (default for ARM64 jobs; x86 defaults to Debian 12 bookworm): use **`openjdk-21-jdk-headless`** from Ubuntu main unless you intentionally want Temurin, in which case set **`temurin-21-jdk`** the same way as on Debian.
 
 Examples: **`openjdk-21-jdk-headless`** (distro OpenJDK), **`temurin-21-jdk`** (Eclipse Temurin).
 
@@ -377,7 +377,7 @@ Build VMs need outbound **Hypertext Transfer Protocol Secure (HTTPS)** to distro
 
 Override the OS image version string. Images age out; refresh periodically.
 
-- **x86_64:** Ubuntu **Jammy** amd64 family on **`ubuntu-os-cloud`** (same generation as ARM64 Jammy; use **`gcloud compute images list --project=ubuntu-os-cloud`**).
+- **x86_64:** Debian 12 bookworm on **`debian-cloud`** (default `debian-12-bookworm-v20260114`).
 - **ARM64:** Ubuntu ARM64 family (see **`ubuntu-os-cloud`** / Jammy variants).
 
 Use **`gcloud compute images list`** to list current names.
@@ -390,9 +390,9 @@ Refer to `gcloud compute images list` for the project names based on family and 
 
 ### `CURL_UPDATE_COMMAND`
 
-Command provided to upgrade Curl during the Packer bake. **Optional:** leave empty on Ubuntu Jammy unless you need a specific curl build.
+Command provided to upgrade Curl during the Packer bake.
 
-When x86 used **Debian bookworm**, a typical value was **`sudo apt install -t bookworm-backports -y curl libcurl4`**.
+x86 (Debian bookworm) Jenkins default: `sudo apt install -t bookworm-backports -y curl libcurl4`. ARM64 (Ubuntu Jammy) default is empty.
 
 ### `NODEJS_VERSION`
 

@@ -94,7 +94,7 @@ sdv_sub_env_configs = {
     keycloak_horizon_admin_password = "<HORIZON_ADMIN_PASS>"
 
     # Optional: sync this sub-environment's ArgoCD from a specific branch.
-    # Defaults to sdv_git_repo_branch if not set.
+    # Defaults to scm_repo_branch if not set.
     branch = "<BRANCH_NAME>"
 
     # Optional: override auto-generated passwords for specific secrets.
@@ -121,7 +121,7 @@ sdv_sub_env_configs = {
 
 | Field            | Description                                                                                         | Default                       |
 |------------------|-----------------------------------------------------------------------------------------------------|-------------------------------|
-| `branch`         | Git branch that Argo CD in this sub-environment will sync from                                      | `sdv_git_repo_branch`      |
+| `branch`         | Git branch that Argo CD in this sub-environment will sync from                                      | `scm_repo_branch`          |
 | `manual_secrets` | Map of secret IDs to plain-text values for secrets you want to set manually instead of auto-generating. Each value must not be `Change_Me_123` and must meet the same password policy as the required passwords. | `{}` (all auto-generated)  |
 
 ### Password Requirements
@@ -156,7 +156,7 @@ Invalid examples: `Dev` (uppercase), `-dev` (starts with hyphen), `my_env` (unde
 Once you have added the `sdv_sub_env_configs` block to `terraform.tfvars`, run the standard deployment workflow. Terraform will detect the new sub-environment entries and create all required resources.
 
 ```bash
-./deploy.sh
+./deploy.sh --apply
 ```
 
 Terraform will create the following for each new sub-environment:
@@ -194,13 +194,13 @@ For example, if `SUB_ENV_NAME=dev`, `SUB_DOMAIN=sbx`, and `HORIZON_DOMAIN=exampl
 |----------------------|-----------------------------------------------------------------|
 | Developer Portal     | `https://dev.sbx.example.com`                                   |
 | Argo CD              | `https://dev.sbx.example.com/argocd`                            |
-| Keycloak             | `https://dev.sbx.example.com/keycloak`                          |
+| Keycloak             | `https://dev.sbx.example.com/auth`                              |
 | Gerrit               | `https://dev.sbx.example.com/gerrit`                            |
 | Jenkins              | `https://dev.sbx.example.com/jenkins`                           |
 | Headlamp             | `https://dev.sbx.example.com/headlamp`                          |
 | Grafana              | `https://dev.sbx.example.com/grafana`                           |
 | MTK Connect          | `https://dev.sbx.example.com/mtk-connect`                       |
-| MCP Gateway Registry | `https://dev.sbx.example.com/mcp-gateway-registry`              |
+| MCP Gateway Registry | `https://mcp.dev.sbx.example.com`                               |
 
 ### Available Applications
 
@@ -269,10 +269,12 @@ For example, to destroy the `dev` sub-environment:
 
 1. Open `terraform/env/terraform.tfvars`.
 2. Remove the `dev` block from `sdv_sub_env_configs` (or remove the entire variable if no other sub-environments exist).
-3. Run the deployment:
+3. Run the deployment again so Terraform drops only that sub-environment:
    ```bash
-   ./deploy.sh
+   ./deploy.sh --apply
    ```
+
+`./deploy.sh --destroy` deprovisions all Terraform-managed infrastructure, including the main environment. Do not use it to remove a single sub-environment.
 
 Terraform will detect the removed entry and destroy only the resources belonging to that sub-environment. The main environment and any remaining sub-environments are not affected.
 

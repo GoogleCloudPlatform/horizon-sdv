@@ -55,7 +55,7 @@ Summary of pre-requisite tasks:
 
 This has been detailed in the following documentation, please ensure this is configured as documented.
 
-- [Role based strategy configuration](../../guides/pipeline_guide.md#irolebasedstrategy)
+- [Role based strategy configuration](../../guides/pipeline_guide.md#rolebasedstrategy)
 
 ### <span style="color:#335bff">3.2 Seeding OpenBSW Workload <a name="3-2-openbsw-seed"></a></span>
 
@@ -137,7 +137,7 @@ The unit test results will be stored as a build artifact in the Jenkins job and 
 Artifacts stored in gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/16
 Bucket URL: https://console.cloud.google.com/storage/browser/sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/16
 
-    gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/16/build_info.txt .
+    gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/16/build-info.txt .
     gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/16/unit_test_results.txt .
 ```
 You can access the results from Jenkins itself or using `gcloud storage` to download.
@@ -158,7 +158,7 @@ The coverage results will be stored as a build artifact in the Jenkins job and u
 Artifacts stored in gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/10
 Bucket URL: https://console.cloud.google.com/storage/browser/sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/10
 
-    gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/10/build_info.txt .
+    gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/10/build-info.txt .
     gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/10/unit_test_results.txt .
     gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/10/coverage_unfiltered.info .
     gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/10/coverage.info .
@@ -195,7 +195,7 @@ The POSIX application will be uploaded to a Google Cloud Storage bucket. The bui
 Artifacts stored in gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/23
 Bucket URL: https://console.cloud.google.com/storage/browser/sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/23
 
-    gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/23/build_info.txt .
+    gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/23/build-info.txt .
     gcloud storage cp -r gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/23/posix .
 ```
 
@@ -203,7 +203,7 @@ This storage location will be required for the POSIX tests section later in this
 
 **Running pyTest against POSIX Application**
 
-See `POSIX_PYTEST`, only applicable when `POSIX_BUILD` is selected and will run the default set of python tests against the application. User may choose to run these on the host via MTK Connect, in which case refer to the description in `Jenkins` → `OpenBSW Workflows` → `Tests` → `POSIX`.
+See `POSIX_PYTEST`, only applicable when `BUILD_POSIX` is selected and will run the default set of python tests against the application. User may choose to run these on the host via MTK Connect, in which case refer to the description in `Jenkins` → `OpenBSW Workflows` → `Tests` → `POSIX`.
 
 ### <span style="color:#335bff">4.3 S32K148 Target<a name="4-3-s32k148"></a></span>
 
@@ -224,8 +224,8 @@ The S32K148 application will be uploaded to a Google Cloud Storage bucket. The b
 Artifacts stored in gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18
 Bucket URL: https://console.cloud.google.com/storage/browser/sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18
 
-    gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18/build_info.txt .
-    gcloud storage cp -r gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18/s32k148-gcc .
+    gcloud storage cp gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18/build-info.txt .
+    gcloud storage cp -r gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/18/s32k148 .
 ```
 Within the `s32k148` storage bucket directory, the following has been stored for later retrieval and use on NXP evaluation boards:
 
@@ -271,7 +271,7 @@ in the Jenkins job description):
 
    <img src="images/section.5/5.1_testbench_booking.png" width="100" />
 
-   The application will then start (depending on `LAUNCH_APPLICATION_NAME` setting above).
+   Start the application manually from `${HOME}/posix` (see the POSIX job description).
 
    <img src="images/section.5/5.1_testbench_posix_app.png" width="600" />
 
@@ -285,7 +285,7 @@ in the Jenkins job description):
 4. **Test using pytest:**
 
     Refer to `Jenkins` → `OpenBSW Workflows` → `Tests` → `POSIX` description for command to use to test the application using pytest, e.g.
-    `pytest target=posix`
+    `pytest --target=posix --app=<freertos|threadx|rust>`
 
 
 ### <span style="color:#335bff">5.2 S32K148 Target<a name="5-2-hardware"></a></span>
@@ -299,7 +299,7 @@ Note that testing the NXP S32K148 platform is not currently supported in this re
 To download the application, use the following command, which will be shown in the respective `BSW Builder` jobs
 artifact file, eg. `openbsw-1-artifacts.txt`:
 
-`gcloud storage cp -r gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/01/s32k148-gcc .`
+`gcloud storage cp -r gs://sdva-2108202401-openbsw/OpenBSW/Builds/BSW_Builder/01/s32k148 .`
 
 **Flashing the Application**
 
