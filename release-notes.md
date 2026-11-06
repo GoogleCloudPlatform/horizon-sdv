@@ -834,9 +834,6 @@ limitations under the License. -->
 
 <td valign="top" width="51%"><p><strong>Description</strong></p>
 </td>
-
-<td valign="top" width="15%"><p><strong>SHA</strong></p>
-</td>
 </tr>
 
 <tr>
@@ -862,14 +859,6 @@ limitations under the License. -->
 </li>
 <li>
 <p>Add a JCasC appearance entry that loads the script from userContent.   The script turns the last breadcrumb entry back into a link to the current page. It does nothing if the entry is already a link, so no action is needed if Jenkins restores the link in a later version.</p>
-</li>
-</ul>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>4bf10a67f45a66eaa7590d5b1e2e01c22cc68b86</p>
 </li>
 </ul>
 </td>
@@ -899,20 +888,6 @@ limitations under the License. -->
 </li>
 </ul>
 </td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>c702e4c2f7a3030db401cc06044c9d5746c0b4d8</p>
-</li>
-<li>
-<p>39a03c6785f5275813ca200c632c534ab9e9d59e</p>
-</li>
-<li>
-<p>f586303083d1adfa9fadc5065885191e20e6148b</p>
-</li>
-</ul>
-</td>
 </tr>
 
 <tr>
@@ -926,14 +901,6 @@ limitations under the License. -->
 
 <td valign="top" width="51%">
 <p>psf-requests module updated to version 2.34.2 in mtk-connect-post-key to resolve known vulnerabilities <a href="https://github.com/advisories/GHSA-gc5v-m9x4-r6x2">CVE-2026-25645</a> and <a href="https://github.com/advisories/GHSA-9wx4-h78v-vm56">CVE-2024-35195</a><code>.</code></p>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>c44f5048f9f39f8574d92a7759edb3b47999aeb7</p>
-</li>
-</ul>
 </td>
 </tr>
 
@@ -951,17 +918,6 @@ limitations under the License. -->
 
 <p><a href="http://golang.org/x/net">http://golang.org/x/net</a> module updated to version v0.61.0 in module-manager and workflow-namespace-drain to resolve <a href="https://github.com/advisories/GHSA-w2q5-6q6x-x959">CVE-2026-39821</a>,<a href="https://github.com/advisories/GHSA-w2q5-6q6x-x959">CVE-2026-39821</a>,<a href="https://github.com/advisories/GHSA-gg3m-vvp2-p2c5">CVE-2026-46600</a>.</p>
 </td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>0e7374baa115e4577049a208a7ec97b5aed1dbdb</p>
-</li>
-<li>
-<p>40fdeb7cc3aed13bd1e8020adcc910d77014fead</p>
-</li>
-</ul>
-</td>
 </tr>
 
 <tr>
@@ -976,14 +932,6 @@ limitations under the License. -->
 <td valign="top" width="51%">
 <p>storage-gcs-module-app client-go updated to v0.35.5 so gorilla/websocket moves off v1.5.0 and resolves BDSA-2026-30093.</p>
 </td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>cc967841423cf283a10f09ece71635fa4513bdbd</p>
-</li>
-</ul>
-</td>
 </tr>
 
 <tr>
@@ -997,14 +945,6 @@ limitations under the License. -->
 
 <td valign="top" width="51%">
 <p>source-map-js module updated to version 1.2.2 to resolve known vulnerability <a href="https://github.com/advisories/GHSA-68fv-2mgg-jv7q">CVE-2026-93749</a>.</p>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>f13e3fdc21a7a28ae8c7833e9b0c12819a51aa37</p>
-</li>
-</ul>
 </td>
 </tr>
 
@@ -1027,17 +967,6 @@ limitations under the License. -->
 <ul>
 <li>
 <p>added the /get-cli route to the router configuration, forwarded to the installers service and marked as not authenticated, in line with the other installer script routes   The installer script itself still downloads the CLI binary through the authenticated /api/v1/installer endpoint using the user&#39;s API key.</p>
-</li>
-</ul>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>173d0f58ae28ec578f0c93de95d3fe2bbc9ddcfd</p>
-</li>
-<li>
-<p>0d53dd60170625ef8be92bbb7c78f5d532769a90</p>
 </li>
 </ul>
 </td>
@@ -1107,14 +1036,6 @@ limitations under the License. -->
 </li>
 </ul>
 </td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>47aa8012b2e76d0c2f8e2aed88f52b2c95b3ace5</p>
-</li>
-</ul>
-</td>
 </tr>
 
 <tr>
@@ -1141,14 +1062,6 @@ limitations under the License. -->
 </li>
 </ul>
 </td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>672cac6c753013c5ea956872d4b69954bdf6b9ea</p>
-</li>
-</ul>
-</td>
 </tr>
 
 <tr>
@@ -1165,14 +1078,6 @@ limitations under the License. -->
 
 <p>Remove MTK_CONNECT_USERNAME, MTK_CONNECT_PASSWORD, and REMOTIVE_CLOUD_AUTH_TOKEN from the uploaded job environment. Pass them as base64 instance metadata on the ephemeral VM, and have the guest read and export them at startup. Deleting the VM removes the metadata.</p>
 </td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>8dc4cca33ab6398d023670710db51350dd72b2b7</p>
-</li>
-</ul>
-</td>
 </tr>
 
 <tr>
@@ -1186,14 +1091,6 @@ limitations under the License. -->
 
 <td valign="top" width="51%">
 <p>The change fixes handling of AndroidCustom configuration in abfs-uploader-config-select workflow exposed by abfs-data-module. Previously workflow submit page always presented default configuration record, regardless if any custom configuration was already applied or not. Change of custom configuration required to recreate it each time. After this change, the workflow submit page presents to the end user the currently stored/applied AndroidCustom config record, so that it can be updated.</p>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>4e03d119db9e78b98185f1c557d76a80fee389ca</p>
-</li>
-</ul>
 </td>
 </tr>
 
@@ -1215,14 +1112,6 @@ limitations under the License. -->
 
 <p>Pass the booleans through unchanged in both places. Missing values still resolve to null and fall back to the Terraform defaults.</p>
 </td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>5660f00453364b15c3d358b1fa1b1accd878bc95</p>
-</li>
-</ul>
-</td>
 </tr>
 
 <tr>
@@ -1241,14 +1130,6 @@ limitations under the License. -->
 
 <p>Bump gcloudCliVersion and kubectlVersion defaults from 545.0.0-0 to 591.0.0-0 across the builder images (aaos_builder, abfs and non-ABFS docker_image_template, cloud-workstations environment Dockerfile) and the seed Jenkinsfile defaults.</p>
 </td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>64a17f2194664b11e69164594154688108595c41</p>
-</li>
-</ul>
-</td>
 </tr>
 
 <tr>
@@ -1266,14 +1147,6 @@ limitations under the License. -->
 <p>WorkflowTemplate label corrected to <code>horizon-sdv.io/module: abfs-service-module</code>, matching the ModuleCatalog registration (<code>moduleName: "abfs-service-module"</code>) and the sibling manifests in the same chart.</p>
 
 <p>Additionally, the parameters were still substituted directly into the <code>sh -c</code> script (the same injection class as the TAA-2315 hardening). Since the template becomes catalog-visible with this fix, they are now passed as container env vars and read via <code>"$VAR"</code>, and all three steps run non-root with <code>runAsNonRoot</code> and no privilege escalation.</p>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>3e530bb8c521a41d7346aeacfd333d1e722ae52c</p>
-</li>
-</ul>
 </td>
 </tr>
 
@@ -1295,14 +1168,6 @@ limitations under the License. -->
 </li>
 <li>
 <p>Add a 4-line guard at the start of every ABFS script that uses <code>python3</code>: when <code>python3</code> is not on PATH, put the interpreter bundled with gcloud (<code>gcloud info --format='value(basic.python_location)'</code>) on PATH. This keeps the scripts working when the digest is bumped to an SDK &gt;= 592 build.</p>
-</li>
-</ul>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>aa45d56f522fca857ab6da4eeba150f9a3c782c9</p>
 </li>
 </ul>
 </td>
@@ -1331,14 +1196,6 @@ limitations under the License. -->
 </li>
 </ul>
 </td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>44fb54e5f8dfb4c7c75c55f80694c9a06c771a1b</p>
-</li>
-</ul>
-</td>
 </tr>
 
 <tr>
@@ -1354,14 +1211,6 @@ limitations under the License. -->
 <p>Fix issue with missing abfs namespace during abfs-data module first enable on fresh enviornment.</p>
 
 <p>The abfs-data child Applications <code>mod-abfs-data-license-workflows</code> and <code>mod-abfs-data-uploader-config</code> deploy RBAC (RoleBindings) into the <code>abfs</code> namespace while their destination namespace is <code>workflows</code> / <code>horizon</code>, so <code>CreateNamespace=true</code> never creates <code>abfs</code>. On a fresh environment both stay <code>OutOfSync</code> with <code>error running rbacReconcile: error running kubectl auth reconcile: error getting namespace abfs: namespaces "abfs" not found</code>, the Developer Portal shows the module as UPDATE IN PROGRESS and ABFS cannot be used.</p>
-</td>
-
-<td valign="top" width="15%">
-<ul>
-<li>
-<p>7677c3622f36571a8c6962862d7eb6d49312cae2</p>
-</li>
-</ul>
 </td>
 </tr>
 
