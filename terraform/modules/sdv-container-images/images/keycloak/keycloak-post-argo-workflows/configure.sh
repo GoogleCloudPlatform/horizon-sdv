@@ -37,7 +37,7 @@ sed -i "s/##SECRET##/${CLIENT_SECRET}/g" ./secret.json
 sed -i "s/##NAMESPACE##/${TARGET_NAMESPACE}/g" ./secret.json
 
 # Recreate Argo Workflows SSO secret with current client credentials
-curl --silent --show-error --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${TARGET_NAMESPACE}/secrets/argo-workflows-sso || true
-curl --fail --silent --show-error --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST ${APISERVER}/api/v1/namespaces/${TARGET_NAMESPACE}/secrets -d @secret.json
+curl -sS -o /dev/null -w 'DELETE argo-workflows-sso: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${TARGET_NAMESPACE}/secrets/argo-workflows-sso" || true
+curl -fsS -o /dev/null -w 'POST argo-workflows-sso: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${TARGET_NAMESPACE}/secrets" -d @secret.json
 
 echo "Argo Workflows Keycloak configuration completed successfully"

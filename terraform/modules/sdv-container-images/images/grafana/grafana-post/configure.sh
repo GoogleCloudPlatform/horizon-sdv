@@ -38,16 +38,18 @@ NEW_SECRET="client_secret = "$(kubectl get secret --namespace ${NAMESPACE_PREFIX
 
 
 if [[ "${DEBUG:-0}" == "1" ]]; then
-  echo "NEW_SECRET: "
-  echo $NEW_SECRET
+  echo "NEW_SECRET loaded (value redacted)"
 fi
 
 #save current grafana configMap
 kubectl get cm -n ${NAMESPACE_PREFIX}monitoring ${NAMESPACE_PREFIX}grafana -o yaml > $GRAFANA_TEMP_FILE
 
 if [[ "${DEBUG:-0}" == "1" ]]; then
-  echo "GRAFANA_TEMP_FILE with current secret: "
-  cat $GRAFANA_TEMP_FILE | grep client
+  if grep -q '^[[:space:]]*client_secret[[:space:]]*=' "$GRAFANA_TEMP_FILE"; then
+    echo "GRAFANA_TEMP_FILE contains client_secret entry (value redacted)"
+  else
+    echo "GRAFANA_TEMP_FILE does not contain client_secret entry"
+  fi
 fi
 
 #replace client_secret with NEW_SECRET
@@ -68,8 +70,11 @@ awk -v new_value="$NEW_SECRET" '
 ' $GRAFANA_TEMP_FILE > $UPDATED_GRAFANA_TEMP_FILE
 
 if [[ "${DEBUG:-0}" == "1" ]]; then
-  echo "UPDATED_GRAFANA_TEMP_FILE: "
-  cat $UPDATED_GRAFANA_TEMP_FILE | grep client
+  if grep -q '^[[:space:]]*client_secret[[:space:]]*=' "$UPDATED_GRAFANA_TEMP_FILE"; then
+    echo "UPDATED_GRAFANA_TEMP_FILE contains updated client_secret entry (value redacted)"
+  else
+    echo "UPDATED_GRAFANA_TEMP_FILE missing client_secret entry"
+  fi
 fi
 
 # apply configMap with new secret into K8s

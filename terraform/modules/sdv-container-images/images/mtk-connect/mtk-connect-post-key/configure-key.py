@@ -116,8 +116,9 @@ def perform_api_request(operation=API_REQUEST_OPT["GET_VERSION"], is_delete_key_
       if response_api.status_code // 100 == 2:
         OLD_KEY_VAL = KEY_VAL
         KEY_VAL = response_api.json()["data"]["key"]
-
-      print(f"Thoreticaly key created. Is it saved? Key: {KEY_VAL}, old key: {OLD_KEY_VAL}")
+        print("API key rotated (value redacted).")
+      else:
+        print("Failed to create new API key.")
 
     elif operation == "DELETE_KEY":
       print(f"\nDeleting keys id: {OLD_KEY_ID_LS}")
@@ -151,19 +152,20 @@ def perform_api_request(operation=API_REQUEST_OPT["GET_VERSION"], is_delete_key_
     else:
       print(f"There was a problem!")
 
-    print(f"Status code: {response_api.status_code} \nResponse from API: \n\t{response_api.text}")
+    print(f"Status code: {response_api.status_code}")
     print("Request to API finished")
     return result
 
 def retrieve_secret_value(secret_key):
   """
-  Retrieves the value of a specific key from a Kubernetes Secret.
+  Retrieves the value of a specific key from an environment variable backed by a Kubernetes Secret.
   """
-  secret_value = os.getenv(secret_key).strip()
+  raw_value = os.getenv(secret_key)
+  secret_value = raw_value.strip() if raw_value else ""
   if secret_value:
-    print(f"Retrieved secret value from environment variable: {secret_value}")
+    print(f"Retrieved secret value from environment variable '{secret_key}' (redacted).")
   else:
-    print("Failed to retrieve secret value from environment variable.")
+    print(f"Failed to retrieve secret value from environment variable '{secret_key}'.")
   return secret_value
 
 def get_k8s_client():
