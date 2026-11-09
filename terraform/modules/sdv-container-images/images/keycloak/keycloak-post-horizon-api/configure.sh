@@ -62,14 +62,15 @@ SECRET_JSON=$(
     }'
 )
 
-curl --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
-  -X DELETE "${APISERVER}/api/v1/namespaces/${JENKINS_NS}/secrets/jenkins-horizon-api-ci-secret" \
-  -sS -o /dev/null || true
+curl -sS -o /dev/null -w 'DELETE jenkins-horizon-api-ci-secret: %{http_code}\n' \
+  --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
+  -X DELETE "${APISERVER}/api/v1/namespaces/${JENKINS_NS}/secrets/jenkins-horizon-api-ci-secret" || true
 
-curl -fS --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
+printf '%s' "${SECRET_JSON}" | curl -fsS -o /dev/null -w 'POST jenkins-horizon-api-ci-secret: %{http_code}\n' \
+  --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
   -H 'Accept: application/json' -H 'Content-Type: application/json' \
   -X POST "${APISERVER}/api/v1/namespaces/${JENKINS_NS}/secrets" \
-  -d "${SECRET_JSON}"
+  --data-binary @-
 
 # Developer Portal proxy uses the same Keycloak confidential client (client_credentials).
 DEVPORTAL_NS="${NAMESPACE_PREFIX}horizon-dev-portal"
@@ -89,11 +90,12 @@ SECRET_JSON_DEVPORTAL=$(
     }'
 )
 
-curl -fS --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
-  -X DELETE "${APISERVER}/api/v1/namespaces/${DEVPORTAL_NS}/secrets/${SECRET_NAME}" \
-  -o /dev/null || true
+curl -sS -o /dev/null -w "DELETE ${SECRET_NAME}: %{http_code}\n" \
+  --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
+  -X DELETE "${APISERVER}/api/v1/namespaces/${DEVPORTAL_NS}/secrets/${SECRET_NAME}" || true
 
-curl -fS --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
+printf '%s' "${SECRET_JSON_DEVPORTAL}" | curl -fsS -o /dev/null -w "POST ${SECRET_NAME}: %{http_code}\n" \
+  --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
   -H 'Accept: application/json' -H 'Content-Type: application/json' \
   -X POST "${APISERVER}/api/v1/namespaces/${DEVPORTAL_NS}/secrets" \
-  -d "${SECRET_JSON_DEVPORTAL}"
+  --data-binary @-

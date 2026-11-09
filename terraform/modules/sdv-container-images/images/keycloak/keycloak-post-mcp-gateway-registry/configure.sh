@@ -30,9 +30,9 @@ sed -i "s/##SECRET##/${CLI_CLIENT_SECRET}/g" ./cli-client-secret.json
 sed -i "s/##NAMESPACE##/${NAMESPACE_PREFIX}mcp-gateway-registry/g" ./cli-client-secret.json
 
 # Update the web client k8s secret
-curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets/mcp-gateway-registry-web-keycloak-secret
-curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets -d @web-client-secret.json
+curl -sS -o /dev/null -w 'DELETE mcp-gateway-registry-web-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets/mcp-gateway-registry-web-keycloak-secret"
+curl -fsS -o /dev/null -w 'POST mcp-gateway-registry-web-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets" -d @web-client-secret.json
 
 # Update the cli client k8s secret
-curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets/mcp-gateway-registry-cli-keycloak-secret
-curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets -d @cli-client-secret.json
+curl -sS -o /dev/null -w 'DELETE mcp-gateway-registry-cli-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets/mcp-gateway-registry-cli-keycloak-secret"
+curl -fsS -o /dev/null -w 'POST mcp-gateway-registry-cli-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets" -d @cli-client-secret.json
