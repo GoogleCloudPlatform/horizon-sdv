@@ -26,7 +26,7 @@ npm install --ignore-scripts
 node keycloak.mjs
 SECRET=$(cat client-gerrit.json | jq -r ".secret")
 
-curl -sS --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X GET "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}gerrit/secrets/gerrit-secure-config" >current.json
+curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}gerrit/secrets/gerrit-secure-config >current.json
 CURRENT_SECURE_CONFIG=$(jq -r '.data."secure.config"' current.json)
 CURRENT_KEY=$(jq -r '.data.ssh_host_ecdsa_key' current.json)
 CURRENT_PUBKEY=$(jq -r '.data."ssh_host_ecdsa_key.pub"' current.json)

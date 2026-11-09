@@ -48,28 +48,28 @@ locals {
     }
     "gerrit-post" = {
       directory      = "gerrit"
-      build_version  = "1.0.3"
-      deploy_version = "1.0.3"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "mtk-connect-post" = {
       directory      = "mtk-connect"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     "mtk-connect-post-key" = {
       directory      = "mtk-connect"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     "grafana-post" = {
       directory      = "grafana"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     "keycloak-post-mcp-gateway-registry" = {
       directory      = "keycloak"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     "keycloak-post" = {
       directory      = "keycloak"
@@ -78,13 +78,13 @@ locals {
     }
     "keycloak-post-gerrit" = {
       directory      = "keycloak"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     "keycloak-post-jenkins" = {
       directory      = "keycloak"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     "keycloak-post-argocd" = {
       directory      = "keycloak"
@@ -103,18 +103,18 @@ locals {
     }
     "keycloak-post-grafana" = {
       directory      = "keycloak"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     "keycloak-post-argo-workflows" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.0"
+      deploy_version = "1.0.0"
     }
     "keycloak-post-horizon-api" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.0"
+      deploy_version = "1.0.0"
     }
     # Developer portal (Vite + Go proxy). context_path is set so sdv-container-images trigger hashing skips node_modules/dist (same as former external client tree).
     # Image tag (build_version / deploy_version) follows components.horizoncore from the repo-root versions.yaml; do not edit here.
