@@ -20,6 +20,7 @@ import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import StopOutlinedIcon from '@mui/icons-material/StopOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import TerminalOutlinedIcon from '@mui/icons-material/TerminalOutlined';
 import {
   Alert,
@@ -68,6 +69,15 @@ import {
 import { useMaxWorkflowLogLines } from '../utils/logBufferSettings';
 import { injectOverviewPortalTheme } from '../utils/overviewPortalTheme';
 import { workflowPassesSubmittedFromFilter } from '../utils/workflowVisibilityDiscovery';
+import { usePortalAccess } from '../rbac/AccessProvider';
+import { HoverTooltip, RoleBadge } from '../rbac/GatedControl';
+import {
+  abortDecision,
+  findAdminTemplate,
+  gatedTooltip,
+  hasGrant,
+  requiredRoleLabel,
+} from '../rbac/portalAccess';
 import type {
   CatalogEntry,
   CatalogResponse,
@@ -588,6 +598,7 @@ function TemplatesTab({
   entries: CatalogEntry[];
   onOpenSubmit: (e: CatalogEntry) => void;
 }) {
+  const access = usePortalAccess();
   if (entries.length === 0) {
     return (
       <Typography color="text.secondary">
@@ -605,19 +616,54 @@ function TemplatesTab({
         gap: 2,
       }}
     >
-      {sortedEntries.map((e) => (
-        <Card key={`${e.module}/${e.templateName}`} variant="outlined">
-          <CardContent>
-            <Typography variant="h6">{e.templateName}</Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              {e.namespace}
-            </Typography>
-            <Button sx={{ mt: 2 }} variant="contained" onClick={() => onOpenSubmit(e)}>
-              Configure &amp; submit
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+      {sortedEntries.map((e) => {
+        const adminRule = findAdminTemplate(access, e.module, e.templateName);
+        const templateLocked = !!adminRule && access?.role !== 'admin';
+        const canSubmitRole = hasGrant(access, 'workflows.submit');
+        const openAllowed = access ? (templateLocked ? true : canSubmitRole) : false;
+        const tip = !access
+          ? 'Checking your access…'
+          : templateLocked
+            ? adminRule.denial
+            : !canSubmitRole
+              ? gatedTooltip(access, 'workflows.submit')
+              : '';
+        return (
+          <Card key={`${e.module}/${e.templateName}`} variant="outlined">
+            <CardContent>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                }}
+              >
+                <Typography variant="h6">{e.templateName}</Typography>
+                {adminRule ? <RoleBadge label="Admin" /> : null}
+              </Box>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {e.namespace}
+              </Typography>
+              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                {!openAllowed && access ? (
+                  <RoleBadge label={requiredRoleLabel(access, 'workflows.submit')} />
+                ) : null}
+                <HoverTooltip title={tip}>
+                  <Button
+                    variant="contained"
+                    disabled={!openAllowed}
+                    startIcon={!openAllowed ? <LockOutlinedIcon /> : undefined}
+                    onClick={() => onOpenSubmit(e)}
+                  >
+                    Configure &amp; submit
+                  </Button>
+                </HoverTooltip>
+              </Box>
+            </CardContent>
+          </Card>
+        );
+      })}
     </Box>
   );
 }
@@ -1031,8 +1077,23 @@ function SubmitDialog({
   });
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const access = usePortalAccess();
+  const adminRule = findAdminTemplate(access, moduleName, entry.templateName);
+  const templateLocked = !!adminRule && access?.role !== 'admin';
+  const roleLocked = !hasGrant(access, 'workflows.submit');
+  const permitted = !!access && !templateLocked && !roleLocked;
+  const submitTip = !access
+    ? 'Checking your access…'
+    : templateLocked
+      ? adminRule.denial
+      : roleLocked
+        ? gatedTooltip(access, 'workflows.submit')
+        : '';
 
   const submit = async () => {
+    if (!permitted) {
+      return;
+    }
     setLoading(true);
     setErr(null);
     const ctrl = new AbortController();
@@ -1167,9 +1228,21 @@ function SubmitDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" disabled={loading} onClick={() => void submit()}>
-          {loading ? 'Submitting…' : 'SUBMIT'}
-        </Button>
+        {!permitted && access ? (
+          <RoleBadge
+            label={templateLocked ? 'Admin' : requiredRoleLabel(access, 'workflows.submit')}
+          />
+        ) : null}
+        <HoverTooltip title={submitTip}>
+          <Button
+            variant="contained"
+            disabled={!permitted || loading}
+            startIcon={!permitted ? <LockOutlinedIcon /> : undefined}
+            onClick={() => void submit()}
+          >
+            {loading ? 'Submitting…' : 'SUBMIT'}
+          </Button>
+        </HoverTooltip>
       </DialogActions>
     </Dialog>
   );
@@ -1320,6 +1393,7 @@ function WorkflowDetailDialog({
   const [abortBusy, setAbortBusy] = useState(false);
   /** This dialog instance is awaiting the blocking DELETE response. */
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const access = usePortalAccess();
   const deletionPendingUi = deleteBusy || listDeletionPending;
   /** null = unknown; true = Workflow CR still in cluster; false = deleted/TTL (Argo UI has nothing to open). */
   const [argoReachable, setArgoReachable] = useState<boolean | null>(null);
@@ -1415,6 +1489,13 @@ function WorkflowDetailDialog({
       : undefined;
 
   const terminal = detail ? isTerminalWorkflowPhase(detail.phase) : false;
+  const abort = abortDecision(access, detail?.startedBy);
+  const canDelete = hasGrant(access, 'workflows.delete');
+  const deleteTip = !access
+    ? 'Checking your access…'
+    : canDelete
+      ? 'Remove workflow record from the cluster (terminal workflows only)'
+      : gatedTooltip(access, 'workflows.delete');
   const detailTitle = detail
     ? (() => {
         const root = detail.workflowTemplate?.trim() || 'Workflow';
@@ -1429,6 +1510,9 @@ function WorkflowDetailDialog({
     : 'Workflow';
 
   const doAbort = async () => {
+    if (!abortDecision(access, detail?.startedBy).allowed) {
+      return;
+    }
     if (
       !window.confirm(
         `Abort workflow "${workflowName}"? The run will stop gracefully (shutdown Stop) and may show as Aborted when finished.`
@@ -1461,6 +1545,9 @@ function WorkflowDetailDialog({
   };
 
   const doDelete = async () => {
+    if (!hasGrant(access, 'workflows.delete')) {
+      return;
+    }
     if (
       !window.confirm(
         `Permanently delete workflow "${workflowName}" from the cluster? This cannot be undone.`
@@ -1592,40 +1679,44 @@ function WorkflowDetailDialog({
               ) : null}
             </Stack>
             {detail && (
-              <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexShrink: 0 }}>
                 {!terminal && (
-                  <Tooltip title="Request graceful stop (Horizon API abort)">
-                    <span>
+                  <>
+                    {!abort.allowed && abort.badge ? <RoleBadge label={abort.badge} /> : null}
+                    <HoverTooltip title={abort.tooltip}>
                       <Button
                         size="small"
-                        color="warning"
+                        color={abort.allowed ? 'warning' : 'inherit'}
                         variant="outlined"
-                        startIcon={<StopOutlinedIcon />}
-                        disabled={abortBusy || deleteBusy || listDeletionPending}
+                        startIcon={abort.allowed ? <StopOutlinedIcon /> : <LockOutlinedIcon />}
+                        disabled={!abort.allowed || abortBusy || deleteBusy || listDeletionPending}
                         onClick={() => void doAbort()}
                       >
                         Abort
                       </Button>
-                    </span>
-                  </Tooltip>
+                    </HoverTooltip>
+                  </>
                 )}
                 {terminal && (
-                  <Tooltip title="Remove workflow CR from cluster (terminal workflows only)">
-                    <span>
+                  <>
+                    {access && !canDelete ? <RoleBadge label="Admin" /> : null}
+                    <HoverTooltip title={deleteTip}>
                       <Button
                         size="small"
-                        color={deletionPendingUi ? 'inherit' : 'error'}
+                        color={canDelete && !deletionPendingUi ? 'error' : 'inherit'}
                         variant="outlined"
                         startIcon={
                           deletionPendingUi ? (
                             <CircularProgress color="inherit" size={14} sx={{ ml: 0.25 }} />
+                          ) : !canDelete ? (
+                            <LockOutlinedIcon />
                           ) : (
                             <DeleteOutlineIcon />
                           )
                         }
-                        disabled={abortBusy || deleteBusy || listDeletionPending}
+                        disabled={!canDelete || abortBusy || deleteBusy || listDeletionPending}
                         sx={
-                          deletionPendingUi
+                          !canDelete || deletionPendingUi
                             ? { color: 'text.disabled', borderColor: 'action.disabled' }
                             : undefined
                         }
@@ -1633,8 +1724,8 @@ function WorkflowDetailDialog({
                       >
                         Delete
                       </Button>
-                    </span>
-                  </Tooltip>
+                    </HoverTooltip>
+                  </>
                 )}
               </Stack>
             )}
@@ -1747,7 +1838,7 @@ function WorkflowDetailSections({
           <Typography variant="body2" color="text.secondary">
             Horizon API OAuth client:{' '}
             <Box component="code" sx={{ fontSize: 12 }}>
-              {config.getString('horizonApiOAuthClientId', 'horizon-api-ci')}
+              {authService.getOAuthClientId() ?? 'horizon-dev-portal'}
             </Box>
           </Typography>
         </CardContent>

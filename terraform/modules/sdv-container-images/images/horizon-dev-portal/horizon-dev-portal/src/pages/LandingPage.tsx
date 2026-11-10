@@ -25,6 +25,7 @@ import {
   Tabs,
   Typography,
 } from '@mui/material';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import {
   ACCENTURE_LOGO_SRC,
@@ -38,8 +39,13 @@ import {
   MCP_GATEWAY_REGISTRY_LOGO_SRC,
 } from '../constants.ts';
 import type { ReactElement } from 'react';
+import { usePortalAccess } from '../rbac/AccessProvider';
+import { HoverTooltip, RoleBadge } from '../rbac/GatedControl';
+import { applicationAllowed, applicationAudience, gatedTooltip } from '../rbac/portalAccess';
 
 type ApplicationCard = {
+  id: string;
+  audience: 'developer' | 'admin';
   icon: ReactElement;
   title: string;
   description: string;
@@ -47,13 +53,89 @@ type ApplicationCard = {
   href: string;
 };
 
+function ApplicationCardView({ card }: { card: ApplicationCard }) {
+  const access = usePortalAccess();
+  const audience = applicationAudience(access, card.id, card.audience);
+  const allowed = applicationAllowed(access, card.id, audience);
+  const tooltip = !access
+    ? 'Checking your access…'
+    : allowed
+      ? ''
+      : gatedTooltip(access, 'platform.adminApplications');
+
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-around',
+      }}
+    >
+      <CardHeader
+        avatar={card.icon}
+        title={card.title}
+        disableTypography
+        action={audience === 'admin' ? <RoleBadge label="Admin" /> : undefined}
+        sx={{ '& .MuiCardHeader-action': { alignSelf: 'center', ml: 2, mr: 0 } }}
+      />
+      <CardContent>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          display="block"
+          sx={{ whiteSpace: 'pre-line' }}
+        >
+          {card.description}
+        </Typography>
+      </CardContent>
+      <CardActions>
+        <HoverTooltip title={tooltip} fullWidth>
+          <Button
+            sx={{ mb: 1 }}
+            component={allowed ? 'a' : 'button'}
+            href={allowed ? card.href : undefined}
+            target={allowed ? '_blank' : undefined}
+            rel={allowed ? 'noopener noreferrer' : undefined}
+            variant="contained"
+            disabled={!allowed}
+            startIcon={!allowed ? <LockOutlinedIcon /> : undefined}
+            endIcon={allowed ? <OpenInNewOutlinedIcon /> : undefined}
+            fullWidth
+          >
+            {card.action}
+          </Button>
+        </HoverTooltip>
+      </CardActions>
+    </Card>
+  );
+}
+
+function ApplicationGrid({ cards }: { cards: ApplicationCard[] }) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', md: 'repeat(3,1fr)' },
+        gap: 2,
+      }}
+    >
+      {cards.map((card) => (
+        <ApplicationCardView key={card.id} card={card} />
+      ))}
+    </Box>
+  );
+}
+
 export function LandingPage() {
   const tab = 'applications';
-
   const mcpGatewayHref = location.protocol + '//mcp.' + location.hostname;
 
-  const APPLICATION_CARDS: ApplicationCard[] = [
+  const developerCards: ApplicationCard[] = [
     {
+      id: 'gerrit',
+      audience: 'developer',
       icon: (
         <Avatar
           alt="Gerrit logo"
@@ -68,6 +150,8 @@ export function LandingPage() {
       href: '/gerrit',
     },
     {
+      id: 'jenkins',
+      audience: 'developer',
       icon: (
         <Avatar
           alt="Jenkins logo"
@@ -82,6 +166,8 @@ export function LandingPage() {
       href: '/jenkins',
     },
     {
+      id: 'mtk-connect',
+      audience: 'developer',
       icon: (
         <Avatar
           alt="MTK Connect logo"
@@ -96,6 +182,8 @@ export function LandingPage() {
       href: '/mtk-connect',
     },
     {
+      id: 'mcp-gateway',
+      audience: 'developer',
       icon: (
         <Avatar
           alt="MCP Gateway Registry logo"
@@ -105,7 +193,6 @@ export function LandingPage() {
             width: 54,
             height: 54,
             bgcolor: 'transparent',
-            // White-on-transparent PNG: invert so strokes are dark in light mode.
             filter: (theme) => (theme.palette.mode === 'light' ? 'invert(1)' : 'none'),
           }}
         />
@@ -115,10 +202,28 @@ export function LandingPage() {
       action: 'Open',
       href: mcpGatewayHref,
     },
+    {
+      id: 'argo-workflows',
+      audience: 'developer',
+      icon: (
+        <Avatar
+          alt="Argo Workflows logo"
+          variant="square"
+          src={ARGO_WORKFLOWS_LOGO_SRC}
+          sx={{ width: 54, height: 54 }}
+        />
+      ),
+      title: 'Argo Workflows',
+      description: 'Open source container-native workflow engine',
+      action: 'Open',
+      href: '/workflows/workflows/argo-workflows',
+    },
   ];
 
-  const ADMIN_APPLICATION_CARDS: ApplicationCard[] = [
+  const adminCards: ApplicationCard[] = [
     {
+      id: 'keycloak',
+      audience: 'admin',
       icon: (
         <Avatar
           alt="Keycloak logo"
@@ -133,6 +238,8 @@ export function LandingPage() {
       href: '/auth/admin/horizon/console',
     },
     {
+      id: 'argo-cd',
+      audience: 'admin',
       icon: (
         <Avatar
           alt="Argo CD logo"
@@ -147,6 +254,8 @@ export function LandingPage() {
       href: '/argocd',
     },
     {
+      id: 'headlamp',
+      audience: 'admin',
       icon: (
         <Avatar
           alt="Headlamp logo"
@@ -161,6 +270,8 @@ export function LandingPage() {
       href: '/headlamp/',
     },
     {
+      id: 'grafana',
+      audience: 'admin',
       icon: (
         <Avatar
           alt="Grafana logo"
@@ -175,22 +286,7 @@ export function LandingPage() {
       action: 'Open',
       href: '/grafana',
     },
-    {
-      // as icon is the same as Argo CD, we use the same logo
-      icon: (
-        <Avatar
-          alt="Argo Workflows logo"
-          variant="square"
-          src={ARGO_WORKFLOWS_LOGO_SRC}
-          sx={{ width: 54, height: 54 }}
-        />
-      ),
-      title: 'Argo Workflows',
-      description: 'Open source container-native workflow engine',
-      action: 'Open',
-      href: '/workflows/workflows/argo-workflows',
-    },
-];
+  ];
 
   return (
     <Box>
@@ -200,114 +296,18 @@ export function LandingPage() {
       <Tabs value={tab} sx={{ mb: 2 }}>
         <Tab label="Applications" value="applications" />
       </Tabs>
-      {tab === 'applications' && (
-        <>
-          <Stack spacing={2} sx={{ mt: 4 }}>
-            <Typography variant="h6" color="text.primary" sx={{ letterSpacing: 1 }}>
-              Developer applications
-            </Typography>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', md: 'repeat(3,1fr)' },
-                gap: 2,
-              }}
-            >
-              {APPLICATION_CARDS.map((e) => (
-                <Card
-                  key={e.title}
-                  variant="outlined"
-                  sx={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-around',
-                  }}
-                >
-                  <CardHeader avatar={e.icon} title={e.title} disableTypography={true}></CardHeader>
-                  <CardContent>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      display="block"
-                      sx={{
-                        whiteSpace: 'pre-line',
-                      }}
-                    >
-                      {e.description}
-                    </Typography>
-                  </CardContent>
-                  <CardActions>
-                    <Button
-                      sx={{ mb: 1 }}
-                      component="a"
-                      href={e.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      variant="contained"
-                      endIcon={<OpenInNewOutlinedIcon />}
-                      fullWidth
-                    >
-                      {e.action}
-                    </Button>
-                  </CardActions>
-                </Card>
-              ))}
-            </Box>
-          </Stack>
-          <Stack spacing={2} sx={{ mt: 4 }}>
-            <Typography variant="h6" color="text.primary" sx={{ letterSpacing: 1 }}>
-              Admin applications
-            </Typography>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', md: 'repeat(3,1fr)' },
-                gap: 2,
-              }}
-            >
-              {ADMIN_APPLICATION_CARDS.map((e) => (
-                <Card
-                  key={e.title}
-                  variant="outlined"
-                  sx={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-around',
-                  }}
-                >
-                  <CardHeader avatar={e.icon} title={e.title} disableTypography={true}></CardHeader>
-                  <CardContent>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      display="block"
-                      sx={{ whiteSpace: 'pre-line' }}
-                    >
-                      {e.description}
-                    </Typography>
-                  </CardContent>
-                  <CardActions>
-                    <Button
-                      sx={{ mb: 1 }}
-                      component="a"
-                      href={e.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      variant="contained"
-                      endIcon={<OpenInNewOutlinedIcon />}
-                      fullWidth
-                    >
-                      {e.action}
-                    </Button>
-                  </CardActions>
-                </Card>
-              ))}
-            </Box>
-          </Stack>
-        </>
-      )}
+      <Stack spacing={2} sx={{ mt: 4 }}>
+        <Typography variant="h6" color="text.primary" sx={{ letterSpacing: 1 }}>
+          Developer applications
+        </Typography>
+        <ApplicationGrid cards={developerCards} />
+      </Stack>
+      <Stack spacing={2} sx={{ mt: 4 }}>
+        <Typography variant="h6" color="text.primary" sx={{ letterSpacing: 1 }}>
+          Admin applications
+        </Typography>
+        <ApplicationGrid cards={adminCards} />
+      </Stack>
     </Box>
   );
 }

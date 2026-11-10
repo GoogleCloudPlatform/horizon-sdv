@@ -28,10 +28,14 @@ import {
   Typography,
   Chip,
 } from '@mui/material';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { apiMm } from '../../utils/api';
 import type { ModuleResponse, StatusResponse } from '../../types';
 import { deploymentStatus } from '../../moduleStatus';
 import { READY_MODULES_REFRESH_EVENT } from '../../constants';
+import { usePortalAccess } from '../../rbac/AccessProvider';
+import { HoverTooltip, RoleBadge } from '../../rbac/GatedControl';
+import { gatedTooltip, hasGrant } from '../../rbac/portalAccess';
 
 async function fetchModules(): Promise<ModuleResponse[]> {
   const r = await apiMm('/modules');
@@ -53,6 +57,13 @@ type RefreshResult =
   { ok: true; list: ModuleResponse[]; allReady: boolean } | { ok: false; allReady: boolean };
 
 export function ModulesTab() {
+  const access = usePortalAccess();
+  const canModules = hasGrant(access, 'platform.modules');
+  const moduleTip = !access
+    ? 'Checking your access…'
+    : canModules
+      ? ''
+      : gatedTooltip(access, 'platform.modules');
   const [mods, setMods] = useState<ModuleResponse[]>([]);
   const [statuses, setStatuses] = useState<Record<string, StatusResponse>>({});
   const [refDraft, setRefDraft] = useState<Record<string, string>>({});
@@ -165,6 +176,9 @@ export function ModulesTab() {
   }, [refresh]);
 
   const resetToPlatformBranch = async (m: ModuleResponse) => {
+    if (!hasGrant(access, 'platform.modules')) {
+      return;
+    }
     setBusy(m.name);
     suppressBackgroundPollRef.current = false;
     setError(null);
@@ -190,6 +204,9 @@ export function ModulesTab() {
   };
 
   const applyRef = async (m: ModuleResponse) => {
+    if (!hasGrant(access, 'platform.modules')) {
+      return;
+    }
     const ref = (refDraft[m.name] ?? '').trim();
     if (!ref) {
       setError('Git ref cannot be empty');
@@ -235,6 +252,9 @@ export function ModulesTab() {
   };
 
   const toggle = async (m: ModuleResponse, enable: boolean) => {
+    if (!hasGrant(access, 'platform.modules')) {
+      return;
+    }
     setBusy(m.name);
     suppressBackgroundPollRef.current = enable;
     setError(null);
@@ -327,6 +347,13 @@ export function ModulesTab() {
           </Typography>
         </Stack>
       </Alert>
+      {access && !canModules && (
+        <Alert severity="info" icon={<LockOutlinedIcon />} sx={{ mb: 2 }}>
+          <strong>View only.</strong> You are signed in as {access.roleLabel}. Enabling, disabling,
+          pinning and resetting modules needs Admin, because these change shared cloud resources for
+          everyone.
+        </Alert>
+      )}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
@@ -341,6 +368,7 @@ export function ModulesTab() {
             label === 'UNINSTALL IN PROGRESS' ||
             label === 'INSTALLATION IN PROGRESS' ||
             label === 'UPDATE IN PROGRESS';
+          const controlsLocked = moduleUiLocked || !canModules;
           const color =
             label === 'READY'
               ? 'success'
@@ -353,7 +381,17 @@ export function ModulesTab() {
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={m.id || m.name}>
               <Card variant="outlined">
                 <CardContent>
-                  <Typography variant="h6">{m.name}</Typography>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="h6">{m.name}</Typography>
+                    {access && !canModules ? <RoleBadge label="Admin" /> : null}
+                  </Box>
                   <Box
                     sx={{ my: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
                   >
@@ -411,7 +449,7 @@ export function ModulesTab() {
                         label="Custom Git ref"
                         placeholder={m.clusterTargetRevision || 'branch / tag / SHA'}
                         value={refDraft[m.name] ?? ''}
-                        disabled={moduleUiLocked}
+                        disabled={controlsLocked}
                         onChange={(e) =>
                           setRefDraft((prev) => ({ ...prev, [m.name]: e.target.value }))
                         }
@@ -425,14 +463,17 @@ export function ModulesTab() {
                       />
                       <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                         {m.enabled ? (
-                          <Button
-                            size="small"
-                            variant="contained"
-                            disabled={moduleUiLocked}
-                            onClick={() => void applyRef(m)}
-                          >
-                            Apply
-                          </Button>
+                          <HoverTooltip title={moduleTip}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              disabled={controlsLocked}
+                              startIcon={!canModules ? <LockOutlinedIcon /> : undefined}
+                              onClick={() => void applyRef(m)}
+                            >
+                              Apply
+                            </Button>
+                          </HoverTooltip>
                         ) : null}
                         <Button
                           size="small"
@@ -448,50 +489,69 @@ export function ModulesTab() {
                     <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                       {m.enabled ? (
                         <>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            disabled={moduleUiLocked}
-                            onClick={() => setPinEditor(m.name)}
-                          >
-                            {m.pinned ? 'Edit ref' : 'Pin to ref'}
-                          </Button>
-                          {m.pinned ? (
+                          <HoverTooltip title={moduleTip}>
                             <Button
                               size="small"
                               variant="outlined"
-                              color="secondary"
-                              disabled={moduleUiLocked}
-                              onClick={() => void resetToPlatformBranch(m)}
+                              disabled={controlsLocked}
+                              startIcon={!canModules ? <LockOutlinedIcon /> : undefined}
+                              onClick={() => setPinEditor(m.name)}
                             >
-                              Reset to platform branch
+                              {m.pinned ? 'Edit ref' : 'Pin to ref'}
                             </Button>
+                          </HoverTooltip>
+                          {m.pinned ? (
+                            <HoverTooltip title={moduleTip}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                disabled={controlsLocked}
+                                startIcon={!canModules ? <LockOutlinedIcon /> : undefined}
+                                onClick={() => void resetToPlatformBranch(m)}
+                              >
+                                Reset to platform branch
+                              </Button>
+                            </HoverTooltip>
                           ) : null}
                         </>
                       ) : (
-                        <Button
-                          size="small"
-                          variant="text"
-                          disabled={moduleUiLocked}
-                          onClick={() => setPinEditor(m.name)}
-                          sx={{ px: 0, minWidth: 0 }}
-                        >
-                          Pin ref before install
-                        </Button>
+                        <HoverTooltip title={moduleTip}>
+                          <Button
+                            size="small"
+                            variant="text"
+                            disabled={controlsLocked}
+                            startIcon={!canModules ? <LockOutlinedIcon /> : undefined}
+                            onClick={() => setPinEditor(m.name)}
+                            sx={{ px: 0, minWidth: 0 }}
+                          >
+                            Pin ref before install
+                          </Button>
+                        </HoverTooltip>
                       )}
                     </Box>
                   )}
-                  <FormControlLabel
-                    sx={{ mt: 1, display: 'block' }}
-                    control={
-                      <Switch
-                        checked={m.enabled}
-                        disabled={moduleUiLocked}
-                        onChange={(_, v) => void toggle(m, v)}
-                      />
-                    }
-                    label={m.enabled ? 'Enabled' : 'Disabled'}
-                  />
+                  <HoverTooltip title={moduleTip}>
+                    <FormControlLabel
+                      sx={{ mt: 1, display: 'inline-flex' }}
+                      control={
+                        <Switch
+                          checked={m.enabled}
+                          disabled={controlsLocked}
+                          onChange={(_, v) => void toggle(m, v)}
+                        />
+                      }
+                      label={
+                        <Box
+                          component="span"
+                          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                        >
+                          {!canModules ? <LockOutlinedIcon sx={{ fontSize: 16 }} /> : null}
+                          {m.enabled ? 'Enabled' : 'Disabled'}
+                        </Box>
+                      }
+                    />
+                  </HoverTooltip>
                   {m.hardDependencies?.length || m.softDependencies?.length ? (
                     <Typography
                       variant="caption"

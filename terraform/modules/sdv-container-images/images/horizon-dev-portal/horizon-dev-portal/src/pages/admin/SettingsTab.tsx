@@ -19,6 +19,7 @@ import {
   Button,
   Card,
   CardContent,
+  CardHeader,
   Checkbox,
   CircularProgress,
   FormControlLabel,
@@ -27,7 +28,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { apiHorizon, apiMm } from '../../utils/api';
+import { usePortalAccess } from '../../rbac/AccessProvider';
+import { HoverTooltip, RoleBadge } from '../../rbac/GatedControl';
+import { gatedTooltip, hasGrant } from '../../rbac/portalAccess';
 import type { WorkflowListResponse, WorkflowSummary, WorkflowsVisibilityDTO } from '../../types';
 import {
   collectSubmittedFromFromWorkflows,
@@ -43,6 +48,13 @@ import {
 } from '../../utils/logBufferSettings';
 
 export function SettingsTab() {
+  const access = usePortalAccess();
+  const canSettings = hasGrant(access, 'platform.settings');
+  const settingsTip = !access
+    ? 'Checking your access…'
+    : canSettings
+      ? ''
+      : gatedTooltip(access, 'platform.settings');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -118,6 +130,9 @@ export function SettingsTab() {
   }, [load]);
 
   const save = async () => {
+    if (!hasGrant(access, 'platform.settings')) {
+      return;
+    }
     setSaving(true);
     setErr(null);
     setSavedMsg(null);
@@ -143,6 +158,9 @@ export function SettingsTab() {
   };
 
   const saveLogBuffer = () => {
+    if (!hasGrant(access, 'platform.settings')) {
+      return;
+    }
     setLogBufferErr(null);
     setLogBufferSaved(null);
     const n = Number.parseInt(logBufferLines.trim(), 10);
@@ -198,6 +216,12 @@ export function SettingsTab() {
         <code>horizon-sdv.io/submitted-from</code> label (REST API, Developer Portal, Horizon CLI,
         or overrides). Options combine Horizon OpenAPI enums with values seen in recent workflows.
       </Typography>
+      {access && !canSettings && (
+        <Alert severity="info" icon={<LockOutlinedIcon />}>
+          <strong>View only.</strong> You are signed in as {access.roleLabel}. Portal settings need
+          Admin, because they change what every signed-in user sees.
+        </Alert>
+      )}
       {err && (
         <Alert severity="error" onClose={() => setErr(null)}>
           {err}
@@ -219,14 +243,17 @@ export function SettingsTab() {
         </Alert>
       )}
       <Card variant="outlined">
+        <CardHeader
+          title="Workflows visibility"
+          action={access && !canSettings ? <RoleBadge label="Admin" /> : undefined}
+          slotProps={{ title: { variant: 'h6' } }}
+        />
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Workflows visibility
-          </Typography>
           <FormControlLabel
             control={
               <Checkbox
                 checked={noRestriction}
+                disabled={!canSettings}
                 onChange={(_, c) => {
                   if (c) {
                     setSelected(null);
@@ -248,7 +275,7 @@ export function SettingsTab() {
                 control={
                   <Checkbox
                     checked={checked(v)}
-                    disabled={noRestriction}
+                    disabled={noRestriction || !canSettings}
                     onChange={() => toggleOne(v)}
                   />
                 }
@@ -256,17 +283,27 @@ export function SettingsTab() {
               />
             ))}
           </FormGroup>
-          <Button sx={{ mt: 2 }} variant="contained" disabled={saving} onClick={() => void save()}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
+          <HoverTooltip title={settingsTip}>
+            <Button
+              sx={{ mt: 2 }}
+              variant="contained"
+              disabled={!canSettings || saving}
+              startIcon={!canSettings ? <LockOutlinedIcon /> : undefined}
+              onClick={() => void save()}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          </HoverTooltip>
         </CardContent>
       </Card>
 
       <Card variant="outlined">
+        <CardHeader
+          title="Workflow log buffer (browser)"
+          action={access && !canSettings ? <RoleBadge label="Admin" /> : undefined}
+          slotProps={{ title: { variant: 'h6' } }}
+        />
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Workflow log buffer (browser)
-          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Maximum number of lines kept in memory for the live / archived log viewer on module
             workflow pages. Higher values use more RAM in this browser tab (roughly proportional to
@@ -285,12 +322,21 @@ export function SettingsTab() {
               step: 1000,
             }}
             value={logBufferLines}
+            disabled={!canSettings}
             onChange={(e) => setLogBufferLines(e.target.value)}
             sx={{ maxWidth: 280 }}
           />
-          <Button sx={{ mt: 2, display: 'block' }} variant="contained" onClick={saveLogBuffer}>
-            Save buffer limit
-          </Button>
+          <HoverTooltip title={settingsTip}>
+            <Button
+              sx={{ mt: 2, display: 'block' }}
+              variant="contained"
+              disabled={!canSettings}
+              startIcon={!canSettings ? <LockOutlinedIcon /> : undefined}
+              onClick={saveLogBuffer}
+            >
+              Save buffer limit
+            </Button>
+          </HoverTooltip>
         </CardContent>
       </Card>
     </Stack>
