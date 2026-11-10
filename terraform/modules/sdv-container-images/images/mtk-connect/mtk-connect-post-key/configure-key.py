@@ -116,8 +116,7 @@ def perform_api_request(operation=API_REQUEST_OPT["GET_VERSION"], is_delete_key_
       if response_api.status_code // 100 == 2:
         OLD_KEY_VAL = KEY_VAL
         KEY_VAL = response_api.json()["data"]["key"]
-
-      print("API key rotated.")
+        print("API key rotated.")
 
     elif operation == "DELETE_KEY":
       print(f"\nDeleting keys id: {OLD_KEY_ID_LS}")

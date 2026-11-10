@@ -31,8 +31,8 @@ sed -i "s/##NAMESPACE##/${NAMESPACE_PREFIX}mcp-gateway-registry/g" ./cli-client-
 
 # Update the web client k8s secret
 curl -sS -o /dev/null -w 'DELETE mcp-gateway-registry-web-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets/mcp-gateway-registry-web-keycloak-secret"
-curl -fsS -o /dev/null -w 'POST mcp-gateway-registry-web-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets" -d @web-client-secret.json
+curl -fsS -o /dev/null -w 'POST mcp-gateway-registry-web-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets" -d @web-client-secret.json || exit 1
 
 # Update the cli client k8s secret
 curl -sS -o /dev/null -w 'DELETE mcp-gateway-registry-cli-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets/mcp-gateway-registry-cli-keycloak-secret"
-curl -fsS -o /dev/null -w 'POST mcp-gateway-registry-cli-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets" -d @cli-client-secret.json
+curl -fsS -o /dev/null -w 'POST mcp-gateway-registry-cli-keycloak-secret: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mcp-gateway-registry/secrets" -d @cli-client-secret.json || exit 1
