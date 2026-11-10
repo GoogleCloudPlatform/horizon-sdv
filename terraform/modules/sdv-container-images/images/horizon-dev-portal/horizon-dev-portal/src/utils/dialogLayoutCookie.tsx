@@ -80,11 +80,14 @@ export function useResizableDialogSize(options: {
       if (typeof window === 'undefined') {
         return { width: w, height: h };
       }
-      const maxW = Math.floor(window.innerWidth * 0.96);
-      const maxH = Math.floor(window.innerHeight * 0.9);
+      const gutter = 16;
+      const maxW = Math.max(1, Math.floor(window.innerWidth - gutter));
+      const maxH = Math.max(1, Math.floor(window.innerHeight - gutter));
+      const floorW = Math.min(minWidth, maxW);
+      const floorH = Math.min(minHeight, maxH);
       return {
-        width: Math.min(maxW, Math.max(minWidth, w)),
-        height: Math.min(maxH, Math.max(minHeight, h)),
+        width: Math.min(maxW, Math.max(floorW, w)),
+        height: Math.min(maxH, Math.max(floorH, h)),
       };
     },
     [minWidth, minHeight]
@@ -107,6 +110,12 @@ export function useResizableDialogSize(options: {
   useEffect(() => {
     sizeRef.current = size;
   }, [size]);
+
+  useEffect(() => {
+    const onResize = () => setSize((prev) => clamp(prev.width, prev.height));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [clamp]);
 
   useEffect(
     () => () => {
@@ -173,9 +182,9 @@ export function useResizableDialogSize(options: {
     position: 'relative',
     width: size.width,
     height: size.height,
-    maxWidth: '96vw',
-    maxHeight: '90vh',
-    m: 2,
+    maxWidth: 'calc(100vw - 16px)',
+    maxHeight: 'calc(100dvh - 16px)',
+    m: 1,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',

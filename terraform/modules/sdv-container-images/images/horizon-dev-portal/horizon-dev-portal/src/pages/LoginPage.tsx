@@ -77,7 +77,7 @@ export function LoginPage() {
       }}
     >
       <Card sx={{ width: '100%', maxWidth: 420, boxShadow: 6 }}>
-        <CardContent sx={{ p: 4 }}>
+        <CardContent sx={{ p: { xs: 2.5, sm: 4 } }}>
           <Box
             sx={{
               display: 'flex',
@@ -92,7 +92,13 @@ export function LoginPage() {
               alt="Horizon"
               sx={{ height: 72, width: 'auto', mb: 2 }}
             />
-            <Typography variant="h5" fontWeight="bold" gutterBottom>
+            <Typography
+              variant="h5"
+              fontWeight="bold"
+              gutterBottom
+              align="center"
+              sx={{ overflowWrap: 'anywhere' }}
+            >
               Horizon Developer Portal
             </Typography>
             <Box
@@ -118,7 +124,7 @@ export function LoginPage() {
             variant="contained"
             size="large"
             onClick={() => authService.login()}
-            sx={{ mb: 2, py: 1.5 }}
+            sx={{ mb: 2, py: 1.5, whiteSpace: 'normal' }}
           >
             Sign in with SSO (Keycloak)
           </Button>

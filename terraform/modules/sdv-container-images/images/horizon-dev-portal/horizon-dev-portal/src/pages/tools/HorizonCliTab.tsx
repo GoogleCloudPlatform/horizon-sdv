@@ -317,7 +317,10 @@ function HorizonCliTab() {
               {linuxMacInstallationDescription}
               <pre>
                 <code>
-                  chmod +x {linuxMacFilename} && sudo mv {linuxMacFilename} /usr/local/bin/
+                  {[
+                    `chmod +x ${linuxMacFilename} &&`,
+                    `sudo mv ${linuxMacFilename} /usr/local/bin/`,
+                  ].join('\n')}
                 </code>
               </pre>
             </Typography>

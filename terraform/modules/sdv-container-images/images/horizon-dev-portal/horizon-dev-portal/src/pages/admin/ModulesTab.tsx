@@ -389,8 +389,17 @@ export function ModulesTab() {
                       gap: 1,
                     }}
                   >
-                    <Typography variant="h6">{m.name}</Typography>
-                    {access && !canModules ? <RoleBadge label="Admin" /> : null}
+                    <Typography
+                      variant="h6"
+                      sx={{ minWidth: 0, flex: 1, overflowWrap: 'anywhere' }}
+                    >
+                      {m.name}
+                    </Typography>
+                    {access && !canModules ? (
+                      <Box sx={{ flexShrink: 0 }}>
+                        <RoleBadge label="Admin" />
+                      </Box>
+                    ) : null}
                   </Box>
                   <Box
                     sx={{ my: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}

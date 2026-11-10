@@ -413,11 +413,18 @@ export function ModulePage() {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" gutterBottom sx={{ overflowWrap: 'anywhere' }}>
         Module: {moduleName}
       </Typography>
       {/* MUI Tabs must not wrap <Tab> in Fragment — cloneElement only hits direct children. */}
-      <Tabs value={activeTab} onChange={(_, v) => setTab(v as TabKey)} sx={{ mb: 2 }}>
+      <Tabs
+        value={activeTab}
+        onChange={(_, v) => setTab(v as TabKey)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{ mb: 2 }}
+      >
         <Tab label="Overview" value="overview" />
         {hasApplications ? <Tab label="Applications" value="applications" /> : null}
         {hasTemplates ? <Tab label="Workflow Templates" value="templates" /> : null}
@@ -639,13 +646,19 @@ function TemplatesTab({
                   gap: 1,
                 }}
               >
-                <Typography variant="h6">{e.templateName}</Typography>
-                {adminRule ? <RoleBadge label="Admin" /> : null}
+                <Typography variant="h6" sx={{ minWidth: 0, flex: 1, overflowWrap: 'anywhere' }}>
+                  {e.templateName}
+                </Typography>
+                {adminRule ? (
+                  <Box sx={{ flexShrink: 0 }}>
+                    <RoleBadge label="Admin" />
+                  </Box>
+                ) : null}
               </Box>
               <Typography variant="caption" color="text.secondary" display="block">
                 {e.namespace}
               </Typography>
-              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 {!openAllowed && access ? (
                   <RoleBadge label={requiredRoleLabel(access, 'workflows.submit')} />
                 ) : null}
@@ -1144,7 +1157,7 @@ function SubmitDialog({
 
   return (
     <Dialog open onClose={onClose} maxWidth={hasYamlField ? 'md' : 'sm'} fullWidth>
-      <DialogTitle>Submit: {entry.templateName}</DialogTitle>
+      <DialogTitle sx={{ overflowWrap: 'anywhere' }}>Submit: {entry.templateName}</DialogTitle>
       <DialogContent>
         {entry.parameters
           .filter((p) => p.name !== 'submittedBy')
@@ -1226,7 +1239,7 @@ function SubmitDialog({
           </Alert>
         )}
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
         <Button onClick={onClose}>Cancel</Button>
         {!permitted && access ? (
           <RoleBadge
@@ -1595,7 +1608,12 @@ function WorkflowDetailDialog({
         PaperProps={{ sx: dlgLayout.paperSx }}
       >
         <DialogTitle>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={1}
+          >
             <Stack spacing={0.75} sx={{ flex: 1, minWidth: 0 }}>
               {detail?.namespace ? (
                 <Tooltip
@@ -1625,7 +1643,7 @@ function WorkflowDetailDialog({
                   </span>
                 </Tooltip>
               ) : null}
-              <Typography variant="h6" component="div">
+              <Typography variant="h6" component="div" sx={{ overflowWrap: 'anywhere' }}>
                 {detailTitle}
               </Typography>
               {detail ? (
@@ -1679,7 +1697,14 @@ function WorkflowDetailDialog({
               ) : null}
             </Stack>
             {detail && (
-              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexShrink: 0 }}>
+              <Stack
+                direction="row"
+                spacing={0.75}
+                useFlexGap
+                flexWrap="wrap"
+                alignItems="center"
+                sx={{ flexShrink: 0, maxWidth: '100%' }}
+              >
                 {!terminal && (
                   <>
                     {!abort.allowed && abort.badge ? <RoleBadge label={abort.badge} /> : null}

@@ -39,6 +39,9 @@ export function ToolsPage() {
             navigate(next.path);
           }
         }}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
         sx={{ mb: 2 }}
       >
         {TOOL_TABS.map((item) => (

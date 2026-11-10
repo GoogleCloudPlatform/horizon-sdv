@@ -22,7 +22,7 @@ export function AdminLayout() {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" gutterBottom sx={{ overflowWrap: 'anywhere' }}>
         Administration
       </Typography>
       <Tabs
@@ -30,6 +30,9 @@ export function AdminLayout() {
         onChange={(_, v) => {
           navigate(v === 'settings' ? '/admin/settings' : '/admin/modules');
         }}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
         sx={{ mb: 2 }}
       >
         <Tab label="Modules" value="modules" />

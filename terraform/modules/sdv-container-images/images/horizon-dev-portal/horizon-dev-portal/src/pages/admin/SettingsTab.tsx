@@ -247,6 +247,10 @@ export function SettingsTab() {
           title="Workflows visibility"
           action={access && !canSettings ? <RoleBadge label="Admin" /> : undefined}
           slotProps={{ title: { variant: 'h6' } }}
+          sx={{
+            '& .MuiCardHeader-content': { minWidth: 0 },
+            '& .MuiCardHeader-action': { alignSelf: 'flex-start', m: 0, ml: 1, flexShrink: 0 },
+          }}
         />
         <CardContent>
           <FormControlLabel
@@ -302,6 +306,10 @@ export function SettingsTab() {
           title="Workflow log buffer (browser)"
           action={access && !canSettings ? <RoleBadge label="Admin" /> : undefined}
           slotProps={{ title: { variant: 'h6' } }}
+          sx={{
+            '& .MuiCardHeader-content': { minWidth: 0 },
+            '& .MuiCardHeader-action': { alignSelf: 'flex-start', m: 0, ml: 1, flexShrink: 0 },
+          }}
         />
         <CardContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -312,23 +320,25 @@ export function SettingsTab() {
             {DEFAULT_MAX_WORKFLOW_LOG_LINES.toLocaleString()}). Stored only in this browser
             (localStorage).
           </Typography>
-          <TextField
-            label="Max lines"
-            type="number"
-            size="small"
-            inputProps={{
-              min: MIN_MAX_WORKFLOW_LOG_LINES,
-              max: MAX_MAX_WORKFLOW_LOG_LINES,
-              step: 1000,
-            }}
-            value={logBufferLines}
-            disabled={!canSettings}
-            onChange={(e) => setLogBufferLines(e.target.value)}
-            sx={{ maxWidth: 280 }}
-          />
+          <FormGroup>
+            <TextField
+              label="Max lines"
+              type="number"
+              size="small"
+              inputProps={{
+                min: MIN_MAX_WORKFLOW_LOG_LINES,
+                max: MAX_MAX_WORKFLOW_LOG_LINES,
+                step: 1000,
+              }}
+              value={logBufferLines}
+              disabled={!canSettings}
+              onChange={(e) => setLogBufferLines(e.target.value)}
+              sx={{ maxWidth: 180 }}
+            />
+          </FormGroup>
           <HoverTooltip title={settingsTip}>
             <Button
-              sx={{ mt: 2, display: 'block' }}
+              sx={{ mt: 2 }}
               variant="contained"
               disabled={!canSettings}
               startIcon={!canSettings ? <LockOutlinedIcon /> : undefined}

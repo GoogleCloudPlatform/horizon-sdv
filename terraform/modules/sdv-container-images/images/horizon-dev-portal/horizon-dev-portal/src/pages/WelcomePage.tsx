@@ -97,7 +97,7 @@ export function WelcomePage() {
           direction={{ xs: 'column', md: 'row' }}
           spacing={3}
           alignItems={{ xs: 'flex-start', md: 'center' }}
-          sx={{ p: { xs: 3, sm: 4 } }}
+          sx={{ p: { xs: 2, sm: 4 }, width: '100%', boxSizing: 'border-box' }}
         >
           <Box
             component="img"
@@ -105,7 +105,7 @@ export function WelcomePage() {
             alt="Horizon"
             sx={{ height: { xs: 56, sm: 72 }, width: 'auto', flexShrink: 0 }}
           />
-          <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Box sx={{ minWidth: 0, width: '100%' }}>
             <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1 }}>
               Software-defined vehicle toolchain
             </Typography>
@@ -114,7 +114,7 @@ export function WelcomePage() {
               component="h1"
               fontWeight={700}
               gutterBottom
-              sx={{ fontSize: { xs: 20, md: 30 } }}
+              sx={{ fontSize: { xs: 20, md: 30 }, overflowWrap: 'anywhere' }}
             >
               Welcome{username ? `, ${username}` : ''}
             </Typography>
@@ -133,6 +133,7 @@ export function WelcomePage() {
           variant="contained"
           size="large"
           startIcon={<AdminPanelSettingsIcon />}
+          sx={{ whiteSpace: 'normal', justifyContent: 'flex-start', textAlign: 'left' }}
         >
           Open Administration → Modules
         </Button>
@@ -142,6 +143,7 @@ export function WelcomePage() {
           variant="outlined"
           size="large"
           startIcon={<AdminPanelSettingsIcon />}
+          sx={{ whiteSpace: 'normal', justifyContent: 'flex-start', textAlign: 'left' }}
         >
           Administration → Settings
         </Button>
@@ -151,6 +153,7 @@ export function WelcomePage() {
           variant="outlined"
           size="large"
           startIcon={<BuildIcon />}
+          sx={{ whiteSpace: 'normal', justifyContent: 'flex-start', textAlign: 'left' }}
         >
           Tools
         </Button>

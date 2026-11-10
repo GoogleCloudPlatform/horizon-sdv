@@ -17,7 +17,6 @@ import {
   Box,
   Button,
   Card,
-  CardHeader,
   CardContent,
   CardActions,
   Stack,
@@ -73,13 +72,32 @@ function ApplicationCardView({ card }: { card: ApplicationCard }) {
         justifyContent: 'space-around',
       }}
     >
-      <CardHeader
-        avatar={card.icon}
-        title={card.title}
-        disableTypography
-        action={audience === 'admin' ? <RoleBadge label="Admin" /> : undefined}
-        sx={{ '& .MuiCardHeader-action': { alignSelf: 'center', ml: 2, mr: 0 } }}
-      />
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns:
+            audience === 'admin' ? 'auto minmax(0, 1fr) auto' : 'auto minmax(0, 1fr)',
+          alignItems: 'center',
+          columnGap: 1.5,
+          px: 2,
+          pt: 2,
+        }}
+      >
+        <Box sx={{ display: 'flex' }}>{card.icon}</Box>
+        <Typography
+          component="div"
+          variant="subtitle1"
+          sx={{
+            minWidth: 0,
+            fontWeight: 500,
+            lineHeight: 1.3,
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {card.title}
+        </Typography>
+        {audience === 'admin' ? <RoleBadge label="Admin" /> : null}
+      </Box>
       <CardContent>
         <Typography
           variant="caption"
@@ -117,7 +135,11 @@ function ApplicationGrid({ cards }: { cards: ApplicationCard[] }) {
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', md: 'repeat(3,1fr)' },
+        gridTemplateColumns: {
+          xs: '1fr',
+          md: 'repeat(2, minmax(0, 1fr))',
+          lg: 'repeat(3, minmax(0, 1fr))',
+        },
         gap: 2,
       }}
     >
@@ -293,7 +315,13 @@ export function LandingPage() {
       <Typography variant="h4" gutterBottom>
         Landing page
       </Typography>
-      <Tabs value={tab} sx={{ mb: 2 }}>
+      <Tabs
+        value={tab}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{ mb: 2 }}
+      >
         <Tab label="Applications" value="applications" />
       </Tabs>
       <Stack spacing={2} sx={{ mt: 4 }}>
