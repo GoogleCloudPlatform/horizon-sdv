@@ -425,12 +425,12 @@ function gerrit-craft-all-users() {
       # Delete existing jenkins-gerrit-secret if any
       curl -sS -o /dev/null -w 'DELETE jenkins-gerrit-http-password: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets/jenkins-gerrit-http-password"
       # Create new jenkins-gerrit-secret
-      curl -fsS -o /dev/null -w 'POST jenkins-gerrit-http-password: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets" -d @jenkins-gerrit-secret.json
+      curl -fsS -o /dev/null -w 'POST jenkins-gerrit-http-password: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets" -d @jenkins-gerrit-secret.json || exit 1
 
       # Delete existing gerrit-secret if any
       curl -sS -o /dev/null -w 'DELETE gerrit-http-password: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}gerrit/secrets/gerrit-http-password"
       # Create new gerrit-secret
-      curl -fsS -o /dev/null -w 'POST gerrit-http-password: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}gerrit/secrets" -d @gerrit-secret.json
+      curl -fsS -o /dev/null -w 'POST gerrit-http-password: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}gerrit/secrets" -d @gerrit-secret.json || exit 1
 
       # Debug: confirm that the secret was created
       if [[ "${DEBUG:-0}" == "1" ]]; then

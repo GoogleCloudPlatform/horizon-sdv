@@ -61,5 +61,5 @@ if [ $UPDATE_NEEDED == true ]; then
   sed -i "s/##NAMESPACE##/${NAMESPACE_PREFIX}gerrit/g" ./secret.json
 
   curl -sS -o /dev/null -w 'DELETE gerrit-secure-config: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}gerrit/secrets/gerrit-secure-config"
-  curl -fsS -o /dev/null -w 'POST gerrit-secure-config: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}gerrit/secrets" -d @secret.json
+  curl -fsS -o /dev/null -w 'POST gerrit-secure-config: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}gerrit/secrets" -d @secret.json || exit 1
 fi
