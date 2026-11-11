@@ -16,15 +16,12 @@ limitations under the License. -->
 
 Helm chart: `gitops/modules/openbsw-module`
 
-Use this module as the place OpenBSW workflows deploy into. It follows the parent-chart shape of `cloud-workstations-module` and [How to create a new module](../../../docs/architecture/05_creating-modules.md).
-
 The module runs on the main environment only. It is not deployed on a sub-environment, because the OpenBSW node pool is shared by the cluster.
 
 ## Module Metadata
 
 | Metadata Field | Value |
 | :--- | :--- |
-| **STATUS** | experimental |
 | **OWNER** | Accenture |
 | **CONTACT** | [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com) |
 | **CHART VERSION** | 0.1.0 |
