@@ -1,0 +1,195 @@
+<!-- Copyright (c) 2026 Accenture, All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>openbsw-module</title>
+    <style>
+      :root {
+        --bg: #f8f9fa;
+        --paper: #ffffff;
+        --text: #202124;
+        --muted: #5f6368;
+        --primary: #1a73e8;
+        --border: #e8eaed;
+        --hero-end: rgba(26, 115, 232, 0.08);
+        --hero-start: rgba(66, 133, 244, 0.22);
+        --callout-bg: #e8f0fe;
+        --callout-border: #d2e3fc;
+        --warn-bg: #fef7e0;
+        --warn-border: #fde293;
+        --warn-text: #b06000;
+        --code-bg: #f1f3f4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #202124;
+          --paper: #292a2d;
+          --text: #e8eaed;
+          --muted: #9aa0a6;
+          --primary: #8ab4f8;
+          --border: #3c4043;
+          --hero-end: rgba(26, 115, 232, 0.12);
+          --hero-start: rgba(66, 133, 244, 0.28);
+          --callout-bg: rgba(26, 115, 232, 0.14);
+          --callout-border: rgba(138, 180, 248, 0.28);
+          --warn-bg: rgba(251, 188, 4, 0.12);
+          --warn-border: rgba(251, 188, 4, 0.28);
+          --warn-text: #fdd663;
+          --code-bg: #3c4043;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+      body {
+        font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+        padding: 1.1rem clamp(0.9rem, 2.4vw, 1.5rem) 1.4rem;
+        overflow-wrap: anywhere;
+      }
+      .wrap {
+        width: 100%;
+        margin: 0 auto;
+      }
+      .hero {
+        margin: 0 0 1.1rem;
+        padding: 1rem;
+        border-radius: 8px;
+        background: linear-gradient(
+          135deg,
+          var(--hero-start) 0%,
+          var(--hero-end) 45%,
+          var(--paper) 100%
+        );
+      }
+      .overline {
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 0.35rem;
+      }
+      .badge {
+        display: inline-block;
+        margin: 0 0 0.45rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--warn-text);
+        background: var(--warn-bg);
+        border: 1px solid var(--warn-border);
+      }
+      h1 {
+        font-size: clamp(1.35rem, 2.5vw, 1.7rem);
+        font-weight: 700;
+        margin: 0 0 0.45rem;
+        line-height: 1.2;
+      }
+      .lead {
+        font-size: 0.95rem;
+        color: var(--muted);
+        margin: 0;
+        max-width: fit-content;
+      }
+      .grid {
+        display: grid;
+        gap: 0.85rem;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+      }
+      .card {
+        background: var(--paper);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.1rem 1.05rem;
+        box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+      }
+      .card h2 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--primary);
+      }
+      .card p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+      .card p + p {
+        margin-top: 0.7rem;
+      }
+      code {
+        font-size: 0.84em;
+        color: var(--text);
+        background: var(--code-bg);
+        padding: 0.08em 0.32em;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <p class="overline">Horizon module</p>
+        <p class="badge">Experimental</p>
+        <h1>openbsw-module</h1>
+        <p class="lead">
+          A module-owned <code>openbsw</code> namespace. OpenBSW workflow pods
+          schedule onto the OpenBSW node pool.
+        </p>
+      </header>
+      <div class="grid">
+        <section class="card">
+          <h2>Namespace</h2>
+          <p>
+            Enabling the module on the main environment creates <code>openbsw</code>.
+            WorkflowTemplates stay in the platform <code>workflows</code> namespace.
+          </p>
+        </section>
+        <section class="card">
+          <h2>Node pool</h2>
+          <p>
+            Workflow pods and the CAN DaemonSet select
+            <code>sdv-openbsw-build-node-pool</code>
+            (<code>workloadLabel: openbsw</code>) and tolerate
+            <code>workloadType=openbsw</code>. The pool labels stay with
+            Terraform. Existing Jenkins jobs keep their own scheduling.
+          </p>
+        </section>
+        <section class="card">
+          <h2>CAN kernel</h2>
+          <p>
+            DaemonSet <code>openbsw-can-kernel</code> loads <code>can</code>,
+            <code>can-raw</code>, and <code>vcan</code>. It runs as
+            <code>openbsw-can-kernel</code> with no API token and no Role.
+            The Jenkins CAN DaemonSet is left in place.
+          </p>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>
