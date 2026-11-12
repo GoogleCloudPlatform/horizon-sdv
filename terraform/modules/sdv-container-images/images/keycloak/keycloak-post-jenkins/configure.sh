@@ -28,5 +28,5 @@ sed -i "s/##DOMAIN##/${DOMAIN_BS}/g" ./secret.json
 sed -i "s/##SECRET##/${SECRET}/g" ./secret.json
 sed -i "s/##NAMESPACE##/${NAMESPACE_PREFIX}jenkins/g" ./secret.json
 
-curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets/jenkins-keycloak
-curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets -d @secret.json
+curl -sS -o /dev/null -w 'DELETE jenkins-keycloak: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets/jenkins-keycloak"
+curl -fsS -o /dev/null -w 'POST jenkins-keycloak: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets" -d @secret.json || exit 1
