@@ -34,7 +34,6 @@ metadata:
     horizon-sdv.io/module: workloads-android
   annotations:
     argocd.argoproj.io/sync-wave: "8"
-    workflows.argoproj.io/description: "WARNING: Never submit this workflow when a CF Instance Template build is already running in Jenkins."
 spec:
   entrypoint: main
 {{- if $umbrellaCreds }}
