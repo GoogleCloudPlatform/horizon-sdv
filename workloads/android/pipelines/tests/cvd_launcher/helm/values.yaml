@@ -55,8 +55,6 @@ spec:
       operator: Equal
       value: android
       effect: NoSchedule
-  runPodLabels:
-    aaos_pod: "true"
   runPodAnnotations:
     cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
   # Path B ephemeral GCE: KCC ComputeInstance + GCS guest I/O (no IAP ssh/scp from the workflow pod).

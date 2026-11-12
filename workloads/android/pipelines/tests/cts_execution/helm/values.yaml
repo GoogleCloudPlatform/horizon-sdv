@@ -53,8 +53,6 @@ spec:
       operator: Equal
       value: android
       effect: NoSchedule
-  runPodLabels:
-    aaos_pod: "true"
   runPodAnnotations:
     cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
   pipelineWorkspaceStorageSize: 5Gi
