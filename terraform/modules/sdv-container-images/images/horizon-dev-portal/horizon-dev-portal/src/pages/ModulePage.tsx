@@ -1009,6 +1009,16 @@ function isYamlWorkflowParam(value: string): boolean {
   return value.includes('\n');
 }
 
+const CF_INSTANCE_TEMPLATE_SUBMIT_WARNING =
+  'WARNING Never run parallel with Jenkins Instance Template creation jobs';
+
+function cfInstanceTemplateSubmitWarning(templateName: string): string | undefined {
+  if (templateName === 'cf-instance-template-x86' || templateName === 'cf-instance-template-arm64') {
+    return CF_INSTANCE_TEMPLATE_SUBMIT_WARNING;
+  }
+  return undefined;
+}
+
 function SubmitDialog({
   entry,
   moduleName,
@@ -1080,11 +1090,17 @@ function SubmitDialog({
   const hasYamlField = entry.parameters.some(
     (p) => p.name !== 'submittedBy' && isYamlWorkflowParam(params[p.name] ?? p.default ?? '')
   );
+  const submitWarning = cfInstanceTemplateSubmitWarning(entry.templateName);
 
   return (
     <Dialog open onClose={onClose} maxWidth={hasYamlField ? 'md' : 'sm'} fullWidth>
       <DialogTitle>Submit: {entry.templateName}</DialogTitle>
       <DialogContent>
+        {submitWarning && (
+          <Alert severity="warning" sx={{ mb: 1 }}>
+            {submitWarning}
+          </Alert>
+        )}
         {entry.parameters
           .filter((p) => p.name !== 'submittedBy')
           .map((p) => {
