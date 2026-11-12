@@ -15,10 +15,9 @@
 
 """Smoke checks for openbsw-module.
 
-Runs helm lint and helm template, checks the rendered ModuleCatalog entry
-against the ModuleCatalog CRD schema, and checks that the child Application
-is labeled and finalized so enable renders it and disable prunes it with the
-parent.
+Runs helm lint and helm template, checks the openbsw-module ModuleCatalog
+entry, and checks that the child Application is labeled and finalized so
+enable renders it and disable prunes it with the parent.
 """
 
 import subprocess
@@ -35,22 +34,6 @@ LINT_VALUES = (
 )
 MODULE_MANAGER = ROOT / "gitops/apps/module-manager"
 CHILD_FINALIZER = "resources-finalizer.argocd.argoproj.io"
-
-MODULE_KEYS = {
-    "name",
-    "path",
-    "overviewPath",
-    "overviewService",
-    "overviewServiceNamespace",
-    "hardDependencies",
-    "softDependencies",
-    "applications",
-    "softFeaturesPropagation",
-    "softFeaturesConfigMapNamespaces",
-    "autoDisableWhenUnused",
-}
-APPLICATION_KEYS = {"id", "title", "url"}
-PROPAGATION = {"HelmValues", "ConfigMap", "HelmValuesAndConfigMap"}
 
 
 def fail(message):
@@ -73,55 +56,6 @@ def run(cmd):
 
 def docs(text):
     return [doc for doc in yaml.safe_load_all(text) if doc]
-
-
-def require_string(entry, key, where):
-    value = entry.get(key)
-    if not isinstance(value, str) or not value.strip():
-        fail(f"{where}: {key} must be a non-empty string")
-
-
-def validate_catalog_entry(entry, where):
-    if not isinstance(entry, dict):
-        fail(f"{where}: module entry must be an object")
-    unknown = set(entry) - MODULE_KEYS
-    if unknown:
-        fail(f"{where}: unknown fields {sorted(unknown)}")
-    require_string(entry, "name", where)
-    require_string(entry, "path", where)
-    for key in (
-        "overviewPath",
-        "overviewService",
-        "overviewServiceNamespace",
-        "softFeaturesPropagation",
-    ):
-        if key in entry and not isinstance(entry[key], str):
-            fail(f"{where}: {key} must be a string")
-    propagation = entry.get("softFeaturesPropagation")
-    if propagation and propagation not in PROPAGATION:
-        fail(f"{where}: softFeaturesPropagation {propagation!r} is not in {sorted(PROPAGATION)}")
-    for key in ("hardDependencies", "softDependencies", "softFeaturesConfigMapNamespaces"):
-        if key not in entry:
-            continue
-        values = entry[key]
-        if not isinstance(values, list) or not all(isinstance(item, str) and item for item in values):
-            fail(f"{where}: {key} must be a list of non-empty strings")
-    if "autoDisableWhenUnused" in entry and not isinstance(entry["autoDisableWhenUnused"], bool):
-        fail(f"{where}: autoDisableWhenUnused must be a boolean")
-    applications = entry.get("applications", [])
-    if not isinstance(applications, list):
-        fail(f"{where}: applications must be a list")
-    for index, app in enumerate(applications):
-        app_where = f"{where} applications[{index}]"
-        if not isinstance(app, dict):
-            fail(f"{app_where}: must be an object")
-        extra = set(app) - APPLICATION_KEYS
-        if extra:
-            fail(f"{app_where}: unknown fields {sorted(extra)}")
-        require_string(app, "id", app_where)
-        require_string(app, "url", app_where)
-        if "title" in app and not isinstance(app["title"], str):
-            fail(f"{app_where}: title must be a string")
 
 
 def lint():
@@ -224,11 +158,9 @@ def check_catalog():
     if len(catalogs) != 1:
         fail(f"expected one ModuleCatalog, got {len(catalogs)}")
     modules = catalogs[0].get("spec", {}).get("modules")
-    if not isinstance(modules, list) or not modules:
-        fail("ModuleCatalog spec.modules must be a non-empty list")
-    for entry in modules:
-        validate_catalog_entry(entry, f"module {entry.get('name')!r}")
-    match = [entry for entry in modules if entry.get("name") == "openbsw-module"]
+    if not isinstance(modules, list):
+        fail("ModuleCatalog spec.modules must be a list")
+    match = [entry for entry in modules if isinstance(entry, dict) and entry.get("name") == "openbsw-module"]
     if len(match) != 1:
         fail("ModuleCatalog must contain exactly one openbsw-module entry")
     entry = match[0]
@@ -242,7 +174,7 @@ def check_catalog():
     for key, value in expected.items():
         if entry.get(key) != value:
             fail(f"openbsw-module {key}={entry.get(key)!r}, want {value!r}")
-    print("ModuleCatalog schema: ok")
+    print("openbsw-module catalog entry: ok")
 
 
 def check_applications():

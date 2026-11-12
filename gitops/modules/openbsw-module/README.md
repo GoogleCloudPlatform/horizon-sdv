@@ -33,13 +33,17 @@ The module runs on the main environment only. It is not deployed on a sub-enviro
 |----------|-----------|---------|
 | Namespace `openbsw` | — | Module-owned namespace. Annotated with `horizon-sdv.io/node-pool` |
 | ConfigMap `openbsw-workflow-scheduling` | `openbsw` | Node selector and tolerations for OpenBSW workflow pods |
-| Child Application `mod-openbsw-module-argo-workflows` | `workflows` | WorkflowTemplates. Pods schedule onto the OpenBSW node pool |
+| Child Application `mod-openbsw-module-argo-workflows` | `workflows` | Placeholder. Syncs the `argo-workflows` chart, which renders no resources until WorkflowTemplates are added (follow-up ticket) |
 | NetworkPolicies `default-deny-all`, `allow-dns` | `openbsw` | Baseline perimeter when `config.enableNetworkPolicies` is true |
 | ServiceAccount `openbsw-can-kernel` | `openbsw` | Identity for the CAN DaemonSet. No Role or binding |
 | DaemonSet `openbsw-can-kernel` | `openbsw` | Loads `can`, `can-raw`, and `vcan` on the OpenBSW node pool |
 | Overview Deployment and Service `mod-openbsw-module-overview` | `openbsw-overview` | Portal overview page served on port 80 |
 
 Module Manager injects `moduleName`, `config`, `repo.url`, and `repo.revision` when the module is enabled. `moduleName` stays empty in `values.yaml`.
+
+## Status: placeholder workflows
+
+The `argo-workflows/` chart has no WorkflowTemplates yet. Its child Application `mod-openbsw-module-argo-workflows` therefore syncs an empty chart, and enabling the module creates no workflows. Adding the OpenBSW WorkflowTemplates and their Sensors is tracked as a follow-up ticket. The scheduling helper below is ready for those templates but is not used by any template yet.
 
 ## Scheduling
 
@@ -121,12 +125,53 @@ Registered in `gitops/apps/module-manager/templates/module-catalog.yaml`. Enabli
 | Overview namespace | `openbsw-overview` |
 | Hard dependencies | `workloads-common` |
 
+## Validate after enable
+
+1. In the Developer Portal, wait until the module state changes from NOT INSTALLED to READY. Enable `workloads-common` first if it is not already on.
+2. In Argo CD, wait until `mod-openbsw-module` and `mod-openbsw-module-argo-workflows` are Synced/Healthy.
+3. Command-line checks:
+
+```bash
+kubectl -n argocd get applications -l horizon-sdv.io/module=openbsw-module
+# expect: mod-openbsw-module, mod-openbsw-module-argo-workflows, Synced/Healthy
+
+kubectl -n openbsw get ds,pods -o wide
+# expect: DaemonSet openbsw-can-kernel. DESIRED is 0 until the pool has a node
+
+kubectl get nodes -l cloud.google.com/gke-nodepool=sdv-openbsw-build-node-pool
+# expect: one row per node in the OpenBSW pool
+
+kubectl -n openbsw logs ds/openbsw-can-kernel --tail=20
+# expect: no modprobe error. CrashLoopBackOff means modprobe or the /proc/modules check failed
+
+kubectl -n openbsw exec ds/openbsw-can-kernel -- nsenter -t 1 -m -p -- lsmod | grep -E '^(can|can_raw|vcan) '
+# expect: can, can_raw and vcan listed
+```
+
+The `argo-workflows` child is a placeholder, so no WorkflowTemplates appear in the Developer Portal yet (see [Status: placeholder workflows](#status-placeholder-workflows)).
+
+## After disable
+
+Disabling the module deletes the parent Application `mod-openbsw-module`. Argo CD then prunes the child `mod-openbsw-module-argo-workflows`, the `openbsw` namespace with the CAN DaemonSet, its ServiceAccount, the workflow-scheduling ConfigMap and the NetworkPolicies, and the `openbsw-overview` namespace.
+
+```bash
+kubectl -n argocd get applications -l horizon-sdv.io/module=openbsw-module
+# expect: no results
+
+kubectl get ns openbsw openbsw-overview
+# expect: NotFound for both
+```
+
+- The `can`, `can_raw` and `vcan` kernel modules stay loaded on the nodes. The DaemonSet does not unload them.
+- The Terraform node pool `sdv-openbsw-build-node-pool` is not removed. The Jenkins CAN DaemonSet in `jenkins` is not touched.
+- Nothing depends on this module, so it can be disabled while `workloads-common` stays enabled.
+
 ## Tests
 
 ```bash
 python3 gitops/modules/openbsw-module/tests/smoke_test.py
 ```
 
-The smoke test lints both charts, renders them with `helm template`, checks the `openbsw-module` ModuleCatalog entry against the CRD schema, and checks that the child Application is rendered with `prune: true` and the Argo CD resources finalizer.
+The smoke test lints both charts, renders them with `helm template`, checks the `openbsw-module` ModuleCatalog fields, and checks that the child Application is rendered with `prune: true` and the Argo CD resources finalizer. It is not part of CI.
 
 Enable creates the parent Application `mod-openbsw-module`. Disable deletes that parent. The child Application is part of the parent chart, so the parent finalizer prunes it. Those two steps are covered by the Module Manager unit tests `TestEnableOpenBSW_CreatesParentApplication` and `TestPerformModuleDisable_OpenBSWDeletesParentApplication`.

@@ -45,11 +45,18 @@ func TestPerformModuleDisable_OpenBSWDeletesParentApplication(t *testing.T) {
 	if len(store.st.EnabledModules) != 0 {
 		t.Fatalf("enabled modules = %v", store.st.EnabledModules)
 	}
-	assertDeleted(t, c, "mod-openbsw-module")
+	parentAfter, err := openbswGetApplication(c, "mod-openbsw-module")
+	if apierrors.IsNotFound(err) {
+		// removed outright
+	} else if err != nil {
+		t.Fatalf("get parent Application: %v", err)
+	} else if parentAfter.GetDeletionTimestamp().IsZero() {
+		t.Fatal("parent Application is still present and not deleting")
+	}
 	// The child is a manifest of the parent chart and carries the Argo CD resources
 	// finalizer. Deleting the parent is what prunes it. Module Manager does not
 	// delete this child by name (that path is only for prefixed workload modules).
-	if _, err := getApp(c, "mod-openbsw-module-argo-workflows"); err != nil {
+	if _, err := openbswGetApplication(c, "mod-openbsw-module-argo-workflows"); err != nil {
 		t.Fatalf("child Application should remain until the parent finalizer prunes it: %v", err)
 	}
 }
@@ -63,23 +70,9 @@ func openbswApp(name string) *unstructured.Unstructured {
 	return app
 }
 
-func getApp(c client.Client, name string) (*unstructured.Unstructured, error) {
+func openbswGetApplication(c client.Client, name string) (*unstructured.Unstructured, error) {
 	got := &unstructured.Unstructured{}
 	got.SetGroupVersionKind(cwsTestArgoAppGVK)
 	err := c.Get(context.Background(), client.ObjectKey{Namespace: "argocd", Name: name}, got)
 	return got, err
-}
-
-func assertDeleted(t *testing.T, c client.Client, name string) {
-	t.Helper()
-	got, err := getApp(c, name)
-	if apierrors.IsNotFound(err) {
-		return
-	}
-	if err != nil {
-		t.Fatalf("get %s: %v", name, err)
-	}
-	if got.GetDeletionTimestamp().IsZero() {
-		t.Fatalf("%s is still present and not deleting", name)
-	}
 }
