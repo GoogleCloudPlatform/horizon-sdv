@@ -1010,7 +1010,7 @@ function isYamlWorkflowParam(value: string): boolean {
 }
 
 const CF_INSTANCE_TEMPLATE_SUBMIT_WARNING =
-  'WARNING Never run in parallel with CF Instance Template job in Jenkins';
+  'WARNING Never run parallel with Jenkins Instance Template creation jobs';
 
 function cfInstanceTemplateSubmitWarning(templateName: string): string | undefined {
   if (templateName === 'cf-instance-template-x86' || templateName === 'cf-instance-template-arm64') {
