@@ -257,6 +257,47 @@ func TestBearerToken(t *testing.T) {
 	}
 }
 
+func TestUserBearer(t *testing.T) {
+	tests := []struct {
+		name    string
+		header  string
+		cookie  string
+		want    string
+		wantErr bool
+	}{
+		{name: "header wins over cookie", header: "Bearer header-tok", cookie: "horizon_portal_access=cookie-tok", want: "header-tok"},
+		{name: "cookie is URL-decoded", cookie: "horizon_portal_access=a%2Fb", want: "a/b"},
+		{name: "decoded spaces are non-empty", cookie: "horizon_portal_access=%20%20", want: "  "},
+		{name: "no header or cookie", wantErr: true},
+		{name: "empty cookie value", cookie: "horizon_portal_access=", wantErr: true},
+		{name: "invalid escape in cookie", cookie: "horizon_portal_access=%", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/horizon/v1/portal/access", nil)
+			if tc.header != "" {
+				req.Header.Set("Authorization", tc.header)
+			}
+			if tc.cookie != "" {
+				req.Header.Set("Cookie", tc.cookie)
+			}
+			got, err := userBearer(req)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNewMMProxy(t *testing.T) {
 	var gotPath, gotQuery, gotAuth string
 	var gotMu sync.Mutex
@@ -1318,13 +1359,18 @@ func newTestOIDC(t *testing.T) *testOIDC {
 func (o *testOIDC) sign(t *testing.T, ttl time.Duration) string {
 	t.Helper()
 	now := time.Now()
-	claims := map[string]any{
+	return o.signClaims(t, map[string]any{
 		"iss": o.issuer,
 		"sub": "user-1",
 		"aud": "horizon-dev-portal",
 		"iat": now.Add(-time.Minute).Unix(),
 		"exp": now.Add(ttl).Unix(),
-	}
+	})
+}
+
+// signClaims signs an RS256 ID token with the given claims using the test issuer key.
+func (o *testOIDC) signClaims(t *testing.T, claims map[string]any) string {
+	t.Helper()
 	hdr := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","kid":"test-key","typ":"JWT"}`))
 	pb, err := json.Marshal(claims)
 	if err != nil {

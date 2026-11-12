@@ -57,9 +57,7 @@ import { ModulesTab } from './pages/admin/ModulesTab';
 import { SettingsTab } from './pages/admin/SettingsTab';
 import { ModulePage } from './pages/ModulePage';
 import { LandingPage } from './pages/LandingPage';
-import { apiMm } from './utils/api';
-import type { ModuleResponse, StatusResponse } from './types';
-import { deploymentStatus, isReady } from './moduleStatus';
+import { fetchNavModuleNames } from './navModules';
 import { HORIZON_LOGO_SRC, READY_MODULES_REFRESH_EVENT } from './constants';
 import { getRouterBasename } from './utils/publicPath';
 import { config } from './utils/config';
@@ -71,44 +69,6 @@ import { AccessProvider } from './rbac/AccessProvider';
 import { YourAccessButton } from './rbac/YourAccess';
 
 const drawerWidth = 260;
-
-/** Per-module status can be slow (large Argo apps); do not block other modules or hang the sidebar tick forever. */
-const moduleStatusFetchTimeoutMs = 25_000;
-
-/** Sidebar lists modules that are READY for use, or still tearing down (UNINSTALL IN PROGRESS) so the entry does not vanish while Argo prunes. */
-async function fetchNavModuleNameIfRelevant(m: ModuleResponse): Promise<string | null> {
-  const ctrl = new AbortController();
-  const tid = window.setTimeout(() => ctrl.abort(), moduleStatusFetchTimeoutMs);
-  try {
-    const sr = await apiMm(`/modules/${encodeURIComponent(m.name)}/status`, {
-      signal: ctrl.signal,
-    });
-    if (!sr.ok) {
-      return null;
-    }
-    const st = (await sr.json()) as StatusResponse;
-    const label = deploymentStatus(m.enabled, st);
-    if (isReady(m.enabled, st) || label === 'UNINSTALL IN PROGRESS') {
-      return m.name;
-    }
-    return null;
-  } catch {
-    return null;
-  } finally {
-    window.clearTimeout(tid);
-  }
-}
-
-async function fetchNavModuleNames(): Promise<string[]> {
-  const r = await apiMm('/modules');
-  if (!r.ok) {
-    return [];
-  }
-  const list = (await r.json()) as ModuleResponse[];
-  const parts = await Promise.all(list.map((m) => fetchNavModuleNameIfRelevant(m)));
-  const names = parts.filter((x): x is string => x != null);
-  return names.sort((a, b) => a.localeCompare(b));
-}
 
 function useReadyModules(): string[] {
   const [mods, setMods] = useState<string[]>([]);

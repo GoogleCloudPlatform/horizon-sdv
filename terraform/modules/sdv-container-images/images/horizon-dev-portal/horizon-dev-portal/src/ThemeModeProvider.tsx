@@ -15,8 +15,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import { getTheme } from './theme';
-
-const STORAGE_KEY = 'theme';
+import { readInitialDark, THEME_STORAGE_KEY } from './themeMode';
 
 type ThemeModeContextValue = {
   darkMode: boolean;
@@ -25,24 +24,12 @@ type ThemeModeContextValue = {
 
 const ThemeModeContext = createContext<ThemeModeContextValue | null>(null);
 
-function readInitialDark(): boolean {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored !== null) {
-      return stored === 'dark';
-    }
-  } catch {
-    /* ignore */
-  }
-  return window.APP_CONFIG?.theme === 'dark';
-}
-
 export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
   const [darkMode, setDarkMode] = useState(readInitialDark);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue !== null) {
+      if (e.key === THEME_STORAGE_KEY && e.newValue !== null) {
         setDarkMode(e.newValue === 'dark');
       }
     };
@@ -54,7 +41,7 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     setDarkMode((d) => {
       const next = !d;
       try {
-        localStorage.setItem(STORAGE_KEY, next ? 'dark' : 'light');
+        localStorage.setItem(THEME_STORAGE_KEY, next ? 'dark' : 'light');
       } catch {
         /* ignore */
       }

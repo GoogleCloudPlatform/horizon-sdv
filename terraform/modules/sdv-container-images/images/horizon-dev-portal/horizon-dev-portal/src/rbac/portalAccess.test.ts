@@ -19,6 +19,7 @@ import {
   applicationAudience,
   buildPortalAccess,
   findAdminTemplate,
+  functionById,
   gatedTooltip,
   globMatch,
   hasGrant,
@@ -233,6 +234,14 @@ describe('grants', () => {
     expect(gatedTooltip(viewer, 'workflows.submit')).toBe(
       'Developer only. Submitting a workflow uses shared build and test capacity. You are signed in as Viewer. Ask a Horizon administrator to add you to the developers or administrators group.'
     );
+  });
+});
+
+describe('function lookup', () => {
+  it('looks up a function by id', () => {
+    const developer = accessFor('developer');
+    expect(functionById(developer, 'workflows.delete')?.requiredRole).toBe('admin');
+    expect(functionById(developer, 'missing.function')).toBeUndefined();
   });
 });
 

@@ -34,103 +34,16 @@ import DownloadIcon from '@mui/icons-material/Download';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import type { CliArtifact, CliManifest } from '../../types.ts';
 import { apiCli, readCliJson } from '../../utils/api.ts';
-
-type NavigatorUAData = {
-  platform?: string;
-  architecture?: string;
-  getHighEntropyValues?: (hints: string[]) => Promise<{
-    platform?: string;
-    architecture?: string;
-  }>;
-};
-
-function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n < 0) {
-    return '—';
-  }
-  if (n < 1024) {
-    return `${n} B`;
-  }
-  if (n < 1024 * 1024) {
-    return `${(n / 1024).toFixed(1)} KiB`;
-  }
-  return `${(n / (1024 * 1024)).toFixed(1)} MiB`;
-}
-
-function formatBuildDate(value: string | undefined): string {
-  if (!value) {
-    return 'unknown';
-  }
-
-  const date = new Date(value);
-  if (isNaN(date.getTime())) {
-    return 'unknown';
-  }
-
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(date);
-}
-
-function filenameFromDisposition(header: string | null, fallback: string): string {
-  if (!header) {
-    return fallback;
-  }
-  const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
-  if (star?.[1]) {
-    try {
-      return decodeURIComponent(star[1]);
-    } catch {
-      return star[1];
-    }
-  }
-  const quoted = /filename="([^"]+)"/i.exec(header);
-  if (quoted?.[1]) {
-    return quoted[1];
-  }
-  const plain = /filename=([^;]+)/i.exec(header);
-  return plain?.[1]?.trim() || fallback;
-}
-
-async function detectPlatform(): Promise<{ os: string; arch: string }> {
-  const nav = navigator as Navigator & { userAgentData?: NavigatorUAData };
-  let platform = (nav.userAgentData?.platform || navigator.platform || '').toLowerCase();
-  let architecture = (nav.userAgentData?.architecture || '').toLowerCase();
-  try {
-    const high = await nav.userAgentData?.getHighEntropyValues?.(['platform', 'architecture']);
-    if (high?.platform) {
-      platform = high.platform.toLowerCase();
-    }
-    if (high?.architecture) {
-      architecture = high.architecture.toLowerCase();
-    }
-  } catch {
-    // UA-CH may be unavailable; fall back to userAgent.
-  }
-  const ua = navigator.userAgent.toLowerCase();
-  let os = 'linux';
-  if (platform.includes('win') || ua.includes('windows')) {
-    os = 'windows';
-  } else if (platform.includes('mac') || ua.includes('mac')) {
-    os = 'darwin';
-  }
-  let arch = 'amd64';
-  if (
-    architecture.includes('arm') ||
-    ua.includes('arm64') ||
-    ua.includes('aarch64') ||
-    ua.includes('apple silicon')
-  ) {
-    arch = 'arm64';
-  }
-  return { os, arch };
-}
-
-function artifactKey(a: Pick<CliArtifact, 'os' | 'arch'>): string {
-  return `${a.os}/${a.arch}`;
-}
+import {
+  artifactKey,
+  cliApiPath,
+  detectPlatform,
+  filenameFromDisposition,
+  formatBuildDate,
+  formatBytes,
+  linuxMacCliFilename,
+  preferredCliArtifact,
+} from './cliFormat.ts';
 
 function HorizonCliTab() {
   const [manifest, setManifest] = useState<CliManifest | null>(null);
@@ -195,16 +108,10 @@ function HorizonCliTab() {
     };
   }, []);
 
-  const preferred = useMemo(() => {
-    if (!manifest || !detected) {
-      return null;
-    }
-    return (
-      manifest.artifacts.find((a) => a.os === detected.os && a.arch === detected.arch) ??
-      manifest.artifacts.find((a) => a.os === detected.os) ??
-      null
-    );
-  }, [manifest, detected]);
+  const preferred = useMemo(
+    () => preferredCliArtifact(manifest?.artifacts, detected),
+    [manifest, detected]
+  );
 
   const copySha = useCallback(async (sha: string) => {
     try {
@@ -221,7 +128,7 @@ function HorizonCliTab() {
     const key = artifactKey(art);
     setDownloading(key);
     try {
-      const path = art.downloadPath.replace(/^\/api\/cli/, '');
+      const path = cliApiPath(art.downloadPath);
       const resp = await apiCli(path);
       if (!resp.ok) {
         throw new Error(`Download failed (${resp.status}).`);
@@ -243,7 +150,7 @@ function HorizonCliTab() {
     }
   }, []);
 
-  const linuxMacFilename = (preferred?.filename ?? 'horizon').replace(/\.exe$/i, '');
+  const linuxMacFilename = linuxMacCliFilename(preferred?.filename);
   const linuxMacInstallationDescription =
     'To install the CLI system-wide and make it available from any terminal:';
 

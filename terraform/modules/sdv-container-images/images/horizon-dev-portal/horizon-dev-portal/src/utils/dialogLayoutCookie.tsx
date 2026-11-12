@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2026 Accenture, All Rights Reserved.
+// Copyright (c) 2026 Accenture, All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,6 +62,28 @@ export function writeDialogLayoutCookie(name: string, width: number, height: num
   document.cookie = `${name}=${val};path=${path};max-age=${ONE_YEAR_SEC};SameSite=Lax`;
 }
 
+/** Keeps a dialog size inside the viewport (with a gutter) and no smaller than the minimum that still fits. */
+export function clampDialogSize(
+  width: number,
+  height: number,
+  minWidth: number,
+  minHeight: number,
+  viewport: { innerWidth: number; innerHeight: number } | null
+): { width: number; height: number } {
+  if (!viewport) {
+    return { width, height };
+  }
+  const gutter = 16;
+  const maxW = Math.max(1, Math.floor(viewport.innerWidth - gutter));
+  const maxH = Math.max(1, Math.floor(viewport.innerHeight - gutter));
+  const floorW = Math.min(minWidth, maxW);
+  const floorH = Math.min(minHeight, maxH);
+  return {
+    width: Math.min(maxW, Math.max(floorW, width)),
+    height: Math.min(maxH, Math.max(floorH, height)),
+  };
+}
+
 type ActiveDrag = {
   move: (e: PointerEvent) => void;
   up: () => void;
@@ -76,20 +98,8 @@ export function useResizableDialogSize(options: {
 }) {
   const { storageKey, defaultWidth, defaultHeight, minWidth, minHeight } = options;
   const clamp = useCallback(
-    (w: number, h: number) => {
-      if (typeof window === 'undefined') {
-        return { width: w, height: h };
-      }
-      const gutter = 16;
-      const maxW = Math.max(1, Math.floor(window.innerWidth - gutter));
-      const maxH = Math.max(1, Math.floor(window.innerHeight - gutter));
-      const floorW = Math.min(minWidth, maxW);
-      const floorH = Math.min(minHeight, maxH);
-      return {
-        width: Math.min(maxW, Math.max(floorW, w)),
-        height: Math.min(maxH, Math.max(floorH, h)),
-      };
-    },
+    (w: number, h: number) =>
+      clampDialogSize(w, h, minWidth, minHeight, typeof window === 'undefined' ? null : window),
     [minWidth, minHeight]
   );
 
