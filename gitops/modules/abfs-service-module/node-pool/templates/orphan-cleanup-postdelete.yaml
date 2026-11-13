@@ -1,0 +1,72 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# PostDelete: after abfs-service-module is disabled and Argo CD pruned both ContainerNodePool CRs,
+# delete the server and uploader GKE pools with gcloud if they are still there.
+# Config Connector does not delete the GKE pool when the CR is removed ("underlying resource does not
+# exist; no API call necessary"), which leaves orphans that make the next enable fail with "already
+# exists". The PreSync licence job (license-metadata-inject-job.yaml) removes such orphans on enable;
+# this hook removes them at disable time. It never fails, so it cannot block the module disable.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: abfs-data-pools-orphan-postdelete
+  namespace: {{ .Values.license.workflowsNamespace }}
+  labels:
+    horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+    app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+  annotations:
+    argocd.argoproj.io/hook: PostDelete
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+        app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+    spec:
+      serviceAccountName: {{ .Values.license.jobServiceAccountName | quote }}
+      restartPolicy: Never
+      containers:
+        - name: cleanup
+          image: {{ required "license.cloudSdkImage is set by the abfs-service-module Application" .Values.license.cloudSdkImage | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PROJECT_ID
+              value: {{ .Values.gcpProjectId | quote }}
+            - name: CLUSTER_NAME
+              value: {{ .Values.clusterName | quote }}
+            - name: LOCATION
+              value: {{ .Values.location | quote }}
+            - name: NODE_POOL_NAMES
+              value: {{ printf "%s %s" .Values.serverNodePool.name .Values.uploaderNodePool.name | quote }}
+          command: [bash, -uo, pipefail, -c]
+          args:
+            - |
+              G=(--cluster="${CLUSTER_NAME}" --location="${LOCATION}" --project="${PROJECT_ID}")
+              pool_exists() { gcloud container node-pools describe "$1" "${G[@]}" --format='value(status)' >/dev/null 2>&1; }
+              for P in ${NODE_POOL_NAMES}; do
+                if ! pool_exists "${P}"; then echo "PostDelete: GKE node pool ${P} is already gone."; continue; fi
+                echo "PostDelete: deleting GKE node pool ${P} (its ContainerNodePool was pruned)..."
+                gcloud container node-pools delete "${P}" "${G[@]}" --quiet || true
+                for i in $(seq 1 60); do pool_exists "${P}" || break; echo "  waiting for ${P} delete (${i})..."; sleep 15; done
+                if pool_exists "${P}"; then
+                  echo "WARNING: ${P} could not be deleted; the next enable removes it (PreSync licence job)." >&2
+                else
+                  echo "PostDelete: ${P} deleted."
+                fi
+              done
+              exit 0
