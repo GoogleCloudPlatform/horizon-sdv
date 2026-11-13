@@ -236,6 +236,7 @@ pipeline {
                     export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
                     export GERRIT_SERVER_URL="${GERRIT_API_URL}"
                     export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export POST_REPO_COMMAND="${POST_REPO_COMMAND}"
                     export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
                     export MIRROR_DIR_FULL_PATH="${MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
                     ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
@@ -265,6 +266,7 @@ pipeline {
                     export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
                     export GERRIT_SERVER_URL="${GERRIT_API_URL}"
                     export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export POST_REPO_COMMAND="${POST_REPO_COMMAND}"
                     export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
                     export MIRROR_DIR_FULL_PATH="${MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
                     ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
@@ -295,6 +297,7 @@ pipeline {
                     export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
                     export GERRIT_SERVER_URL="${GERRIT_API_URL}"
                     export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export POST_REPO_COMMAND="${POST_REPO_COMMAND}"
                     export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
                     export MIRROR_DIR_FULL_PATH="${MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
                     ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
@@ -326,6 +329,7 @@ pipeline {
                     export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
                     export GERRIT_SERVER_URL="${GERRIT_API_URL}"
                     export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export POST_REPO_COMMAND="${POST_REPO_COMMAND}"
                     export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
                     export MIRROR_DIR_FULL_PATH="${MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
                     ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
@@ -357,6 +361,7 @@ pipeline {
                     export AAOS_ARTIFACT_STORAGE_SOLUTION="${ARTIFACT_STORAGE_SOLUTION}"
                     export GERRIT_SERVER_URL="${GERRIT_API_URL}"
                     export REPO_SYNC_JOBS="${GERRIT_REPO_SYNC_JOBS}"
+                    export POST_REPO_COMMAND="${POST_REPO_COMMAND}"
                     export USE_LOCAL_AOSP_MIRROR="${USE_LOCAL_AOSP_MIRROR}"
                     export MIRROR_DIR_FULL_PATH="${MIRROR_PRESET_FILESTORE_PVC_MOUNT_PATH_IN_CONTAINER}/${MIRROR_PRESET_MIRROR_ROOT_SUBDIR_NAME}/${AOSP_MIRROR_DIR_NAME}"
                     ./workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
