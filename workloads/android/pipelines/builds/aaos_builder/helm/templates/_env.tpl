@@ -109,7 +109,12 @@ envFrom:
 - name: AAOS_CACHE_STORAGE_CLASS_NAME
   value: {{ include "aaos-builder.cacheStorageClassName" . }}
 - name: AAOS_CACHE_SIZE
+{{- if eq (include "aaos-builder.isAbfs" .) "true" }}
+  # Same value as the cache PVC request (submit parameter aaosCacheStorageSize).
+  value: '{{ "{{" }}workflow.parameters.aaosCacheStorageSize{{ "}}" }}'
+{{- else }}
   value: {{ .Values.spec.aaosCacheStorageSize | default "1000Gi" | quote }}
+{{- end }}
 {{- end }}
 
 {{- define "aaos-builder.androidVersionEnv" -}}

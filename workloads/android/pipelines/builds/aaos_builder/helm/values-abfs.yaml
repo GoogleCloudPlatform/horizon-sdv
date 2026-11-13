@@ -31,11 +31,17 @@ aaosBuilderImageWorkflowTemplateName: abfs-builder-runtime-image
 spec:
   lunchTarget: aosp_cf_x86_64_auto-bp1a-userdebug
   androidRevision: android-15.0.0_r36
-  # ABFS uses one dedicated cache StorageClass and size, matching
-  # ABFS_STORAGE_CLASS_SUFFIX and ABFS_STORAGE_SIZE in the Jenkins job. It does
-  # not pick a class per Android revision the way the AAOS builder does.
+  # ABFS uses one dedicated cache StorageClass, matching ABFS_STORAGE_CLASS_SUFFIX
+  # in the Jenkins job. It does not pick a class per Android revision the way the
+  # AAOS builder does.
   aaosCacheStorageClassName: reclaimable-storage-class-android-abfs
-  aaosCacheStorageSize: "750Gi"
+  # Default size of the per-workflow cache PVC; the submit parameter
+  # aaosCacheStorageSize overrides it per run. ABFS streams the source tree, so
+  # the cache holds only the build output (objects, intermediates, images).
+  # Measured peak of a full ABFS build is about 175 GiB; 250Gi leaves ~40 %
+  # headroom. The class has reclaimPolicy Retain, so every PVC leaves a billed
+  # disk behind: an oversized default costs money on every new disk.
+  aaosCacheStorageSize: "250Gi"
   # Folder under gs://<project>-aaos/Android/Builds/ for the build artifacts (STORAGE_BUCKET_BASE).
   storageBuildsDir: AAOS_Builder_ABFS
   # Optional Gerrit topic; when set, aaos_initialise.sh fetches every change

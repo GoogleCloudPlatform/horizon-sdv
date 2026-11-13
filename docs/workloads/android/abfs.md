@@ -210,7 +210,8 @@ Prerequisites: all three ABFS modules enabled, the builder image pushed, and the
 | `abfs.server` | `abfs-server.abfs.svc.cluster.local:50051` | In-cluster Service of the server. |
 | `abfs.clientFlags` | `--disable-tls=true --auth-type none` | Must match how the server listens (no TLS, no auth in this chart). |
 | `abfs.version` / `abfs.casfsVersion` / `abfs.repository` | `0.1.14` / `0.1.14` / `abfs-apt-alpha-public` | Client package to install. Kernel driver package to install. Apt repository to fetch these packages from. |
-| `abfs.cachedBuild`, `abfs.cleanCache`, `abfs.cachemanTimeout` | `false`, `false`, `180` | Keep the cacheman cache on the per-workflow PVC (`750Gi`, class `reclaimable-storage-class-android-abfs`). |
+| `abfs.cachedBuild`, `abfs.cleanCache`, `abfs.cachemanTimeout` | `false`, `false`, `180` | Keep the cacheman cache on the per-workflow PVC (size `aaosCacheStorageSize`, class `reclaimable-storage-class-android-abfs`). |
+| `aaosCacheStorageSize` | `250Gi` | Size of the per-workflow cache PVC. ABFS streams the sources, so the cache holds only the build output; a full build used about 175 GiB. The class keeps its disks (`Retain`) and a new PVC first binds a free disk of at least this size, so a larger value creates a new, billed disk. Raise it only for targets that run out of space. |
 
 Soong runs `soong_build` in an nsjail sandbox where the ABFS mount is read-only and `out` is writable only at `/src/out`; `aaos_environment.sh` fixes `build/soong` per `AAOS_REVISION`:
 

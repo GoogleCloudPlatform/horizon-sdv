@@ -20,7 +20,7 @@ aiReviewRuntime is appended after that list (index 11 + len of the ABFS list; 11
 */}}
 {{- $abfsParams := list }}
 {{- if eq (include "aaos-builder.isAbfs" .) "true" }}
-{{- $abfsParams = list "abfsServer" "abfsCachedBuild" "abfsVersion" "abfsCasfsVersion" "abfsRepository" "uploaderManifestServer" "gerritTopic" "overrideMakeCommand" "abfsCleanCache" "abfsCachemanTimeout" "postRepoCommand" "aaosParallelBuildJobs" }}
+{{- $abfsParams = list "abfsServer" "abfsCachedBuild" "abfsVersion" "abfsCasfsVersion" "abfsRepository" "uploaderManifestServer" "gerritTopic" "overrideMakeCommand" "abfsCleanCache" "abfsCachemanTimeout" "postRepoCommand" "aaosParallelBuildJobs" "aaosCacheStorageSize" }}
 {{- end }}
 apiVersion: argoproj.io/v1alpha1
 kind: Sensor
