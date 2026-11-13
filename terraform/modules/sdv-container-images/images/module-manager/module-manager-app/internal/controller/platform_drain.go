@@ -192,7 +192,7 @@ func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string, bes
 		return nil
 	}
 
-	if err := pauseCloudWorkstationsCoreForDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); err != nil {
+	if err := pauseCloudWorkstationsForDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); err != nil {
 		return err
 	}
 	drainCloudWorkstations := DrainCloudWorkstationsModule
@@ -200,17 +200,14 @@ func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string, bes
 		drainCloudWorkstations = DrainCloudWorkstationsForPlatformTeardown
 	}
 	if err := drainCloudWorkstations(ctx, p.Client, moduleName); err != nil {
-		if resumeErr := resumeCloudWorkstationsCoreAfterFailedDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); resumeErr != nil {
+		if resumeErr := resumeCloudWorkstationsAfterFailedDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); resumeErr != nil {
 			return fmt.Errorf("%w; resume: %v", err, resumeErr)
 		}
 		return err
 	}
 	if err := completeCloudWorkstationsCoreDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); err != nil {
-		// See PerformModuleDisable: completeCloudWorkstationsCoreDrain can fail after disabling
-		// selfHeal but before clearing skip-reconcile, leaving the core Application both unhealable
-		// and unreconcilable. Recover it so a retry is possible.
-		if recoverErr := recoverCloudWorkstationsCoreAfterIncompleteCompletion(ctx, p.Client, p.ArgoCDNamespace, moduleName); recoverErr != nil {
-			return fmt.Errorf("%w; recover: %v", err, recoverErr)
+		if resumeErr := resumeCloudWorkstationsAfterFailedDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName); resumeErr != nil {
+			return fmt.Errorf("%w; resume: %v", err, resumeErr)
 		}
 		return err
 	}
@@ -230,8 +227,10 @@ func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string, bes
 	app.SetName(appName)
 	if err := p.Client.Delete(ctx, app); err != nil && !errors.IsNotFound(err) {
 		clearParentSkipReconcileIfPrefixedModule(ctx, p.Client, p.ArgoCDNamespace, moduleName)
+		logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsAfterFailedDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName))
 		return err
 	}
+	logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsParentAfterDelete(ctx, p.Client, p.ArgoCDNamespace, moduleName))
 	var newEnabled []string
 	for _, id := range state.EnabledModules {
 		if id != modID {

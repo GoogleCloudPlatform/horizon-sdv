@@ -346,6 +346,11 @@ func TestPerformModuleDisable_CloudWorkstationsDrainFailureLeavesModuleEnabled(t
 	if _, found := core.GetAnnotations()[argoCDSkipReconcileAnnotationKey]; found {
 		t.Errorf("core Application skip-reconcile must be cleared after a drain failure, got annotations %v", core.GetAnnotations())
 	}
+	if parent, _ := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", ApplicationName(cloudWorkstationsModuleName)); parent != nil {
+		if _, found := parent.GetAnnotations()[argoCDSkipReconcileAnnotationKey]; found {
+			t.Errorf("parent Application skip-reconcile must be cleared after a drain failure, got annotations %v", parent.GetAnnotations())
+		}
+	}
 	if selfHeal, found, err := unstructured.NestedBool(core.Object, "spec", "syncPolicy", "automated", "selfHeal"); err != nil || !found || !selfHeal {
 		t.Errorf("core Application selfHeal must stay true after a failed drain (selfHeal=%v, found=%v, err=%v)", selfHeal, found, err)
 	}
@@ -354,130 +359,167 @@ func TestPerformModuleDisable_CloudWorkstationsDrainFailureLeavesModuleEnabled(t
 	}
 }
 
-// TestPerformModuleDisable_CompleteDrainSkipReconcileClearFailsRecoversSelfHealAndSkipReconcile covers
-// completeCloudWorkstationsCoreDrain failing after it already disabled selfHeal but before it cleared
-// skip-reconcile (the 3rd Patch on the core Application: #1 pause sets skip-reconcile=true, #2 disables
-// selfHeal, #3 is the clear that fails here). Without recoverCloudWorkstationsCoreAfterIncompleteCompletion,
-// the core Application would be left both un-healable (selfHeal: false) and un-reconcilable
-// (skip-reconcile: "true").
-func TestPerformModuleDisable_CompleteDrainSkipReconcileClearFailsRecoversSelfHealAndSkipReconcile(t *testing.T) {
+const cwsTestArgoFinalizer = "resources-finalizer.argocd.argoproj.io"
+
+func cwsSkipReconcile(app *unstructured.Unstructured) bool {
+	return app.GetAnnotations()[argoCDSkipReconcileAnnotationKey] == "true"
+}
+
+func cwsAssertResumedAndSelfHealIntact(t *testing.T, c client.Client, ns string) {
+	t.Helper()
+	for _, name := range []string{ApplicationName(cloudWorkstationsModuleName), cloudWorkstationsCoreAppName} {
+		app, ok := cwsExists2(t, c, cwsTestArgoAppGVK, ns, name)
+		if !ok {
+			t.Fatalf("%s must remain", name)
+		}
+		if _, found := app.GetAnnotations()[argoCDSkipReconcileAnnotationKey]; found {
+			t.Errorf("%s skip-reconcile must be cleared, got annotations %v", name, app.GetAnnotations())
+		}
+	}
+	core, _ := cwsExists2(t, c, cwsTestArgoAppGVK, ns, cloudWorkstationsCoreAppName)
+	if selfHeal, found, err := unstructured.NestedBool(core.Object, "spec", "syncPolicy", "automated", "selfHeal"); err != nil || !found || !selfHeal {
+		t.Errorf("core Application selfHeal must stay true (selfHeal=%v, found=%v, err=%v)", selfHeal, found, err)
+	}
+}
+
+func cwsFailCoreDelete() interceptor.Funcs {
+	return interceptor.Funcs{
+		Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			if obj.GetName() == cloudWorkstationsCoreAppName {
+				return fmt.Errorf("injected core Application delete failure")
+			}
+			return cl.Delete(ctx, obj, opts...)
+		},
+	}
+}
+
+func cwsDrainedFixtures() []client.Object {
+	return []client.Object{
+		cwsParentApp(), cwsCoreApp(), cwsHorizon("Workstation", "ws"), cwsHorizon("WorkstationConfig", "cfg"), cwsHorizon("WorkstationCluster", "cl"),
+		cwsCRD(cloudWorkstationsHorizonCRDNames[0]), cwsCRD(cloudWorkstationsHorizonCRDNames[1]), cwsCRD(cloudWorkstationsHorizonCRDNames[2]), cwsCRD(cwsKCCCRDName),
+	}
+}
+
+func TestPerformModuleDisable_CoreDeleteFailureResumesApplications(t *testing.T) {
 	withFastCWSDrain(t, 5*time.Millisecond, 2*time.Second)
 
-	var mu sync.Mutex
-	patchCount := 0
-	c := cwsTestClient(interceptor.Funcs{
-		Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-			if obj.GetObjectKind().GroupVersionKind() == cwsTestArgoAppGVK && obj.GetName() == cloudWorkstationsCoreAppName {
-				mu.Lock()
-				patchCount++
-				n := patchCount
-				mu.Unlock()
-				if n == 3 {
-					return fmt.Errorf("injected failure clearing skip-reconcile")
-				}
-			}
-			return cl.Patch(ctx, obj, patch, opts...)
-		},
-	}, cwsParentApp(), cwsCoreApp(), cwsHorizon("Workstation", "ws"), cwsHorizon("WorkstationConfig", "cfg"), cwsHorizon("WorkstationCluster", "cl"),
-		cwsCRD(cloudWorkstationsHorizonCRDNames[0]), cwsCRD(cloudWorkstationsHorizonCRDNames[1]), cwsCRD(cloudWorkstationsHorizonCRDNames[2]), cwsCRD(cwsKCCCRDName))
+	c := cwsTestClient(cwsFailCoreDelete(), cwsDrainedFixtures()...)
 	store := &cwsFakeStateStore{st: &State{
 		EnabledModules: []string{"mod-cws"},
 		ModuleIDs:      map[string]string{cloudWorkstationsModuleName: "mod-cws"},
 	}}
 
 	err := PerformModuleDisable(context.Background(), c, store, nil, "argocd", "module-manager", cloudWorkstationsModuleName, "mod-cws", false, "")
-	if err == nil || !strings.Contains(err.Error(), "injected failure clearing skip-reconcile") {
-		t.Fatalf("expected the injected completeCloudWorkstationsCoreDrain failure, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "injected core Application delete failure") {
+		t.Fatalf("expected the injected core delete failure, got %v", err)
 	}
 	if store.updates != 0 || len(store.st.EnabledModules) != 1 {
-		t.Errorf("state must be untouched when completeCloudWorkstationsCoreDrain fails (updates=%d, enabled=%v)", store.updates, store.st.EnabledModules)
+		t.Errorf("state must be untouched when the core delete fails (updates=%d, enabled=%v)", store.updates, store.st.EnabledModules)
 	}
-	core, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", cloudWorkstationsCoreAppName)
-	if !ok {
-		t.Fatal("core Application must remain")
-	}
-	if _, found := core.GetAnnotations()[argoCDSkipReconcileAnnotationKey]; found {
-		t.Errorf("core Application skip-reconcile must be cleared by the recovery path, got annotations %v", core.GetAnnotations())
-	}
-	if selfHeal, found, err := unstructured.NestedBool(core.Object, "spec", "syncPolicy", "automated", "selfHeal"); err != nil || !found || !selfHeal {
-		t.Errorf("core Application selfHeal must be restored to true by the recovery path (selfHeal=%v, found=%v, err=%v)", selfHeal, found, err)
-	}
+	cwsAssertResumedAndSelfHealIntact(t, c, "argocd")
 }
 
-// TestPlatformDrainer_DisableOne_CompleteDrainFailureRecoversCoreApplication mirrors
-// TestPerformModuleDisable_CompleteDrainSkipReconcileClearFailsRecoversSelfHealAndSkipReconcile for the
-// PlatformDrainer.disableOne path (whole-platform teardown), which hits the same
-// completeCloudWorkstationsCoreDrain failure and must recover the same way.
-func TestPlatformDrainer_DisableOne_CompleteDrainFailureRecoversCoreApplication(t *testing.T) {
+func TestPlatformDrainer_DisableOne_CoreDeleteFailureResumesApplications(t *testing.T) {
 	withFastCWSDrain(t, 5*time.Millisecond, 2*time.Second)
 
-	var mu sync.Mutex
-	patchCount := 0
-	c := cwsTestClient(interceptor.Funcs{
-		Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-			if obj.GetObjectKind().GroupVersionKind() == cwsTestArgoAppGVK && obj.GetName() == cloudWorkstationsCoreAppName {
-				mu.Lock()
-				patchCount++
-				n := patchCount
-				mu.Unlock()
-				if n == 3 {
-					return fmt.Errorf("injected failure clearing skip-reconcile")
-				}
-			}
-			return cl.Patch(ctx, obj, patch, opts...)
-		},
-	}, cwsParentApp(), cwsCoreApp(), cwsHorizon("Workstation", "ws"), cwsHorizon("WorkstationConfig", "cfg"), cwsHorizon("WorkstationCluster", "cl"),
-		cwsCRD(cloudWorkstationsHorizonCRDNames[0]), cwsCRD(cloudWorkstationsHorizonCRDNames[1]), cwsCRD(cloudWorkstationsHorizonCRDNames[2]), cwsCRD(cwsKCCCRDName))
+	c := cwsTestClient(cwsFailCoreDelete(), cwsDrainedFixtures()...)
 	d, _ := testDrainer(c, &State{
 		EnabledModules: []string{"mod-cws"},
 		ModuleIDs:      map[string]string{cloudWorkstationsModuleName: "mod-cws"},
 	}, []CatalogEntry{{Name: cloudWorkstationsModuleName}})
 
 	err := d.disableOne(context.Background(), cloudWorkstationsModuleName, false)
-	if err == nil || !strings.Contains(err.Error(), "injected failure clearing skip-reconcile") {
-		t.Fatalf("expected the injected completeCloudWorkstationsCoreDrain failure, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "injected core Application delete failure") {
+		t.Fatalf("expected the injected core delete failure, got %v", err)
 	}
-	core, ok := cwsExists2(t, c, cwsTestArgoAppGVK, testArgoNS, cloudWorkstationsCoreAppName)
-	if !ok {
-		t.Fatal("core Application must remain")
+	cwsAssertResumedAndSelfHealIntact(t, c, testArgoNS)
+}
+
+// cwsArgoSimClient behaves like Argo CD for the parent and core Applications: their finalizer only runs
+// once the Application is deleted and no longer paused. It records every ordering violation.
+func cwsArgoSimClient(t *testing.T, ns string, violations *[]string) client.Client {
+	t.Helper()
+	var mu sync.Mutex
+	violate := func(msg string) {
+		mu.Lock()
+		*violations = append(*violations, msg)
+		mu.Unlock()
 	}
-	if _, found := core.GetAnnotations()[argoCDSkipReconcileAnnotationKey]; found {
-		t.Errorf("core Application skip-reconcile must be cleared by the recovery path, got annotations %v", core.GetAnnotations())
+	getApp := func(ctx context.Context, cl client.WithWatch, name string) (*unstructured.Unstructured, bool) {
+		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(cwsTestArgoAppGVK)
+		if err := cl.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, u); err != nil {
+			return nil, false
+		}
+		return u, true
 	}
-	if selfHeal, found, err := unstructured.NestedBool(core.Object, "spec", "syncPolicy", "automated", "selfHeal"); err != nil || !found || !selfHeal {
-		t.Errorf("core Application selfHeal must be restored to true by the recovery path (selfHeal=%v, found=%v, err=%v)", selfHeal, found, err)
-	}
+	parentName := ApplicationName(cloudWorkstationsModuleName)
+
+	parent := cwsParentApp()
+	parent.SetNamespace(ns)
+	parent.SetFinalizers([]string{cwsTestArgoFinalizer})
+	core := cwsCoreApp()
+	core.SetNamespace(ns)
+	core.SetFinalizers([]string{cwsTestArgoFinalizer})
+
+	return cwsTestClient(interceptor.Funcs{
+		Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			p, pOK := getApp(ctx, cl, parentName)
+			cr, crOK := getApp(ctx, cl, cloudWorkstationsCoreAppName)
+			switch {
+			case obj.GetObjectKind().GroupVersionKind().Kind == "WorkstationCluster":
+				if !pOK || !cwsSkipReconcile(p) || !crOK || !cwsSkipReconcile(cr) {
+					violate("parent and core must be paused while the WorkstationCluster is deleted")
+				}
+			case obj.GetName() == cloudWorkstationsCoreAppName:
+				if !crOK || !cwsSkipReconcile(cr) || !pOK || !cwsSkipReconcile(p) {
+					violate("core must be deleted while it and the parent are paused")
+				}
+				if _, ok := cwsExists(t, cl, newCWSDrainStage("WorkstationCluster").horizonGVK, "cl"); ok {
+					violate("WorkstationCluster must be gone before the core delete")
+				}
+				if selfHeal, _, _ := unstructured.NestedBool(cr.Object, "spec", "syncPolicy", "automated", "selfHeal"); !selfHeal {
+					violate("core selfHeal must not be changed")
+				}
+			case obj.GetName() == parentName:
+				if crOK {
+					violate("core Application must be gone before the parent delete")
+				}
+				if !pOK || !cwsSkipReconcile(p) {
+					violate("parent must be deleted while paused")
+				}
+			}
+			return cl.Delete(ctx, obj, opts...)
+		},
+		Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			name := obj.GetName()
+			if obj.GetObjectKind().GroupVersionKind() != cwsTestArgoAppGVK || (name != parentName && name != cloudWorkstationsCoreAppName) {
+				return cl.Patch(ctx, obj, patch, opts...)
+			}
+			before, _ := getApp(ctx, cl, name)
+			if err := cl.Patch(ctx, obj, patch, opts...); err != nil {
+				return err
+			}
+			after, ok := getApp(ctx, cl, name)
+			if !ok || before == nil || !cwsSkipReconcile(before) || cwsSkipReconcile(after) {
+				return nil
+			}
+			if after.GetDeletionTimestamp().IsZero() {
+				violate(name + " resumed before it was deleted")
+				return nil
+			}
+			after.SetFinalizers(nil)
+			return cl.Update(ctx, after)
+		},
+	}, parent, core, cwsHorizon("Workstation", "ws"), cwsHorizon("WorkstationConfig", "cfg"), cwsHorizon("WorkstationCluster", "cl"),
+		cwsCRD(cloudWorkstationsHorizonCRDNames[0]), cwsCRD(cloudWorkstationsHorizonCRDNames[1]), cwsCRD(cloudWorkstationsHorizonCRDNames[2]), cwsCRD(cwsKCCCRDName))
 }
 
 func TestPerformModuleDisable_CloudWorkstationsDrainsThenDeletesParent(t *testing.T) {
 	withFastCWSDrain(t, 5*time.Millisecond, 2*time.Second)
 
-	sawParentDelete := false
-	c := cwsTestClient(interceptor.Funcs{
-		Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
-			if obj.GetName() == ApplicationName(cloudWorkstationsModuleName) {
-				sawParentDelete = true
-				core := &unstructured.Unstructured{}
-				core.SetGroupVersionKind(cwsTestArgoAppGVK)
-				if err := cl.Get(ctx, client.ObjectKey{Namespace: "argocd", Name: cloudWorkstationsCoreAppName}, core); err != nil {
-					t.Errorf("get core Application before parent delete: %v", err)
-				} else {
-					if _, found := core.GetAnnotations()[argoCDSkipReconcileAnnotationKey]; found {
-						t.Errorf("core Application skip-reconcile must be cleared before parent delete: %v", core.GetAnnotations())
-					}
-					selfHeal, found, err := unstructured.NestedBool(core.Object, "spec", "syncPolicy", "automated", "selfHeal")
-					if err != nil || !found || selfHeal {
-						t.Errorf("core Application selfHeal must be false before parent delete (selfHeal=%v, found=%v, err=%v)", selfHeal, found, err)
-					}
-				}
-				if _, ok := cwsExists(t, cl, newCWSDrainStage("WorkstationCluster").horizonGVK, "cl"); ok {
-					t.Error("WorkstationCluster must be gone before parent delete")
-				}
-			}
-			return cl.Delete(ctx, obj, opts...)
-		},
-	}, cwsParentApp(), cwsCoreApp(), cwsHorizon("Workstation", "ws"), cwsHorizon("WorkstationConfig", "cfg"), cwsHorizon("WorkstationCluster", "cl"),
-		cwsCRD(cloudWorkstationsHorizonCRDNames[0]), cwsCRD(cloudWorkstationsHorizonCRDNames[1]), cwsCRD(cloudWorkstationsHorizonCRDNames[2]), cwsCRD(cwsKCCCRDName))
+	var violations []string
+	c := cwsArgoSimClient(t, "argocd", &violations)
 	store := &cwsFakeStateStore{st: &State{
 		EnabledModules: []string{"mod-cws"},
 		ModuleIDs:      map[string]string{cloudWorkstationsModuleName: "mod-cws"},
@@ -486,17 +528,19 @@ func TestPerformModuleDisable_CloudWorkstationsDrainsThenDeletesParent(t *testin
 	if err := PerformModuleDisable(context.Background(), c, store, nil, "argocd", "module-manager", cloudWorkstationsModuleName, "mod-cws", false, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if len(violations) > 0 {
+		t.Fatalf("disable ordering violated: %v", violations)
+	}
 	for _, kind := range []string{"Workstation", "WorkstationConfig", "WorkstationCluster"} {
 		name := map[string]string{"Workstation": "ws", "WorkstationConfig": "cfg", "WorkstationCluster": "cl"}[kind]
 		if _, ok := cwsExists(t, c, newCWSDrainStage(kind).horizonGVK, name); ok {
 			t.Errorf("%s should have been drained", kind)
 		}
 	}
-	if _, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", ApplicationName(cloudWorkstationsModuleName)); ok {
-		t.Error("parent Application should be deleted after a successful drain")
-	}
-	if !sawParentDelete {
-		t.Error("parent Application delete was not observed")
+	for _, name := range []string{ApplicationName(cloudWorkstationsModuleName), cloudWorkstationsCoreAppName} {
+		if _, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", name); ok {
+			t.Errorf("%s should be deleted after a successful drain", name)
+		}
 	}
 	for _, name := range cloudWorkstationsHorizonCRDNames {
 		if _, ok := cwsExists2(t, c, cwsCRDGVK, "", name); ok {
@@ -508,6 +552,32 @@ func TestPerformModuleDisable_CloudWorkstationsDrainsThenDeletesParent(t *testin
 	}
 	if store.updates != 1 || len(store.st.EnabledModules) != 0 {
 		t.Errorf("state should record the module as disabled (updates=%d, enabled=%v)", store.updates, store.st.EnabledModules)
+	}
+}
+
+func TestPlatformDrainer_DisableOne_CloudWorkstationsDeletesPausedApplications(t *testing.T) {
+	withFastCWSDrain(t, 5*time.Millisecond, 2*time.Second)
+
+	var violations []string
+	c := cwsArgoSimClient(t, testArgoNS, &violations)
+	d, store := testDrainer(c, &State{
+		EnabledModules: []string{"mod-cws"},
+		ModuleIDs:      map[string]string{cloudWorkstationsModuleName: "mod-cws"},
+	}, []CatalogEntry{{Name: cloudWorkstationsModuleName}})
+
+	if err := d.disableOne(context.Background(), cloudWorkstationsModuleName, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(violations) > 0 {
+		t.Fatalf("disable ordering violated: %v", violations)
+	}
+	for _, name := range []string{ApplicationName(cloudWorkstationsModuleName), cloudWorkstationsCoreAppName} {
+		if _, ok := cwsExists2(t, c, cwsTestArgoAppGVK, testArgoNS, name); ok {
+			t.Errorf("%s should be deleted after a successful drain", name)
+		}
+	}
+	if st, _ := store.Get(context.Background()); len(st.EnabledModules) != 0 {
+		t.Errorf("cloud-workstations should be removed from enabled modules, got %v", st.EnabledModules)
 	}
 }
 

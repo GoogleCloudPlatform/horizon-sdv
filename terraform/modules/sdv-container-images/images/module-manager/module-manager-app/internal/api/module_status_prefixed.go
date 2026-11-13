@@ -22,7 +22,10 @@ import (
 	"github.com/acn-horizon-sdv/module-manager/internal/controller"
 )
 
-const argoCDSkipReconcileAnnotationKey = "argocd.argoproj.io/skip-reconcile"
+const (
+	argoCDSkipReconcileAnnotationKey = "argocd.argoproj.io/skip-reconcile"
+	cloudWorkstationsModuleName      = "cloud-workstations"
+)
 
 func managedChildApplicationPresent(managed []unstructured.Unstructured) bool {
 	for i := range managed {
@@ -65,4 +68,14 @@ func fillPrefixedModuleStackStatus(moduleName string, enabled bool, parentErr er
 		skip := parentSkipReconcile(parent)
 		status.ParentSkipReconcile = &skip
 	}
+}
+
+// fillCloudWorkstationsDrainStatus reports the paused parent during a cloud-workstations disable drain.
+// The drain runs before the state flips, while the paused Applications still report Synced/Healthy.
+func fillCloudWorkstationsDrainStatus(moduleName string, enabled bool, parentErr error, parent *unstructured.Unstructured, status *StatusResponse) {
+	if !enabled || moduleName != cloudWorkstationsModuleName || parentErr != nil {
+		return
+	}
+	skip := parentSkipReconcile(parent)
+	status.ParentSkipReconcile = &skip
 }

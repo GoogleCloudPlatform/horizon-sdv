@@ -37,9 +37,11 @@ import (
 // workloads-android it also waits for ConfigConnectorContext to be absent so the cluster matches the
 // pre-enable / pre–cf_instance_template baseline.
 //
-// For cloud-workstations, DrainCloudWorkstationsModule runs first: it deletes Horizon Workstations, then
-// WorkstationConfigs, then WorkstationClusters (waiting for the KCC objects too) while the controller is still
-// running, and fails without touching state or the parent Application if that times out. After the parent
+// For cloud-workstations, the parent and core Applications are paused (skip-reconcile) and
+// DrainCloudWorkstationsModule runs first: it deletes Horizon Workstations, then WorkstationConfigs, then
+// WorkstationClusters (waiting for the KCC objects too) while the controller is still running, and fails
+// without touching state or the parent Application if that times out. Each Application is deleted while still
+// paused and resumed only afterwards, so Argo CD cannot recreate the drained cluster. After the parent
 // Application is gone, RemoveCloudWorkstationsCRDs deletes the module's three Horizon CRDs.
 //
 // Ordering note (vs platform drain): this path updates ModuleManagerState before deleting the parent
@@ -78,21 +80,18 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 
 	// Drain Horizon CRs while the controller (core child) is still running; it alone releases their finalizers.
 	// A failure here leaves the module enabled and the parent Application untouched, so disable can be retried.
-	if err := pauseCloudWorkstationsCoreForDrain(ctx, c, argocdNamespace, moduleName); err != nil {
+	if err := pauseCloudWorkstationsForDrain(ctx, c, argocdNamespace, moduleName); err != nil {
 		return fmt.Errorf("perform module disable: %w", err)
 	}
 	if err := DrainCloudWorkstationsModule(ctx, c, moduleName); err != nil {
-		if resumeErr := resumeCloudWorkstationsCoreAfterFailedDrain(ctx, c, argocdNamespace, moduleName); resumeErr != nil {
+		if resumeErr := resumeCloudWorkstationsAfterFailedDrain(ctx, c, argocdNamespace, moduleName); resumeErr != nil {
 			return fmt.Errorf("perform module disable: drain cloud-workstations CRs: %w; resume: %v", err, resumeErr)
 		}
 		return fmt.Errorf("perform module disable: drain cloud-workstations CRs: %w", err)
 	}
 	if err := completeCloudWorkstationsCoreDrain(ctx, c, argocdNamespace, moduleName); err != nil {
-		// completeCloudWorkstationsCoreDrain can fail after already disabling selfHeal but before
-		// clearing skip-reconcile, leaving the core Application both unhealable and unreconcilable -
-		// worse than the pre-drain paused state. Recover it so a retry is possible.
-		if recoverErr := recoverCloudWorkstationsCoreAfterIncompleteCompletion(ctx, c, argocdNamespace, moduleName); recoverErr != nil {
-			return fmt.Errorf("perform module disable: complete cloud-workstations core drain: %w; recover: %v", err, recoverErr)
+		if resumeErr := resumeCloudWorkstationsAfterFailedDrain(ctx, c, argocdNamespace, moduleName); resumeErr != nil {
+			return fmt.Errorf("perform module disable: complete cloud-workstations core drain: %w; resume: %v", err, resumeErr)
 		}
 		return fmt.Errorf("perform module disable: complete cloud-workstations core drain: %w", err)
 	}
@@ -123,6 +122,7 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 	}
 	if err := stateStore.Update(ctx, state); err != nil {
 		clearParentSkipReconcileIfPrefixedModule(ctx, c, argocdNamespace, moduleName)
+		logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsAfterFailedDrain(ctx, c, argocdNamespace, moduleName))
 		return err
 	}
 
@@ -134,8 +134,10 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 	logger.Info("disabling module", "module", moduleName, "moduleID", moduleID, "application", appName, "enforceNoHardDependents", enforceNoHardDependents)
 	if err := c.Delete(ctx, app); err != nil && !errors.IsNotFound(err) {
 		clearParentSkipReconcileIfPrefixedModule(ctx, c, argocdNamespace, moduleName)
+		logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsAfterFailedDrain(ctx, c, argocdNamespace, moduleName))
 		return err
 	}
+	logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsParentAfterDelete(ctx, c, argocdNamespace, moduleName))
 	if err := deletePrefixedChildApplicationIfPresent(ctx, c, argocdNamespace, moduleConfig, moduleName); err != nil {
 		return fmt.Errorf("perform module disable: remove child Application after parent delete for %q: %w", moduleName, err)
 	}
