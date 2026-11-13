@@ -41,8 +41,9 @@ import (
 // DrainCloudWorkstationsModule runs first: it deletes Horizon Workstations, then WorkstationConfigs, then
 // WorkstationClusters (waiting for the KCC objects too) while the controller is still running, and fails
 // without touching state or the parent Application if that times out. Each Application is deleted while still
-// paused and resumed only afterwards, so Argo CD cannot recreate the drained cluster. After the parent
-// Application is gone, RemoveCloudWorkstationsCRDs deletes the module's three Horizon CRDs.
+// paused and resumed only afterwards, so Argo CD cannot recreate the drained cluster. If the parent delete
+// fails after the state already says disabled, the parent stays paused. After the parent Application is gone,
+// RemoveCloudWorkstationsCRDs deletes the module's three Horizon CRDs.
 //
 // Ordering note (vs platform drain): this path updates ModuleManagerState before deleting the parent
 // mod-* Application so the Portal API reflects disabled during long Argo prunes. PlatformDrainer
@@ -122,7 +123,7 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 	}
 	if err := stateStore.Update(ctx, state); err != nil {
 		clearParentSkipReconcileIfPrefixedModule(ctx, c, argocdNamespace, moduleName)
-		logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsAfterFailedDrain(ctx, c, argocdNamespace, moduleName))
+		logCloudWorkstationsResumeError(ctx, argocdNamespace, resumeCloudWorkstationsAfterFailedDrain(ctx, c, argocdNamespace, moduleName), cloudWorkstationsCoreAppName, ApplicationName(moduleName))
 		return err
 	}
 
@@ -134,10 +135,16 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 	logger.Info("disabling module", "module", moduleName, "moduleID", moduleID, "application", appName, "enforceNoHardDependents", enforceNoHardDependents)
 	if err := c.Delete(ctx, app); err != nil && !errors.IsNotFound(err) {
 		clearParentSkipReconcileIfPrefixedModule(ctx, c, argocdNamespace, moduleName)
-		logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsAfterFailedDrain(ctx, c, argocdNamespace, moduleName))
+		if moduleName == CloudWorkstationsModuleName {
+			// State already says disabled, so a retry will not run. Leave the parent paused so it cannot
+			// recreate the core Application and the workstation cluster.
+			logger.Error(err, "Cloud Workstations parent Application left paused after failed delete",
+				"manual", fmt.Sprintf("kubectl -n %s delete application %s && kubectl -n %s annotate application %s %s-",
+					argocdNamespace, appName, argocdNamespace, appName, argoCDSkipReconcileAnnotationKey))
+		}
 		return err
 	}
-	logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsParentAfterDelete(ctx, c, argocdNamespace, moduleName))
+	logCloudWorkstationsResumeError(ctx, argocdNamespace, resumeCloudWorkstationsParentAfterDelete(ctx, c, argocdNamespace, moduleName), appName)
 	if err := deletePrefixedChildApplicationIfPresent(ctx, c, argocdNamespace, moduleConfig, moduleName); err != nil {
 		return fmt.Errorf("perform module disable: remove child Application after parent delete for %q: %w", moduleName, err)
 	}

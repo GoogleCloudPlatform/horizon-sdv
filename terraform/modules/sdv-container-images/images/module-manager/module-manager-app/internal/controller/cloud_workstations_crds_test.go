@@ -86,7 +86,7 @@ func TestRemoveCloudWorkstationsCRDs_DeletesOnlyHorizonCRDsOnceParentIsGone(t *t
 	withFastCWSCleanup(t, 5*time.Millisecond, time.Second, time.Second)
 
 	c := cwsTestClient(interceptor.Funcs{}, append(allHorizonCRDs(), cwsCRD(cwsKCCCRDName))...)
-	if err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", cloudWorkstationsModuleName); err != nil {
+	if err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", CloudWorkstationsModuleName); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, n := range cloudWorkstationsHorizonCRDNames {
@@ -103,7 +103,7 @@ func TestRemoveCloudWorkstationsCRDs_AlreadyAbsentIsNoOp(t *testing.T) {
 	withFastCWSCleanup(t, 5*time.Millisecond, time.Second, time.Second)
 
 	c := cwsTestClient(interceptor.Funcs{})
-	if err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", cloudWorkstationsModuleName); err != nil {
+	if err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", CloudWorkstationsModuleName); err != nil {
 		t.Fatalf("expected no error when the CRDs are already gone, got: %v", err)
 	}
 }
@@ -118,7 +118,7 @@ func TestRemoveCloudWorkstationsCRDs_WaitsForParentApplicationBeforeDeleting(t *
 	c = cwsTestClient(interceptor.Funcs{
 		Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
 			if obj.GetObjectKind().GroupVersionKind().Kind == "CustomResourceDefinition" {
-				if _, present := cwsExists2(t, cl, cwsTestArgoAppGVK, "argocd", ApplicationName(cloudWorkstationsModuleName)); present {
+				if _, present := cwsExists2(t, cl, cwsTestArgoAppGVK, "argocd", ApplicationName(CloudWorkstationsModuleName)); present {
 					crdDeletedWhileAppPresent = true
 				}
 			}
@@ -132,14 +132,14 @@ func TestRemoveCloudWorkstationsCRDs_WaitsForParentApplicationBeforeDeleting(t *
 	}
 	go func() {
 		time.Sleep(60 * time.Millisecond)
-		u, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", ApplicationName(cloudWorkstationsModuleName))
+		u, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", ApplicationName(CloudWorkstationsModuleName))
 		if ok {
 			u.SetFinalizers(nil)
 			_ = c.Update(context.Background(), u)
 		}
 	}()
 
-	if err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", cloudWorkstationsModuleName); err != nil {
+	if err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", CloudWorkstationsModuleName); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if crdDeletedWhileAppPresent {
@@ -156,11 +156,11 @@ func TestRemoveCloudWorkstationsCRDs_ParentAppTimeoutLeavesCRDsAndGivesManualCom
 	withFastCWSCleanup(t, 5*time.Millisecond, 100*time.Millisecond, time.Second)
 
 	c := cwsTestClient(interceptor.Funcs{}, append(allHorizonCRDs(), cwsParentApp())...)
-	err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", cloudWorkstationsModuleName)
+	err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", CloudWorkstationsModuleName)
 	if err == nil {
 		t.Fatal("expected a timeout error")
 	}
-	for _, want := range []string{"timed out", ApplicationName(cloudWorkstationsModuleName), "kubectl delete crd", cloudWorkstationsHorizonCRDNames[0]} {
+	for _, want := range []string{"timed out", ApplicationName(CloudWorkstationsModuleName), "kubectl delete crd", cloudWorkstationsHorizonCRDNames[0]} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain %q", err.Error(), want)
 		}
@@ -178,7 +178,7 @@ func TestRemoveCloudWorkstationsCRDs_StuckCRDTimesOutNamesItAndKeepsFinalizer(t 
 	stuck := cloudWorkstationsHorizonCRDNames[1]
 	c := cwsTestClient(interceptor.Funcs{}, cwsCRD(cloudWorkstationsHorizonCRDNames[0]), cwsCRD(stuck, cwsTestFinalizer), cwsCRD(cloudWorkstationsHorizonCRDNames[2]))
 
-	err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", cloudWorkstationsModuleName)
+	err := RemoveCloudWorkstationsCRDs(context.Background(), c, "argocd", CloudWorkstationsModuleName)
 	if err == nil {
 		t.Fatal("expected a timeout error for the stuck CRD")
 	}
@@ -209,14 +209,14 @@ func TestRemoveCloudWorkstationsCRDs_CallerCancellationDoesNotAbortCleanup(t *te
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(20*time.Millisecond, cancel)
 	time.AfterFunc(80*time.Millisecond, func() {
-		u, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", ApplicationName(cloudWorkstationsModuleName))
+		u, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", ApplicationName(CloudWorkstationsModuleName))
 		if ok {
 			u.SetFinalizers(nil)
 			_ = c.Update(context.Background(), u)
 		}
 	})
 
-	if err := RemoveCloudWorkstationsCRDs(ctx, c, "argocd", cloudWorkstationsModuleName); err != nil {
+	if err := RemoveCloudWorkstationsCRDs(ctx, c, "argocd", CloudWorkstationsModuleName); err != nil {
 		t.Fatalf("cleanup must survive caller cancellation, got: %v", err)
 	}
 	for _, n := range cloudWorkstationsHorizonCRDNames {
@@ -237,7 +237,7 @@ func TestRemoveCloudWorkstationsCRDs_DetachedCleanupIsStillBounded(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := RemoveCloudWorkstationsCRDs(ctx, c, "argocd", cloudWorkstationsModuleName)
+	err := RemoveCloudWorkstationsCRDs(ctx, c, "argocd", CloudWorkstationsModuleName)
 	if err == nil || !strings.Contains(err.Error(), "timed out") || !strings.Contains(err.Error(), "kubectl delete crd") {
 		t.Fatalf("expected the bounded timeout error with the manual command, got: %v", err)
 	}

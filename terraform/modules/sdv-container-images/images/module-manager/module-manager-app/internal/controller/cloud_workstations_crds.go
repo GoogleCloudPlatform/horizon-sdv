@@ -57,7 +57,7 @@ var cloudWorkstationsHorizonCRDNames = []string{
 // "already disabled"). It therefore ignores cancellation of the caller's context, such as an HTTP client that
 // disconnected during the long teardown, and is bounded by its own budget instead.
 func RemoveCloudWorkstationsCRDs(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
-	if moduleName != cloudWorkstationsModuleName {
+	if moduleName != CloudWorkstationsModuleName {
 		return nil
 	}
 	logger := log.FromContext(ctx).WithName("cloud-workstations-crds")

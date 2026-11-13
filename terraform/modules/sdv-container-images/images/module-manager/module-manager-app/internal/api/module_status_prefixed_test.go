@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/acn-horizon-sdv/module-manager/internal/controller"
 )
 
 func TestManagedChildApplicationPresent(t *testing.T) {
@@ -77,7 +79,7 @@ func TestFillCloudWorkstationsDrainStatus(t *testing.T) {
 	}}
 
 	status := &StatusResponse{}
-	fillCloudWorkstationsDrainStatus(cloudWorkstationsModuleName, true, nil, paused, status)
+	fillCloudWorkstationsDrainStatus(controller.CloudWorkstationsModuleName, true, nil, paused, status)
 	if status.ParentSkipReconcile == nil || !*status.ParentSkipReconcile {
 		t.Fatalf("parentSkipReconcile: got %v, want true", status.ParentSkipReconcile)
 	}
@@ -90,7 +92,7 @@ func TestFillCloudWorkstationsDrainStatus(t *testing.T) {
 		enabled bool
 	}{
 		"other module": {module: "sample", enabled: true},
-		"disabled":     {module: cloudWorkstationsModuleName, enabled: false},
+		"disabled":     {module: controller.CloudWorkstationsModuleName, enabled: false},
 	} {
 		st := &StatusResponse{}
 		fillCloudWorkstationsDrainStatus(tc.module, tc.enabled, nil, paused, st)

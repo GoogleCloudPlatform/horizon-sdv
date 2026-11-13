@@ -227,10 +227,10 @@ func (p *PlatformDrainer) disableOne(ctx context.Context, moduleName string, bes
 	app.SetName(appName)
 	if err := p.Client.Delete(ctx, app); err != nil && !errors.IsNotFound(err) {
 		clearParentSkipReconcileIfPrefixedModule(ctx, p.Client, p.ArgoCDNamespace, moduleName)
-		logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsAfterFailedDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName))
+		logCloudWorkstationsResumeError(ctx, p.ArgoCDNamespace, resumeCloudWorkstationsAfterFailedDrain(ctx, p.Client, p.ArgoCDNamespace, moduleName), cloudWorkstationsCoreAppName, appName)
 		return err
 	}
-	logCloudWorkstationsResumeError(ctx, resumeCloudWorkstationsParentAfterDelete(ctx, p.Client, p.ArgoCDNamespace, moduleName))
+	logCloudWorkstationsResumeError(ctx, p.ArgoCDNamespace, resumeCloudWorkstationsParentAfterDelete(ctx, p.Client, p.ArgoCDNamespace, moduleName), appName)
 	var newEnabled []string
 	for _, id := range state.EnabledModules {
 		if id != modID {
