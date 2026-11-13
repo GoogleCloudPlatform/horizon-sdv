@@ -14,13 +14,16 @@
 
 # SPDX-License-Identifier: Apache-2.0
 
-# CLI sources are staged into ./cli (terraform local_file, or copy tools/horizon/*.{go,mod,sum}).
+# CLI sources are staged into ./cli, including *_test.go (terraform local_file, or copy tools/horizon).
 FROM golang:1.27.2-alpine AS cli
 WORKDIR /src
 COPY cli/ ./
 ARG HORIZON_CLI_VERSION=dev
 ARG HORIZON_CLI_COMMIT=unknown
 ENV HORIZON_CLI_COMMIT=$HORIZON_CLI_COMMIT
+# RUN_TESTS=false skips every suite in this image. -p 2 caps package parallelism under build load.
+ARG RUN_TESTS=true
+RUN if [ "$RUN_TESTS" = "true" ]; then CGO_ENABLED=0 go test -p 2 ./...; fi
 RUN go run mkdist.go /out "$HORIZON_CLI_VERSION"
 
 FROM node:22-alpine AS frontend
@@ -29,13 +32,21 @@ WORKDIR /app
 COPY package.json package-lock.json* .npmrc* ./
 RUN npm ci
 COPY . .
+# RUN_TESTS=false skips the suite: docker build --build-arg RUN_TESTS=false .
+# VITEST_MAX_WORKERS caps the pool. Uncapped workers time out under build load.
+ARG RUN_TESTS=true
+ARG VITEST_MAX_WORKERS=2
+RUN if [ "$RUN_TESTS" = "true" ]; then npm run test -- --maxWorkers="${VITEST_MAX_WORKERS}"; fi
 RUN npm run build
 
 FROM golang:1.27.2-alpine AS backend
 WORKDIR /src
 COPY proxy/go.mod proxy/go.sum* ./
 RUN go mod download
-COPY proxy/*.go ./
+COPY proxy/ ./
+# Test against the committed spa fixture. The Vite build replaces it below, which the embed then compiles in.
+ARG RUN_TESTS=true
+RUN if [ "$RUN_TESTS" = "true" ]; then CGO_ENABLED=0 go test -p 2 ./...; fi
 # The proxy embeds spa. Replace the committed test fixture with the Vite build.
 COPY --from=frontend /app/dist ./spa
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /horizon-dev-portal .

@@ -124,6 +124,11 @@ locals {
       deploy_version = local.horizon_core_version
       context_path   = abspath("${path.module}/../sdv-container-images/images/horizon-dev-portal/horizon-dev-portal")
       platform       = "linux/amd64"
+      # Dockerfile ARGs. RUN_TESTS=false skips Vitest and both Go suites. VITEST_MAX_WORKERS caps the Vitest pool.
+      build_args = {
+        RUN_TESTS          = "true"
+        VITEST_MAX_WORKERS = "2"
+      }
     }
     "module-manager-app" = {
       directory      = "module-manager"

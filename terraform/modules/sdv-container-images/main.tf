@@ -19,11 +19,10 @@ locals {
   }
 
   horizon_cli_root = abspath("${path.module}/../../../tools/horizon")
+  # *_test.go is included so the cli image stage can run `go test`.
   horizon_cli_files = toset([
     for f in fileset(local.horizon_cli_root, "**") : f
-    if !endswith(f, "_test.go") && (
-    endswith(f, ".go") || endswith(f, ".mod") || endswith(f, ".sum") || endswith(f, ".json")
-    )
+    if endswith(f, ".go") || endswith(f, ".mod") || endswith(f, ".sum") || endswith(f, ".json")
   ])
   portal_image_key = "horizon-dev-portal"
 
