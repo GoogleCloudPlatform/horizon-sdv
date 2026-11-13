@@ -58,6 +58,9 @@ spec:
           maxNodeCount: {{ .Values.nodePool.maxNodeCount }}
           workloadLabel: {{ .Values.nodePool.workloadLabel | quote }}
           workloadType: {{ .Values.nodePool.workloadType | quote }}
+        cleanup:
+          workflowsNamespace: {{ .Values.config.namespacePrefix | default "" }}workflows
+          cloudSdkImage: {{ required "cleanup.image (google-cloud-cli) must be set" .Values.cleanup.image | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.overviewNamespace }}

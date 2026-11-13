@@ -102,4 +102,9 @@ casfs:
     # -- casfs.daemonset.tolerations -- loader tolerations
     # (empty = the global tolerations).
     tolerations: []
+# Orphan GKE node-pool cleanup hooks of the node-pool child Application (see node-pool/templates/orphan-cleanup-hooks.yaml).
+cleanup:
+  # -- cleanup.image -- google-cloud-cli used by the PreSync/PostDelete jobs (gcloud + kubectl component).
+  # Same pin as abfs-service-module license.validation.image (SDK 591.0.0); bump both together.
+  image: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based@sha256:f455f6bfd3d66abe3131ddff47d95c5f01061e8e91937285adcf2a86b5c82e48
 config: {}
