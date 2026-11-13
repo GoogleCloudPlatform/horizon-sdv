@@ -43,8 +43,8 @@ locals {
     }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "gerrit-post" = {
       directory      = "gerrit"
