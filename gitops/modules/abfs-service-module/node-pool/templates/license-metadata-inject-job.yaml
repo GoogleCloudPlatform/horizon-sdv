@@ -124,6 +124,24 @@ spec:
                 return 0
               }
 
+              # Licence metadata as GKE has it ("" when the pool is missing). Source of truth for the
+              # running pool; the CR can be stale because KCC cannot read back the pool it created (TAA-2101).
+              gke_pool_exists() {
+                gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                  --cluster="${CLUSTER_NAME}" \
+                  --location="${LOCATION}" \
+                  --project="${PROJECT_ID}" >/dev/null 2>&1
+              }
+              gke_metadata() {
+                gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                  --cluster="${CLUSTER_NAME}" \
+                  --location="${LOCATION}" \
+                  --project="${PROJECT_ID}" \
+                  --format=json 2>/dev/null \
+                  | python3 -c "import json,sys; m=(json.load(sys.stdin).get('config') or {}).get('metadata') or {}; print(m.get('${METADATA_KEY}',''))" \
+                  2>/dev/null || true
+              }
+
               desired=""
               if kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" >/dev/null 2>&1; then
                 desired="$(kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" \
@@ -154,7 +172,14 @@ spec:
                   -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].reason}' 2>/dev/null || true)"
 
                 if [[ "${ready}" == "UpdateFailed" ]]; then
-                  echo "CR ${NODE_POOL_NAME} is UpdateFailed — deleting so Sync can recreate."
+                  # KCC reports "already exists" for a pool it created itself (TAA-2101). If the running GKE pool
+                  # already carries the Secret licence it is correct: keep it (deleting it would kill abfs-server
+                  # and the uploaders for nothing). Delete only when the licence on GKE is wrong.
+                  if gke_pool_exists && [[ "$(gke_metadata)" == "${desired}" ]]; then
+                    echo "CR ${NODE_POOL_NAME} is UpdateFailed but the GKE pool already has the Secret licence (length=${#desired}) — keeping the pool, no PreSync delete."
+                    continue
+                  fi
+                  echo "CR ${NODE_POOL_NAME} is UpdateFailed and the GKE licence differs from the Secret — deleting CR + pool so Sync can recreate."
                   delete_cr_and_gcp_pool
                   continue
                 fi
@@ -388,8 +413,26 @@ spec:
                 ready_message="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
                   -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || true)"
 
+                # GKE is the source of truth for the running pool (TAA-2101: KCC cannot read back the pool it
+                # created, so the CR flips to UpdateFailed "already exists" while the pool is fine). If GKE already
+                # carries the Secret licence, do not recreate: recreate_cr_with_license deletes the GKE pool.
+                if [[ -n "${desired}" ]]; then
+                  live_gke_now="$(gcloud container node-pools describe "${NODE_POOL_NAME}" \
+                    --cluster="${CLUSTER_NAME}" \
+                    --location="${LOCATION}" \
+                    --project="${PROJECT_ID}" \
+                    --format=json 2>/dev/null \
+                    | python3 -c "import json,sys; m=(json.load(sys.stdin).get('config') or {}).get('metadata') or {}; print(m.get('${METADATA_KEY}',''))" \
+                    2>/dev/null || true)"
+                  if [[ "${live_gke_now}" == "${desired}" ]]; then
+                    echo "GKE pool ${NODE_POOL_NAME} already has the Secret licence (length=${#desired}); CR state '${ready_reason}' ignored (TAA-2101) — no recreate."
+                    echo "Licence metadata applied on pool ${NODE_POOL_NAME}."
+                    continue
+                  fi
+                fi
+
                 if [[ "${ready_reason}" == "UpdateFailed" && "${ready_message}" == *"already exists"* ]]; then
-                  echo "${NODE_POOL_NAME} CR points at an existing GKE pool — recreating to clear the stale KCC state."
+                  echo "${NODE_POOL_NAME} CR points at an existing GKE pool whose licence differs — recreating CR + pool."
                   recreate_cr_with_license "${desired}"
                   live_cr="$(cr_metadata)"
                 fi
