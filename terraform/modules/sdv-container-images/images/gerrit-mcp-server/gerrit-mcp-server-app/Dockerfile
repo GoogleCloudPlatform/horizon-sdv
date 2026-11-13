@@ -40,25 +40,24 @@ FROM --platform=linux/amd64 python:3.12-slim-bookworm AS final
 # Add security repository and upgrade all packages to fix CVEs
 RUN echo "deb http://security.debian.org/debian-security bookworm-security main" > /etc/apt/sources.list.d/security.list && \
     apt-get update && apt-get upgrade -y && \
-    apt-get install -y \
-    curl \
-    vim \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser
 
 # Copy installed packages from the build stage
 COPY --from=build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=build /usr/local/bin/ /usr/local/bin/
+COPY --from=build /usr/local/bin/uvicorn /usr/local/bin/uvicorn
 
 # Copy the startup script to working directory and set ownership
 COPY --chown=appuser:appuser startup.sh /app/gerrit-mcp-server/startup.sh
 
-# Create a log file (needed by app logic) in to installed packages dir and
-# set permissions for the non-root user for the entire site-packages directory
-RUN touch /usr/local/lib/python3.12/site-packages/server.log && \
-    chown -R appuser:appuser /usr/local/lib/python3.12/site-packages
+# startup.sh overwrites gerrit_config.json with sed and the server writes server.log.
+# set permissions for the non-root user only for those files
+RUN touch /usr/local/lib/python3.12/site-packages/server.log \
+          /usr/local/lib/python3.12/site-packages/gerrit_mcp_server/gerrit_config.json && \
+    chown appuser:appuser /usr/local/lib/python3.12/site-packages/server.log \
+          /usr/local/lib/python3.12/site-packages/gerrit_mcp_server/gerrit_config.json
 
 # Switch to the non-root user
 USER appuser
