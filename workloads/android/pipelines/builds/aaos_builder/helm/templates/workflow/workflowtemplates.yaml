@@ -133,8 +133,14 @@ spec:
       - name: aaosParallelBuildJobs
         value: {{ .Values.spec.parallelBuildJobs | quote }}
         description: "Parallel build jobs (-j). Default: 16. Empty lets the build system decide. If the ABFS cacheman socket gets overloaded during the build, the value may be too high."
+{{- else }}
+      # Same slot the ABFS variant uses inside its parameter list. sensors.yaml
+      # maps this to index 11; keep it immediately before aiReviewRuntime.
+      - name: postRepoCommand
+        value: {{ .Values.spec.postRepoCommand | quote }}
+        description: "Optional additional commands post repo sync/fetch, git clone and prior to build/make. Single command line only, use logical operators to execute subsequent commands."
 {{- end }}
-      # Appended after the positional ABFS parameters so sensors.yaml can map it to index 11+len(abfs).
+      # Appended after the positional ABFS parameters so sensors.yaml can map it to index 11+len(tail params).
       - name: aiReviewRuntime
         value: {{ .Values.spec.aiReviewRuntime | default "agy" | quote }}
         enum:

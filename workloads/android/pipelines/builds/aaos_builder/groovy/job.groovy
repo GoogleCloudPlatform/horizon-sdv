@@ -101,7 +101,7 @@ pipelineJob('Android/Builds/AAOS Builder') {
 
     stringParam {
       name('POST_REPO_COMMAND')
-      defaultValue('')
+      defaultValue("if [ -f external/pogreb/db.go ]; then sed -i 's/MaxValueLength = 512 << 20/MaxValueLength = 2 << 30/' external/pogreb/db.go; fi")
       description('''<p>Optional additional commands post repo sync/fetch, git clone and prior to build/make.<br/>
         <b>Note: </b>Single command line only, use logical operators to execute subsequent commands.<br/><br/></p>''')
       trim(true)

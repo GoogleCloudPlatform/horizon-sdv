@@ -75,6 +75,8 @@ envFrom:
   value: "password"
 - name: GERRIT_REPO_SYNC_JOBS
   value: '{{ "{{" }}workflow.parameters.parallelSyncJobs{{ "}}" }}'
+- name: POST_REPO_COMMAND
+  value: '{{ "{{" }}workflow.parameters.postRepoCommand{{ "}}" }}'
 {{- if eq (include "aaos-builder.isAbfs" .) "true" }}
 - name: GERRIT_TOPIC
   value: '{{ "{{" }}workflow.parameters.gerritTopic{{ "}}" }}'
@@ -99,8 +101,6 @@ envFrom:
   value: '{{ "{{" }}workflow.parameters.abfsCleanCache{{ "}}" }}'
 - name: ABFS_CACHEMAN_TIMEOUT
   value: '{{ "{{" }}workflow.parameters.abfsCachemanTimeout{{ "}}" }}'
-- name: POST_REPO_COMMAND
-  value: '{{ "{{" }}workflow.parameters.postRepoCommand{{ "}}" }}'
 - name: AAOS_PARALLEL_BUILD_JOBS
   value: '{{ "{{" }}workflow.parameters.aaosParallelBuildJobs{{ "}}" }}'
 - name: UPLOADER_MANIFEST_SERVER
