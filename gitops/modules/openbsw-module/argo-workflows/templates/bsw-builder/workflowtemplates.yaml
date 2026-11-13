@@ -1,0 +1,65 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Description:
+# Argo WorkflowTemplate for the OpenBSW builder (Jenkins: OpenBSW/Builds/BSW Builder).
+# Builds Eclipse OpenBSW unit tests, POSIX and NXP S32K148 targets with the bsw_builder scripts,
+# runs AI review (Antigravity SDK by default) when the build fails, and stores artifacts in GCS.
+# Argo Events: Sensor webhook-<workflowTemplateName> (sensors.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ .Values.bswBuilder.workflowTemplateName | quote }}
+  namespace: {{ .Values.workflowNamespace | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.bswBuilder.workflowTemplateName | quote }}
+    horizon-sdv.io/expose: "true"
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  entrypoint: main
+{{- include "openbsw.workflowSpecCommon" . | nindent 2 }}
+  volumeClaimGC:
+    strategy: OnWorkflowCompletion
+  workflowMetadata:
+    annotations:
+      workflows.argoproj.io/title: 'OpenBSW {{ "{{" }}workflow.parameters.rtosPlatform{{ "}}" }} {{ "{{" }}workflow.parameters.buildConfig{{ "}}" }} ({{ "{{" }}workflow.parameters.toolchain{{ "}}" }})'
+      workflows.argoproj.io/description: '{{ "{{" }}workflow.parameters.openbswGitBranch{{ "}}" }}'
+  templateDefaults:
+{{- include "openbsw.templateDefaults" . | nindent 4 }}
+  arguments:
+    parameters:
+{{- include "openbsw.workflowParameters" .Values.bswBuilder.parameters | nindent 6 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: bsw-workspace
+        labels:
+          app.kubernetes.io/name: {{ .Values.bswBuilder.workflowTemplateName | quote }}
+          horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ .Values.bswBuilder.workspace.storageClassName | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.bswBuilder.workspace.size | quote }}
+  volumes:
+    # POSIX pyTest loads network and CAN modules (Jenkins pod mounts the same path).
+    - name: host-lib-modules
+      hostPath:
+        path: /lib/modules
+        type: Directory
+  templates:
+{{- include "openbsw.bswBuilder.templates" . | nindent 4 }}

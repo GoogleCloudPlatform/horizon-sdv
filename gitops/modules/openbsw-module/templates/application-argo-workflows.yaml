@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Child Application: OpenBSW WorkflowTemplates.
-# Templates live in the platform workflows namespace. Their pods schedule onto
-# sdv-openbsw-build-node-pool via openbsw.templateDefaults.
+# Child Application: OpenBSW WorkflowTemplates openbsw-bsw-builder and openbsw-builder-image,
+# and their webhook Sensors. Templates live in the platform workflows namespace, Sensors in
+# argo-events. Their pods schedule onto sdv-openbsw-build-node-pool via openbsw.templateDefaults.
 # Main environment only. workflows is unprefixed there (namespacePrefix is empty).
 {{- if not (default false .Values.config.isSubEnvironment) }}
 {{- if and .Values.repo.url .Values.repo.revision }}
+{{- $authMethod := dig "scm" "authMethod" "" .Values.config }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -41,6 +42,7 @@ spec:
     helm:
       values: |
         workflowNamespace: {{ .Values.config.namespacePrefix }}workflows
+        eventsNamespace: {{ .Values.config.namespacePrefix }}argo-events
         moduleName: {{ .Values.moduleName | default "openbsw-module" | quote }}
         nodePool:
           name: {{ .Values.nodePool.name | quote }}
@@ -48,6 +50,16 @@ spec:
           workloadLabel: {{ .Values.nodeSelector.workloadLabel | quote }}
         tolerations:
 {{ .Values.tolerations | toYaml | nindent 10 }}
+        git:
+          authMethod: {{ $authMethod | quote }}
+        cloud:
+          project: {{ .Values.config.projectID | quote }}
+          region: {{ .Values.config.region | quote }}
+        # Same monorepo as the Android workloads (MODULE_CONFIG has no OpenBSW-specific repo).
+        pipelineRepo:
+          url: {{ dig "workloads" "android" "url" "" .Values.config | quote }}
+          revision: {{ dig "workloads" "android" "branch" "" .Values.config | quote }}
+          secret: {{ if or (eq $authMethod "userpass") (eq $authMethod "app") }}{{ "workflow-pipeline-git-creds" | quote }}{{ else }}{{ "" | quote }}{{ end }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.config.namespacePrefix }}workflows
