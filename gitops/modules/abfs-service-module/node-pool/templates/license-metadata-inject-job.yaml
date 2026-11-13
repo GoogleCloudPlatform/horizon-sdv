@@ -125,7 +125,7 @@ spec:
               }
 
               # Licence metadata as GKE has it ("" when the pool is missing). Source of truth for the
-              # running pool; the CR can be stale because KCC cannot read back the pool it created (TAA-2101).
+              # running pool; the CR can be stale because KCC cannot read back the pool it created, see the README known issues.
               gke_pool_exists() {
                 gcloud container node-pools describe "${NODE_POOL_NAME}" \
                   --cluster="${CLUSTER_NAME}" \
@@ -172,7 +172,7 @@ spec:
                   -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].reason}' 2>/dev/null || true)"
 
                 if [[ "${ready}" == "UpdateFailed" ]]; then
-                  # KCC reports "already exists" for a pool it created itself (TAA-2101). If the running GKE pool
+                  # KCC reports "already exists" for a pool it created itself, see the README known issues. If the running GKE pool
                   # already carries the Secret licence it is correct: keep it (deleting it would kill abfs-server
                   # and the uploaders for nothing). Delete only when the licence on GKE is wrong.
                   if gke_pool_exists && [[ "$(gke_metadata)" == "${desired}" ]]; then
@@ -413,7 +413,7 @@ spec:
                 ready_message="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
                   -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || true)"
 
-                # GKE is the source of truth for the running pool (TAA-2101: KCC cannot read back the pool it
+                # GKE is the source of truth for the running pool (KCC cannot read back the pool it
                 # created, so the CR flips to UpdateFailed "already exists" while the pool is fine). If GKE already
                 # carries the Secret licence, do not recreate: recreate_cr_with_license deletes the GKE pool.
                 if [[ -n "${desired}" ]]; then
@@ -425,7 +425,7 @@ spec:
                     | python3 -c "import json,sys; m=(json.load(sys.stdin).get('config') or {}).get('metadata') or {}; print(m.get('${METADATA_KEY}',''))" \
                     2>/dev/null || true)"
                   if [[ "${live_gke_now}" == "${desired}" ]]; then
-                    echo "GKE pool ${NODE_POOL_NAME} already has the Secret licence (length=${#desired}); CR state '${ready_reason}' ignored (TAA-2101) — no recreate."
+                    echo "GKE pool ${NODE_POOL_NAME} already has the Secret licence (length=${#desired}); CR state '${ready_reason}' ignored (stale KCC state) — no recreate."
                     echo "Licence metadata applied on pool ${NODE_POOL_NAME}."
                     continue
                   fi
