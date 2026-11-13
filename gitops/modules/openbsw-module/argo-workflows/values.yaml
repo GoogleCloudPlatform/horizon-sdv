@@ -14,6 +14,8 @@
 
 # Platform workflows namespace (Horizon API and the Argo controller watch this namespace).
 workflowNamespace: workflows
+# Argo Events namespace. Sensors listen on EventSource webhook / workflow-dispatch there.
+eventsNamespace: argo-events
 
 moduleName: openbsw-module
 
@@ -29,3 +31,285 @@ tolerations:
     operator: Equal
     value: openbsw
     effect: NoSchedule
+
+# Set by the parent Application from MODULE_CONFIG. Left empty here for helm lint.
+git:
+  # userpass | app | none. userpass and app run ClusterWorkflowTemplate prepare-pipeline-git-creds
+  # (module workloads-common) before the first git artifact.
+  authMethod: ""
+cloud:
+  project: ""
+  region: ""
+# Horizon monorepo cloned by the workflows (the scripts under workloads/openbsw/ run from it).
+pipelineRepo:
+  url: ""
+  revision: ""
+  # Static Secret for prepare-pipeline-git-creds (userpass | app). Empty for public clones.
+  secret: ""
+
+# Steps read CLOUD_PROJECT, CLOUD_REGION, CLOUD_ZONE and HORIZON_DOMAIN from this ConfigMap
+# (gitops/templates/argo-workflows-init.yaml).
+cloudEnvConfigMapName: horizon-workflow-cloud-env
+# true: pods run as workflow-executor-elevated (Artifact Registry push, GCS upload, Vertex AI).
+useElevatedWorkflowIam: true
+serviceAccountName: workflow-executor
+# OnWorkflowCompletion keeps step pods until the workflow ends, so the bsw-workspace
+# pod affinity can find its siblings and logs stay live in the portal.
+podGcStrategy: OnWorkflowCompletion
+# Seconds after completion before the Workflow object is deleted. Empty keeps it.
+workflowTtlSecondsAfterCompletion:
+
+# WorkflowTemplate openbsw-builder-image (Jenkins: OpenBSW/Environment/Docker Image Template).
+builderImage:
+  workflowTemplateName: openbsw-builder-image
+  # Only one image build at a time (Jenkins blockOn 'OpenBSW*.*Docker.*'). "" disables it.
+  concurrencyMutexName: openbsw-builder-image
+  # Shared BuildKit build from module workloads-common.
+  clusterWorkflowTemplateName: common-docker-image-build
+  dockerfileDir: workloads/openbsw/pipelines/environment/docker_image_template
+  # Workflow parameters, in order. The Sensor maps webhook fields by position, so it is
+  # generated from this list. Entries with buildArg are passed to the Dockerfile.
+  parameters:
+    - name: dockerArtifactPathName
+      value: horizon-sdv/openbsw-builder
+      description: "Artifact Registry image path (repository/name)."
+    - name: dryRun
+      value: "false"
+      enum: ["true", "false"]
+      description: "When true, build only and do not push to the registry."
+    - name: imageTag
+      # argowf-latest keeps Argo builds from overwriting the Jenkins tag (ubuntu.noble-20251001).
+      value: argowf-latest
+      description: "Image tag to build and push. Allowed characters: a-z 0-9 _ - . /"
+    - name: openbswGitUrl
+      buildArg: OPENBSW_GIT_URL
+      value: https://github.com/eclipse-openbsw/openbsw.git
+      description: "OpenBSW Git URL (Python requirements are installed from this checkout)."
+    - name: openbswGitBranch
+      buildArg: OPENBSW_GIT_BRANCH
+      value: main
+      description: "OpenBSW revision tag or branch name."
+    - name: postGitCloneCommand
+      buildArg: POST_GIT_CLONE_COMMAND
+      value: git checkout 1c1450e
+      description: "Optional single command line run after the OpenBSW clone."
+    - name: linuxDistribution
+      buildArg: LINUX_DISTRIBUTION
+      value: ubuntu:noble-20251001
+      description: "Base Linux distribution, e.g. ubuntu:22.04, ubuntu:noble-20251001."
+    - name: armToolchainUrl
+      buildArg: ARM_TOOLCHAIN_URL
+      value: https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi.tar.xz
+      description: "ARM GNU toolchain archive URL."
+    - name: llvmArmToolchainUrl
+      buildArg: LLVM_ARM_TOOLCHAIN_URL
+      value: https://github.com/ARM-software/LLVM-embedded-toolchain-for-Arm/releases/download/release-19.1.1/LLVM-ET-Arm-19.1.1-Linux-x86_64.tar.xz
+      description: "LLVM Embedded Toolchain for Arm archive URL."
+    - name: nodejsVersion
+      buildArg: NODEJS_VERSION
+      value: "25.2.1"
+      description: "Node.js version."
+    - name: plantumlUrl
+      buildArg: PLANTUML_URL
+      value: https://github.com/plantuml/plantuml/releases/download/v1.2025.10/plantuml.jar
+      description: "PlantUML Java archive URL."
+    - name: pythonVersion
+      buildArg: PYTHON_VERSION
+      value: "3.12"
+      description: "Python version to install."
+    - name: treefmtUrl
+      buildArg: TREEFMT_URL
+      value: https://github.com/numtide/treefmt/releases/download/v2.1.0/treefmt_2.1.0_linux_amd64.tar.gz
+      description: "Treefmt archive URL."
+    - name: rustDefaultToolchain
+      buildArg: RUST_DEFAULT_TOOLCHAIN
+      value: "1.90.0"
+      description: "rustup --default-toolchain (e.g. 1.90.0, stable)."
+    - name: rustupProfile
+      buildArg: RUSTUP_PROFILE
+      value: minimal
+      description: "rustup install profile (minimal, default)."
+    - name: rustEmbeddedTarget
+      buildArg: RUST_EMBEDDED_TARGET
+      value: thumbv7em-none-eabihf
+      description: "Extra Rust target added for S32K148 builds."
+    - name: cbindgenVersion
+      buildArg: CBINDGEN_VERSION
+      value: "0.27.0"
+      description: "cbindgen version (cargo install --locked)."
+    - name: gcloudCliVersion
+      buildArg: GCLOUD_CLI_VERSION
+      value: "591.0.0-0"
+      description: "Google Cloud CLI version, or latest."
+    - name: kubectlVersion
+      buildArg: KUBECTL_VERSION
+      value: "1:591.0.0-0"
+      description: "kubectl version, or latest."
+    - name: enableGeminiAiAssistant
+      buildArg: ENABLE_GEMINI_AI_ASSISTANT
+      value: "true"
+      enum: ["true", "false"]
+      description: "Install the AI review tooling (Antigravity SDK and Gemini CLI)."
+    - name: geminiCliVersion
+      buildArg: GEMINI_CLI_VERSION
+      value: latest
+      description: "Gemini CLI version (npm view @google/gemini-cli versions)."
+    - name: antigravitySdkVersion
+      buildArg: ANTIGRAVITY_SDK_VERSION
+      value: "0.1.16"
+      description: "google-antigravity SDK version (pip index versions google-antigravity)."
+
+# WorkflowTemplate openbsw-bsw-builder (Jenkins: OpenBSW/Builds/BSW Builder).
+bswBuilder:
+  workflowTemplateName: openbsw-bsw-builder
+  # Uploads go to gs://<cloud.project>-<storageBucketSuffix>/<storageBuildsDir>/<date>-<time>_<workflow>
+  # unless storageBucketDestination is set. Horizon API allows <project>-openbsw.
+  storageBucketSuffix: openbsw
+  storageBuildsDir: OpenBSW/Builds/BSW_Builder
+  # Per-workflow volume holding the Horizon checkout (/horizon) and ${HOME}/bsw-builds, shared by
+  # build, ai-review, storage and retain. Deleted when the workflow completes.
+  workspace:
+    storageClassName: standard-rwo
+    size: 50Gi
+  # AI review. aiReviewRuntime (workflow parameter) picks agy (Antigravity SDK) or gemini-cli.
+  # geminiModel is used by both runtimes (empty: SDK default). geminiCommandLine is gemini-cli only.
+  geminiModel: ""
+  geminiCommandLine: gemini --yolo --output-format json
+  geminiPreviewFeatures: "true"
+  geminiLocationGlobal: "true"
+  # Sized for c2d-highcpu-8 (sdv-openbsw-build-node-pool). build requests most of a node so two
+  # builds do not share one (Jenkins used pod anti-affinity for this).
+  resources:
+    fetchPipeline:
+      requests: {cpu: "500m", memory: "1Gi"}
+      limits: {cpu: "2000m", memory: "4Gi"}
+    build:
+      requests: {cpu: "6000m", memory: "10Gi"}
+      limits: {cpu: "7500m", memory: "12Gi"}
+    aiReview:
+      requests: {cpu: "1000m", memory: "4Gi"}
+      limits: {cpu: "4000m", memory: "8Gi"}
+    storage:
+      requests: {cpu: "500m", memory: "2Gi"}
+      limits: {cpu: "2000m", memory: "4Gi"}
+    retain:
+      requests: {cpu: "250m", memory: "512Mi"}
+      limits: {cpu: "1000m", memory: "2Gi"}
+  # Workflow parameters, in order (Sensor mapping is generated from this list, as above).
+  # ${...} inside command lines is expanded by bsw_build.sh at run time.
+  parameters:
+    - name: openbswGitUrl
+      value: https://github.com/eclipse-openbsw/openbsw.git
+      description: "OpenBSW Git URL."
+    - name: openbswGitBranch
+      value: main
+      description: "OpenBSW revision tag or branch name."
+    - name: postGitCloneCommand
+      value: cd openbsw && git checkout 1c1450e && cd -
+      description: "Optional single command line run after the clone and before the build."
+    - name: rtosPlatform
+      value: freertos
+      enum: [freertos, threadx, rust]
+      description: "RTOS kernel. rust: POSIX preset posix-rust, S32K148 preset s32k148-rust-gcc (GCC only)."
+    - name: buildConfig
+      value: debug
+      enum: [debug, release]
+      description: "Compilation profile (BUILD_CONFIG)."
+    - name: toolchain
+      value: gcc
+      enum: [gcc, clang]
+      description: "Compiler toolchain (TOOLCHAIN)."
+    - name: imageTag
+      value: argowf-latest
+      description: "openbsw-builder image tag to build with."
+    - name: forceImageBuild
+      value: "false"
+      enum: ["true", "false"]
+      description: "When true, rebuild the openbsw-builder image (openbsw-builder-image defaults) before the build."
+    - name: cmakeSyncJobs
+      value: "7"
+      description: "Parallel cmake jobs (-j)."
+    - name: buildDocumentation
+      value: "false"
+      enum: ["true", "false"]
+      description: "Create the OpenBSW doxygen documentation and coverage report."
+    - name: codeCoverage
+      value: "false"
+      enum: ["true", "false"]
+      description: "Unit test code coverage. Needs buildUnitTests and runUnitTests."
+    - name: listUnitTests
+      value: "false"
+      enum: ["true", "false"]
+      description: "List the available unit tests."
+    - name: listUnitTestsCmdline
+      value: cmake --preset tests-posix-${BUILD_CONFIG} && cmake --build --preset tests-posix-${BUILD_CONFIG} --target help -j${CMAKE_SYNC_JOBS}
+      description: "List unit tests command line (presets tests-posix-*, tests-s32k1xx-*)."
+    - name: buildUnitTests
+      value: "true"
+      enum: ["true", "false"]
+      description: "Build unit tests."
+    - name: unitTestTarget
+      value: all
+      description: "Unit test target to build, or all."
+    - name: unitTestsCmdline
+      value: cmake --preset tests-posix-${BUILD_CONFIG} && cmake --build --preset tests-posix-${BUILD_CONFIG} --target ${UNIT_TEST_TARGET} -j${CMAKE_SYNC_JOBS}
+      description: "Unit test build command line."
+    - name: runUnitTests
+      value: "true"
+      enum: ["true", "false"]
+      description: "Run unit tests."
+    - name: runUnitTestsCmdline
+      value: ctest --preset tests-posix-${BUILD_CONFIG} --parallel ${CMAKE_SYNC_JOBS}
+      description: "Unit test run command line. For a single test use ctest --test-dir build/tests/posix/Debug/<path>."
+    - name: buildPosix
+      value: "true"
+      enum: ["true", "false"]
+      description: "Build the POSIX target reference application (stored for the OpenBSW POSIX test job)."
+    - name: posixBuildCmdline
+      value: cmake --preset posix-${RTOS_PLATFORM} && cmake --build --preset posix-${RTOS_PLATFORM} -j${CMAKE_SYNC_JOBS}
+      description: "POSIX build command line (posix-freertos, posix-threadx, posix-rust)."
+    - name: posixArtifact
+      value: build/posix-${RTOS_PLATFORM}/executables/referenceApp/application/Release/app.referenceApp.elf
+      description: "POSIX artifact path."
+    - name: posixPytest
+      value: "false"
+      enum: ["true", "false"]
+      description: "Run pyTest on the POSIX application. Needs buildPosix."
+    - name: posixPytestCmdline
+      value: ./tools/enet/bring-up-ethernet.sh && ./tools/can/bring-up-vcan0.sh && cd test/pyTest/ && pytest --target=posix --app=${RTOS_PLATFORM}
+      description: "POSIX pyTest command line."
+    - name: buildNxpS32k148
+      value: "true"
+      enum: ["true", "false"]
+      description: "Build the NXP S32K148 target."
+    - name: nxpS32k148BuildCmdline
+      value: cmake --preset s32k148-${RTOS_PLATFORM}-${TOOLCHAIN} && cmake --build --preset s32k148-${RTOS_PLATFORM}-${TOOLCHAIN} -j${CMAKE_SYNC_JOBS}
+      description: "NXP S32K148 build command line (s32k148-<rtos>-<gcc|clang>; rust uses s32k148-rust-gcc)."
+    - name: nxpS32k148Artifact
+      value: build/s32k148-${RTOS_PLATFORM}-${TOOLCHAIN}/executables/referenceApp/application/RelWithDebInfo/app.referenceApp.elf
+      description: "NXP S32K148 artifact path."
+    - name: instanceRetentionTime
+      value: "0"
+      enum: ["0", "15", "30", "45", "60", "120", "180"]
+      description: "Minutes to keep a pod with the build workspace mounted after the run, for debugging (kubectl exec)."
+    - name: enableGeminiAiAssistant
+      value: "true"
+      enum: ["true", "false"]
+      description: "Run AI review when the build fails."
+    - name: aiReviewRuntime
+      value: agy
+      enum: [agy, gemini-cli]
+      description: "AI review runtime: agy (Antigravity SDK, default) or gemini-cli."
+    - name: geminiAiExecutionTimeoutMinutes
+      value: "60"
+      enum: ["60", "45", "30", "20", "10", "90", "120"]
+      description: "Maximum minutes for the AI review before it is stopped."
+    - name: artifactStorageSolution
+      value: GCS_BUCKET
+      description: "GCS_BUCKET stores artifacts in Cloud Storage. Empty stores nothing."
+    - name: storageBucketDestination
+      value: ""
+      description: "Optional gs:// destination. Empty: gs://<project>-openbsw/OpenBSW/Builds/BSW_Builder/<date>-<time>_<workflow>."
+    - name: storageLabels
+      value: ""
+      description: "Optional labels for stored artifacts, comma or space separated (e.g. Release=X.Y.Z,Workload=OpenBSW)."
