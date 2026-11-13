@@ -1,0 +1,151 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Orphan GKE node pool cleanup for the ABFS build pool.
+#
+# Config Connector cannot read back the ContainerNodePool it created: a few minutes after create
+# the CR reports "already exists", and when the CR is deleted KCC logs "underlying resource does not
+# exist; no API call necessary" and leaves the GKE pool behind. The next enable then fails with
+# "already exists". These hooks remove the GKE pool with gcloud instead of relying on KCC:
+#   PreSync    – CR absent but GKE pool present (left over from an earlier disable) → delete the pool,
+#                so the sync creates a fresh one. A pool that still has a CR is never touched.
+#   PostDelete – after the module is disabled and Argo CD pruned the CR → delete the GKE pool if it
+#                is still there. Never fails the deletion (logs a warning instead).
+# Same identity as the abfs-service-module licence jobs: workflow-executor-elevated in the workflows
+# namespace (Workload Identity → gke-argo-workflows-elevated-sa, roles/container.admin).
+{{- $c := .Values.cleanup }}
+{{- if $c.enabled }}
+{{- $image := required "cleanup.cloudSdkImage is set by the parent Application" $c.cloudSdkImage }}
+{{- $pool := .Values.nodePool.name }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ printf "%s-orphan-cleanup" $pool | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+    app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-5"
+rules:
+  - apiGroups: ["container.cnrm.cloud.google.com"]
+    resources: ["containernodepools"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-orphan-cleanup" $pool | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+    app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-5"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ printf "%s-orphan-cleanup" $pool | trunc 63 | trimSuffix "-" }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $c.jobServiceAccountName | quote }}
+    namespace: {{ $c.workflowsNamespace | quote }}
+{{- range $phase := list "PreSync" "PostDelete" }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-orphan-%s" $pool (lower $phase) | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $c.workflowsNamespace }}
+  labels:
+    horizon-sdv.io/module: {{ $.Values.parentModuleName | quote }}
+    app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+  annotations:
+    argocd.argoproj.io/hook: {{ $phase }}
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 1500
+  template:
+    metadata:
+      labels:
+        horizon-sdv.io/module: {{ $.Values.parentModuleName | quote }}
+        app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+    spec:
+      serviceAccountName: {{ $c.jobServiceAccountName | quote }}
+      restartPolicy: Never
+      containers:
+        - name: cleanup
+          image: {{ $image | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PHASE
+              value: {{ $phase | quote }}
+            - name: PROJECT_ID
+              value: {{ $.Values.gcpProjectId | quote }}
+            - name: CLUSTER_NAME
+              value: {{ $.Values.clusterName | quote }}
+            - name: LOCATION
+              value: {{ $.Values.location | quote }}
+            - name: CR_NS
+              value: {{ $.Values.namespace | quote }}
+            - name: NODE_POOL_NAME
+              value: {{ $pool | quote }}
+          command: [bash, -uo, pipefail, -c]
+          args:
+            - |
+              G=(--cluster="${CLUSTER_NAME}" --location="${LOCATION}" --project="${PROJECT_ID}")
+              pool_exists() { gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(status)' >/dev/null 2>&1; }
+
+              delete_pool() {
+                echo "${PHASE}: deleting GKE node pool ${NODE_POOL_NAME} (no ContainerNodePool owns it)..."
+                gcloud container node-pools delete "${NODE_POOL_NAME}" "${G[@]}" --quiet || true
+                for i in $(seq 1 60); do
+                  if ! pool_exists; then echo "${PHASE}: GKE node pool ${NODE_POOL_NAME} deleted."; return 0; fi
+                  echo "  waiting for the delete (${i})..."; sleep 15
+                done
+                return 1
+              }
+
+              if [[ "${PHASE}" == "PreSync" ]]; then
+                if ! command -v kubectl >/dev/null 2>&1; then gcloud components install kubectl --quiet; fi
+                if out="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" -o name 2>&1)"; then
+                  echo "PreSync: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} exists – the pool is managed, nothing to do."
+                  exit 0
+                elif ! grep -q -i 'not found' <<<"${out}"; then
+                  echo "ERROR: cannot read ContainerNodePool ${CR_NS}/${NODE_POOL_NAME}: ${out}" >&2
+                  exit 1
+                fi
+                if ! pool_exists; then
+                  echo "PreSync: no CR and no GKE pool – the sync creates ${NODE_POOL_NAME}."
+                  exit 0
+                fi
+                delete_pool || { echo "ERROR: ${NODE_POOL_NAME} still exists; the sync would fail with 'already exists'" >&2; exit 1; }
+                exit 0
+              fi
+
+              # PostDelete: the CR is gone (Argo CD pruned it). Never block the module disable.
+              if pool_exists; then
+                delete_pool || echo "WARNING: ${NODE_POOL_NAME} could not be deleted; the next enable removes it (PreSync)." >&2
+              else
+                echo "PostDelete: GKE node pool ${NODE_POOL_NAME} is already gone."
+              fi
+              exit 0
+{{- end }}
+{{- end }}
