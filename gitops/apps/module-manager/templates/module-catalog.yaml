@@ -124,3 +124,10 @@ spec:
       overviewServiceNamespace: cloud-workstations-overview
       hardDependencies:
         - workloads-common
+    - name: openbsw-module
+      path: gitops/modules/openbsw-module
+      overviewPath: portal/overview.html
+      overviewService: mod-openbsw-module-overview
+      overviewServiceNamespace: openbsw-overview
+      hardDependencies:
+        - workloads-common
