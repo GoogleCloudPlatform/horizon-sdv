@@ -1,0 +1,64 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Injected by Module Manager on enable.
+moduleName: ""
+
+moduleManagerNamespace: module-manager
+
+argocd:
+  namespace: argocd
+  project: horizon-sdv
+
+repo:
+  url: ""
+  revision: HEAD
+
+# Developer Portal overview (Module Manager GET /modules/{name}/overview).
+overviewServiceName: mod-openbsw-module-overview
+overviewNamespace: openbsw-overview
+
+# Module-owned namespace. WorkflowTemplates stay in the platform workflows namespace
+# (that is the namespace Horizon API and Argo watch). Their pods schedule onto the pool below.
+namespace: openbsw
+
+# Existing Terraform pool (google_container_node_pool.sdv_openbsw_build_node_pool).
+# This module does not create the pool and does not change its labels or taint.
+# Jenkins agents select workloadLabel=openbsw only. Module workflows add the pool name
+# so they stay on this pool if another pool ever carries the same workloadLabel.
+nodePool:
+  name: sdv-openbsw-build-node-pool
+
+nodeSelector:
+  workloadLabel: openbsw
+
+tolerations:
+  - key: workloadType
+    operator: Equal
+    value: openbsw
+    effect: NoSchedule
+
+# Privileged DaemonSet that loads these modules into the host kernel.
+# It does not install packages and it does not call the Kubernetes API.
+canKernel:
+  image: ubuntu:22.04
+  modules:
+    - can
+    - can-raw
+    - vcan
+
+softFeaturesEnabled: {}
+
+# From MODULE_CONFIG: projectID, namespacePrefix, region, zone, isSubEnvironment, etc.
+config: {}

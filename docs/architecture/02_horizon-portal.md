@@ -54,6 +54,7 @@ Each module is a separate Argo CD Application (app-of-apps). Module Manager crea
 - abfs-service-module
 - abfs-client-ubuntu
 - cloud-workstations (experimental, main environment only; requires workloads-common)
+- openbsw-module (main environment only; requires workloads-common)
 
 ### Sign in
 
