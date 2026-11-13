@@ -29,6 +29,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.10",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
@@ -40,6 +44,7 @@
     "globals": "^16.5.0",
     "husky": "^9.1.7",
     "is-ci": "^4.1.0",
+    "jsdom": "^31.0.1",
     "lint-staged": "^16.1.6",
     "postcss": "^8.5.26",
     "prettier": "^3.6.2",
