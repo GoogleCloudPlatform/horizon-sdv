@@ -56,6 +56,9 @@ func (s *moduleHelmStartup) Start(ctx context.Context) error {
 	}
 
 	if s.stateStore != nil {
+		if err := controller.ResumeCloudWorkstationsAfterRestart(ctx, s.client, s.stateStore, s.argocdNS); err != nil {
+			log.Printf("module-manager startup: resume Cloud Workstations Applications: %v", err)
+		}
 		if err := s.healStatePlaceholderRevisions(ctx, def); err != nil {
 			log.Printf("module-manager startup: heal ModuleManagerState target revisions: %v", err)
 		}

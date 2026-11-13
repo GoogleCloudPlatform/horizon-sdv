@@ -65,6 +65,7 @@ function argoAppStatusPresent(st?: StatusResponse): boolean {
  * ordering (state before parent delete) and CIT ordering after child Application removal reduce
  * misleading READY during teardown. Prefixed-child modules (expectedManagedApplicationCount === 2):
  * parent-only maps to INSTALLATION IN PROGRESS (enable) or UNINSTALL IN PROGRESS (parent skip-reconcile).
+ * Other modules (cloud-workstations drain): enabled with a paused parent maps to UNINSTALL IN PROGRESS.
  *
  * DEPLOYMENT PENDING: module is enabled, the API reports zero managed Argo CD Applications, and
  * there is no Argo-derived status yet — GitOps has not materialized the Application(s), or the
@@ -78,6 +79,9 @@ export function deploymentStatus(enabled: boolean, st?: StatusResponse): Deploym
   }
   if (enabled && prefixedChildStackIncomplete(st)) {
     return st?.parentSkipReconcile ? 'UNINSTALL IN PROGRESS' : 'INSTALLATION IN PROGRESS';
+  }
+  if (enabled && st?.parentSkipReconcile && st?.expectedManagedApplicationCount !== 2) {
+    return 'UNINSTALL IN PROGRESS';
   }
   if (!enabled) {
     const rem = st?.remainingManagedApplications;

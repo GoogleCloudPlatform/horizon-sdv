@@ -269,12 +269,12 @@ Afterwards:
 
 `cloud-workstations` is drained before anything else changes, because only its controller can delete the Google Cloud resources behind it:
 
-1. Module Manager pauses the module's core Application, `mod-cloud-workstations-core`, so Argo CD doesn't recreate what is being deleted.
+1. Module Manager pauses the parent Application, `mod-cloud-workstations`, and the core Application, `mod-cloud-workstations-core`, so Argo CD doesn't recreate what is being deleted.
 2. It deletes the workstations, then the workstation configurations, then the workstation cluster. Before each next step it waits up to 20 minutes until both the Horizon objects and their Config Connector objects are gone.
-3. After a successful drain, the disable continues as above.
+3. After a successful drain, it deletes the core Application and only then resumes it, so Argo CD prunes it without syncing it again. The disable continues as above, and the parent Application is also deleted before it resumes.
 4. Once the parent Application is gone, Module Manager deletes the module's three CRDs.
 
-If a step of the drain times out, the disable fails and nothing else changes: the module stays enabled, the core Application resumes, and you can retry.
+While the drain runs, the portal shows the module as `UNINSTALL IN PROGRESS`. If a step of the drain times out, the disable fails and nothing else changes: the module stays enabled, both Applications resume, and you can retry. If Module Manager restarts during the drain while the module is still enabled, it resumes both Applications on startup.
 
 If a module sets `autoDisableWhenUnused`, Module Manager checks after every enable and disable whether the last enabled module that depends on it (hard or soft) has gone, and disables it if so.
 

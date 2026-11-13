@@ -50,8 +50,8 @@ spec:
       - CreateNamespace=true
     automated:
       prune: true
-      # Module Manager pauses this Application during disable, then turns self-heal off before
-      # resuming it for parent-Application pruning. Outside that drain, repair manual changes.
+      # Module Manager pauses this Application during disable and deletes it before resuming.
+      # Outside that drain, repair manual changes.
       selfHeal: true
 {{- end }}
 {{- end }}
