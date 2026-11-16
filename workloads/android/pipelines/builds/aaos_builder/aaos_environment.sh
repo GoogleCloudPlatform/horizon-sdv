@@ -676,6 +676,18 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
     fi
 fi
 
+# Android 17 turns on Soong incremental analysis. Blueprint then stores provider
+# cache entries in pogreb, and a payload can exceed the hardcoded MaxValueLength
+# of 512 MiB, which panics soong_build. Raise the limit to 2 GiB on android-17
+# only. Revisions that do not contain android-17 are left unchanged.
+case "${AAOS_REVISION}" in
+    *android-17*)
+        POST_REPO_COMMAND_LIST+=(
+            "if [ -f external/pogreb/db.go ]; then sed -i 's/MaxValueLength = 512 << 20/MaxValueLength = 2 << 30/' external/pogreb/db.go; fi"
+        )
+        ;;
+esac
+
 if [ -n "${POST_REPO_COMMAND}" ]; then
     POST_REPO_COMMAND_LIST+=("${POST_REPO_COMMAND}")
 fi

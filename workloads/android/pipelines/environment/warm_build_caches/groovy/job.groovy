@@ -51,7 +51,7 @@ pipelineJob('Android/Environment/Warm Build Caches') {
 
     stringParam {
       name('POST_REPO_COMMAND')
-      defaultValue("if [ -f external/pogreb/db.go ]; then sed -i 's/MaxValueLength = 512 << 20/MaxValueLength = 2 << 30/' external/pogreb/db.go; fi")
+      defaultValue('')
       description('''<p>Optional additional commands post repo sync/fetch, git clone and prior to build/make.<br/>
         <b>Note: </b>Single command line only, use logical operators to execute subsequent commands.<br/><br/></p>''')
       trim(true)

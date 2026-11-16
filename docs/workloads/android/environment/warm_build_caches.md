@@ -49,7 +49,7 @@ Defined in **`groovy/job.groovy`** (Jenkins UI).
 | **`AAOS_GERRIT_MANIFEST_URL`** | Repo manifest URL (default: Horizon Gerrit manifest). |
 | **`AAOS_REVISION`** | Branch or tag (default in groovy: `horizon/android-17.0.0_r1`). Must contain `android-14`, `android-15`, `android-16`, or `android-17` so the job can infer the SDK / storage pool when **`ANDROID_VERSION`** is `default` (see **`Jenkinsfile`** `getAndroidVersion()`). |
 | **`ANDROID_VERSION`** | `default` \| `14` \| `15` \| `16` \| `17`. Selects the build-cache disk pool / `STORAGE_CLASS_SUFFIX` (`android-${version}`). With **`default`**, the job derives the version from **`AAOS_REVISION`**. |
-| **`POST_REPO_COMMAND`** | Optional single command line run after repo sync and before the build (`aaos_initialise.sh`). Default raises pogreb `MaxValueLength` when `external/pogreb/db.go` exists. Appended to any target-specific post-repo commands. |
+| **`POST_REPO_COMMAND`** | Optional single command line run after repo sync and before the build (`aaos_initialise.sh`). Appended to any target-specific post-repo commands. |
 | **`GERRIT_REPO_SYNC_JOBS`** | Parallel jobs for `repo sync` (default from seed / `${REPO_SYNC_JOBS}`). |
 | **`AAOS_CLEAN`** | `NO_CLEAN` \| `CLEAN_BUILD` \| `CLEAN_ALL`. Controls clean behavior across stages (see [Pipeline behavior](#pipeline-behavior)). |
 | **`ARCHIVE_ARTIFACTS`** | If true, artifacts are stored via GCS (`ARTIFACT_STORAGE_SOLUTION=GCS_BUCKET` in **`Jenkinsfile`**); if false, storage is effectively noop for that flag. |

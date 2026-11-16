@@ -144,6 +144,8 @@ Useful for installing additional code, tools etc, prior to build.
 
 e.g: [Pixel Devices](https://source.android.com/docs/automotive/start/pixelxl) where you need to download and extract vendor device images.
 
+Note: For Android 17 builds, the Soong incremental analysis stores provider cache entries in pogreb, and a payload can exceed pogreb's hardcoded `MaxValueLength` of 512 MiB, which crashes `soong_build`. So for android-17 builds, `aaos_environment.sh` appends a post-repo command that raises `MaxValueLength` in `external/pogreb/db.go` from 512 MiB to 2 GiB if that file exists. Other revisions are left unchanged. This is applied in addition to any `POST_REPO_COMMAND` set by the user.
+
 ### `OVERRIDE_MAKE_COMMAND`
 
 Optional parameter that allows the user to override the default target make command with their own.
