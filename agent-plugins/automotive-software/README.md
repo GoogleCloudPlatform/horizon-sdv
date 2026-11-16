@@ -24,17 +24,17 @@ A modular suite of **12 general-purpose engineering skills**, **11 zero-dependen
 ## Installation & Usage
 
 ### Option A: Google Antigravity (`agy`) Plugin Bundle
-When working inside a clone of `horizon-sdv`, Antigravity discovers `.agents/plugins/automotive-software` automatically as a workspace plugin. You can also install or validate it globally via `agy`:
+Install or validate the plugin via the Antigravity CLI (`agy`) from GitHub or a local `horizon-sdv` clone (see [`SETUP.md`](../SETUP.md) for headless Python SDK usage):
 
 ```bash
 # Install the full 12-skill + 1-agent plugin from GitHub or a local horizon-sdv clone:
-agy plugin install https://github.com/GoogleCloudPlatform/horizon-sdv/tree/main/.agents/plugins/automotive-software
-agy plugin install .agents/plugins/automotive-software
+agy plugin install https://github.com/GoogleCloudPlatform/horizon-sdv/tree/main/agent-plugins/automotive-software
+agy plugin install agent-plugins/automotive-software
 
 # Validate, list, enable/disable, or reinstall to refresh:
-agy plugin validate .agents/plugins/automotive-software
+agy plugin validate agent-plugins/automotive-software
 agy plugin list
-agy plugin uninstall automotive-software && agy plugin install .agents/plugins/automotive-software
+agy plugin uninstall automotive-software && agy plugin install agent-plugins/automotive-software
 ```
 
 ### Option B: Any `SKILL.md`-Compatible Coding Agent (Selective or Full)
@@ -43,7 +43,7 @@ Each directory under [`skills/`](skills/) follows the standard progressive-discl
 ```bash
 # Copy all 12 skills — or cherry-pick Track A C++-to-Rust skills only — into a workspace:
 mkdir -p .agents/skills
-cp -R skills/* .agents/skills/
+cp -R agent-plugins/automotive-software/skills/* .agents/skills/
 ```
 
 ---
@@ -103,8 +103,8 @@ done
 
 ## Contributing
 
-See the Horizon SDV [Contribution Guide](../../../docs/contributing.md) for contribution guidelines and CLA requirements.
+See the Horizon SDV [Contribution Guide](../../docs/contributing.md) for contribution guidelines and CLA requirements.
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](../../../LICENSE).
+Licensed under the [Apache License, Version 2.0](../../LICENSE).
