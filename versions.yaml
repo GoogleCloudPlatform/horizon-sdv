@@ -12,18 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Horizon platform version(s). Single source of truth for the release number.
+# Horizon platform version(s) and shared tool image pins. Single source of truth for the
+# release number (components) and the nginx image tag (tools.nginx).
 #
 # Readers of this file:
 #   - Terraform (yamldecode in terraform/modules/base)
-#   - tools/scripts/container-images/build.sh via PyYAML (portal image tag and HORIZON_CLI_VERSION)
+#   - tools/scripts/container-images/build.sh via PyYAML (portal image tag and HORIZON_CLI_VERSION;
+#     reads components.horizoncore only, tools.* is ignored)
 # Helm charts under gitops/ cannot read files outside their own directory, so they
 # receive the value through the Terraform-injected Argo CD values, not from here.
 #
 # components.horizoncore is also used as the Developer Portal image tag (locals.tf), as the
 # horizon CLI version, and as the version shown in the portal UI. The portal image is
 # rebuilt and re-tagged when this value changes, so bump it (e.g. RC.3 -> RC.4) for each
-# build that must roll out. Other image tags stay in terraform/modules/base/locals.tf.
+# build that must roll out.
+#
+# tools.nginx.tag is the nginx image tag used by the token-injector and the module-overview-http
+# templates. Terraform exposes it to GitOps as config.nginx.tag (locals.tf common_nginx_version).
+# Other image tags stay in terraform/modules/base/locals.tf.
 
 components:
   # The Horizon platform release itself (not a generic "core" key — unique for grepping).
@@ -31,4 +37,10 @@ components:
   #   - no spaces, because the version is passed inside the -ldflags string
   #   - must be a valid Docker tag: letters, digits, "_", "." and "-" only (no "+"),
   #     not starting with "." or "-", at most 128 characters
-  horizoncore: "5.0.0"
+  horizoncore: "5.0.2"
+
+tools:
+  # Docker Hub nginx tag (image name "nginx" is set in terraform/modules/sdv-gke-apps/main.tf).
+  # Keep it quoted: unquoted values such as 1.30 would be parsed as numbers (1.3).
+  nginx:
+    tag: "1.31.2-alpine3.23"
