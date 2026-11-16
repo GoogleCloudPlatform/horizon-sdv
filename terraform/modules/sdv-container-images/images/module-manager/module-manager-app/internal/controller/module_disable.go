@@ -172,11 +172,17 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 }
 
 // DisableModuleAndRefresh performs the shared disable workflow used by the REST API:
-// disable the module, refresh dependents, then resync soft-feature parents.
+// disable the module, refresh dependents, then resync soft-feature parents. For cloud-workstations the
+// refresh runs detached from the caller's cancellation, like the disable itself.
 // moduleConfig is passed to PerformModuleDisable (prefixed child teardown for workloads-android / workloads-common).
 func DisableModuleAndRefresh(ctx context.Context, apiReader client.Reader, c client.Client, stateStore StateStoreInterface, catalogStore CatalogStoreInterface, argocdNamespace, mmNamespace, moduleName, moduleID string, enforceNoHardDependents bool, moduleConfig string) error {
 	if err := PerformModuleDisable(ctx, c, stateStore, catalogStore, argocdNamespace, mmNamespace, moduleName, moduleID, enforceNoHardDependents, moduleConfig); err != nil {
 		return err
+	}
+	if moduleName == CloudWorkstationsModuleName {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), cwsDisableOverhead)
+		defer cancel()
 	}
 	if err := RunAutoDisableSweep(ctx, apiReader, c, mmNamespace, argocdNamespace, stateStore, catalogStore); err != nil {
 		return fmt.Errorf("refresh dependents after disabling %q: %w", moduleName, err)

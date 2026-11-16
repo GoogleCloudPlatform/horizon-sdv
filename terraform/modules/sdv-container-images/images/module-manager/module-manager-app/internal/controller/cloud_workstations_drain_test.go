@@ -789,6 +789,29 @@ func TestDisableModuleAndRefresh_CRDCleanupTimeoutStillSweeps(t *testing.T) {
 	}
 }
 
+func TestDisableModuleAndRefresh_CloudWorkstationsSweepFinishesAfterCallerCancels(t *testing.T) {
+	withFastCWSDrain(t, 5*time.Millisecond, 2*time.Second)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c := &cwsCtxStrictClient{Client: cwsTestClient(interceptor.Funcs{}, cwsDrainedFixtures()...)}
+	fake := &cwsFakeStateStore{st: &State{
+		EnabledModules: []string{"mod-cws", "mod-helper"},
+		ModuleIDs: map[string]string{
+			CloudWorkstationsModuleName: "mod-cws",
+			"unused-helper":             "mod-helper",
+		},
+	}}
+	catalog := cwsFixedCatalog{{Name: "unused-helper", AutoDisableWhenUnused: true}}
+	err := DisableModuleAndRefresh(ctx, c, c, cwsCtxStrictStore{fake}, catalog, "argocd", "module-manager", CloudWorkstationsModuleName, "mod-cws", false, "")
+	if err != nil {
+		t.Fatalf("dependent sweep must finish after the caller cancels, got %v", err)
+	}
+	if len(fake.st.EnabledModules) != 0 {
+		t.Errorf("disable and the dependent sweep should both finish, enabled=%v", fake.st.EnabledModules)
+	}
+}
+
 func cwsPausedApps() []client.Object {
 	apps := []*unstructured.Unstructured{cwsParentApp(), cwsCoreApp()}
 	out := make([]client.Object, 0, len(apps))
