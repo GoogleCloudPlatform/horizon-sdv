@@ -57,12 +57,11 @@ One-time setup requirements.
 
 ### `AAOS_REVISION`
 
-The Android revision, i.e. branch or tag to build. It must be seeded into ABFS (see Prerequisites). Supported revisions:
+The Android revision, i.e. branch or tag to build. It must be seeded into ABFS (see Prerequisites). Tested versions:
 
 - `android-14.0.0_r30` (ap1a)
 - `android-15.0.0_r36` (bp1a)
 - `android-16.0.0_r3` (bp3a)
-- `android-17.0.0_r1` (cp2a)
 
 ### `AAOS_MANIFEST_NAME`
 
@@ -83,10 +82,6 @@ Examples:
     -   `aosp_cf_arm64_auto-bp1a-userdebug`
 -   Pixel Devices:
     -   `aosp_tangorpro_car-bp1a-userdebug`
--   Android 17 (`cp2a`):
-    -   `aosp_cf_x86_64_auto-cp2a-userdebug` (`android-17.0.0_r1`)
-    -   `sdk_car_x86_64-cp2a-userdebug` (`android-17.0.0_r1`)
-    -   Tangor Pro is not supported on `cp2a`. RPi lunch targets are not supported on ABFS.
 
 ### `AAOS_BUILD_CTS`
 
