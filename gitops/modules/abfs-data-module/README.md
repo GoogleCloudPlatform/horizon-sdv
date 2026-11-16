@@ -137,7 +137,7 @@ GCP Console hides Secret values; use `kubectl` to decode `data.license`.
 
 ConfigMap `horizon/abfs-uploader-config`, key `table`, is a YAML list of rows; exactly one row is `active` (and `synced`). The uploaders of `abfs-service-module` seed the manifest of the active row. The table lives here so it survives a disable of the service module.
 
-Default rows (`uploader-config/values.yaml`, `uploaderConfig.entries`): `Android14_r30`, `Android15_r36` (active), `Android16_r3`, `AndroidLatest` (`android-latest-release`), `AndroidCustom` (no stored repo until a custom config is submitted). Shared settings: manifest URL `https://android.googlesource.com/platform/manifest`, file `default.xml`, `fetch-ref-spec` `refs/*:refs/*` minus Gerrit meta refs.
+Default rows (`uploader-config/values.yaml`, `uploaderConfig.entries`): `Android14_r30`, `Android15_r36` (active), `Android16_r3`, `Android17_r1` (`android-17.0.0_r1`), `AndroidLatest` (`android-latest-release`), `AndroidCustom` (no stored repo until a custom config is submitted). Shared settings: manifest URL `https://android.googlesource.com/platform/manifest`, file `default.xml`, `fetch-ref-spec` `refs/*:refs/*` minus Gerrit meta refs.
 
 WorkflowTemplate **`abfs-uploader-config-select`** (portal: **abfs-data** → Workflow Templates):
 

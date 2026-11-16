@@ -57,11 +57,12 @@ One-time setup requirements.
 
 ### `AAOS_REVISION`
 
-The Android revision, i.e. branch or tag to build. It must be seeded into ABFS (see Prerequisites). Tested versions:
+The Android revision, i.e. branch or tag to build. It must be seeded into ABFS (see Prerequisites). Supported revisions:
 
 - `android-14.0.0_r30` (ap1a)
 - `android-15.0.0_r36` (bp1a)
 - `android-16.0.0_r3` (bp3a)
+- `android-17.0.0_r1` (cp2a)
 
 ### `AAOS_MANIFEST_NAME`
 
@@ -82,6 +83,10 @@ Examples:
     -   `aosp_cf_arm64_auto-bp1a-userdebug`
 -   Pixel Devices:
     -   `aosp_tangorpro_car-bp1a-userdebug`
+-   Android 17 (`cp2a`):
+    -   `aosp_cf_x86_64_auto-cp2a-userdebug` (`android-17.0.0_r1`)
+    -   `sdk_car_x86_64-cp2a-userdebug` (`android-17.0.0_r1`)
+    -   Tangor Pro is not supported on `cp2a`. RPi lunch targets are not supported on ABFS.
 
 ### `AAOS_BUILD_CTS`
 
@@ -108,7 +113,7 @@ Delete the ABFS cache directory prior to build.
 
 Optional parameter that allows the user to include additional commands to run after the repo has been synced, or cloned.
 
-The build/soong fix ABFS needs (Soong runs `soong_build` in a sandbox where the ABFS mount is read-only) is applied automatically by `aaos_environment.sh` based on `AAOS_REVISION`, so this parameter can stay empty. What is applied for each Android version is listed in [ABFS integration → Perform an AAOS build with ABFS](../abfs.md#build). A branch name (`android-latest-release`, `main`, custom) carries no Android version, so nothing is applied for it; add the fix through this parameter if the build needs it.
+The build/soong fix ABFS needs (Soong runs `soong_build` in a sandbox where the ABFS mount is read-only) is applied automatically by `aaos_environment.sh` based on `AAOS_REVISION`, so this parameter can stay empty. What is applied for each Android version is listed in [ABFS integration → Perform an AAOS build with ABFS](../abfs.md#build). A branch name (`android-latest-release`, `main`, custom) carries no Android version, so nothing is applied for it; add any required fixes through this parameter if the build needs it.
 
 Anything set here runs after the automatic fix. This is a single command line, so use of logical operators to execute subsequent commands is essential.
 

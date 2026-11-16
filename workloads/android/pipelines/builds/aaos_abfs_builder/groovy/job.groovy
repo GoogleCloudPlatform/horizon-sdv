@@ -83,7 +83,7 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
     choiceParam {
       name('ANDROID_VERSION')
       description('''<p>Version of Android required for SDK generation of addons and devices.</p>''')
-      choices(['15','16'])
+      choices(['15','16','17'])
     }
 
     booleanParam {
@@ -110,7 +110,7 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
       name('POST_REPO_COMMAND')
       defaultValue('')
       description('''<p>Optional additional commands post repo sync/fetch, git clone and prior to build/make.<br/>
-        The build/soong sandbox fix ABFS needs is applied automatically per Android version (Android 15 cherry-picks plus soong.go sed, Android 16 soong.go patch); leave empty unless extra commands are needed.<br/>
+        The build/soong sandbox fix ABFS needs is applied automatically per Android version (Android 15 cherry-picks plus soong.go sed, Android 16 and 17 soong.go patch). Android 17 also raises pogreb MaxValueLength. Leave empty unless extra commands are needed.<br/>
         <b>Note: </b>Single command line only, use logical operators to execute subsequent commands.<br/><br/></p>''')
       trim(true)
     }
