@@ -41,6 +41,9 @@
 #  - POST_REPO_COMMAND: additional vendor commands initialisation post repo sync.
 #  - DISK_SPACE_WATERMARK: percentage watermark to clean out old buids
 #        to retain space for current build.
+#  - ABFS_CACHE_MIN_FREE_GB: free space (GB) one cached ABFS build needs on the
+#        cache disk; a cache left by another revision is removed when less is
+#        free (default: 180).
 #  - AAOS_PARALLEL_BUILD_JOBS: define the number of parallel build jobs. Default
 #        let the build run as many jobs in parallel,  otherwise define max number.
 #  - USE_LOCAL_AOSP_MIRROR: Use the AOSP Gerrit mirror to repo sync from.
@@ -179,6 +182,10 @@ if [ -d "${AAOS_CACHE_DIRECTORY}" ]; then
     sudo chown builder:builder /"${AAOS_CACHE_DIRECTORY}"
     sudo chmod g+s /"${AAOS_CACHE_DIRECTORY}"
 
+    # Free space one ABFS build needs on the cache disk, and the record of the
+    # revision that last used the cache (kept beside it, not inside).
+    ABFS_CACHE_MIN_FREE_GB=${ABFS_CACHE_MIN_FREE_GB:-180}
+    ABFS_CACHE_REVISION_FILE="${AAOS_CACHE_DIRECTORY}/.abfs-cache-revision"
     if [[ "${ABFS_BUILDER}" == "true" ]]; then
         if [[ "${ABFS_CACHED_BUILD}" == "true" ]]; then
             ABFS_CMD_FLAGS="--cache-dir ${AAOS_CACHE_DIRECTORY}/cache"
@@ -199,6 +206,26 @@ if [ -d "${AAOS_CACHE_DIRECTORY}" ]; then
                         echo "WARNING: Removing ${AAOS_CACHE_DIRECTORY}/cache} ..."
                         find "${AAOS_CACHE_DIRECTORY}/cache" -delete
                     fi
+                    # The cache disk is kept after the build and reused by the
+                    # next one, which may be for another revision. That cache
+                    # does not help this build and may not leave room for it.
+                    # Remove it before cacheman starts when the free space is
+                    # below what one build needs, whatever the disk size.
+                    case "$0" in
+                        *initialise.sh)
+                            ABFS_CACHE_REVISION=$(cat "${ABFS_CACHE_REVISION_FILE}" 2>/dev/null || true)
+                            FREE_GB=$(df -BG "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print $4}' | tr -dc '0-9')
+                            if [ "${ABFS_CACHE_REVISION}" != "${AAOS_REVISION}" ] && \
+                               [ "${FREE_GB:-0}" -lt "${ABFS_CACHE_MIN_FREE_GB}" ] && \
+                               [ -n "$(find "${AAOS_CACHE_DIRECTORY}/cache" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+                                echo "WARNING: ${FREE_GB:-0}G free, below ${ABFS_CACHE_MIN_FREE_GB}G, and the cache is from revision '${ABFS_CACHE_REVISION:-unknown}'"
+                                echo "WARNING: Removing ${AAOS_CACHE_DIRECTORY}/cache ..."
+                                find "${AAOS_CACHE_DIRECTORY}/cache" -mindepth 1 -delete
+                            fi
+                            mkdir -p "${AAOS_CACHE_DIRECTORY}/cache"
+                            echo "${AAOS_REVISION}" > "${ABFS_CACHE_REVISION_FILE}"
+                            ;;
+                    esac
                 fi
             else
                 # Remove unwanted directories that may have been created for dev.
