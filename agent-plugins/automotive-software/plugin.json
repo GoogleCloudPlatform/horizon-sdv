@@ -1,0 +1,13 @@
+{
+  "name": "automotive-software",
+  "displayName": "Automotive Software & Verifiable C++-to-Rust Engineering Suite",
+  "description": "General-purpose Google Antigravity plugin for verifiable C/C++-to-Rust migration, Google FOSS Rust Style architectural hardening (1-10 benchmark), statistical performance parity optimization, and automotive software engineering aligned with ISO 26262:2018 and ASPICE 4.0.",
+  "version": "1.2.0",
+  "logo": "assets/logo.svg",
+  "repository": "https://github.com/GoogleCloudPlatform/horizon-sdv",
+  "suggestedPrompts": [
+    "Score this Rust middleware workspace on the 1-10 Google Rust Style & embedded hardening benchmark",
+    "Audit C++-to-Rust port provenance, API mirror coverage, and statistical performance parity",
+    "Verify ISO 26262-6 Rust safety rules, Annex D FFI boundaries, and SWE.1-SWE.6 traceability"
+  ]
+}
