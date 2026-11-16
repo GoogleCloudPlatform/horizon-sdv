@@ -166,6 +166,7 @@ Seeding is driven by the uploader table, ConfigMap `horizon/abfs-uploader-config
 | `Android14_r30` | `android-14.0.0_r30` | |
 | `Android15_r36` | `android-15.0.0_r36` | active by default |
 | `Android16_r3` | `android-16.0.0_r3` | |
+| `Android17_r1` | `android-17.0.0_r1` | |
 | `AndroidLatest` | `android-latest-release` | moving branch |
 | `AndroidCustom` | editable | any manifest `url`, `branch`, `file`, `fetch-ref-spec` |
 

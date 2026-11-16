@@ -47,6 +47,9 @@ uploaderConfig:
     - name: Android16_r3
       branch: android-16.0.0_r3
       active: false
+    - name: Android17_r1
+      branch: android-17.0.0_r1
+      active: false
     - name: AndroidLatest
       branch: android-latest-release
       active: false
