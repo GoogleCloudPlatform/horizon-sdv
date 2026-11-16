@@ -26,12 +26,12 @@ import (
 )
 
 // portalAccessPath is the Horizon API contract the Developer Portal calls for RBAC.
-// While PORTAL_ACCESS_MOCK is not "false", the proxy verifies the caller and answers
-// here. Set PORTAL_ACCESS_MOCK=false to forward this path with the same user token.
+// The proxy answers here only when PORTAL_ACCESS_MOCK=true. Otherwise it forwards
+// the call with the same user token.
 const portalAccessPath = "/v1/portal/access"
 
-// Mock-only role switch so a signed-in user can be rendered as Viewer, Developer, or Admin
-// before Keycloak group mapping is in place. Ignored once the real endpoint is forwarded.
+// Local preview switch. The proxy applies it only when PORTAL_ACCESS_ROLE_OVERRIDE=true.
+// Shared environments leave that unset so a caller cannot choose their own role.
 const portalRoleOverrideHeader = "X-Horizon-Portal-Role"
 
 type stringOrSlice []string
@@ -114,13 +114,17 @@ type portalRoleColumn struct {
 	Label string `json:"label"`
 }
 
-func writePortalAccess(w http.ResponseWriter, r *http.Request, idToken *oidc.IDToken) {
+func writePortalAccess(w http.ResponseWriter, r *http.Request, idToken *oidc.IDToken, allowRoleOverride bool) {
 	var claims portalClaims
 	_ = idToken.Claims(&claims)
 	if claims.Sub == "" {
 		claims.Sub = idToken.Subject
 	}
-	access := accessFromClaims(claims, r.Header.Get(portalRoleOverrideHeader))
+	override := ""
+	if allowRoleOverride {
+		override = r.Header.Get(portalRoleOverrideHeader)
+	}
+	access := accessFromClaims(claims, override)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	enc := json.NewEncoder(w)
@@ -174,7 +178,7 @@ func resolvePortalRole(groups []string, roleOverride string) (role, group string
 		}
 	}
 	if best == "" {
-		return "developer", "developers", true
+		return "viewer", "viewers", true
 	}
 	return best, canonicalGroup(best), false
 }
@@ -226,7 +230,7 @@ func grants(viewer, developer, admin bool) map[string]bool {
 func buildPortalAccess(subject, email, role, group string, defaulted bool) portalAccess {
 	summary := "Your role comes from your Keycloak group: " + group + ". Admin includes everything a Developer can do."
 	if defaulted {
-		summary = "No Keycloak group matched viewers, developers, or administrators, so this mock assigns Developer. Admin includes everything a Developer can do."
+		summary = "No Keycloak group matched viewers, developers, or administrators, so this mock assigns Viewer. Admin includes everything a Developer can do."
 	}
 	templates := []adminOnlyTemplate{
 		{
@@ -271,7 +275,7 @@ func buildPortalAccess(subject, email, role, group string, defaulted bool) porta
 					{ID: "platform.modules", Label: "Enable, disable, pin or reset modules", Grants: grants(false, false, true), Denial: "Enabling a module creates cloud resources that everyone shares.", RequiredRole: "admin"},
 					{ID: "platform.settings", Label: "Portal settings", Grants: grants(false, false, true), Denial: "Portal settings change what every signed-in user sees.", RequiredRole: "admin"},
 					{ID: "platform.adminApplications", Label: "Open Admin applications", Grants: grants(false, false, true), Denial: "Admin applications manage the whole platform.", RequiredRole: "admin"},
-					{ID: "platform.openArgoWorkflows", Label: "Open Argo Workflows", Grants: grants(true, true, true)},
+					{ID: "platform.openArgoWorkflows", Label: "Open Argo Workflows", Grants: grants(true, true, true), Denial: "Opening Argo Workflows shows every workflow on the platform."},
 				},
 			},
 			{

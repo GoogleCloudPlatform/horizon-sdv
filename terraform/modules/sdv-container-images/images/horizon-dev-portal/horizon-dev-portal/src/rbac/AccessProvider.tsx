@@ -15,8 +15,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { apiHorizon } from '../utils/api';
-import { authService } from '../utils/auth';
-import { buildPortalAccess, identityFromClaims } from './portalAccess';
 import type { PortalAccess } from './portalAccess';
 
 const AccessContext = createContext<PortalAccess | null>(null);
@@ -35,36 +33,28 @@ function isPortalAccess(value: unknown): value is PortalAccess {
 
 /**
  * Loads GET /v1/portal/access once the user is signed in.
- * A network failure or a missing mock (404/502/503) falls back to the same
- * payload built in the browser from the Keycloak token. HTTP 401 is left to
- * the API client, which refreshes or sends the user to login.
+ * Only a 200 body that matches the contract is shown. HTTP 401 is left to
+ * the API client, which refreshes or sends the user to login. Any other
+ * response, including 403, 5xx, and a body that is not the contract, leaves
+ * access unknown so the UI stays closed instead of inventing grants from the token.
  */
 export function AccessProvider({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState<PortalAccess | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const fallback = () => buildPortalAccess(identityFromClaims(authService.getTokenClaims()));
     (async () => {
       try {
         const resp = await apiHorizon('/v1/portal/access');
-        if (cancelled || resp.status === 401) {
+        if (cancelled || resp.status === 401 || !resp.ok) {
           return;
         }
-        if (resp.ok) {
-          const body: unknown = await resp.json();
-          if (isPortalAccess(body)) {
-            if (!cancelled) {
-              setAccess(body);
-            }
-            return;
-          }
+        const body: unknown = await resp.json();
+        if (!cancelled && isPortalAccess(body)) {
+          setAccess(body);
         }
       } catch {
-        // The dev server or proxy is not answering; use the in-browser mock.
-      }
-      if (!cancelled) {
-        setAccess(fallback());
+        // Leave access unknown. A client-built matrix can grant more than the server.
       }
     })();
     return () => {

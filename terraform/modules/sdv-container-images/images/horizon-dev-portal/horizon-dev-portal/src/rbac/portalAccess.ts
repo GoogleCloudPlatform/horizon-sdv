@@ -183,7 +183,7 @@ export function resolveRole(
     }
   }
   if (!best) {
-    return { role: 'developer', keycloakGroup: 'developers', defaulted: true };
+    return { role: 'viewer', keycloakGroup: 'viewers', defaulted: true };
   }
   return { role: best, keycloakGroup: CANONICAL_GROUP[best], defaulted: false };
 }
@@ -274,7 +274,7 @@ function summaryFor(resolved: {
   defaulted: boolean;
 }): string {
   if (resolved.defaulted) {
-    return 'No Keycloak group matched viewers, developers, or administrators, so this mock assigns Developer. Admin includes everything a Developer can do.';
+    return 'No Keycloak group matched viewers, developers, or administrators, so this mock assigns Viewer. Admin includes everything a Developer can do.';
   }
   return `Your role comes from your Keycloak group: ${resolved.keycloakGroup}. Admin includes everything a Developer can do.`;
 }
@@ -319,6 +319,7 @@ export function buildPortalAccess(
         id: 'platform.openArgoWorkflows',
         label: 'Open Argo Workflows',
         grants: { viewer: true, developer: true, admin: true },
+        denial: 'Opening Argo Workflows shows every workflow on the platform.',
       },
     ],
   };
@@ -471,6 +472,17 @@ export function applicationAudience(
   return access?.applications.find((app) => app.id === id)?.audience ?? fallback;
 }
 
+/** Grant that allows opening an application card. Matches applicationAllowed. */
+export function applicationGrantId(id: string, audience: 'developer' | 'admin'): string {
+  if (audience === 'admin') {
+    return 'platform.adminApplications';
+  }
+  if (id === 'argo-workflows') {
+    return 'platform.openArgoWorkflows';
+  }
+  return 'platform.view';
+}
+
 export function applicationAllowed(
   access: PortalAccess | null,
   id: string,
@@ -479,13 +491,7 @@ export function applicationAllowed(
   if (!access) {
     return false;
   }
-  if (audience === 'admin') {
-    return hasGrant(access, 'platform.adminApplications');
-  }
-  if (id === 'argo-workflows') {
-    return hasGrant(access, 'platform.openArgoWorkflows');
-  }
-  return hasGrant(access, 'platform.view');
+  return hasGrant(access, applicationGrantId(id, audience));
 }
 
 function sameIdentity(left: string, right: string): boolean {

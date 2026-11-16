@@ -87,7 +87,10 @@ func main() {
 	haBase := mustEnv("HORIZON_API_BASE_URL")
 	// Display-only. Horizon API calls use the signed-in user's Keycloak token.
 	ciID := env("HORIZON_API_CI_CLIENT_ID", "")
-	mockAccess := !strings.EqualFold(env("PORTAL_ACCESS_MOCK", "true"), "false")
+	// Both stay off unless set to "true". A shared environment that leaves them
+	// unset forwards /v1/portal/access and ignores X-Horizon-Portal-Role.
+	mockAccess := envFlag("PORTAL_ACCESS_MOCK")
+	allowRoleOverride := envFlag("PORTAL_ACCESS_ROLE_OVERRIDE")
 
 	ctx := context.Background()
 	provider, err := oidc.NewProvider(ctx, issuer)
@@ -109,7 +112,7 @@ func main() {
 	})
 	mux.Handle("/api/mm/", newMMProxy(mmURL, verifier))
 	var cliVer bearerVerifier = oidcBearerVerifier{inner: verifier}
-	mux.Handle("/api/horizon/", newHorizonProxy(haURL, verifier, mockAccess))
+	mux.Handle("/api/horizon/", newHorizonProxy(haURL, verifier, mockAccess, allowRoleOverride))
 	registerCLIRoutes(mux, env("CLI_DIST_DIR", "/cli-dist"), cliVer)
 	mux.Handle("/", spaHandler(htmlBaseTagHref(normalizePublicPath(env("PUBLIC_PATH", "")))))
 
@@ -117,6 +120,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("listen: %v", err)
 	}
+	log.Printf("portal access mock=%t roleOverride=%t", mockAccess, allowRoleOverride)
 	log.Printf("listening on %s", ln.Addr().String())
 	log.Fatal(http.Serve(ln, mux))
 }
@@ -126,6 +130,11 @@ func env(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// envFlag is true only when the variable is explicitly "true".
+func envFlag(k string) bool {
+	return strings.EqualFold(env(k, "false"), "true")
 }
 
 func mustEnv(k string) string {
@@ -225,22 +234,47 @@ func bearerToken(r *http.Request) (string, error) {
 	return t, nil
 }
 
+// portalAccessCookie is the first chunk of the caller's Keycloak access token.
+// Longer tokens continue in horizon_portal_access_1, _2, ... so a JWT that does
+// not fit in one browser cookie still reaches the Swagger iframe.
+const portalAccessCookie = "horizon_portal_access"
+const portalAccessCookieChunks = 16
+
 // userBearer is the caller's Keycloak access token. Fetch sends Authorization.
 // The Swagger iframe cannot set that header, so the SPA also mirrors the same token
-// into a SameSite cookie scoped to /api/horizon.
+// into SameSite cookies scoped to /api/horizon.
 func userBearer(r *http.Request) (string, error) {
 	if raw, err := bearerToken(r); err == nil {
 		return raw, nil
 	}
-	c, err := r.Cookie("horizon_portal_access")
-	if err != nil {
+	return tokenFromPortalCookies(r)
+}
+
+func tokenFromPortalCookies(r *http.Request) (string, error) {
+	var b strings.Builder
+	for i := 0; i < portalAccessCookieChunks; i++ {
+		name := portalAccessCookie
+		if i > 0 {
+			name = fmt.Sprintf("%s_%d", portalAccessCookie, i)
+		}
+		c, err := r.Cookie(name)
+		if err != nil {
+			break
+		}
+		raw := strings.TrimSpace(c.Value)
+		if raw == "" {
+			return "", fmt.Errorf("missing bearer")
+		}
+		part, err := url.QueryUnescape(raw)
+		if err != nil || part == "" {
+			return "", fmt.Errorf("missing bearer")
+		}
+		b.WriteString(part)
+	}
+	if b.Len() == 0 {
 		return "", fmt.Errorf("missing bearer")
 	}
-	v, err := url.QueryUnescape(strings.TrimSpace(c.Value))
-	if err != nil || v == "" {
-		return "", fmt.Errorf("missing bearer")
-	}
-	return v, nil
+	return b.String(), nil
 }
 
 func newMMProxy(upstream *url.URL, verifier *oidc.IDTokenVerifier) http.Handler {
@@ -342,7 +376,8 @@ func isHorizonDocsPath(path string) bool {
 // Swagger and OpenAPI stay reachable without a bearer, matching the embedded docs iframe.
 // When a user token is present on those paths it is verified and forwarded.
 // mockAccess serves GET /v1/portal/access locally.
-func newHorizonProxy(upstream *url.URL, verifier *oidc.IDTokenVerifier, mockAccess bool) http.Handler {
+// allowRoleOverride applies X-Horizon-Portal-Role. Leave it off outside local dev.
+func newHorizonProxy(upstream *url.URL, verifier *oidc.IDTokenVerifier, mockAccess bool, allowRoleOverride bool) http.Handler {
 	rp := httputil.NewSingleHostReverseProxy(upstream)
 	// Chunked NDJSON log streams: periodic flush so the browser sees lines without buffering the whole body.
 	rp.FlushInterval = 100 * time.Millisecond
@@ -374,7 +409,7 @@ func newHorizonProxy(upstream *url.URL, verifier *oidc.IDTokenVerifier, mockAcce
 			upstreamPath = "/"
 		}
 		if idToken != nil && mockAccess && r.Method == http.MethodGet && (upstreamPath == portalAccessPath || upstreamPath == portalAccessPath+"/") {
-			writePortalAccess(w, r, idToken)
+			writePortalAccess(w, r, idToken, allowRoleOverride)
 			return
 		}
 

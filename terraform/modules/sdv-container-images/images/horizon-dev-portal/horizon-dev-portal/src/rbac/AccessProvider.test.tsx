@@ -16,18 +16,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiHorizon } from '../utils/api';
-import { authService } from '../utils/auth';
 import { AccessProvider, usePortalAccess } from './AccessProvider';
 import { portalAccess } from '../test/portalAccessFixture';
 
 vi.mock('../utils/api', () => ({
   apiHorizon: vi.fn(),
-}));
-
-vi.mock('../utils/auth', () => ({
-  authService: {
-    getTokenClaims: vi.fn(),
-  },
 }));
 
 const apiHorizonMock = vi.mocked(apiHorizon);
@@ -47,11 +40,6 @@ function json(body: unknown, status = 200): Response {
 describe('AccessProvider', () => {
   beforeEach(() => {
     apiHorizonMock.mockReset();
-    vi.mocked(authService.getTokenClaims).mockReturnValue({
-      email: 'ada@example.com',
-      preferred_username: 'ada@example.com',
-      groups: ['developers'],
-    });
   });
 
   it('uses a valid access payload from the API', async () => {
@@ -65,15 +53,26 @@ describe('AccessProvider', () => {
     expect(apiHorizonMock).toHaveBeenCalledWith('/v1/portal/access');
   });
 
-  it('builds access from the token when the API is unavailable or returns a non-contract body', async () => {
+  it('stays closed when the API is unavailable, denies the caller, or returns a non-contract body', async () => {
     apiHorizonMock.mockResolvedValueOnce(new Response('down', { status: 503 }));
     const { unmount } = render(
       <AccessProvider>
         <Probe />
       </AccessProvider>
     );
-    expect(await screen.findByText('developer')).toBeInTheDocument();
+    await waitFor(() => expect(apiHorizonMock).toHaveBeenCalled());
+    expect(screen.getByText('none')).toBeInTheDocument();
     unmount();
+
+    apiHorizonMock.mockResolvedValueOnce(new Response(null, { status: 403 }));
+    const denied = render(
+      <AccessProvider>
+        <Probe />
+      </AccessProvider>
+    );
+    await waitFor(() => expect(apiHorizonMock).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByText('none').length).toBeGreaterThan(0);
+    denied.unmount();
 
     apiHorizonMock.mockResolvedValueOnce(json({ role: 'nope' }));
     render(
@@ -81,17 +80,19 @@ describe('AccessProvider', () => {
         <Probe />
       </AccessProvider>
     );
-    expect(await screen.findByText('developer')).toBeInTheDocument();
+    await waitFor(() => expect(apiHorizonMock).toHaveBeenCalledTimes(3));
+    expect(screen.getByText('none')).toBeInTheDocument();
   });
 
-  it('builds access from the token when the request throws', async () => {
+  it('stays closed when the request throws', async () => {
     apiHorizonMock.mockRejectedValue(new Error('network down'));
     render(
       <AccessProvider>
         <Probe />
       </AccessProvider>
     );
-    expect(await screen.findByText('developer')).toBeInTheDocument();
+    await waitFor(() => expect(apiHorizonMock).toHaveBeenCalled());
+    expect(screen.getByText('none')).toBeInTheDocument();
   });
 
   it('leaves access unknown on 401 so the API client can refresh or redirect', async () => {

@@ -90,6 +90,21 @@ func TestEnvAndMustEnv(t *testing.T) {
 	if got := env("HORIZON_PROXY_TEST_ENV_UNSET", "default"); got != "default" {
 		t.Fatalf("unset env() = %q", got)
 	}
+	if envFlag("HORIZON_PROXY_TEST_FLAG_UNSET") {
+		t.Fatal("unset flag was enabled")
+	}
+	t.Setenv("HORIZON_PROXY_TEST_FLAG", "true")
+	if !envFlag("HORIZON_PROXY_TEST_FLAG") {
+		t.Fatal("true flag was disabled")
+	}
+	t.Setenv("HORIZON_PROXY_TEST_FLAG", "FALSE")
+	if envFlag("HORIZON_PROXY_TEST_FLAG") {
+		t.Fatal("false flag was enabled")
+	}
+	t.Setenv("HORIZON_PROXY_TEST_FLAG", "yes")
+	if envFlag("HORIZON_PROXY_TEST_FLAG") {
+		t.Fatal("non-true flag was enabled")
+	}
 
 	t.Setenv(key, "  required  ")
 	if got := mustEnv(key); got != "required" {
@@ -268,6 +283,8 @@ func TestUserBearer(t *testing.T) {
 		{name: "header wins over cookie", header: "Bearer header-tok", cookie: "horizon_portal_access=cookie-tok", want: "header-tok"},
 		{name: "cookie is URL-decoded", cookie: "horizon_portal_access=a%2Fb", want: "a/b"},
 		{name: "decoded spaces are non-empty", cookie: "horizon_portal_access=%20%20", want: "  "},
+		{name: "cookie chunks are joined", cookie: "horizon_portal_access=aaa; horizon_portal_access_1=bbb", want: "aaabbb"},
+		{name: "a missing chunk stops the join", cookie: "horizon_portal_access=aaa; horizon_portal_access_2=ccc", want: "aaa"},
 		{name: "no header or cookie", wantErr: true},
 		{name: "empty cookie value", cookie: "horizon_portal_access=", wantErr: true},
 		{name: "invalid escape in cookie", cookie: "horizon_portal_access=%", wantErr: true},
@@ -577,7 +594,7 @@ func TestNewHorizonProxy(t *testing.T) {
 	}
 
 	issuer := newTestOIDC(t)
-	h := newHorizonProxy(upURL, issuer.verifier, true)
+	h := newHorizonProxy(upURL, issuer.verifier, true, false)
 	raw := issuer.sign(t, time.Hour)
 	beforeTokens := issuer.tokenHits.Load()
 
@@ -670,6 +687,22 @@ func TestNewHorizonProxy(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/horizon/from-cookie", nil)
+	mid := len(raw) / 2
+	req.AddCookie(&http.Cookie{Name: "horizon_portal_access", Value: raw[:mid]})
+	req.AddCookie(&http.Cookie{Name: "horizon_portal_access_1", Value: raw[mid:]})
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("chunked cookie status %d body %s", rec.Code, rec.Body.String())
+	}
+	upstreamMu.Lock()
+	gotAuths = append([]string(nil), auths...)
+	upstreamMu.Unlock()
+	if gotAuths[len(gotAuths)-1] != "Bearer "+raw {
+		t.Fatalf("chunked cookie auth %q", gotAuths[len(gotAuths)-1])
+	}
+
+	rec = httptest.NewRecorder()
 	big := bytes.Repeat([]byte("a"), (4<<20)+1)
 	req = httptest.NewRequest(http.MethodPost, "/api/horizon/v1/jobs", bytes.NewReader(big))
 	req.Header.Set("Authorization", "Bearer "+raw)
@@ -707,7 +740,7 @@ func TestNewHorizonProxy(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+raw)
 	req.Header.Set(portalRoleOverrideHeader, "admin")
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"role":"admin"`) || !strings.Contains(rec.Body.String(), `"mock":true`) {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"role":"viewer"`) || strings.Contains(rec.Body.String(), `"role":"admin"`) || !strings.Contains(rec.Body.String(), `"mock":true`) {
 		t.Fatalf("access status %d body %s", rec.Code, rec.Body.String())
 	}
 	upstreamMu.Lock()
@@ -717,7 +750,17 @@ func TestNewHorizonProxy(t *testing.T) {
 		t.Fatal("mock access endpoint called Horizon API")
 	}
 
-	forward := newHorizonProxy(upURL, issuer.verifier, false)
+	elevated := newHorizonProxy(upURL, issuer.verifier, true, true)
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/horizon/v1/portal/access", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set(portalRoleOverrideHeader, "admin")
+	elevated.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"role":"admin"`) {
+		t.Fatalf("role override status %d body %s", rec.Code, rec.Body.String())
+	}
+
+	forward := newHorizonProxy(upURL, issuer.verifier, false, true)
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/horizon/v1/portal/access", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
@@ -743,7 +786,7 @@ func TestNewHorizonProxyDocsPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	issuer := newTestOIDC(t)
-	h := newHorizonProxy(upURL, issuer.verifier, true)
+	h := newHorizonProxy(upURL, issuer.verifier, true, false)
 	raw := issuer.sign(t, time.Hour)
 
 	for _, path := range []string{"/api/horizon/swagger", "/api/horizon/openapi.json", "/api/horizon/swagger/"} {
@@ -1181,6 +1224,7 @@ func TestProxyMainSmoke(t *testing.T) {
 		"HORIZON_API_CI_CLIENT_SECRET": "ci-secret",
 		"PUBLIC_BASE_URL":              "https://portal.example",
 		"PUBLIC_PATH":                  "dev",
+		"PORTAL_ACCESS_MOCK":           "true",
 	})
 	cmd.Stdout = &logs
 	cmd.Stderr = &logs
@@ -1286,13 +1330,14 @@ func TestProxyMainSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	accReq.Header.Set("Authorization", "Bearer "+raw)
+	accReq.Header.Set("X-Horizon-Portal-Role", "admin")
 	accResp, err := client.Do(accReq)
 	if err != nil {
 		t.Fatal(err)
 	}
 	accBody, _ := io.ReadAll(accResp.Body)
 	accResp.Body.Close()
-	if accResp.StatusCode != http.StatusOK || !strings.Contains(string(accBody), `"role":"developer"`) || !strings.Contains(string(accBody), "Open Admin applications") {
+	if accResp.StatusCode != http.StatusOK || !strings.Contains(string(accBody), `"role":"viewer"`) || strings.Contains(string(accBody), `"role":"admin"`) || !strings.Contains(string(accBody), "Open Admin applications") {
 		t.Fatalf("portal access %d %s\n%s", accResp.StatusCode, accBody, logs.String())
 	}
 }

@@ -157,6 +157,7 @@ function portalAccessDevApi(): Plugin {
         }
         const header = req.headers.authorization ?? '';
         const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
+        // Dev server only. The Go proxy ignores this header unless PORTAL_ACCESS_ROLE_OVERRIDE=true.
         const override = req.headers['x-horizon-portal-role'];
         const roleOverride = Array.isArray(override) ? override[0] : override;
         sendJson(res, 200, buildPortalAccess(identityFromToken(token), roleOverride));

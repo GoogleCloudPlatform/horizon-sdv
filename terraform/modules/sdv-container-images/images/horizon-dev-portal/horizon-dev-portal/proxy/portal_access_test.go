@@ -47,9 +47,9 @@ func TestResolvePortalRole(t *testing.T) {
 	if role != "admin" || group != "administrators" || defaulted {
 		t.Fatalf("path group got %s %s defaulted %v", role, group, defaulted)
 	}
-	role, _, defaulted = resolvePortalRole(nil, "nope")
-	if role != "developer" || !defaulted {
-		t.Fatalf("default got %s defaulted %v", role, defaulted)
+	role, group, defaulted = resolvePortalRole(nil, "nope")
+	if role != "viewer" || group != "viewers" || !defaulted {
+		t.Fatalf("default got %s %s defaulted %v", role, group, defaulted)
 	}
 }
 
@@ -78,8 +78,8 @@ func TestAccessFromClaims(t *testing.T) {
 
 func TestAccessFromClaimsSubjectFallback(t *testing.T) {
 	access := accessFromClaims(portalClaims{Sub: "sub-1"}, "")
-	if access.Subject != "sub-1" || access.Email != "sub-1" {
-		t.Fatalf("sub fallback got subject %q email %q", access.Subject, access.Email)
+	if access.Subject != "sub-1" || access.Email != "sub-1" || access.Role != "viewer" {
+		t.Fatalf("sub fallback got subject %q email %q role %q", access.Subject, access.Email, access.Role)
 	}
 	access = accessFromClaims(portalClaims{Name: "Some User"}, "")
 	if access.Subject != "Some User" || access.Email != "Some User" {
@@ -141,7 +141,7 @@ func TestWritePortalAccessSubjectFallback(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	writePortalAccess(rec, httptest.NewRequest(http.MethodGet, "/api/horizon/v1/portal/access", nil), idToken)
+	writePortalAccess(rec, httptest.NewRequest(http.MethodGet, "/api/horizon/v1/portal/access", nil), idToken, false)
 
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("Cache-Control %q", got)

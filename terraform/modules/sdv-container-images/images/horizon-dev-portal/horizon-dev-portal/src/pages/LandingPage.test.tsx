@@ -14,6 +14,7 @@
 //
 // @vitest-environment jsdom
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PortalAccess } from '../rbac/portalAccess';
 import { renderThemed } from '../test/render';
@@ -62,6 +63,36 @@ describe('LandingPage', () => {
       'href',
       '/grafana'
     );
+  });
+
+  it('explains a locked admin app with the admin-applications reason', async () => {
+    const user = userEvent.setup();
+    renderThemed(<LandingPage />);
+    const button = within(card('Keycloak')).getByRole('button', { name: 'Open' });
+    await user.hover(button.parentElement!);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'Admin applications manage the whole platform'
+    );
+  });
+
+  it('explains a locked Argo Workflows card with the Argo reason', async () => {
+    const access = portalAccess('viewer');
+    const platform = access.sections.find((section) => section.id === 'platform');
+    const openArgo = platform?.functions.find((fn) => fn.id === 'platform.openArgoWorkflows');
+    if (!openArgo) {
+      throw new Error('missing Argo grant');
+    }
+    openArgo.grants = { viewer: false, developer: true, admin: true };
+    accessBox.current = access;
+    const user = userEvent.setup();
+    renderThemed(<LandingPage />);
+    const button = within(card('Argo Workflows')).getByRole('button', { name: 'Open' });
+    await user.hover(button.parentElement!);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent(
+      'Opening Argo Workflows shows every workflow on the platform.'
+    );
+    expect(tooltip).not.toHaveTextContent('Admin applications manage the whole platform');
   });
 
   it('keeps every application locked while access is unknown', () => {

@@ -179,6 +179,32 @@ describe('authService', () => {
       expect(lastCookie()).toContain('SameSite=Strict; Secure');
     });
 
+    it('splits a long access token across cookies so Swagger can send it', async () => {
+      const auth = await loadAuth();
+      const kc = currentKc();
+      const token = jwt({ exp: nowSec() + 600, pad: 'x'.repeat(7000) });
+      expect(token.length).toBeGreaterThan(3200);
+      kc.init.mockImplementation(async () => {
+        kc.token = token;
+        kc.refreshToken = 'refresh-1';
+        kc.authenticated = true;
+        return true;
+      });
+
+      await expect(auth.init()).resolves.toBe(true);
+
+      const sets = cookieWrites.filter((write) => !write.includes('Max-Age=0'));
+      const parts = sets.map((write) => {
+        const value = write.slice(write.indexOf('=') + 1, write.indexOf(';'));
+        return decodeURIComponent(value);
+      });
+      expect(parts.length).toBeGreaterThan(1);
+      expect(parts.join('')).toBe(token);
+      expect(sets[0]).toContain('horizon_portal_access=');
+      expect(sets[1]).toContain('horizon_portal_access_1=');
+      expect(sets[0]).toContain('Path=/dev/api/horizon');
+    });
+
     it('clears the stored session when Keycloak reports no login', async () => {
       const auth = await loadAuth();
       const kc = currentKc();

@@ -40,7 +40,12 @@ import {
 import type { ReactElement } from 'react';
 import { usePortalAccess } from '../rbac/AccessProvider';
 import { HoverTooltip, RoleBadge } from '../rbac/GatedControl';
-import { applicationAllowed, applicationAudience, gatedTooltip } from '../rbac/portalAccess';
+import {
+  applicationAllowed,
+  applicationAudience,
+  applicationGrantId,
+  gatedTooltip,
+} from '../rbac/portalAccess';
 
 type ApplicationCard = {
   id: string;
@@ -60,7 +65,7 @@ function ApplicationCardView({ card }: { card: ApplicationCard }) {
     ? 'Checking your access…'
     : allowed
       ? ''
-      : gatedTooltip(access, 'platform.adminApplications');
+      : gatedTooltip(access, applicationGrantId(card.id, audience));
 
   return (
     <Card

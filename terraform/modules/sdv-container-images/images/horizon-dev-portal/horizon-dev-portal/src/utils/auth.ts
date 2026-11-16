@@ -18,6 +18,9 @@ import { config } from './config';
 import { getRouterBasename } from './publicPath';
 
 const PORTAL_ACCESS_COOKIE = 'horizon_portal_access';
+/** Per-cookie token budget. Browsers cap one cookie around 4KB including its name and attributes. */
+const PORTAL_ACCESS_COOKIE_CHUNK = 3200;
+const PORTAL_ACCESS_COOKIE_CHUNKS = 16;
 
 const SK_TOKEN = 'kc-devportal-token';
 const SK_REFRESH = 'kc-devportal-refresh';
@@ -52,22 +55,37 @@ function loginPath(): string {
   return `${base}/login`;
 }
 
+function portalAccessCookieName(index: number): string {
+  return index === 0 ? PORTAL_ACCESS_COOKIE : `${PORTAL_ACCESS_COOKIE}_${index}`;
+}
+
 /**
- * Mirrors the user access token into a cookie scoped to the Horizon proxy so browser
+ * Mirrors the user access token into cookies scoped to the Horizon proxy so browser
  * navigations (embedded Swagger) present the same Keycloak token as fetch() calls.
+ * A token that does not fit in one cookie is split across horizon_portal_access_N.
  */
 function syncPortalAccessCookie(token: string | undefined): void {
   const secure = window.location.protocol === 'https:' ? '; Secure' : '';
   const path = `${getRouterBasename()}/api/horizon`;
-  const clear = `${PORTAL_ACCESS_COOKIE}=; Path=${path}; Max-Age=0; SameSite=Strict${secure}`;
-  if (!token || token.length > 3800) {
-    document.cookie = clear;
+  for (let index = 0; index < PORTAL_ACCESS_COOKIE_CHUNKS; index++) {
+    document.cookie = `${portalAccessCookieName(index)}=; Path=${path}; Max-Age=0; SameSite=Strict${secure}`;
+  }
+  if (!token) {
+    return;
+  }
+  const chunks: string[] = [];
+  for (let offset = 0; offset < token.length; offset += PORTAL_ACCESS_COOKIE_CHUNK) {
+    chunks.push(token.slice(offset, offset + PORTAL_ACCESS_COOKIE_CHUNK));
+  }
+  if (chunks.length > PORTAL_ACCESS_COOKIE_CHUNKS) {
     return;
   }
   const parsed = decodeJwtPayload(token);
   const exp = typeof parsed?.exp === 'number' ? parsed.exp : 0;
   const maxAge = exp > 0 ? Math.max(30, exp - Math.floor(Date.now() / 1000)) : 300;
-  document.cookie = `${PORTAL_ACCESS_COOKIE}=${encodeURIComponent(token)}; Path=${path}; Max-Age=${maxAge}; SameSite=Strict${secure}`;
+  chunks.forEach((chunk, index) => {
+    document.cookie = `${portalAccessCookieName(index)}=${encodeURIComponent(chunk)}; Path=${path}; Max-Age=${maxAge}; SameSite=Strict${secure}`;
+  });
 }
 
 /** Decode JWT payload (no signature verification — display/session use only). */

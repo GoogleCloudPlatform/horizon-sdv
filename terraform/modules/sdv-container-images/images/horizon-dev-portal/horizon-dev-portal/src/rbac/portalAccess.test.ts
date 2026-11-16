@@ -17,6 +17,7 @@ import {
   abortDecision,
   applicationAllowed,
   applicationAudience,
+  applicationGrantId,
   buildPortalAccess,
   findAdminTemplate,
   functionById,
@@ -82,16 +83,19 @@ describe('resolveRole', () => {
     });
   });
 
-  it('assigns Developer when nothing matches', () => {
+  it('assigns Viewer when nothing matches', () => {
     expect(resolveRole([], 'nope')).toEqual({
-      role: 'developer',
-      keycloakGroup: 'developers',
+      role: 'viewer',
+      keycloakGroup: 'viewers',
       defaulted: true,
     });
     expect(resolveRole(['realm-admin', 'offline_access'])).toMatchObject({
-      role: 'developer',
+      role: 'viewer',
       defaulted: true,
     });
+    const access = buildPortalAccess(identity([]));
+    expect(hasGrant(access, 'workflows.submit')).toBe(false);
+    expect(hasGrant(access, 'workflows.abortOwn')).toBe(false);
   });
 });
 
@@ -159,8 +163,8 @@ describe('buildPortalAccess', () => {
 
   it('says when the mock defaulted the role', () => {
     const access = buildPortalAccess(identity([]));
-    expect(access.role).toBe('developer');
-    expect(access.summary).toContain('this mock assigns Developer');
+    expect(access.role).toBe('viewer');
+    expect(access.summary).toContain('this mock assigns Viewer');
   });
 
   it('lets the role override win', () => {
@@ -281,6 +285,9 @@ describe('applications', () => {
     expect(applicationAllowed(viewer, 'gerrit', 'developer')).toBe(true);
     expect(applicationAllowed(viewer, 'argo-workflows', 'developer')).toBe(true);
     expect(applicationAllowed(admin, 'grafana', 'admin')).toBe(true);
+    expect(applicationGrantId('grafana', 'admin')).toBe('platform.adminApplications');
+    expect(applicationGrantId('argo-workflows', 'developer')).toBe('platform.openArgoWorkflows');
+    expect(applicationGrantId('gerrit', 'developer')).toBe('platform.view');
   });
 });
 

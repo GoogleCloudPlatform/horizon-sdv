@@ -622,33 +622,31 @@ function TemplatesTab({
             : !canSubmitRole
               ? gatedTooltip(access, 'workflows.submit')
               : '';
+        const headerBadge = adminRule
+          ? 'Admin'
+          : !openAllowed && access
+            ? requiredRoleLabel(access, 'workflows.submit')
+            : null;
         return (
           <Card key={`${e.module}/${e.templateName}`} variant="outlined">
             <CardContent>
               <Box
                 sx={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'space-between',
-                  gap: 1,
+                  display: 'grid',
+                  gridTemplateColumns: headerBadge ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)',
+                  alignItems: 'center',
+                  columnGap: 1.5,
                 }}
               >
-                <Typography variant="h6" sx={{ minWidth: 0, flex: 1, overflowWrap: 'anywhere' }}>
+                <Typography variant="h6" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                   {e.templateName}
                 </Typography>
-                {adminRule ? (
-                  <Box sx={{ flexShrink: 0 }}>
-                    <RoleBadge label="Admin" />
-                  </Box>
-                ) : null}
+                {headerBadge ? <RoleBadge label={headerBadge} /> : null}
               </Box>
               <Typography variant="caption" color="text.secondary" display="block">
                 {e.namespace}
               </Typography>
-              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                {!openAllowed && access ? (
-                  <RoleBadge label={requiredRoleLabel(access, 'workflows.submit')} />
-                ) : null}
+              <Box sx={{ mt: 2 }}>
                 <HoverTooltip title={tip}>
                   <Button
                     variant="contained"
@@ -961,9 +959,28 @@ function SubmitDialog({
     (p) => p.name !== 'submittedBy' && isYamlWorkflowParam(params[p.name] ?? p.default ?? '')
   );
 
+  const submitBadge =
+    !permitted && access
+      ? templateLocked
+        ? 'Admin'
+        : requiredRoleLabel(access, 'workflows.submit')
+      : null;
+
   return (
     <Dialog open onClose={onClose} maxWidth={hasYamlField ? 'md' : 'sm'} fullWidth>
-      <DialogTitle sx={{ overflowWrap: 'anywhere' }}>Submit: {entry.templateName}</DialogTitle>
+      <DialogTitle>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: submitBadge ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)',
+            alignItems: 'center',
+            columnGap: 1.5,
+          }}
+        >
+          <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>Submit: {entry.templateName}</Box>
+          {submitBadge ? <RoleBadge label={submitBadge} /> : null}
+        </Box>
+      </DialogTitle>
       <DialogContent>
         {entry.parameters
           .filter((p) => p.name !== 'submittedBy')
@@ -1047,11 +1064,6 @@ function SubmitDialog({
       </DialogContent>
       <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
         <Button onClick={onClose}>Cancel</Button>
-        {!permitted && access ? (
-          <RoleBadge
-            label={templateLocked ? 'Admin' : requiredRoleLabel(access, 'workflows.submit')}
-          />
-        ) : null}
         <HoverTooltip title={submitTip}>
           <Button
             variant="contained"
@@ -1200,6 +1212,13 @@ function WorkflowDetailDialog({
     : canDelete
       ? 'Remove workflow record from the cluster (terminal workflows only)'
       : gatedTooltip(access, 'workflows.delete');
+  const detailBadge = !detail
+    ? null
+    : !terminal && !abort.allowed && abort.badge
+      ? abort.badge
+      : terminal && access && !canDelete
+        ? 'Admin'
+        : null;
   const detailTitle = detail
     ? (() => {
         const root = detail.workflowTemplate?.trim() || 'Workflow';
@@ -1398,7 +1417,7 @@ function WorkflowDetailDialog({
               >
                 {!terminal && (
                   <>
-                    {!abort.allowed && abort.badge ? <RoleBadge label={abort.badge} /> : null}
+                    {detailBadge ? <RoleBadge label={detailBadge} /> : null}
                     <HoverTooltip title={abort.tooltip}>
                       <Button
                         size="small"
@@ -1415,7 +1434,7 @@ function WorkflowDetailDialog({
                 )}
                 {terminal && (
                   <>
-                    {access && !canDelete ? <RoleBadge label="Admin" /> : null}
+                    {detailBadge ? <RoleBadge label={detailBadge} /> : null}
                     <HoverTooltip title={deleteTip}>
                       <Button
                         size="small"

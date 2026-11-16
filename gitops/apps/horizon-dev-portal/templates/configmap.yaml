@@ -32,3 +32,9 @@ data:
   KEYCLOAK_CLIENT_ID: {{ .Values.config.keycloakClientId | quote }}
   HORIZON_API_CI_CLIENT_ID: {{ .Values.config.horizonApiCiClientId | quote }}
   CLI_DIST_DIR: "/cli-dist"
+  # Explicit opt-in. The proxy defaults this to false. Horizon API does not serve
+  # GET /v1/portal/access yet, so the portal answers from Keycloak groups.
+  PORTAL_ACCESS_MOCK: "true"
+  # Leave false in shared environments. True lets any signed-in user send
+  # X-Horizon-Portal-Role and preview another role. Local dev only.
+  PORTAL_ACCESS_ROLE_OVERRIDE: "false"
