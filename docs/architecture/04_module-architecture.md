@@ -274,6 +274,8 @@ Afterwards:
 3. After a successful drain, it deletes the core Application and only then resumes it, so Argo CD prunes it without syncing it again. The disable continues as above, and the parent Application is also deleted before it resumes.
 4. Once the parent Application is gone, Module Manager deletes the module's three CRDs.
 
+The disable keeps running if the client disconnects, for example when the portal tab is closed, within a time budget of the three stage timeouts plus a margin. Other modules still stop when the request is cancelled.
+
 While the drain runs, the portal shows the module as `UNINSTALL IN PROGRESS`. If a step of the drain times out, the disable fails and nothing else changes: the module stays enabled, both Applications resume, and you can retry. If Module Manager restarts during the drain while the module is still enabled, it resumes both Applications on startup. If it restarts after the module is already disabled, it finishes the parent delete and resumes only Applications that are being deleted. Module Manager runs as a single pod that is replaced rather than rolled, so an old pod and a new one never overlap.
 
 If a module sets `autoDisableWhenUnused`, Module Manager checks after every enable and disable whether the last enabled module that depends on it (hard or soft) has gone, and disables it if so.

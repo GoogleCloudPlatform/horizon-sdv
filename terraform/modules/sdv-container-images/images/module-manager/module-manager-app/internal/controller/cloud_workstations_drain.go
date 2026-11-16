@@ -73,8 +73,8 @@ func pauseCloudWorkstationsApplications(ctx context.Context, c client.Client, ar
 // disable error. selfHeal is never changed, so Argo CD manages both again. The module is still enabled.
 //
 // This deliberately does not use the caller's ctx for its own API calls. It runs on the error path of a
-// long drain (up to cwsDrainStageTimeout per stage) that, for the REST disable handler, is driven by
-// r.Context() - cancelled the moment the client/proxy disconnects. Reusing that ctx here would make the
+// long drain (up to cwsDrainStageTimeout per stage) whose ctx can already be dead: the disable budget may
+// have expired, or the platform teardown ctx may be cancelled. Reusing that ctx here would make the
 // resume call fail immediately with the same cancellation/deadline that triggered this cleanup in the
 // first place, leaving the Applications stuck paused with no recovery. A fresh, short-lived context
 // gives the cleanup a real chance to reach the API server even when the triggering ctx is already dead.
@@ -254,7 +254,16 @@ var (
 	cwsResumeRetryInterval = 2 * time.Second
 	// cwsRestartLockPoll spaces attempts to take ModuleOpsMutex for the startup resume.
 	cwsRestartLockPoll = 5 * time.Second
+	// cwsDisableOverhead covers the Argo CD and state API calls around the drain stages.
+	cwsDisableOverhead = 10 * time.Minute
 )
+
+// cloudWorkstationsDisableContext lets a disable outlive a disconnected caller. A half-done drain leaves the
+// module paused and the state ambiguous. The budget still bounds a stuck drain.
+func cloudWorkstationsDisableContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	budget := time.Duration(len(cloudWorkstationsDrainStages))*cwsDrainStageTimeout + cwsDisableOverhead
+	return context.WithTimeout(context.WithoutCancel(ctx), budget)
+}
 
 type cwsDrainStage struct {
 	kind       string

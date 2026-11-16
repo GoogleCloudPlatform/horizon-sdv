@@ -1007,3 +1007,175 @@ func TestResumeCloudWorkstationsParentAfterDelete_GivesUpWithinBudget(t *testing
 		t.Errorf("must stop at the cleanup budget, took %v", time.Since(start))
 	}
 }
+
+// cwsCtxStrictClient fails every call made with a cancelled context, like a real API client would, and can
+// cancel the caller's context after the first Workstation delete to simulate a disconnect mid-drain.
+type cwsCtxStrictClient struct {
+	client.Client
+	cancel context.CancelFunc
+	once   sync.Once
+}
+
+func (c *cwsCtxStrictClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return c.Client.Get(ctx, key, obj, opts...)
+}
+
+func (c *cwsCtxStrictClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return c.Client.List(ctx, list, opts...)
+}
+
+func (c *cwsCtxStrictClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return c.Client.Update(ctx, obj, opts...)
+}
+
+func (c *cwsCtxStrictClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return c.Client.Patch(ctx, obj, patch, opts...)
+}
+
+func (c *cwsCtxStrictClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	err := c.Client.Delete(ctx, obj, opts...)
+	if c.cancel != nil && obj.GetObjectKind().GroupVersionKind().Kind == "Workstation" {
+		c.once.Do(c.cancel)
+	}
+	return err
+}
+
+type cwsCtxStrictStore struct{ *cwsFakeStateStore }
+
+func (s cwsCtxStrictStore) Update(ctx context.Context, st *State) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.cwsFakeStateStore.Update(ctx, st)
+}
+
+func TestPerformModuleDisable_CloudWorkstationsFinishesAfterCallerCancels(t *testing.T) {
+	withFastCWSDrain(t, 5*time.Millisecond, 2*time.Second)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var violations []string
+	c := &cwsCtxStrictClient{Client: cwsArgoSimClient(t, "argocd", &violations), cancel: cancel}
+	fake := &cwsFakeStateStore{st: &State{
+		EnabledModules: []string{"mod-cws"},
+		ModuleIDs:      map[string]string{CloudWorkstationsModuleName: "mod-cws"},
+	}}
+
+	if err := PerformModuleDisable(ctx, c, cwsCtxStrictStore{fake}, nil, "argocd", "module-manager", CloudWorkstationsModuleName, "mod-cws", false, ""); err != nil {
+		t.Fatalf("disable must finish after the caller cancels, got %v", err)
+	}
+	if ctx.Err() == nil {
+		t.Fatal("test setup: the caller context was never cancelled")
+	}
+	if len(violations) > 0 {
+		t.Fatalf("disable ordering violated: %v", violations)
+	}
+	for _, name := range []string{ApplicationName(CloudWorkstationsModuleName), cloudWorkstationsCoreAppName} {
+		if _, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", name); ok {
+			t.Errorf("%s should be deleted", name)
+		}
+	}
+	for _, name := range cloudWorkstationsHorizonCRDNames {
+		if _, ok := cwsExists2(t, c, cwsCRDGVK, "", name); ok {
+			t.Errorf("Horizon CRD %s should be removed", name)
+		}
+	}
+	if fake.updates != 1 || len(fake.st.EnabledModules) != 0 {
+		t.Errorf("state should record the module as disabled (updates=%d, enabled=%v)", fake.updates, fake.st.EnabledModules)
+	}
+}
+
+func TestPerformModuleDisable_CloudWorkstationsDrainTimeoutAfterCallerCancelsStillResumes(t *testing.T) {
+	withFastCWSDrain(t, 5*time.Millisecond, 100*time.Millisecond)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c := &cwsCtxStrictClient{Client: cwsTestClient(interceptor.Funcs{}, cwsParentApp(), cwsCoreApp(), cwsHorizon("Workstation", "stuck-ws", cwsTestFinalizer))}
+	fake := &cwsFakeStateStore{st: &State{
+		EnabledModules: []string{"mod-cws"},
+		ModuleIDs:      map[string]string{CloudWorkstationsModuleName: "mod-cws"},
+	}}
+
+	err := PerformModuleDisable(ctx, c, cwsCtxStrictStore{fake}, nil, "argocd", "module-manager", CloudWorkstationsModuleName, "mod-cws", false, "")
+	if err == nil || !strings.Contains(err.Error(), "Workstation/stuck-ws") {
+		t.Fatalf("expected the stage timeout naming the blocker, not a cancellation, got %v", err)
+	}
+	if fake.updates != 0 || len(fake.st.EnabledModules) != 1 {
+		t.Errorf("state must be untouched on drain failure (updates=%d, enabled=%v)", fake.updates, fake.st.EnabledModules)
+	}
+	cwsAssertResumedAndSelfHealIntact(t, c, "argocd")
+}
+
+func TestPerformModuleDisable_OtherModuleStillStopsWhenCallerCancels(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c := &cwsCtxStrictClient{Client: cwsTestClient(interceptor.Funcs{})}
+	fake := &cwsFakeStateStore{st: &State{
+		EnabledModules: []string{"mod-sample"},
+		ModuleIDs:      map[string]string{"sample": "mod-sample"},
+	}}
+
+	err := PerformModuleDisable(ctx, c, cwsCtxStrictStore{fake}, nil, "argocd", "module-manager", "sample", "mod-sample", false, "")
+	if err != context.Canceled {
+		t.Fatalf("a non-cloud-workstations disable must keep the caller context, got %v", err)
+	}
+	if fake.updates != 0 || len(fake.st.EnabledModules) != 1 {
+		t.Errorf("state must be untouched (updates=%d, enabled=%v)", fake.updates, fake.st.EnabledModules)
+	}
+}
+
+type cwsCtxKey struct{}
+
+func TestCloudWorkstationsDisableContext_IgnoresCancelKeepsValuesAndIsBounded(t *testing.T) {
+	withFastCWSDrain(t, 5*time.Millisecond, 2*time.Second)
+
+	parent, cancel := context.WithCancel(context.WithValue(context.Background(), cwsCtxKey{}, "kept"))
+	cancel()
+	ctx, stop := cloudWorkstationsDisableContext(parent)
+	defer stop()
+
+	if ctx.Err() != nil {
+		t.Fatalf("detached context must ignore the caller cancel, got %v", ctx.Err())
+	}
+	if ctx.Value(cwsCtxKey{}) != "kept" {
+		t.Error("context values must be preserved")
+	}
+	budget := time.Duration(len(cloudWorkstationsDrainStages))*cwsDrainStageTimeout + cwsDisableOverhead
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("detached context must have a deadline")
+	}
+	if left := time.Until(deadline); left > budget || left < budget-time.Minute {
+		t.Errorf("deadline should be about %v away, got %v", budget, left)
+	}
+
+	oldOverhead := cwsDisableOverhead
+	cwsDisableOverhead = 20 * time.Millisecond
+	t.Cleanup(func() { cwsDisableOverhead = oldOverhead })
+	cwsDrainStageTimeout = 0
+	short, stopShort := cloudWorkstationsDisableContext(context.Background())
+	defer stopShort()
+	select {
+	case <-short.Done():
+		if short.Err() != context.DeadlineExceeded {
+			t.Errorf("expected DeadlineExceeded, got %v", short.Err())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("detached context must end once its budget is spent")
+	}
+}

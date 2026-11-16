@@ -43,7 +43,8 @@ import (
 // without touching state or the parent Application if that times out. Each Application is deleted while still
 // paused and resumed only afterwards, so Argo CD cannot recreate the drained cluster. If the parent delete
 // fails after the state already says disabled, the parent stays paused. After the parent Application is gone,
-// RemoveCloudWorkstationsCRDs deletes the module's three Horizon CRDs.
+// RemoveCloudWorkstationsCRDs deletes the module's three Horizon CRDs. Once validation passes, the whole
+// sequence runs detached from the caller's cancellation, so a client disconnect does not abort it.
 //
 // Ordering note (vs platform drain): this path updates ModuleManagerState before deleting the parent
 // mod-* Application so the Portal API reflects disabled during long Argo prunes. PlatformDrainer
@@ -77,6 +78,18 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 		if len(deps) > 0 {
 			return fmt.Errorf("perform module disable: module %q still has hard dependents %v", moduleName, deps)
 		}
+	}
+
+	if moduleName == CloudWorkstationsModuleName {
+		callerCtx := ctx
+		var cancel context.CancelFunc
+		ctx, cancel = cloudWorkstationsDisableContext(ctx)
+		defer cancel()
+		defer func() {
+			if callerCtx.Err() != nil {
+				logger.Info("caller disconnected; Cloud Workstations disable ran detached from the request")
+			}
+		}()
 	}
 
 	// Drain Horizon CRs while the controller (core child) is still running; it alone releases their finalizers.
