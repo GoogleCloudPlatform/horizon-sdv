@@ -1,0 +1,10 @@
+{
+  "name": "horizon-sdv",
+  "displayName": "Horizon SDV Tools",
+  "description": "Plugin for Horizon SDV platform workflows. Equips the agent with skills to operate the Horizon CLI, discover catalog templates, trigger and monitor Argo workflows, and inspect build artifacts.",
+  "suggestedPrompts": [
+    "Check my Horizon CLI authentication status and list available catalog templates",
+    "Show the status and logs of recent failed workflows using the Horizon CLI",
+    "Submit a workflow run via the Horizon CLI and monitor its progress"
+  ]
+}
