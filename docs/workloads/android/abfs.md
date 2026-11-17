@@ -173,6 +173,12 @@ Manifest URL `https://android.googlesource.com/platform/manifest`, file `default
 
 **Fetch refspec.** The predefined rows fetch `refs/*` without `refs/changes/*` (Gerrit patch sets) and `refs/cache-automerge/*`. Patch sets are up to 90 % of the refs and about half of the data of the busy AOSP projects, and builds do not read them from ABFS: a build of a Gerrit change fetches its patch set from the Git host. To seed them anyway, or any other set of refs, use the `AndroidCustom` row and edit `fetch-ref-spec`. A running installation keeps the refspec its rows were created with until a row is selected: after an upgrade that changes the default, submit `abfs-uploader-config-select` once with the active row; the row takes the new refspec and the uploaders restart.
 
+**Making the first seed faster.** A first seed of an Android release takes about one hour with the defaults. Three things decide it:
+
+- **Fetch refspec** (default, above): leaving out `refs/changes/*` roughly halves what is fetched and stored for the busy projects.
+- **Uploader data disks** (default): each uploader has an SSD persistent disk (`premium-rwo`, `uploader.dataDisk.size` 1 Ti). Unpacking large packfiles is write-heavy; during a first seed a disk wrote up to about 400 MB/s, and three seeded releases filled 22–62 % of a disk. A larger SSD disk has higher throughput and IOPS limits, so raise the size only when the disks are the limit; a PVC cannot be made smaller again.
+- **More or larger uploaders** (not a default, it costs more): for the first seed only, `uploader.count` can be raised (for example to 6–10; `uploaderNodePool.maxNodeCount` is 5 and has to follow) and/or the uploader machine type, and set back afterwards. Two limits to watch: the Git host slows down or rejects clients that fetch too much at once (HTTP 429/502/503 in the uploader logs), and the Spanner instance needs enough processing units for the extra writes. Changing the count spreads the projects over the uploaders again, so expect each uploader to fetch projects it did not hold before.
+
 **Switch or add a revision.**
 
 1. Portal → `abfs-data` → Workflow Templates → `abfs-uploader-config-select`.
