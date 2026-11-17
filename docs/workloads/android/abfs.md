@@ -274,7 +274,21 @@ What remains after each disable:
 - **abfs-service-module**: pods, Jobs and the two data node pools are removed; uploader PVCs are deleted (`uploader.dataDisk.deletePvcWhenDisabled: true`). Spanner/GCS content is untouched.
 - **abfs-data**: Secret, workflows, uploader table and the KCC CRs are pruned. The Spanner instance and database and the GCS bucket are **abandoned** in GCP (data kept, still billed); delete them with `gcloud` when ABFS is retired for good. The license service account is soft-deleted (recoverable ~30 days, see [Import the ABFS license](#license)).
 
-After a disable, confirm the GKE pools are gone (`gcloud container node-pools list --cluster <cluster> --region <region>`). A pool can be left behind when the CRs are removed while KCC is still reconciling. For the two data pools the service module's PreSync Job deletes such an orphan GKE pool before the next create; if it is still there the `ContainerNodePool` reports `UpdateFailed ... already exists` (the pool keeps working, but the status stays red) and the fix is `gcloud container node-pools delete` followed by an Argo sync. The build pool has no such hook: delete an orphan `abfs-build-node-pool-ubuntu` by hand before re-enabling `abfs-client-ubuntu`.
+Config Connector (KCC) cannot read back the ABFS node pools it creates: some minutes after create a `ContainerNodePool` reports `UpdateFailed ... already exists` although the pool works, and on disable KCC removes the CR but leaves the GKE pool. The modules therefore remove the pools with `gcloud` in hook Jobs (namespace `workflows`):
+
+| When | Hook | What it does |
+|------|------|--------------|
+| Disable of `abfs-client-ubuntu` or `abfs-service-module` | PostDelete | Deletes the GKE pool(s) of the module once their `ContainerNodePool` is gone. It never fails, so it cannot block the disable; when the delete takes longer than its wait (15–20 minutes) it logs a warning and the delete finishes in the background. |
+| Enable of `abfs-client-ubuntu` | PreSync | A build pool that exists without a `ContainerNodePool` is deleted first, so the sync creates a fresh one. A pool that has a `ContainerNodePool` is never touched. |
+| Every sync of the service node pools | PreSync / PostSync licence Job | Removes a data pool that exists without its `ContainerNodePool`. A pool whose GKE metadata already carries the licence of the Secret is kept, also when its `ContainerNodePool` shows `UpdateFailed`. |
+
+Safety rules of the hooks:
+
+- A pool is deleted only when every check worked. When `gcloud` or `kubectl` fails (anything other than "not found"), the PreSync hook stops with `ERROR: cannot read ...` and deletes nothing; the sync fails and is retried with the next sync. Look at the Job log (`kubectl logs -n workflows job/<name>`; the Jobs are `abfs-license-metadata-presync`, `abfs-license-metadata-postsync`, `<pool>-orphan-presync`), fix the cause (usually a short API outage or missing rights of the workflow service account) and sync the node-pool Application again.
+- A build pool is deleted only if it carries the node label `workloadLabel` of the module (`android-abfs-build`). A pool with the same name but without that label is left alone: the enable then stops with `does not carry workloadLabel`, and the pool has to be renamed or deleted by hand.
+- The licence Secret: "no licence in the Secret" and "the Secret could not be read" are different. Only the first one removes the licence from the pools.
+
+After a disable, `gcloud container node-pools list --cluster <cluster> --region <region>` shows whether the pools are gone. If a PostDelete hook logged a warning and a pool is still there later, the next enable removes it; `gcloud container node-pools delete <pool>` does the same by hand.
 
 ### Update the ABFS version <a name="update"></a>
 
@@ -296,7 +310,7 @@ Every ABFS build writes `abfs_repository_list.txt` (listing of the apt repositor
 - **Builds of unseeded revisions** fail at `abfs mount`. Seed the row first (`abfs-data` → `abfs-uploader-config-select`) and wait for the uploaders to finish.
 - **Soong sandbox fix is selected from `AAOS_REVISION`** (table under [Perform an AAOS build with ABFS](#build)); branch names get none. If a build panics with `read-only file system` under `out/soong`, pass the fix through `postRepoCommand` / `POST_REPO_COMMAND`.
 - **License changes recreate the data node pools** (see [Import the ABFS license](#license)); plan them outside build hours.
-- **Node pools can be left behind on disable**: if the `ContainerNodePool` CRs are pruned while KCC is still reconciling, the GKE pool stays. For the two data pools the service module's PreSync Job deletes such an orphan before the next create (until then the CR reports `UpdateFailed ... already exists`); the build pool `abfs-build-node-pool-ubuntu` has to be deleted by hand with `gcloud container node-pools delete` before `abfs-client-ubuntu` is enabled again. See [Disable ABFS](#disable).
+- **`ContainerNodePool` shows `UpdateFailed ... already exists`**: KCC cannot read back the ABFS node pools it created, so the CR status turns red while the GKE pool works. Judge the pools by the workloads (server and uploaders Ready, builds running), not by the CR status. Hook Jobs remove the GKE pools on disable and remove leftovers before the next enable; see [Disable ABFS](#disable).
 - **Portal Custom Git ref does not switch pipeline scripts**: `aaos-builder-abfs` clones `aaos_environment.sh` and friends from the platform branch set in Terraform. Test script changes by merging to that branch or by passing the commands through `postRepoCommand`.
 - **AI review on ABFS builds still runs on Gemini CLI**: the other workflows default to the Antigravity SDK and keep Gemini CLI only until it is decommissioned; the ABFS Argo workflows migrate to the Antigravity SDK in the next release. The review also has no access to the mount (`/abfs`), so its findings are of little use for ABFS-specific failures; read the raw build log.
 - **ABFS UI** (`abfs-ui`) is disabled in the chart (`ui.enabled: false`) until it is functional.
