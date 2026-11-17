@@ -125,7 +125,7 @@ to Sensor `webhook-abfs-builder-runtime-image`. Set:
 - `templateFlavor` (`ubuntu` or `cos`) — selects the default registry tag
 - `imageTag` — optional override; leave the Ubuntu default with `templateFlavor=cos` and the workflow uses `argowf-cos-latest`
 - ABFS registry fields (`abfsRepository`, `abfsDistributionRegistry`, `googleDistributionRegistry`)
-- `googleAdkVersion` (same pin as AAOS Docker Image Template / Dockerfile `GOOGLE_ADK_VERSION`)
+- `antigravitySdkVersion` (same pin as AAOS Docker Image Template / Dockerfile `ANTIGRAVITY_SDK_VERSION`)
 
 ## What’s in this chart
 

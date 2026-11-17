@@ -143,7 +143,8 @@ spec:
 | Job | Default |
 | --- | --- |
 | AAOS Builder, CTS Execution, CVD Launcher | Jenkins **AI Review runtime** = `agy`. Helm `aiReviewRuntime: agy`. CTS Execution and CVD Launcher run AI Review from `cvd-pipeline-shared-library`. |
-| AAOS ABFS Builder, OpenBSW BSW Builder | Jenkins **AI Review runtime** = `agy`. These jobs have no Argo workflow. |
+| AAOS ABFS Builder | Jenkins **AI Review runtime** = `agy`. Helm `aiReviewRuntime: agy` (WorkflowTemplate `aaos-builder-abfs`, same chart as AAOS Builder with `values-abfs.yaml`). |
+| OpenBSW BSW Builder | Jenkins **AI Review runtime** = `agy`. This job has no Argo workflow. |
 | Utilities / Gemini AI Assistant | **AI Review runtime** = `agy`. `GEMINI_ARTIFACTS_COMMAND` is required. Uploaded prompts and `GEMINI_SKILLS_YAML` are not. |
 | AAOS SDV Builder | Timeout parameter only. This job has no `AI_REVIEW_RUNTIME` parameter. |
 

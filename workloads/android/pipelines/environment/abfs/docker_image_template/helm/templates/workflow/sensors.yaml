@@ -67,7 +67,7 @@ spec:
                     - name: packerVersion
                     - name: enableGeminiAiAssistant
                     - name: geminiCliVersion
-                    - name: googleAdkVersion
+                    - name: antigravitySdkVersion
           parameters:
             - src:
                 dependencyName: webhook-dep
@@ -139,5 +139,5 @@ spec:
               dest: spec.arguments.parameters.14.value
             - src:
                 dependencyName: webhook-dep
-                dataKey: body.googleAdkVersion
+                dataKey: body.antigravitySdkVersion
               dest: spec.arguments.parameters.15.value
