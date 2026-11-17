@@ -21,6 +21,8 @@ git:
 scm:
   authMethod: ""
 cloudEnvConfigMapName: "horizon-workflow-cloud-env"
+# Soft dependency state from Module Manager (set by the workloads-android parent Application).
+softFeaturesEnabled: {}
 workflowTemplateName: cts-execution-on-gce
 podGcStrategy: OnWorkflowCompletion
 workflowTtlSecondsAfterCompletion:
