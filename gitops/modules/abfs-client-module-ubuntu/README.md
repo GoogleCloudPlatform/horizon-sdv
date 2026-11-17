@@ -99,4 +99,9 @@ Then submit a build: Developer Portal → `workloads-android` → Workflow Templ
 
 ## After disable
 
-The DaemonSet, overview and the `ContainerNodePool` CR are pruned and KCC deletes the GKE pool. Running builds on the pool are killed. If the GKE pool survives (CR removed while KCC was reconciling), delete it with `gcloud container node-pools delete abfs-build-node-pool-ubuntu` before re-enabling, otherwise the CR reports `already exists`.
+The DaemonSet, overview and the `ContainerNodePool` CR are pruned. Running builds on the pool are killed. Config Connector does not delete the GKE pool when the CR goes, so two hook Jobs of the node-pool Application (namespace `workflows`) do it with `gcloud`:
+
+- PostDelete `abfs-build-node-pool-ubuntu-orphan-postdelete`: deletes the GKE pool after the disable. It never fails and stops waiting after 15 minutes.
+- PreSync `abfs-build-node-pool-ubuntu-orphan-presync`: on enable, deletes a pool that exists without a `ContainerNodePool`, so the sync creates a fresh one. A pool that has a CR is never touched.
+
+Both delete only a pool that carries the node label `workloadLabel: android-abfs-build`. A pool with the same name without that label is left alone and the enable stops with `does not carry workloadLabel`: rename or delete that pool by hand. When `gcloud` or `kubectl` fails, the PreSync Job stops with `ERROR: cannot read ...` and deletes nothing; check `kubectl logs -n workflows job/abfs-build-node-pool-ubuntu-orphan-presync`, fix the cause and sync `mod-abfs-client-ubuntu-node-pool` again.
