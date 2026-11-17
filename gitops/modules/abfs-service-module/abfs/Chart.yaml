@@ -19,3 +19,7 @@ name: abfs
 description: ABFS GKE workloads and KCC resources Chart
 version: 0.1.0
 type: application
+dependencies:
+  - name: abfs-casfs-installer
+    version: 0.1.0
+    repository: file://../../abfs-common/casfs-installer

@@ -71,11 +71,14 @@ image:
   # -- image.pullPolicy -- IfNotPresent | Always | Never.
   pullPolicy: IfNotPresent
 
-# Compile casfs from source on each Ubuntu build node (same DaemonSet pattern as
+# Install casfs on each Ubuntu build node. The DaemonSet and its script come from the
+# shared chart gitops/modules/abfs-common/casfs-installer (also used by
 # abfs-service-module on the data pool). Targeting uses nodePool labels/taints.
 casfs:
   provider: daemonset
   daemonset:
+    # Name of the DaemonSet and of its ConfigMap.
+    name: abfs-casfs-installer-client
     # casfs-kmod package version. The source tarball is <sourceUrl>/casfs-<version>.tar.gz.
     version: "0.1.14"
     image: "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim"

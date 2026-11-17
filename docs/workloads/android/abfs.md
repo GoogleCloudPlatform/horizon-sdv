@@ -75,6 +75,8 @@ ABFS is split into three modules plus the Android workloads. Each module is an A
 
 `abfs-client-module-cos` (COS nodes with casfs shipped in the image) exists in the repository but is not registered in the catalog: it needs GKE ≥ 1.36 with COS 129 LTS carrying casfs 0.1.14 and was not tested.
 
+The casfs installer (DaemonSet and script) is implemented once, in the library chart `gitops/modules/abfs-common/casfs-installer`, and used by `abfs-service-module`, `abfs-client-ubuntu` and `abfs-client-module-cos`. On Ubuntu pools it installs the module (prebuilt package or source build); on COS it only loads the module shipped in the image. See its [README](../../../gitops/modules/abfs-common/casfs-installer/README.md).
+
 Module READMEs: [abfs-data](../../../gitops/modules/abfs-data-module/README.md), [abfs-service-module](../../../gitops/modules/abfs-service-module/README.md), [abfs-client-ubuntu](../../../gitops/modules/abfs-client-module-ubuntu/README.md).
 
 ### How the modules interact <a name="interaction"></a>
