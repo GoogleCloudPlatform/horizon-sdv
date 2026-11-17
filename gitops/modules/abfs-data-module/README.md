@@ -156,15 +156,17 @@ The ABFS git-pusher has no "seed finished" message and never stops: it pushes ev
 |-------|---------------|
 | Workflow `abfs-uploader-config-select` | Stays Running during the seed and logs one progress line per poll (`seed <row>: <done>/<total> projects`). **Succeeded** = seed finished (`SEED FINISHED …` with the duration). **Failed** after `seedTimeoutSeconds` (10800) = not finished; the row stays `synced: false` |
 | ConfigMap `abfs-uploader-config`, row flag `synced` | `true` only after the seed of the active row has finished |
-| ConfigMap `abfs-uploader-config`, key `seed-status` | JSON: `row`, `state` (`seeding`, `seeded`, `timeout`), `projectsDone`, `projectsTotal`, `pending` (first 10 project names), `startedAt`, `finishedAt`, `durationSeconds`, `updatedAt`, `workflow`, `check` |
-| Module overview page, **Status → Seed** | `In progress (870/1329 projects)`, `Finished (<time>, took 52 min, 1329/1329 projects)` or `Not confirmed` |
+| ConfigMap `abfs-uploader-config`, key `seed-status` | JSON: `row`, `state` (`seeding`, `seeded`; not synced: `timeout`, `unconfirmed`, `incomplete`), `fullTotal`, `failing`, `projectsDone`, `projectsTotal`, `pending` (first 10 project names), `startedAt`, `finishedAt`, `durationSeconds`, `updatedAt`, `workflow`, `check` |
+| Module overview page, **Status → Seed** | `In progress (870/1329 projects)`, `Finished (<time>, took 52 min, 1329/1329 projects)`, `Not confirmed …` or `Not finished …` |
 | Overview service, `GET /seed-status` | The same as JSON |
 
 ```bash
 kubectl get configmap abfs-uploader-config -n horizon -o jsonpath='{.data.seed-status}'
 ```
 
-The seed is tracked only by this workflow. After a first enable, a module re-enable or any other uploader restart nothing follows the seed by itself: the overview shows `Not confirmed` (fresh install) or keeps the last result. Submitting the workflow with the already active row checks the seed again without restarting the uploaders (about 4 minutes when everything is pushed) and refreshes the `Finished` line; if that check runs into the time limit, the row is set to `synced: false`. `check` is `full` when the tracker saw the project list each uploader logs at start, and `steady-state` when that part of the log was already rotated away; then it only knows the projects pushed while it was watching, and a project still in its first upload could be missed.
+`synced: true` is written only by this workflow, after it has seen the full project list of the row: either the list each uploader logs at start (`check: full`, the normal case after a restart by the workflow), or, when that part of the log is already rotated away (`check: steady-state`), a project count equal to `fullTotal`, the count of the last full check of the same row. Without either the result is `unconfirmed` and the row is not synced; a row that an older chart marked `synced` at selection time is cleared the same way and the overview shows `Not confirmed`. To confirm such a row, let the workflow restart the uploaders: select another row and then this row again. When the only projects left keep failing (`seedFailLimit` failed pushes, no success) the workflow stops early with state `incomplete` and names them; the row stays not synced.
+
+The seed is tracked only by this workflow. After a first enable, a module re-enable or any other uploader restart nothing follows the seed by itself: the overview keeps the last result. Submitting the workflow with the already active row checks the seed again without restarting the uploaders (about 4 minutes when everything is pushed) and refreshes the `Finished` line.
 
 ```bash
 kubectl get configmap abfs-uploader-config -n horizon -o jsonpath='{.data.table}'

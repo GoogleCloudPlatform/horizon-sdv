@@ -228,8 +228,9 @@ def seed_fields(name, synced, raw):
     """Seed state of the active row for the status card and /seed-status.
 
     raw is ConfigMap key seed-status, written by workflow abfs-uploader-config-select.
-    It is used only when it describes the active row. Without it the row's synced
-    flag is the only information.
+    It is used only when it describes the active row. The seed counts as finished
+    only when that status says seeded and the row is synced; the synced flag alone
+    is not enough (an older chart set it at selection time).
     """
     try:
         status = json.loads(raw) if raw else {}
@@ -240,13 +241,11 @@ def seed_fields(name, synced, raw):
     state = status.get("state")
     done, total = status.get("projectsDone"), status.get("projectsTotal")
     progress = f"{done}/{total} projects" if isinstance(done, int) and isinstance(total, int) and total else ""
-    result = {"row": name, "synced": synced, "state": state or ("seeded" if synced else "unknown")}
+    result = {"row": name, "synced": synced, "state": state or "unknown"}
     result.update({key: status[key] for key in (
         "projectsDone", "projectsTotal", "startedAt", "finishedAt", "updatedAt",
-        "durationSeconds", "check", "workflow", "pending") if key in status})
-    # A check that is running or has failed counts before the synced flag:
-    # the active row can be checked again while it is still marked synced.
-    if synced and state not in ("seeding", "timeout"):
+        "durationSeconds", "check", "workflow", "pending", "failing", "fullTotal") if key in status})
+    if synced and state == "seeded":
         details = [short_time(status.get("finishedAt"))]
         seconds = status.get("durationSeconds")
         if isinstance(seconds, int) and status.get("startedAt"):
@@ -256,6 +255,7 @@ def seed_fields(name, synced, raw):
         result["text"] = "Finished" + (f" ({details})" if details else "")
         return result
     retry = "run abfs-uploader-config-select with this row to check again"
+    restart = "select another row and then this row again to confirm it"
     if state == "seeding":
         updated = parse_expiry(status.get("updatedAt"))
         age = (datetime.now(timezone.utc) - updated).total_seconds() if updated else None
@@ -266,6 +266,12 @@ def seed_fields(name, synced, raw):
             result["text"] = f"Not confirmed: tracking stopped at {short_time(status.get('updatedAt')) or 'an unknown time'}; {retry}"
     elif state == "timeout":
         result["text"] = f"Not finished within the time limit ({progress or 'no progress recorded'}); {retry}"
+    elif state == "incomplete":
+        failing = status.get("failing") if isinstance(status.get("failing"), list) else []
+        names = ", ".join(str(item) for item in failing[:3]) + (" …" if len(failing) > 3 else "")
+        result["text"] = f"Not finished: {progress or 'some projects'} pushed, the rest keep failing ({names or 'see the workflow log'}); {retry}"
+    elif state == "unconfirmed":
+        result["text"] = f"Not confirmed: the uploader logs no longer show the full project list ({progress or 'no count'}); {restart}"
     else:
         result["state"] = "unknown"
         result["text"] = f"Not confirmed; {retry}"

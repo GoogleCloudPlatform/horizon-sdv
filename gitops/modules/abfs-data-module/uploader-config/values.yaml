@@ -31,12 +31,20 @@ syncTimeoutSeconds: 5400
 # Seed tracking, after the rollout: the workflow reads the uploader logs every
 # seedPollSeconds and ends when every project the uploaders started has been
 # pushed once, unchanged for seedStablePolls polls. It fails after
-# seedTimeoutSeconds and leaves the row not synced. A full Android release
+# seedTimeoutSeconds and leaves the row not synced. The row is marked synced
+# only when the tracker has seen the full project list of the row. A full Android release
 # seeds in about one hour on three uploaders.
 uploaderContainerName: abfs-uploader
+# The workflow may read the logs of uploader pods 0 .. uploaderMaxCount-1 only.
+# Raise it when abfs-service runs more uploaders.
+uploaderMaxCount: 10
 seedTimeoutSeconds: 10800
 seedPollSeconds: 60
 seedStablePolls: 3
+# A project with this many failed pushes and no success is reported by name;
+# when only such projects are left the workflow fails without waiting for the
+# time limit.
+seedFailLimit: 10
 
 uploaderConfig:
   manifestUrl: https://android.googlesource.com/platform/manifest

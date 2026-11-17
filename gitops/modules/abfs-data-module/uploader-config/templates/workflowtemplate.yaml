@@ -165,6 +165,8 @@ spec:
             value: {{ .Values.seedPollSeconds | quote }}
           - name: SEED_STABLE_POLLS
             value: {{ .Values.seedStablePolls | quote }}
+          - name: SEED_FAIL_LIMIT
+            value: {{ .Values.seedFailLimit | quote }}
           - name: WORKFLOW_NAME
             value: "{{ "{{workflow.name}}" }}"
         command: [bash, -euo, pipefail, -c]

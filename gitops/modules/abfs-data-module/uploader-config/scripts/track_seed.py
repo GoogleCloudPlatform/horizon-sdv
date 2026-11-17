@@ -22,22 +22,33 @@
 #   Pushing project https://<p>             at the start of every push
 #   Project push <p> succeeded | failed     at the end of every push
 # A project is seeded after its first "succeeded". The row is seeded when every
-# uploader is Ready, every project an uploader has started has succeeded at
-# least once, and that holds with the same project count for SEED_STABLE_POLLS
-# polls in a row.
+# uploader is Ready, every project of the row has succeeded at least once, and
+# that holds with the same project count for SEED_STABLE_POLLS polls in a row.
 #
-# The uploader log rotates within minutes, so the logs are read every
-# SEED_POLL_SECONDS from the last line seen and the project names are kept in
-# memory. When the start lines of an uploader were already rotated away (the
-# tracker was started long after the uploaders), only projects pushed since
-# then are known; the result is then marked check "steady-state", not "full".
+# "Every project of the row" needs the full project list. The uploader log
+# rotates within minutes, so the logs are read every SEED_POLL_SECONDS from the
+# last line seen and the project names are kept in memory:
+#   check "full"          the start lines of every uploader were seen, so the
+#                         list is complete. Normal after a restart by the workflow.
+#   check "steady-state"  the start lines were already rotated away. Only
+#                         projects pushed while watching are known, and a project
+#                         still in its first upload is invisible. The seed is
+#                         confirmed only when the count equals fullTotal, the
+#                         count of the last full check of this row. Without
+#                         that count the result is "unconfirmed", never seeded.
 #
+# synced is set true only here, after such a confirmation. A flag that is true
+# without a recorded "seeded" result for the row is cleared when a check starts.
 # Progress is written to key seed-status of the uploader-config ConfigMap as
-# JSON (state seeding, seeded or timeout). The module overview page shows it.
-# The tracker stops with an error when another row becomes active, when a newer
-# workflow takes over, or after SEED_TIMEOUT_SECONDS (the row is then not synced).
-# It also runs, without an uploader restart, when the active row is selected
-# again: synced keeps its value during that check.
+# JSON. States: seeding, seeded, and without synced: timeout (not finished
+# after SEED_TIMEOUT_SECONDS), unconfirmed (see above), incomplete (the only
+# projects left have failed SEED_FAIL_LIMIT pushes or more without a success;
+# they are named). The module overview page shows it.
+# The tracker also stops with an error when another row becomes active or a
+# newer workflow takes over. It also runs, without an uploader restart, when
+# the active row is selected again; a row confirmed before keeps synced during
+# that check. Table writes carry the ConfigMap resourceVersion, so a selection
+# made in between is not overwritten.
 
 import json
 import os
@@ -60,6 +71,7 @@ STARTED_AT = os.environ.get("SEED_STARTED_AT", "").strip()
 TIMEOUT = int(os.environ.get("SEED_TIMEOUT_SECONDS", "10800"))
 POLL = int(os.environ.get("SEED_POLL_SECONDS", "60"))
 STABLE = int(os.environ.get("SEED_STABLE_POLLS", "3"))
+FAIL_LIMIT = int(os.environ.get("SEED_FAIL_LIMIT", "10"))
 STATUS_KEY = "seed-status"
 PATCH_PATH = "/tmp/seed-status-patch.json"
 
@@ -100,17 +112,19 @@ def uploader_state():
 
 
 def read_config():
-    """Return (table rows, seed-status dict) from the ConfigMap, or (None, {}) when it cannot be read."""
+    """Return (table rows, seed-status dict, resourceVersion), or (None, {}, None) when it cannot be read."""
     code, out = kubectl("get", "configmap", CONFIGMAP, "-n", CONFIG_NS, "-o", "json")
     if code != 0:
-        return None, {}
-    data = json.loads(out).get("data") or {}
+        return None, {}, None
+    obj = json.loads(out)
+    data = obj.get("data") or {}
     try:
         rows = yaml.safe_load(data.get("table", ""))
         status = json.loads(data.get(STATUS_KEY) or "{}")
     except (yaml.YAMLError, ValueError):
-        return None, {}
-    return (rows if isinstance(rows, list) else None), (status if isinstance(status, dict) else {})
+        return None, {}, None
+    version = (obj.get("metadata") or {}).get("resourceVersion")
+    return (rows if isinstance(rows, list) else None), (status if isinstance(status, dict) else {}), version
 
 
 def active_row(rows):
@@ -121,17 +135,47 @@ def active_row(rows):
     return None
 
 
-def write_config(status, rows=None):
-    """Merge-patch seed-status, and the table when rows is given. Return True on success."""
-    data = {STATUS_KEY: json.dumps(status, sort_keys=True)}
-    if rows is not None:
-        data["table"] = yaml.safe_dump(rows, sort_keys=False)
-    with open(PATCH_PATH, "w") as patch:
-        json.dump({"data": data}, patch)
+def patch_config(data, version=None):
+    """Merge-patch ConfigMap data. With a resourceVersion the patch only applies to that version."""
+    patch = {"data": data}
+    if version:
+        patch["metadata"] = {"resourceVersion": version}
+    with open(PATCH_PATH, "w") as out:
+        json.dump(patch, out)
     code, _ = kubectl(
         "patch", "configmap", CONFIGMAP, "-n", CONFIG_NS, "--type", "merge", "--patch-file", PATCH_PATH,
     )
     return code == 0
+
+
+def write_status(status):
+    """Write seed-status only. The table is not touched."""
+    return patch_config({STATUS_KEY: json.dumps(status, sort_keys=True)})
+
+
+def write_synced(status, synced):
+    """Set synced on the active row (false on every other row) together with seed-status.
+
+    The table is read again and the patch carries its resourceVersion, so a
+    selection made by someone else in between is never overwritten: the patch
+    is refused, and the next try sees the new table. Return False when ROW is
+    no longer the active row or the write keeps failing.
+    """
+    for _ in range(5):
+        rows, _stored, version = read_config()
+        if rows is None or version is None:
+            time.sleep(2)
+            continue
+        if active_row(rows) != ROW:
+            return False
+        for row in rows:
+            if isinstance(row, dict):
+                row["synced"] = synced and row.get("name") == ROW
+        data = {STATUS_KEY: json.dumps(status, sort_keys=True), "table": yaml.safe_dump(rows, sort_keys=False)}
+        if patch_config(data, version):
+            return True
+        time.sleep(2)
+    return False
 
 
 class Uploader:
@@ -141,6 +185,7 @@ class Uploader:
         self.pod = pod
         self.started = set()
         self.done = set()
+        self.fails = {}
         self.saw_start_lines = False
         self.in_header = False
         self.since = None
@@ -164,15 +209,20 @@ class Uploader:
                 if not self.in_header:
                     self.started.clear()
                     self.done.clear()
+                    self.fails.clear()
                     self.saw_start_lines = False
                 self.in_header = True
                 continue
             match = RESULT_RE.search(line)
             if match:
                 self.in_header = False
-                self.started.add(match.group(1))
+                project = match.group(1)
+                self.started.add(project)
                 if match.group(2) == "succeeded":
-                    self.done.add(match.group(1))
+                    self.done.add(project)
+                    self.fails.pop(project, None)
+                else:
+                    self.fails[project] = self.fails.get(project, 0) + 1
                 continue
             match = PUSHING_RE.search(line)
             if match:
@@ -189,11 +239,24 @@ class Uploader:
         return True
 
 
+def stop(status, state, message):
+    """End without a confirmed seed: write the state, make sure the row is not synced, exit 1."""
+    status["state"] = state
+    if not write_synced(status, False):
+        write_status(status)
+    print("ERROR: %s" % message, file=sys.stderr, flush=True)
+    raise SystemExit(1)
+
+
 def main():
     if not ROW:
         raise SystemExit("ERROR: SEED_ROW is empty")
     began = now()
     deadline = time.time() + TIMEOUT
+    rows, stored, _version = read_config()
+    previous = stored if stored.get("row") == ROW else {}
+    # Project count of the last run for this row that saw the full list.
+    full_total = previous.get("fullTotal") if isinstance(previous.get("fullTotal"), int) else None
     status = {
         "row": ROW,
         "state": "seeding",
@@ -202,14 +265,28 @@ def main():
         "trackingSince": stamp(began),
         "projectsDone": 0,
         "projectsTotal": 0,
+        "updatedAt": stamp(began),
     }
-    print("track_seed: row=%s timeout=%ss poll=%ss stable_polls=%s" % (ROW, TIMEOUT, POLL, STABLE), flush=True)
-    write_config(dict(status, updatedAt=stamp(began)))
+    if full_total:
+        status["fullTotal"] = full_total
+    print("track_seed: row=%s timeout=%ss poll=%ss stable_polls=%s known_total=%s"
+          % (ROW, TIMEOUT, POLL, STABLE, full_total or "none"), flush=True)
+    # synced may only be true when this tracker has confirmed the seed. A flag
+    # that is true without a "seeded" result for this row (written by an older
+    # chart at selection time) is cleared before the check starts.
+    row_synced = any(isinstance(row, dict) and row.get("name") == ROW and row.get("synced") is True for row in rows or [])
+    if row_synced and previous.get("state") != "seeded":
+        print("row %s is marked synced but no finished seed is recorded for it; clearing the flag until it is confirmed" % ROW, flush=True)
+        write_synced(status, False)
+    else:
+        write_status(status)
     uploaders = {}
     stable = 0
+    stuck = 0
+    blind_polls = 0
     last_total = -1
     while True:
-        rows, stored = read_config()
+        rows, stored, _version = read_config()
         if rows is not None:
             if active_row(rows) != ROW:
                 raise SystemExit("ERROR: row %s is no longer active (now %s); seed tracking stopped" % (ROW, active_row(rows)))
@@ -226,15 +303,25 @@ def main():
         current = [uploaders[pod] for pod in pods]
         started = set().union(*[item.started for item in current]) if current else set()
         done = set().union(*[item.done for item in current]) if current else set()
+        fails = {}
+        for item in current:
+            fails.update(item.fails)
         pending = sorted(started - done)
-        complete = (
-            replicas > 0 and ready == replicas and readable
-            and all(item.started for item in current) and not pending
-        )
+        full = bool(current) and all(item.saw_start_lines for item in current)
+        healthy = replicas > 0 and ready == replicas and readable and all(item.started for item in current)
+        # Without the start lines only projects pushed while watching are known.
+        # The count of the last full run tells whether that is all of them.
+        all_known = full or (full_total is not None and len(started) >= full_total)
+        complete = healthy and not pending and all_known
         if complete and len(started) == last_total:
             stable += 1
         else:
             stable = 1 if complete else 0
+        failing = [project for project in pending if fails.get(project, 0) >= FAIL_LIMIT]
+        only_failing = healthy and pending and len(failing) == len(pending) and len(started) == last_total
+        stuck = stuck + 1 if only_failing else 0
+        blind = healthy and not pending and not full and full_total is None and len(started) == last_total
+        blind_polls = blind_polls + 1 if blind else 0
         last_total = len(started)
 
         moment = now()
@@ -243,7 +330,7 @@ def main():
             "projectsTotal": len(started),
             "pending": pending[:10],
             "uploadersReady": "%d/%d" % (ready, replicas),
-            "check": "full" if current and all(item.saw_start_lines for item in current) else "steady-state",
+            "check": "full" if full else "steady-state",
             "updatedAt": stamp(moment),
         })
         print(
@@ -254,17 +341,16 @@ def main():
         )
 
         if complete and stable >= STABLE:
+            if not full and len(started) != full_total:
+                stop(status, "unconfirmed",
+                     "row %s: %d projects are pushed, but the last full check counted %d; the project list changed, so the seed "
+                     "cannot be confirmed without an uploader restart (select another row and this row again)"
+                     % (ROW, len(started), full_total))
             start = STARTED_AT or status["trackingSince"]
             seconds = int((moment - datetime.strptime(start, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)).total_seconds())
-            status.update({"state": "seeded", "finishedAt": stamp(moment), "durationSeconds": seconds})
-            rows, _ = read_config()
-            if rows is None or active_row(rows) != ROW:
-                raise SystemExit("ERROR: cannot confirm that row %s is still active; synced not changed" % ROW)
-            for row in rows:
-                if isinstance(row, dict):
-                    row["synced"] = row.get("name") == ROW
-            if not write_config(status, rows):
-                raise SystemExit("ERROR: cannot write synced=true to %s/%s" % (CONFIG_NS, CONFIGMAP))
+            status.update({"state": "seeded", "finishedAt": stamp(moment), "durationSeconds": seconds, "fullTotal": len(started)})
+            if not write_synced(status, True):
+                raise SystemExit("ERROR: cannot write synced=true for row %s (row no longer active, or the ConfigMap keeps changing)" % ROW)
             print(
                 "SEED FINISHED row=%s projects=%d check=%s duration=%ds (%s since %s)"
                 % (ROW, status["projectsTotal"], status["check"], seconds,
@@ -273,22 +359,26 @@ def main():
             )
             return
 
+        if blind_polls >= STABLE:
+            stop(status, "unconfirmed",
+                 "row %s: all %d projects seen in the uploader logs are pushed, but the logs no longer show the full project "
+                 "list and no earlier full check exists for this row, so projects still in their first upload cannot be ruled "
+                 "out. To confirm, let the workflow restart the uploaders: select another row and then this row again"
+                 % (ROW, len(started)))
+
+        if stuck >= STABLE:
+            status["failing"] = failing[:10]
+            stop(status, "incomplete",
+                 "row %s: %d of %d projects are pushed; %d keep failing (%d or more failed pushes each, none succeeded): %s. "
+                 "The row is not marked synced. See the uploader logs for the reason"
+                 % (ROW, status["projectsDone"], status["projectsTotal"], len(failing), FAIL_LIMIT, ", ".join(failing[:10])))
+
         if time.time() >= deadline:
-            status["state"] = "timeout"
-            # A row that was synced before this check is not confirmed any more.
-            rows, _ = read_config()
-            if rows is not None and active_row(rows) == ROW:
-                for row in rows:
-                    if isinstance(row, dict):
-                        row["synced"] = False
-            else:
-                rows = None
-            write_config(status, rows)
-            print("ERROR: seed of row %s not finished after %ss: %d/%d projects, uploaders %s; not done: %s"
-                  % (ROW, TIMEOUT, status["projectsDone"], status["projectsTotal"], status["uploadersReady"],
-                     ", ".join(pending[:10]) or "-"), file=sys.stderr, flush=True)
-            raise SystemExit(1)
-        write_config(status)
+            stop(status, "timeout",
+                 "seed of row %s not finished after %ss: %d/%d projects, uploaders %s; not done: %s"
+                 % (ROW, TIMEOUT, status["projectsDone"], status["projectsTotal"], status["uploadersReady"],
+                    ", ".join(pending[:10]) or "-"))
+        write_status(status)
         time.sleep(POLL)
 
 
