@@ -18,14 +18,19 @@ Helm chart: `gitops/modules/openbsw-module`
 
 The module runs on the main environment only. It is not deployed on a sub-environment, because the OpenBSW node pool is shared by the cluster.
 
+---
+
 ## Module Metadata
 
 | Metadata Field | Value |
 | :--- | :--- |
+| **STATUS** | horizon-verified |
 | **OWNER** | Accenture |
 | **CONTACT** | [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com) |
 | **CHART VERSION** | 0.1.0 |
 | **CONTAINS_COMMERCIAL** | no |
+
+---
 
 ## What this chart deploys
 
