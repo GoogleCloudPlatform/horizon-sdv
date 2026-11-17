@@ -35,7 +35,9 @@
 # Progress is written to key seed-status of the uploader-config ConfigMap as
 # JSON (state seeding, seeded or timeout). The module overview page shows it.
 # The tracker stops with an error when another row becomes active, when a newer
-# workflow takes over, or after SEED_TIMEOUT_SECONDS.
+# workflow takes over, or after SEED_TIMEOUT_SECONDS (the row is then not synced).
+# It also runs, without an uploader restart, when the active row is selected
+# again: synced keeps its value during that check.
 
 import json
 import os
@@ -273,7 +275,15 @@ def main():
 
         if time.time() >= deadline:
             status["state"] = "timeout"
-            write_config(status)
+            # A row that was synced before this check is not confirmed any more.
+            rows, _ = read_config()
+            if rows is not None and active_row(rows) == ROW:
+                for row in rows:
+                    if isinstance(row, dict):
+                        row["synced"] = False
+            else:
+                rows = None
+            write_config(status, rows)
             print("ERROR: seed of row %s not finished after %ss: %d/%d projects, uploaders %s; not done: %s"
                   % (ROW, TIMEOUT, status["projectsDone"], status["projectsTotal"], status["uploadersReady"],
                      ", ".join(pending[:10]) or "-"), file=sys.stderr, flush=True)

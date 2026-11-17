@@ -244,7 +244,9 @@ def seed_fields(name, synced, raw):
     result.update({key: status[key] for key in (
         "projectsDone", "projectsTotal", "startedAt", "finishedAt", "updatedAt",
         "durationSeconds", "check", "workflow", "pending") if key in status})
-    if synced:
+    # A check that is running or has failed counts before the synced flag:
+    # the active row can be checked again while it is still marked synced.
+    if synced and state not in ("seeding", "timeout"):
         details = [short_time(status.get("finishedAt"))]
         seconds = status.get("durationSeconds")
         if isinstance(seconds, int) and status.get("startedAt"):

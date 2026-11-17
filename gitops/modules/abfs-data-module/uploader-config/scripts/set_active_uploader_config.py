@@ -22,8 +22,8 @@
 # synced means "the uploaders have finished seeding this row". A newly selected
 # row, or a changed AndroidCustom repo, starts with synced false; the seed
 # tracker (track_seed.py) sets it true. Selecting the row that is already
-# active keeps its synced value. /tmp/seed-track tells the workflow whether the
-# tracker has to run, and /tmp/active-row names the row it watches.
+# active keeps its synced value while the tracker checks the seed again.
+# /tmp/active-row names the row the tracker watches.
 # The patch is written to /tmp/uploader-config-patch.json. An AndroidCustom
 # submit also writes that entry to /tmp/android-custom-saved.yaml so the form
 # shows it on the next open. The workflow log prints the previously active row
@@ -191,14 +191,10 @@ def write_restart_flag(restart):
     print("restart_uploaders: %s" % ("true" if restart else "false"))
 
 
-def write_seed_flags(chosen):
-    """Name the active row and say whether its seed still has to be confirmed."""
-    track = isinstance(chosen, dict) and chosen.get("synced") is not True
+def write_active_row(chosen):
+    """Name the active row for the seed tracker."""
     with open("/tmp/active-row", "w") as flag:
         flag.write("%s\n" % (chosen.get("name") if isinstance(chosen, dict) else ""))
-    with open("/tmp/seed-track", "w") as flag:
-        flag.write("true\n" if track else "false\n")
-    print("track_seed: %s" % ("true" if track else "false"))
 
 
 def config_kind(entry):
@@ -249,7 +245,7 @@ def main():
     chosen = apply_selection(entries, selection, custom_repo_value, restart)
     write_patch(entries)
     write_restart_flag(restart)
-    write_seed_flags(chosen)
+    write_active_row(chosen)
     print(
         "config: previous=%s (%s) current=%s (%s)"
         % (

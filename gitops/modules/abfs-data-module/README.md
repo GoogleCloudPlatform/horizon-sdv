@@ -146,7 +146,7 @@ WorkflowTemplate **`abfs-uploader-config-select`** (portal: **abfs-data** → Wo
 | `Android_Versions` | Dropdown of the rows, shown as `<name> (<branch>)`; the active row is preselected |
 | `Configuration` | Read-only copy of the row's repo block for predefined rows; editable YAML (`name: AndroidCustom`, `repo: {url, branch, file, fetch-ref-spec}`) for `AndroidCustom`. The submitted custom block is saved into the WorkflowTemplate so the form shows it next time. |
 
-The workflow (`uploader-config/scripts/set_active_uploader_config.py`) marks the chosen row active (not yet synced) and every other row inactive, patches the ConfigMap, and, when StatefulSet `abfs/abfs-gerrit-uploader` exists, deletes pod `-0`, restarts the StatefulSet and waits (`syncTimeoutSeconds` 5400) for Job `abfs-pusher-config-sync` to write the new ABFS ref and for the rollout to finish. It then waits for the seed to finish and marks the row synced. Selecting the already active row does not restart the uploaders. One branch/revision is seeded at a time; earlier revisions remain in Spanner/GCS.
+The workflow (`uploader-config/scripts/set_active_uploader_config.py`) marks the chosen row active (not yet synced) and every other row inactive, patches the ConfigMap, and, when StatefulSet `abfs/abfs-gerrit-uploader` exists, deletes pod `-0`, restarts the StatefulSet and waits (`syncTimeoutSeconds` 5400) for Job `abfs-pusher-config-sync` to write the new ABFS ref and for the rollout to finish. It then waits for the seed to finish and marks the row synced. Selecting the already active row does not restart the uploaders; it only checks the seed again. One branch/revision is seeded at a time; earlier revisions remain in Spanner/GCS.
 
 ### Seed finished
 
@@ -164,7 +164,7 @@ The ABFS git-pusher has no "seed finished" message and never stops: it pushes ev
 kubectl get configmap abfs-uploader-config -n horizon -o jsonpath='{.data.seed-status}'
 ```
 
-The seed is tracked only by this workflow. After a first enable, a module re-enable or any other uploader restart the row is not marked by itself: the overview shows `Not confirmed`, and submitting the workflow with the already active row checks the seed without restarting the uploaders (only while the row is `synced: false`). `check` is `full` when the tracker saw the project list each uploader logs at start, and `steady-state` when that part of the log was already rotated away; then it only knows the projects pushed while it was watching, and a project still in its first upload could be missed.
+The seed is tracked only by this workflow. After a first enable, a module re-enable or any other uploader restart nothing follows the seed by itself: the overview shows `Not confirmed` (fresh install) or keeps the last result. Submitting the workflow with the already active row checks the seed again without restarting the uploaders (about 4 minutes when everything is pushed) and refreshes the `Finished` line; if that check runs into the time limit, the row is set to `synced: false`. `check` is `full` when the tracker saw the project list each uploader logs at start, and `steady-state` when that part of the log was already rotated away; then it only knows the projects pushed while it was watching, and a project still in its first upload could be missed.
 
 ```bash
 kubectl get configmap abfs-uploader-config -n horizon -o jsonpath='{.data.table}'

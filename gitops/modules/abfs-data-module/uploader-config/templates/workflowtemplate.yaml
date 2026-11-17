@@ -212,7 +212,7 @@ spec:
             fi
             # The seed tracker sets synced true on the active row once every
             # project of that row has been pushed. It runs after a reseed, and
-            # also for an unchanged row whose seed was never confirmed.
+            # also, without a restart, when the active row is selected again.
             export SEED_ROW="$(tr -d '[:space:]' < /tmp/active-row)"
             track_seed() {
               python3 - << 'PY'
@@ -224,11 +224,7 @@ spec:
               exit 0
             fi
             if [[ "$(tr -d '[:space:]' < /tmp/uploader-restart)" != "true" ]]; then
-              if [[ "$(tr -d '[:space:]' < /tmp/seed-track)" != "true" ]]; then
-                echo "Selected row is already active and seeded; uploaders were not restarted"
-                exit 0
-              fi
-              echo "Selected row is already active but its seed is not confirmed; uploaders were not restarted, checking the seed"
+              echo "Selected row is already active; uploaders were not restarted, checking its seed"
               track_seed
               exit 0
             fi
