@@ -187,7 +187,7 @@ Note: this can change, so the `Seed Workloads` job supports this parameter to al
 
 ### `ABFS_CLIENT_FLAGS`
 
-Flags passed to the ABFS client commands. Default `--disable-tls=true --auth-type none`.
+Flags passed to the ABFS client commands. Default `--disable-tls=true --auth-type gcpsa --auth-audience abfs-user`.
 
 Change this on an ABFS build to test session encryption or authentication.
 

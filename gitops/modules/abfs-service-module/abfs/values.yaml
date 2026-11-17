@@ -230,8 +230,8 @@ server:
     # -- server.auth.enabled -- start abfs-server with --auth-enabled (client
     # authentication). Every client must then send a Google service account
     # identity (client.authType: gcpsa here, and --auth-type gcpsa in the
-    # clientFlags of the builder chart / Jenkins job). Off by default: not yet
-    # validated with ABFS 0.1.14.
+    # clientFlags of the builder chart / Jenkins job). The module
+    # (parent chart, auth.enabled) switches it on; this chart alone keeps it off.
     enabled: false
   # -- server.replicas -- the ABFS server is a singleton; keep 1.
   replicas: 1

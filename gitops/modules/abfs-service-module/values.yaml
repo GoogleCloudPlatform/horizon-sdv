@@ -86,9 +86,10 @@ tests:
 # true: the server starts with --auth-enabled and the uploaders and the
 # pusher-config Job send --auth-type <clientAuthType>. The builds need the same
 # flag in abfs.clientFlags (builder chart) / ABFS_CLIENT_FLAGS (Jenkins).
-# Off by default: not yet validated with ABFS 0.1.14.
+# Set enabled to false to run without authentication; the builds then need
+# "--auth-type none" again.
 auth:
-  enabled: false
+  enabled: true
   clientAuthType: gcpsa
   # Audience of the identity token the clients send. The gcpsa client needs one.
   clientAuthAudience: abfs-user

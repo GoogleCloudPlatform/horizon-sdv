@@ -62,14 +62,14 @@ spec:
     server: abfs-server.abfs.svc.cluster.local:50051
     # Flags for every ABFS client command (init, config, cacheman, mount, setup
     # in aaos_initialise.sh), passed as ABFS_CLIENT_FLAGS. They must match how
-    # the server listens: abfs-service-module runs it without TLS and without
-    # auth (abfs.clientFlags in its chart). The Jenkins job sets the same
-    # default through its ABFS_CLIENT_FLAGS parameter. Without them the client
-    # opens a TLS session and cacheman stops at initialise with
-    # "tls: first record does not look like a TLS handshake".
-    # When abfs-service-module runs with auth.enabled=true, use
-    # "--disable-tls=true --auth-type gcpsa --auth-audience abfs-user" here (and in the Jenkins job).
-    clientFlags: "--disable-tls=true --auth-type none"
+    # the server listens: abfs-service-module runs it without TLS and with
+    # client authentication (its auth.enabled, on by default). The Jenkins job
+    # sets the same default through its ABFS_CLIENT_FLAGS parameter. Without
+    # --disable-tls the client opens a TLS session and cacheman stops at
+    # initialise with "tls: first record does not look like a TLS handshake".
+    # With auth.enabled=false in abfs-service-module use
+    # "--disable-tls=true --auth-type none".
+    clientFlags: "--disable-tls=true --auth-type gcpsa --auth-audience abfs-user"
     cachedBuild: "false"
     version: "0.1.14"
     casfsVersion: "0.1.14"
