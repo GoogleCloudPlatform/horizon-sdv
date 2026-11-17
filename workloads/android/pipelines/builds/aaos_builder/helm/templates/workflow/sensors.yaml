@@ -136,6 +136,10 @@ spec:
             - src:
                 dependencyName: webhook-dep
                 dataKey: body.{{ $p }}
+{{- if eq $p "aaosCacheStorageSize" }}
+                # Callers that do not send the size yet get the chart default.
+                value: {{ $.Values.spec.aaosCacheStorageSize | default "1000Gi" | quote }}
+{{- end }}
               dest: spec.arguments.parameters.{{ add 11 $i }}.value
 {{- end }}
             - src:

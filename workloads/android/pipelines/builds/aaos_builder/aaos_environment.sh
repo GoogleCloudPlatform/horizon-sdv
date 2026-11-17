@@ -183,7 +183,7 @@ if [ -d "${AAOS_CACHE_DIRECTORY}" ]; then
     sudo chmod g+s /"${AAOS_CACHE_DIRECTORY}"
 
     # Free space one ABFS build needs on the cache disk, and the record of the
-    # revision that last used the cache (kept beside it, not inside).
+    # revision and lunch target the cache was built for (kept beside it, not inside).
     ABFS_CACHE_MIN_FREE_GB=${ABFS_CACHE_MIN_FREE_GB:-180}
     ABFS_CACHE_REVISION_FILE="${AAOS_CACHE_DIRECTORY}/.abfs-cache-revision"
     if [[ "${ABFS_BUILDER}" == "true" ]]; then
@@ -213,17 +213,20 @@ if [ -d "${AAOS_CACHE_DIRECTORY}" ]; then
                     # below what one build needs, whatever the disk size.
                     case "$0" in
                         *initialise.sh)
-                            ABFS_CACHE_REVISION=$(cat "${ABFS_CACHE_REVISION_FILE}" 2>/dev/null || true)
+                            ABFS_CACHE_OWNER=$(cat "${ABFS_CACHE_REVISION_FILE}" 2>/dev/null || true)
+                            ABFS_CACHE_WANTED="${AAOS_REVISION} ${AAOS_LUNCH_TARGET}"
                             FREE_GB=$(df -BG "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print $4}' | tr -dc '0-9')
-                            if [ "${ABFS_CACHE_REVISION}" != "${AAOS_REVISION}" ] && \
-                               [ "${FREE_GB:-0}" -lt "${ABFS_CACHE_MIN_FREE_GB}" ] && \
-                               [ -n "$(find "${AAOS_CACHE_DIRECTORY}/cache" -mindepth 1 -print -quit 2>/dev/null)" ]; then
-                                echo "WARNING: ${FREE_GB:-0}G free, below ${ABFS_CACHE_MIN_FREE_GB}G, and the cache is from revision '${ABFS_CACHE_REVISION:-unknown}'"
+                            if [ "${ABFS_CACHE_OWNER}" != "${ABFS_CACHE_WANTED}" ] &&                                [ "${FREE_GB:-0}" -lt "${ABFS_CACHE_MIN_FREE_GB}" ] &&                                [ -n "$(find "${AAOS_CACHE_DIRECTORY}/cache" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+                                echo "WARNING: ${FREE_GB:-0}G free, below ${ABFS_CACHE_MIN_FREE_GB}G, and the cache is from '${ABFS_CACHE_OWNER:-unknown}'"
                                 echo "WARNING: Removing ${AAOS_CACHE_DIRECTORY}/cache ..."
                                 find "${AAOS_CACHE_DIRECTORY}/cache" -mindepth 1 -delete
                             fi
                             mkdir -p "${AAOS_CACHE_DIRECTORY}/cache"
-                            echo "${AAOS_REVISION}" > "${ABFS_CACHE_REVISION_FILE}"
+                            # Record the owner only for an empty cache, so a cache
+                            # shared with another build keeps its first owner.
+                            if [ -z "$(find "${AAOS_CACHE_DIRECTORY}/cache" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+                                echo "${ABFS_CACHE_WANTED}" > "${ABFS_CACHE_REVISION_FILE}"
+                            fi
                             ;;
                     esac
                 fi
