@@ -27,6 +27,12 @@ variable "gcp_registry_id" {
   type        = string
 }
 
+variable "container_image_no_cache" {
+  description = "False reuses finished image layers. True rebuilds every layer for one apply, including apk and apt upgrades."
+  type        = bool
+  default     = false
+}
+
 variable "images" {
   description = <<-EOT
     Map of images to build. Key = image name in Artifact Registry.

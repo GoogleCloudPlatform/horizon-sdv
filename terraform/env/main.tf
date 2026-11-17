@@ -693,6 +693,8 @@ module "base" {
   sdv_enable_network_policies = var.sdv_enable_network_policies
   # KMS encryption for GKE secrets (optional)
   sdv_enable_kms_encryption = var.sdv_enable_kms_encryption
+  # One clean image build. False reuses finished Docker layers.
+  sdv_container_image_no_cache = var.sdv_container_image_no_cache
   # DNSSEC configuration for Cloud DNS
   sdv_dns_dnssec_enabled = var.sdv_dns_dnssec_enabled
   # Static A records: no zone delegation, LB cert auth; add A records to parent zone manually

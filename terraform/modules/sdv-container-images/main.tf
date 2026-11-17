@@ -22,7 +22,7 @@ locals {
   horizon_cli_files = toset([
     for f in fileset(local.horizon_cli_root, "**") : f
     if !endswith(f, "_test.go") && (
-    endswith(f, ".go") || endswith(f, ".mod") || endswith(f, ".sum") || endswith(f, ".json")
+      endswith(f, ".go") || endswith(f, ".mod") || endswith(f, ".sum") || endswith(f, ".json")
     )
   ])
   portal_image_key = "horizon-dev-portal"
@@ -63,11 +63,13 @@ resource "docker_image" "sdv-container-images" {
   name = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"
   build {
     # Reuse finished layers when deploy.sh is run again. triggers still rebuild
-    # the image when the Dockerfile, context, build args, or platform change.
+    # the image when the Dockerfile, context, build args, platform, or
+    # container_image_no_cache change.
     # pull_parent refreshes each FROM image so a moved parent tag is not served
     # from the local Docker cache. An apk/apt upgrade step stays cached until
-    # that instruction or its parent layer changes.
-    no_cache    = false
+    # that instruction, its parent layer, or container_image_no_cache changes.
+    # Set container_image_no_cache to rerun every layer for this apply.
+    no_cache    = var.container_image_no_cache
     pull_parent = true
 
     context    = local.docker_context[each.key]
@@ -90,6 +92,9 @@ resource "docker_image" "sdv-container-images" {
     dockerfile_sha = try(each.value.dockerfile_path, null) != null ? filesha1(each.value.dockerfile_path) : ""
 
     platform_sha = try(each.value.platform, null) != null ? each.value.platform : ""
+
+    # Changing this replaces every image. true rebuilds with no layer cache.
+    no_cache = var.container_image_no_cache ? "true" : "false"
 
     horizon_cli_sha = each.key == local.portal_image_key ? sha1(join("", [
       for f in sort(tolist(local.horizon_cli_files)) :
