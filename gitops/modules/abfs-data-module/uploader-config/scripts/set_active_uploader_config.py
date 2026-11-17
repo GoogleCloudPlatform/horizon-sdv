@@ -15,10 +15,15 @@
 # Set one uploader-config row active and write a kubectl patch for that table.
 #
 # The workflow saves ConfigMap key "table" to /tmp/table.yaml, then runs this
-# script. SELECTION names the row that becomes active and synced.
+# script. SELECTION names the row that becomes active.
 # CUSTOM_CONFIG is applied only when that name is AndroidCustom; an empty paste uses
 # DEFAULT_CUSTOM_CONFIG. An AndroidCustom row with no repo is an empty slot and
 # counts as a change. Every other row is active false and synced false.
+# synced means "the uploaders have finished seeding this row". A newly selected
+# row, or a changed AndroidCustom repo, starts with synced false; the seed
+# tracker (track_seed.py) sets it true. Selecting the row that is already
+# active keeps its synced value. /tmp/seed-track tells the workflow whether the
+# tracker has to run, and /tmp/active-row names the row it watches.
 # The patch is written to /tmp/uploader-config-patch.json. An AndroidCustom
 # submit also writes that entry to /tmp/android-custom-saved.yaml so the form
 # shows it on the next open. The workflow log prints the previously active row
@@ -101,8 +106,12 @@ def custom_repo(custom_text):
     return repo_of(pasted)
 
 
-def apply_selection(entries, selection, custom_repo_value):
-    """Set active and synced on the chosen row. Replace that row's repo only for AndroidCustom."""
+def apply_selection(entries, selection, custom_repo_value, reseed):
+    """Set active on the chosen row. Replace that row's repo only for AndroidCustom.
+
+    synced is false on every other row. On the chosen row it is false when the
+    uploaders have to seed it again, and unchanged when nothing changes.
+    """
     names = [entry.get("name") for entry in entries if isinstance(entry, dict)]
     if selection not in names:
         raise SystemExit("ERROR: unknown selection %r; expected one of: %s" % (selection, ", ".join(names)))
@@ -110,7 +119,7 @@ def apply_selection(entries, selection, custom_repo_value):
     for entry in entries:
         selected = entry.get("name") == selection
         entry["active"] = selected
-        entry["synced"] = selected
+        entry["synced"] = selected and not reseed and entry.get("synced") is True
         if selected:
             chosen = entry
             if custom_repo_value is not None:
@@ -119,8 +128,8 @@ def apply_selection(entries, selection, custom_repo_value):
         print("apply_selection: no row matched %r" % selection)
     else:
         print(
-            "apply_selection: active=%s synced=true replaced_repo=%s"
-            % (chosen["name"], custom_repo_value is not None)
+            "apply_selection: active=%s synced=%s replaced_repo=%s"
+            % (chosen["name"], "true" if chosen["synced"] else "false", custom_repo_value is not None)
         )
     return chosen
 
@@ -182,6 +191,16 @@ def write_restart_flag(restart):
     print("restart_uploaders: %s" % ("true" if restart else "false"))
 
 
+def write_seed_flags(chosen):
+    """Name the active row and say whether its seed still has to be confirmed."""
+    track = isinstance(chosen, dict) and chosen.get("synced") is not True
+    with open("/tmp/active-row", "w") as flag:
+        flag.write("%s\n" % (chosen.get("name") if isinstance(chosen, dict) else ""))
+    with open("/tmp/seed-track", "w") as flag:
+        flag.write("true\n" if track else "false\n")
+    print("track_seed: %s" % ("true" if track else "false"))
+
+
 def config_kind(entry):
     """AndroidCustom is custom. Every other named row is predefined."""
     if not isinstance(entry, dict) or not entry.get("name"):
@@ -226,9 +245,11 @@ def main():
     else:
         custom_repo_value = None
         print("main: selection is not AndroidCustom, leaving repo blocks unchanged")
-    chosen = apply_selection(entries, selection, custom_repo_value)
+    restart = (not same_row) or repo_changed
+    chosen = apply_selection(entries, selection, custom_repo_value, restart)
     write_patch(entries)
-    write_restart_flag((not same_row) or repo_changed)
+    write_restart_flag(restart)
+    write_seed_flags(chosen)
     print(
         "config: previous=%s (%s) current=%s (%s)"
         % (

@@ -37,6 +37,8 @@ LICENSE_SECRET = os.environ.get("LICENSE_SECRET", "abfs-license")
 UPLOADER_NS = os.environ.get("UPLOADER_CONFIG_NAMESPACE", LICENSE_NS)
 UPLOADER_CONFIGMAP = os.environ.get("UPLOADER_CONFIGMAP", "abfs-uploader-config")
 CUSTOM_ROW = "AndroidCustom"
+# The seed tracker writes its progress every minute. Older than this, it has stopped.
+SEED_STALE_SECONDS = 600
 
 
 def api_get(path):
@@ -216,19 +218,74 @@ def listing_without_flags(block):
     return "\n".join(kept).strip()
 
 
-def pusher_config():
-    """Active uploader-config row. AndroidCustom is custom; any other row is predefined."""
+def short_time(value):
+    """2026-01-31T12:00:00Z as 2026-01-31 12:00Z, or '' when the value is not a time."""
+    parsed = parse_expiry(value) if isinstance(value, str) and "T" in value else None
+    return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ") if parsed else ""
+
+
+def seed_fields(name, synced, raw):
+    """Seed state of the active row for the status card and /seed-status.
+
+    raw is ConfigMap key seed-status, written by workflow abfs-uploader-config-select.
+    It is used only when it describes the active row. Without it the row's synced
+    flag is the only information.
+    """
+    try:
+        status = json.loads(raw) if raw else {}
+    except ValueError:
+        status = {}
+    if not isinstance(status, dict) or status.get("row") != name:
+        status = {}
+    state = status.get("state")
+    done, total = status.get("projectsDone"), status.get("projectsTotal")
+    progress = f"{done}/{total} projects" if isinstance(done, int) and isinstance(total, int) and total else ""
+    result = {"row": name, "synced": synced, "state": state or ("seeded" if synced else "unknown")}
+    result.update({key: status[key] for key in (
+        "projectsDone", "projectsTotal", "startedAt", "finishedAt", "updatedAt",
+        "durationSeconds", "check", "workflow", "pending") if key in status})
+    if synced:
+        details = [short_time(status.get("finishedAt"))]
+        seconds = status.get("durationSeconds")
+        if isinstance(seconds, int) and status.get("startedAt"):
+            details.append(f"took {max(1, round(seconds / 60))} min")
+        details.append(progress)
+        details = ", ".join(item for item in details if item)
+        result["text"] = "Finished" + (f" ({details})" if details else "")
+        return result
+    retry = "run abfs-uploader-config-select with this row to check again"
+    if state == "seeding":
+        updated = parse_expiry(status.get("updatedAt"))
+        age = (datetime.now(timezone.utc) - updated).total_seconds() if updated else None
+        if age is not None and age <= SEED_STALE_SECONDS:
+            result["text"] = "In progress" + (f" ({progress})" if progress else "")
+        else:
+            result["state"] = "stalled"
+            result["text"] = f"Not confirmed: tracking stopped at {short_time(status.get('updatedAt')) or 'an unknown time'}; {retry}"
+    elif state == "timeout":
+        result["text"] = f"Not finished within the time limit ({progress or 'no progress recorded'}); {retry}"
+    else:
+        result["state"] = "unknown"
+        result["text"] = f"Not confirmed; {retry}"
+    return result
+
+
+def uploader_status():
+    """Config type, row listing, and seed state of the active uploader-config row."""
     obj = read_core_object(UPLOADER_NS, "configmaps", UPLOADER_CONFIGMAP)
-    text = ((obj or {}).get("data") or {}).get("table", "")
+    data = (obj or {}).get("data") or {}
+    text = data.get("table", "")
+    missing = {"row": "", "synced": False, "state": "unknown", "text": "Not Rendered"}
     if not text.strip():
-        return "Not Rendered", "Not Rendered"
+        return "Not Rendered", "Not Rendered", missing
     for block in table_blocks(text):
         if block_field(block, "active").lower() != "true":
             continue
         name = block_field(block, "name")
         kind = "Custom" if name == CUSTOM_ROW else "Predefined"
-        return kind, listing_without_flags(block) or "Not Rendered"
-    return "Not Rendered", "Not Rendered"
+        synced = block_field(block, "synced").lower() == "true"
+        return kind, listing_without_flags(block) or "Not Rendered", seed_fields(name, synced, data.get("seed-status", ""))
+    return "Not Rendered", "Not Rendered", missing
 
 
 def license_status():
@@ -240,7 +297,7 @@ def license_status():
 def build_status():
     """Build the Status card HTML from the current license and pusher config."""
     secret, valid_until = license_fields(*license_payload())
-    config_type, config_content = pusher_config()
+    config_type, config_content, seed = uploader_status()
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
     return f"""
         <article class="card">
@@ -254,6 +311,7 @@ def build_status():
           <h3>ABFS Pusher Config</h3>
           <ul>
             <li><strong>Config Type:</strong> {html.escape(config_type)}</li>
+            <li><strong>Seed:</strong> {html.escape(seed["text"])}</li>
             <li><strong>Config Content:</strong></li>
           </ul>
           <pre>{html.escape(config_content)}</pre>
@@ -280,6 +338,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/license-status":
             body = json.dumps(license_status()).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == "/seed-status":
+            body = json.dumps(uploader_status()[2]).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")

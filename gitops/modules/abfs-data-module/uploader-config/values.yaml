@@ -28,6 +28,15 @@ pusherSyncJobName: abfs-pusher-config-sync
 # Upper bound for the reseed: sync Job plus uploader rollout. Pod 0 itself
 # waits up to 90 min for the sync Job.
 syncTimeoutSeconds: 5400
+# Seed tracking, after the rollout: the workflow reads the uploader logs every
+# seedPollSeconds and ends when every project the uploaders started has been
+# pushed once, unchanged for seedStablePolls polls. It fails after
+# seedTimeoutSeconds and leaves the row not synced. A full Android release
+# seeds in about one hour on three uploaders.
+uploaderContainerName: abfs-uploader
+seedTimeoutSeconds: 10800
+seedPollSeconds: 60
+seedStablePolls: 3
 
 uploaderConfig:
   manifestUrl: https://android.googlesource.com/platform/manifest
