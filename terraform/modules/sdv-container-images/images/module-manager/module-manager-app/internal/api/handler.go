@@ -102,7 +102,8 @@ type StatusResponse struct {
 	ExpectedManagedApplicationCount *int `json:"expectedManagedApplicationCount,omitempty"`
 	// ManagedChildApplicationPresent is false when the labeled child Application is absent (disable teardown or enable not finished).
 	ManagedChildApplicationPresent *bool `json:"managedChildApplicationPresent,omitempty"`
-	// ParentSkipReconcile is true when the mod-* parent has argocd.argoproj.io/skip-reconcile (set during prefixed-module disable).
+	// ParentSkipReconcile is true when the mod-* parent has argocd.argoproj.io/skip-reconcile (set during prefixed-module
+	// and cloud-workstations disable).
 	ParentSkipReconcile *bool `json:"parentSkipReconcile,omitempty"`
 }
 
@@ -479,6 +480,7 @@ func (h *Handler) getModuleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fillPrefixedModuleStackStatus(mod.Name, mod.Enabled, parentErr, parentApp, listErr, managed, &status)
+	fillCloudWorkstationsDrainStatus(mod.Name, mod.Enabled, parentErr, parentApp, &status)
 
 	if listErr == nil {
 		n := countRemainingModuleApplications(parentErr, parentApp, managed)

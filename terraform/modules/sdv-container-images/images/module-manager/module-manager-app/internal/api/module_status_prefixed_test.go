@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/acn-horizon-sdv/module-manager/internal/controller"
 )
 
 func TestManagedChildApplicationPresent(t *testing.T) {
@@ -66,5 +68,36 @@ func TestFillPrefixedModuleStackStatus(t *testing.T) {
 	fillPrefixedModuleStackStatus("sample", true, nil, nil, nil, nil, status2)
 	if status2.ExpectedManagedApplicationCount != nil {
 		t.Fatal("sample module should not set prefixed stack fields")
+	}
+}
+
+func TestFillCloudWorkstationsDrainStatus(t *testing.T) {
+	paused := &unstructured.Unstructured{Object: map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{argoCDSkipReconcileAnnotationKey: "true"},
+		},
+	}}
+
+	status := &StatusResponse{}
+	fillCloudWorkstationsDrainStatus(controller.CloudWorkstationsModuleName, true, nil, paused, status)
+	if status.ParentSkipReconcile == nil || !*status.ParentSkipReconcile {
+		t.Fatalf("parentSkipReconcile: got %v, want true", status.ParentSkipReconcile)
+	}
+	if status.ExpectedManagedApplicationCount != nil {
+		t.Fatal("cloud-workstations must not set prefixed stack fields")
+	}
+
+	for name, tc := range map[string]struct {
+		module  string
+		enabled bool
+	}{
+		"other module": {module: "sample", enabled: true},
+		"disabled":     {module: controller.CloudWorkstationsModuleName, enabled: false},
+	} {
+		st := &StatusResponse{}
+		fillCloudWorkstationsDrainStatus(tc.module, tc.enabled, nil, paused, st)
+		if st.ParentSkipReconcile != nil {
+			t.Errorf("%s: parentSkipReconcile must be omitted, got %v", name, *st.ParentSkipReconcile)
+		}
 	}
 }

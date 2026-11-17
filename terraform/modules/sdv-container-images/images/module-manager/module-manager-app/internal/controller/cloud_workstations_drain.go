@@ -18,6 +18,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -26,13 +27,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
-	cloudWorkstationsModuleName  = "cloud-workstations"
+	// CloudWorkstationsModuleName is the catalog name of the Cloud Workstations module.
+	CloudWorkstationsModuleName  = "cloud-workstations"
 	cloudWorkstationsNamespace   = "cloud-workstations"
 	cloudWorkstationsCoreAppName = "mod-cloud-workstations-core"
 
@@ -40,47 +41,152 @@ const (
 	cloudWorkstationsKCCGroup     = "workstations.cnrm.cloud.google.com"
 )
 
-// pauseCloudWorkstationsCoreForDrain prevents Argo CD self-heal from recreating resources while the
-// module drain deletes them. A missing core Application is already drained and is therefore a no-op.
-func pauseCloudWorkstationsCoreForDrain(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
-	if moduleName != cloudWorkstationsModuleName {
+// pauseCloudWorkstationsForDrain sets skip-reconcile on the parent, then on the core Application, so neither
+// Git nor a parent sync can recreate what the drain deletes. The parent goes first so it cannot reapply the
+// core Application in between. On error everything already paused is resumed.
+func pauseCloudWorkstationsForDrain(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
+	if moduleName != CloudWorkstationsModuleName {
 		return nil
 	}
-	if err := setArgoCDApplicationSkipReconcile(ctx, c, argocdNamespace, cloudWorkstationsCoreAppName, true); err != nil {
-		return fmt.Errorf("pause Cloud Workstations core Application for drain: %w", err)
+	if err := pauseCloudWorkstationsApplications(ctx, c, argocdNamespace, moduleName); err != nil {
+		if resumeErr := resumeCloudWorkstationsAfterFailedDrain(ctx, c, argocdNamespace, moduleName); resumeErr != nil {
+			return fmt.Errorf("pause Cloud Workstations Applications for drain: %w; resume: %v", err, resumeErr)
+		}
+		return fmt.Errorf("pause Cloud Workstations Applications for drain: %w", err)
 	}
 	return nil
 }
 
-// resumeCloudWorkstationsCoreCleanupTimeout bounds the fresh context resumeCloudWorkstationsCoreAfterFailedDrain
-// uses for its own API call (see below), independent of the caller's ctx deadline/cancellation.
-const resumeCloudWorkstationsCoreCleanupTimeout = 30 * time.Second
+func pauseCloudWorkstationsApplications(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
+	for _, appName := range []string{ApplicationName(moduleName), cloudWorkstationsCoreAppName} {
+		if err := terminateArgoCDApplicationOperationIfAny(ctx, c, argocdNamespace, appName); err != nil {
+			return err
+		}
+		if err := setArgoCDApplicationSkipReconcile(ctx, c, argocdNamespace, appName, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-// resumeCloudWorkstationsCoreAfterFailedDrain clears the pause after a drain error.
-// selfHeal is still set to true, so Argo CD manages the core Application again. The module is still enabled.
+// resumeCloudWorkstationsAfterFailedDrain clears the pause on the core and parent Applications after a
+// disable error. selfHeal is never changed, so Argo CD manages both again. The module is still enabled.
 //
-// This deliberately does not use the caller's ctx for its own API call. It runs on the error path of a
+// This deliberately does not use the caller's ctx for its own API calls. It runs on the error path of a
 // long drain (up to cwsDrainStageTimeout per stage) that, for the REST disable handler, is driven by
 // r.Context() - cancelled the moment the client/proxy disconnects. Reusing that ctx here would make the
 // resume call fail immediately with the same cancellation/deadline that triggered this cleanup in the
-// first place, leaving the core Application stuck paused with no recovery. A fresh, short-lived context
+// first place, leaving the Applications stuck paused with no recovery. A fresh, short-lived context
 // gives the cleanup a real chance to reach the API server even when the triggering ctx is already dead.
-func resumeCloudWorkstationsCoreAfterFailedDrain(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
-	if moduleName != cloudWorkstationsModuleName {
+func resumeCloudWorkstationsAfterFailedDrain(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
+	if moduleName != CloudWorkstationsModuleName {
 		return nil
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), resumeCloudWorkstationsCoreCleanupTimeout)
 	defer cancel()
-	if err := setArgoCDApplicationSkipReconcile(cleanupCtx, c, argocdNamespace, cloudWorkstationsCoreAppName, false); err != nil {
-		return fmt.Errorf("resume Cloud Workstations core Application after failed drain: %w", err)
+	var errs []error
+	for _, appName := range []string{cloudWorkstationsCoreAppName, ApplicationName(moduleName)} {
+		if err := setArgoCDApplicationSkipReconcile(cleanupCtx, c, argocdNamespace, appName, false); err != nil {
+			errs = append(errs, fmt.Errorf("resume %q: %w", appName, err))
+		}
+	}
+	if err := stderrors.Join(errs...); err != nil {
+		return fmt.Errorf("resume Cloud Workstations Applications after failed disable: %w", err)
 	}
 	return nil
 }
 
-// completeCloudWorkstationsCoreDrain turns self-heal off before resuming reconciliation. This allows the
-// parent Application deletion to prune the core Application without recreating the drained cluster.
+// ResumeCloudWorkstationsAfterRestart repairs a pause left by a disable that a restart aborted. While the
+// module is still enabled it resumes both Applications; the paused parent also locks the Portal switch.
+// Once the module is disabled it finishes the parent delete and resumes only Applications that are being
+// deleted. It waits for ModuleOpsMutex, which other lifecycle work holds too, rather than skipping.
+func ResumeCloudWorkstationsAfterRestart(ctx context.Context, c client.Client, stateStore StateStoreInterface, argocdNamespace string) error {
+	if err := waitForModuleOpsMutex(ctx); err != nil {
+		return err
+	}
+	defer ModuleOpsMutex.Unlock()
+
+	state, err := stateStore.Get(ctx)
+	if err != nil {
+		return err
+	}
+	id := state.ModuleIDs[CloudWorkstationsModuleName]
+	if id == "" {
+		return nil
+	}
+	if slices.Contains(state.EnabledModules, id) {
+		return resumeCloudWorkstationsAfterFailedDrain(ctx, c, argocdNamespace, CloudWorkstationsModuleName)
+	}
+	return finishCloudWorkstationsDisableAfterRestart(ctx, c, argocdNamespace)
+}
+
+// waitForModuleOpsMutex takes ModuleOpsMutex, polling until ctx ends.
+func waitForModuleOpsMutex(ctx context.Context) error {
+	if ModuleOpsMutex.TryLock() {
+		return nil
+	}
+	log.FromContext(ctx).Info("waiting for a module lifecycle operation before resuming Cloud Workstations")
+	ticker := time.NewTicker(cwsRestartLockPoll)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if ModuleOpsMutex.TryLock() {
+				return nil
+			}
+		}
+	}
+}
+
+// finishCloudWorkstationsDisableAfterRestart completes a disable that stopped after the state flipped. The
+// core is only resumed once it is being deleted. A paused parent that is not yet being deleted is deleted
+// first, still paused, so it cannot recreate the core and the cluster. An Application we did not pause is
+// left alone.
+func finishCloudWorkstationsDisableAfterRestart(ctx context.Context, c client.Client, argocdNamespace string) error {
+	var errs []error
+	for _, app := range []struct {
+		name         string
+		deleteIfLive bool
+	}{
+		{cloudWorkstationsCoreAppName, false},
+		{ApplicationName(CloudWorkstationsModuleName), true},
+	} {
+		if err := finishPausedApplicationDelete(ctx, c, argocdNamespace, app.name, app.deleteIfLive); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return stderrors.Join(errs...)
+}
+
+func finishPausedApplicationDelete(ctx context.Context, c client.Client, argocdNamespace, name string, deleteIfLive bool) error {
+	app := &unstructured.Unstructured{}
+	app.SetGroupVersionKind(argoCDApplicationGVK)
+	if err := c.Get(ctx, client.ObjectKey{Namespace: argocdNamespace, Name: name}, app); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if app.GetAnnotations()[argoCDSkipReconcileAnnotationKey] != "true" {
+		return nil
+	}
+	if app.GetDeletionTimestamp().IsZero() {
+		if !deleteIfLive {
+			return nil
+		}
+		if err := c.Delete(ctx, app); err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("delete paused Application %q: %w", name, err)
+		}
+	}
+	if err := setArgoCDApplicationSkipReconcile(ctx, c, argocdNamespace, name, false); err != nil {
+		return fmt.Errorf("resume deleted Application %q: %w", name, err)
+	}
+	return nil
+}
+
+// completeCloudWorkstationsCoreDrain deletes the paused core Application, then resumes it so its finalizer
+// can prune. Argo CD does not sync an Application that is being deleted, so the drained cluster stays gone.
 func completeCloudWorkstationsCoreDrain(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
-	if moduleName != cloudWorkstationsModuleName {
+	if moduleName != CloudWorkstationsModuleName {
 		return nil
 	}
 	app := &unstructured.Unstructured{}
@@ -89,43 +195,51 @@ func completeCloudWorkstationsCoreDrain(ctx context.Context, c client.Client, ar
 	if err := c.Get(ctx, key, app); err != nil {
 		return client.IgnoreNotFound(err)
 	}
-	patch := client.RawPatch(types.MergePatchType, []byte(`{"spec":{"syncPolicy":{"automated":{"selfHeal":false}}}}`))
-	if err := c.Patch(ctx, app, patch); err != nil {
-		return fmt.Errorf("disable self-heal on Cloud Workstations core Application: %w", err)
+	if app.GetDeletionTimestamp().IsZero() {
+		if err := c.Delete(ctx, app); err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("delete Cloud Workstations core Application: %w", err)
+		}
 	}
 	if err := setArgoCDApplicationSkipReconcile(ctx, c, argocdNamespace, cloudWorkstationsCoreAppName, false); err != nil {
-		return fmt.Errorf("resume Cloud Workstations core Application after drain: %w", err)
+		return fmt.Errorf("resume deleted Cloud Workstations core Application: %w", err)
 	}
 	return nil
 }
 
-// recoverCloudWorkstationsCoreAfterIncompleteCompletion is called when completeCloudWorkstationsCoreDrain
-// fails. That function can disable selfHeal and then fail before clearing skip-reconcile, leaving the core
-// Application both un-healable (selfHeal: false) and un-reconcilable (skip-reconcile: "true") - a worse
-// state than before the drain started. This restores selfHeal: true in addition to clearing skip-reconcile
-// (resumeCloudWorkstationsCoreAfterFailedDrain alone only does the latter, which is sufficient for a drain
-// failure where selfHeal was never touched, but not here). Uses a fresh context for the same reason
-// resumeCloudWorkstationsCoreAfterFailedDrain does.
-func recoverCloudWorkstationsCoreAfterIncompleteCompletion(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
-	if moduleName != cloudWorkstationsModuleName {
+// resumeCloudWorkstationsParentAfterDelete clears skip-reconcile on the deleted parent Application so its
+// finalizer can prune. The state already says disabled, so the disable API cannot retry this: it uses a fresh
+// context and retries within that budget. A restart is covered by ResumeCloudWorkstationsAfterRestart.
+func resumeCloudWorkstationsParentAfterDelete(ctx context.Context, c client.Client, argocdNamespace, moduleName string) error {
+	if moduleName != CloudWorkstationsModuleName {
 		return nil
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), resumeCloudWorkstationsCoreCleanupTimeout)
 	defer cancel()
-	app := &unstructured.Unstructured{}
-	app.SetGroupVersionKind(argoCDApplicationGVK)
-	key := client.ObjectKey{Namespace: argocdNamespace, Name: cloudWorkstationsCoreAppName}
-	if err := c.Get(cleanupCtx, key, app); err != nil {
-		return client.IgnoreNotFound(err)
+	for {
+		err := setArgoCDApplicationSkipReconcile(cleanupCtx, c, argocdNamespace, ApplicationName(moduleName), false)
+		if err == nil {
+			return nil
+		}
+		select {
+		case <-cleanupCtx.Done():
+			return fmt.Errorf("resume deleted Cloud Workstations parent Application: %w", err)
+		case <-time.After(cwsResumeRetryInterval):
+		}
 	}
-	patch := client.RawPatch(types.MergePatchType, []byte(`{"spec":{"syncPolicy":{"automated":{"selfHeal":true}}}}`))
-	if err := c.Patch(cleanupCtx, app, patch); err != nil {
-		return fmt.Errorf("re-enable self-heal on Cloud Workstations core Application: %w", err)
+}
+
+// logCloudWorkstationsResumeError logs a resume failure on paths that already return another error or
+// cannot be retried through the disable API. Each Application gets its own command so a missing one
+// does not hide the others.
+func logCloudWorkstationsResumeError(ctx context.Context, argocdNamespace string, err error, appNames ...string) {
+	if err == nil {
+		return
 	}
-	if err := setArgoCDApplicationSkipReconcile(cleanupCtx, c, argocdNamespace, cloudWorkstationsCoreAppName, false); err != nil {
-		return fmt.Errorf("resume Cloud Workstations core Application after incomplete drain completion: %w", err)
+	cmds := make([]string, 0, len(appNames))
+	for _, name := range appNames {
+		cmds = append(cmds, fmt.Sprintf("kubectl -n %s annotate application %s %s-", argocdNamespace, name, argoCDSkipReconcileAnnotationKey))
 	}
-	return nil
+	log.FromContext(ctx).Error(err, "Cloud Workstations Application left paused", "manual", strings.Join(cmds, " ; "))
 }
 
 // Vars (not consts) so tests can shorten them. Cluster deletion on GCP alone was observed at ~16 minutes,
@@ -133,6 +247,13 @@ func recoverCloudWorkstationsCoreAfterIncompleteCompletion(ctx context.Context, 
 var (
 	cwsDrainPollInterval = 10 * time.Second
 	cwsDrainStageTimeout = 20 * time.Minute
+	// resumeCloudWorkstationsCoreCleanupTimeout bounds the fresh context the resume helpers use for their own
+	// API calls, independent of the caller's ctx deadline/cancellation.
+	resumeCloudWorkstationsCoreCleanupTimeout = 30 * time.Second
+	// cwsResumeRetryInterval spaces retries of the parent resume after its delete.
+	cwsResumeRetryInterval = 2 * time.Second
+	// cwsRestartLockPoll spaces attempts to take ModuleOpsMutex for the startup resume.
+	cwsRestartLockPoll = 5 * time.Second
 )
 
 type cwsDrainStage struct {
@@ -188,7 +309,7 @@ func DrainCloudWorkstationsForPlatformTeardown(ctx context.Context, c client.Cli
 }
 
 func drainCloudWorkstations(ctx context.Context, c client.Client, moduleName string, bestEffort bool) error {
-	if moduleName != cloudWorkstationsModuleName {
+	if moduleName != CloudWorkstationsModuleName {
 		return nil
 	}
 	for _, st := range cloudWorkstationsDrainStages {
