@@ -21,6 +21,9 @@ metadata:
     app.kubernetes.io/name: module-manager
 spec:
   replicas: 1
+  # One pod at a time: the startup resume must not run while the old pod is still draining.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: module-manager

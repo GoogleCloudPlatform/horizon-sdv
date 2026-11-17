@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -815,32 +816,194 @@ func TestResumeCloudWorkstationsAfterRestart_EnabledModuleResumesPausedApplicati
 	cwsAssertResumedAndSelfHealIntact(t, c, "argocd")
 }
 
-func TestResumeCloudWorkstationsAfterRestart_DisabledModuleIsLeftAlone(t *testing.T) {
-	c := cwsTestClient(interceptor.Funcs{}, cwsPausedApps()...)
+// cwsTerminating marks an Application as being deleted. The fake client needs a finalizer for that.
+func cwsTerminating(app *unstructured.Unstructured) *unstructured.Unstructured {
+	now := metav1.Now()
+	app.SetDeletionTimestamp(&now)
+	app.SetFinalizers([]string{cwsTestArgoFinalizer})
+	return app
+}
+
+func cwsPaused(app *unstructured.Unstructured) *unstructured.Unstructured {
+	app.SetAnnotations(map[string]string{argoCDSkipReconcileAnnotationKey: "true"})
+	return app
+}
+
+func cwsCountDeletes(n *int) interceptor.Funcs {
+	return interceptor.Funcs{
+		Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			*n++
+			return cl.Delete(ctx, obj, opts...)
+		},
+	}
+}
+
+func TestResumeCloudWorkstationsAfterRestart_DisabledModuleFinishesPendingParentDelete(t *testing.T) {
+	parent := cwsPaused(cwsParentApp())
+	parent.SetFinalizers([]string{cwsTestArgoFinalizer})
+	c := cwsTestClient(interceptor.Funcs{}, parent, cwsPaused(cwsTerminating(cwsCoreApp())))
 
 	if err := ResumeCloudWorkstationsAfterRestart(context.Background(), c, cwsRestartStore(false), "argocd"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, name := range []string{ApplicationName(CloudWorkstationsModuleName), cloudWorkstationsCoreAppName} {
 		app, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", name)
-		if !ok || !cwsSkipReconcile(app) {
-			t.Errorf("%s must stay paused while the module is disabled (exists=%v)", name, ok)
+		if !ok {
+			t.Fatalf("%s should remain until its finalizer runs", name)
+		}
+		if app.GetDeletionTimestamp().IsZero() {
+			t.Errorf("%s must be deleted", name)
+		}
+		if cwsSkipReconcile(app) {
+			t.Errorf("%s must be resumed so its finalizer can prune", name)
 		}
 	}
 }
 
-func TestResumeCloudWorkstationsAfterRestart_SkipsWhileLifecycleOperationRuns(t *testing.T) {
+func TestResumeCloudWorkstationsAfterRestart_DisabledModuleResumesDeletingApplicationsWithoutDelete(t *testing.T) {
+	deletes := 0
+	c := cwsTestClient(cwsCountDeletes(&deletes), cwsPaused(cwsTerminating(cwsParentApp())), cwsPaused(cwsTerminating(cwsCoreApp())))
+
+	if err := ResumeCloudWorkstationsAfterRestart(context.Background(), c, cwsRestartStore(false), "argocd"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if deletes != 0 {
+		t.Errorf("an Application that is already being deleted must not be deleted again, got %d deletes", deletes)
+	}
+	for _, name := range []string{ApplicationName(CloudWorkstationsModuleName), cloudWorkstationsCoreAppName} {
+		if app, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", name); !ok || cwsSkipReconcile(app) {
+			t.Errorf("%s must be resumed (exists=%v)", name, ok)
+		}
+	}
+}
+
+func TestResumeCloudWorkstationsAfterRestart_DisabledModuleLeavesOtherApplicationsAlone(t *testing.T) {
+	deletes := 0
+	// Parent we did not pause, and a core that is paused but not being deleted.
+	c := cwsTestClient(cwsCountDeletes(&deletes), cwsParentApp(), cwsPaused(cwsCoreApp()))
+
+	if err := ResumeCloudWorkstationsAfterRestart(context.Background(), c, cwsRestartStore(false), "argocd"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if deletes != 0 {
+		t.Errorf("nothing should be deleted, got %d deletes", deletes)
+	}
+	if parent, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", ApplicationName(CloudWorkstationsModuleName)); !ok || !parent.GetDeletionTimestamp().IsZero() {
+		t.Errorf("an unpaused parent must be left alone (exists=%v)", ok)
+	}
+	if core, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", cloudWorkstationsCoreAppName); !ok || !cwsSkipReconcile(core) {
+		t.Errorf("a core that is not being deleted must stay paused (exists=%v)", ok)
+	}
+}
+
+func withFastCWSRestartLock(t *testing.T, poll time.Duration) {
+	t.Helper()
+	old := cwsRestartLockPoll
+	cwsRestartLockPoll = poll
+	t.Cleanup(func() { cwsRestartLockPoll = old })
+}
+
+func TestResumeCloudWorkstationsAfterRestart_WaitsForLifecycleOperation(t *testing.T) {
+	withFastCWSRestartLock(t, 5*time.Millisecond)
+	c := cwsTestClient(interceptor.Funcs{}, cwsPausedApps()...)
+
+	ModuleOpsMutex.Lock()
+	done := make(chan error, 1)
+	go func() {
+		done <- ResumeCloudWorkstationsAfterRestart(context.Background(), c, cwsRestartStore(true), "argocd")
+	}()
+	select {
+	case err := <-done:
+		ModuleOpsMutex.Unlock()
+		t.Fatalf("resume must wait while a lifecycle operation holds ModuleOpsMutex, returned %v", err)
+	case <-time.After(60 * time.Millisecond):
+	}
+	for _, name := range []string{ApplicationName(CloudWorkstationsModuleName), cloudWorkstationsCoreAppName} {
+		if app, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", name); !ok || !cwsSkipReconcile(app) {
+			t.Errorf("%s must stay paused while the lock is held (exists=%v)", name, ok)
+		}
+	}
+	ModuleOpsMutex.Unlock()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("resume must run once the lock is released")
+	}
+	cwsAssertResumedAndSelfHealIntact(t, c, "argocd")
+}
+
+func TestResumeCloudWorkstationsAfterRestart_CancelWhileWaitingTouchesNothing(t *testing.T) {
+	withFastCWSRestartLock(t, 5*time.Millisecond)
 	c := cwsTestClient(interceptor.Funcs{}, cwsPausedApps()...)
 
 	ModuleOpsMutex.Lock()
 	defer ModuleOpsMutex.Unlock()
-	if err := ResumeCloudWorkstationsAfterRestart(context.Background(), c, cwsRestartStore(true), "argocd"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	if err := ResumeCloudWorkstationsAfterRestart(ctx, c, cwsRestartStore(true), "argocd"); err != context.DeadlineExceeded {
+		t.Fatalf("expected context.DeadlineExceeded, got %v", err)
 	}
 	for _, name := range []string{ApplicationName(CloudWorkstationsModuleName), cloudWorkstationsCoreAppName} {
-		app, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", name)
-		if !ok || !cwsSkipReconcile(app) {
-			t.Errorf("%s must stay paused while a lifecycle operation holds ModuleOpsMutex (exists=%v)", name, ok)
+		if app, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", name); !ok || !cwsSkipReconcile(app) {
+			t.Errorf("%s must stay paused (exists=%v)", name, ok)
 		}
+	}
+}
+
+func cwsFailParentPatch(failures *int, failFirst int) interceptor.Funcs {
+	return interceptor.Funcs{
+		Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			if obj.GetName() == ApplicationName(CloudWorkstationsModuleName) {
+				*failures++
+				if failFirst < 0 || *failures <= failFirst {
+					return fmt.Errorf("injected parent patch failure")
+				}
+			}
+			return cl.Patch(ctx, obj, patch, opts...)
+		},
+	}
+}
+
+func TestResumeCloudWorkstationsParentAfterDelete_RetriesUntilItSucceeds(t *testing.T) {
+	old := cwsResumeRetryInterval
+	cwsResumeRetryInterval = 5 * time.Millisecond
+	t.Cleanup(func() { cwsResumeRetryInterval = old })
+
+	calls := 0
+	c := cwsTestClient(cwsFailParentPatch(&calls, 2), cwsPaused(cwsTerminating(cwsParentApp())))
+
+	if err := resumeCloudWorkstationsParentAfterDelete(context.Background(), c, "argocd", CloudWorkstationsModuleName); err != nil {
+		t.Fatalf("unexpected error after retries: %v", err)
+	}
+	if calls != 3 {
+		t.Errorf("expected 2 failures and 1 success, got %d patch attempts", calls)
+	}
+	if app, ok := cwsExists2(t, c, cwsTestArgoAppGVK, "argocd", ApplicationName(CloudWorkstationsModuleName)); !ok || cwsSkipReconcile(app) {
+		t.Errorf("parent must be resumed (exists=%v)", ok)
+	}
+}
+
+func TestResumeCloudWorkstationsParentAfterDelete_GivesUpWithinBudget(t *testing.T) {
+	oldRetry, oldBudget := cwsResumeRetryInterval, resumeCloudWorkstationsCoreCleanupTimeout
+	cwsResumeRetryInterval, resumeCloudWorkstationsCoreCleanupTimeout = 5*time.Millisecond, 50*time.Millisecond
+	t.Cleanup(func() { cwsResumeRetryInterval, resumeCloudWorkstationsCoreCleanupTimeout = oldRetry, oldBudget })
+
+	calls := 0
+	c := cwsTestClient(cwsFailParentPatch(&calls, -1), cwsPaused(cwsTerminating(cwsParentApp())))
+
+	start := time.Now()
+	err := resumeCloudWorkstationsParentAfterDelete(context.Background(), c, "argocd", CloudWorkstationsModuleName)
+	if err == nil || !strings.Contains(err.Error(), "injected parent patch failure") {
+		t.Fatalf("expected the last patch error, got %v", err)
+	}
+	if calls < 2 {
+		t.Errorf("expected several retries, got %d attempts", calls)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Errorf("must stop at the cleanup budget, took %v", time.Since(start))
 	}
 }
