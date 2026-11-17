@@ -163,6 +163,9 @@ spec:
           scm:
             authMethod: {{ .Values.config.scm.authMethod | quote }}
           cloudEnvConfigMapName: "horizon-workflow-cloud-env"
+          # Soft dependency state from Module Manager (parent Application values).
+          softFeaturesEnabled:
+            mtk-connect: {{ index .Values.softFeaturesEnabled "mtk-connect" | default false }}
           spec:
             cloudProject: {{ .Values.config.projectID | quote }}
             cloudRegion: {{ .Values.config.region | quote }}
@@ -185,6 +188,9 @@ spec:
           scm:
             authMethod: {{ .Values.config.scm.authMethod | quote }}
           cloudEnvConfigMapName: "horizon-workflow-cloud-env"
+          # Soft dependency state from Module Manager (parent Application values).
+          softFeaturesEnabled:
+            mtk-connect: {{ index .Values.softFeaturesEnabled "mtk-connect" | default false }}
           spec:
             cloudProject: {{ .Values.config.projectID | quote }}
             cloudRegion: {{ .Values.config.region | quote }}
