@@ -171,6 +171,8 @@ Seeding is driven by the uploader table, ConfigMap `horizon/abfs-uploader-config
 
 Manifest URL `https://android.googlesource.com/platform/manifest`, file `default.xml`. The build parameter `UPLOADER_MANIFEST_SERVER` / `abfs.uploaderManifestServer` (`android.googlesource.com`) must stay the host the uploaders seed from.
 
+**Fetch refspec.** The predefined rows fetch `refs/*` without `refs/changes/*` (Gerrit patch sets) and `refs/cache-automerge/*`. Patch sets are up to 90 % of the refs and about half of the data of the busy AOSP projects, and builds do not read them from ABFS: a build of a Gerrit change fetches its patch set from the Git host. To seed them anyway, or any other set of refs, use the `AndroidCustom` row and edit `fetch-ref-spec`. A running installation keeps the refspec its rows were created with until a row is selected: after an upgrade that changes the default, submit `abfs-uploader-config-select` once with the active row; the row takes the new refspec and the uploaders restart.
+
 **Switch or add a revision.**
 
 1. Portal → `abfs-data` → Workflow Templates → `abfs-uploader-config-select`.
