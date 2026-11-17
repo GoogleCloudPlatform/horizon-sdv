@@ -61,6 +61,9 @@ spec:
             namespace: {{ .Values.abfsNamespace }}
             serviceAccountName: {{ if and .Values.license (kindIs "map" .Values.license) .Values.license.validation }}{{ .Values.license.validation.serviceAccountName | default "abfs-license-validator" }}{{ else }}abfs-license-validator{{ end }}
             image: {{ .Values.license.validation.image | quote }}
+        uploader:
+          dataDisk:
+            deletePvcWhenDisabled: {{ if and .Values.uploader (kindIs "map" .Values.uploader) .Values.uploader.dataDisk (kindIs "map" .Values.uploader.dataDisk) (hasKey .Values.uploader.dataDisk "deletePvcWhenDisabled") }}{{ .Values.uploader.dataDisk.deletePvcWhenDisabled }}{{ else }}true{{ end }}
         ui:
           enabled: {{ if and .Values.ui (kindIs "map" .Values.ui) (hasKey .Values.ui "enabled") }}{{ .Values.ui.enabled }}{{ else }}false{{ end }}
         tests:
