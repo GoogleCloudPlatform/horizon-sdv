@@ -236,19 +236,23 @@ git:
 {{- end -}}
 
 {{/*
-Schedule a step on the node of the other pods of this workflow (RWO bsw-workspace volume).
+Prefer the node that already has another pod of this workflow, so the RWO bsw-workspace
+volume stays attached. Preferred, not required: the OpenBSW pool scales from zero, and a
+required affinity to a pod that is already gone can never be scheduled.
 */}}
 {{- define "openbsw.podAffinitySameWorkflow" -}}
 affinity:
   podAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      - labelSelector:
-          matchExpressions:
-            - key: workflows.argoproj.io/workflow
-              operator: In
-              values:
-                - {{ "{{workflow.name}}" }}
-        topologyKey: kubernetes.io/hostname
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: workflows.argoproj.io/workflow
+                operator: In
+                values:
+                  - {{ "{{workflow.name}}" }}
+          topologyKey: kubernetes.io/hostname
 {{- end -}}
 
 {{/*
