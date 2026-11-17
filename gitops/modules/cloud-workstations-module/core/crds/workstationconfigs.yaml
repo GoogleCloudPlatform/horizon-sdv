@@ -299,6 +299,7 @@ spec:
                     Actuated via the Workstations API.
                 admins:
                   type: array
+                  minItems: 1
                   x-kubernetes-list-type: set
                   items:
                     type: string
@@ -307,11 +308,13 @@ spec:
                     API-owned: List of IAM member principals (e.g. user:alice@example.com)
                     granted workstations.admin on this config.
                     Actuated via Workstations setIamPolicy.
-                    An omitted or empty list removes every unconditional roles/workstations.admin
-                    member, including members granted outside Horizon. Other roles and conditional
-                    bindings are left unchanged.
+                    At least one admin is required: the API server rejects an omitted or empty list.
+                    The list is authoritative, so every unconditional roles/workstations.admin member
+                    not on it is removed, including members granted outside Horizon. Other roles and
+                    conditional bindings are left unchanged.
               required:
                 - clusterRef
+                - admins
             status:
               type: object
               x-kubernetes-preserve-unknown-fields: true

@@ -280,7 +280,8 @@ type WorkstationConfigSpec struct {
 
 	// Admins granted workstations.admin on this config via IAM.
 	// +horizon:api-owned
-	// +optional
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
 	Admins []string `json:"admins,omitempty"`
 }
 
