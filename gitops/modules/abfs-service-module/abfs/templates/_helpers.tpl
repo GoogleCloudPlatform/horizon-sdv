@@ -108,7 +108,7 @@ to TLS — so emit --disable-tls=true unless client.tls, plus --auth-type. Two f
   abfs.clientArgsYaml  -> YAML "- flag" list items (for container args:, use with nindent)
 */}}
 {{- define "abfs.clientFlags" -}}
-{{- if not .Values.client.tls }}--disable-tls=true {{ end }}--auth-type {{ .Values.client.authType | default "none" }}
+{{- if not .Values.client.tls }}--disable-tls=true {{ end }}--auth-type {{ .Values.client.authType | default "none" }}{{ with .Values.client.authAudience }} --auth-audience {{ . }}{{ end }}
 {{- end -}}
 {{- define "abfs.clientArgsYaml" -}}
 {{- if not .Values.client.tls }}
@@ -116,6 +116,10 @@ to TLS — so emit --disable-tls=true unless client.tls, plus --auth-type. Two f
 {{- end }}
 - --auth-type
 - {{ .Values.client.authType | default "none" | quote }}
+{{- with .Values.client.authAudience }}
+- --auth-audience
+- {{ . | quote }}
+{{- end }}
 {{- end -}}
 
 {{/*
