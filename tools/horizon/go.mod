@@ -22,7 +22,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
