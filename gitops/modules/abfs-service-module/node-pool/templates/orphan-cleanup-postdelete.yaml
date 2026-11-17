@@ -17,7 +17,11 @@
 # Config Connector does not delete the GKE pool when the CR is removed ("underlying resource does not
 # exist; no API call necessary"), which leaves orphans that make the next enable fail with "already
 # exists". The PreSync licence job (license-metadata-inject-job.yaml) removes such orphans on enable;
-# this hook removes them at disable time. It never fails, so it cannot block the module disable.
+# this hook removes them at disable time.
+# - It never fails and its waits end well before the Job deadline, so it cannot block the module disable.
+# - A pool is deleted only when its ContainerNodePool is confirmed absent and the pool was read from GKE.
+#   A CR that still exists, or any read that fails, leaves the pool alone (a warning is logged; the next
+#   enable removes a real orphan).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -53,20 +57,53 @@ spec:
               value: {{ .Values.location | quote }}
             - name: NODE_POOL_NAMES
               value: {{ printf "%s %s" .Values.serverNodePool.name .Values.uploaderNodePool.name | quote }}
+            - name: CR_NS
+              value: {{ .Values.namespace | quote }}
           command: [bash, -uo, pipefail, -c]
           args:
             - |
               G=(--cluster="${CLUSTER_NAME}" --location="${LOCATION}" --project="${PROJECT_ID}")
-              pool_exists() { gcloud container node-pools describe "$1" "${G[@]}" --format='value(status)' >/dev/null 2>&1; }
+              BUDGET=1200   # seconds for all waits; the Job deadline is 1800
+              warn() { echo "WARNING: $*" >&2; }
+              # present | absent; any gcloud error other than NOT_FOUND returns 1.
+              pool_state() {
+                local err
+                if err="$(gcloud container node-pools describe "$1" "${G[@]}" --format='value(name)' 2>&1 >/dev/null)"; then echo present; return 0; fi
+                if grep -qiE 'code=404|NOT_FOUND|not found|No node pool named' <<<"${err}"; then echo absent; return 0; fi
+                warn "cannot read GKE node pool $1: ${err}"
+                return 1
+              }
+              if ! command -v kubectl >/dev/null 2>&1; then gcloud components install kubectl --quiet || true; fi
+
+              pending=()
               for P in ${NODE_POOL_NAMES}; do
-                if ! pool_exists "${P}"; then echo "PostDelete: GKE node pool ${P} is already gone."; continue; fi
-                echo "PostDelete: deleting GKE node pool ${P} (its ContainerNodePool was pruned)..."
-                gcloud container node-pools delete "${P}" "${G[@]}" --quiet || true
-                for i in $(seq 1 60); do pool_exists "${P}" || break; echo "  waiting for ${P} delete (${i})..."; sleep 15; done
-                if pool_exists "${P}"; then
-                  echo "WARNING: ${P} could not be deleted; the next enable removes it (PreSync licence job)." >&2
-                else
-                  echo "PostDelete: ${P} deleted."
+                if out="$(kubectl get containernodepool "${P}" -n "${CR_NS}" -o name 2>&1)"; then
+                  warn "ContainerNodePool ${CR_NS}/${P} still exists — the pool is managed, not deleted."
+                  continue
+                elif ! grep -qi 'not found' <<<"${out}"; then
+                  warn "cannot read ContainerNodePool ${CR_NS}/${P} (${out}) — ${P} not deleted; the next enable removes an orphan (PreSync licence job)."
+                  continue
                 fi
+                state="$(pool_state "${P}")" || { warn "${P} not deleted; the next enable removes an orphan (PreSync licence job)."; continue; }
+                if [[ "${state}" == "absent" ]]; then echo "PostDelete: GKE node pool ${P} is already gone."; continue; fi
+                echo "PostDelete: GKE node pool ${P} has no ContainerNodePool — deleting it."
+                pending+=("${P}")
+              done
+
+              # Ask GKE to delete without waiting for the operation (--async) and poll within the budget.
+              # GKE refuses a delete while another operation runs on the cluster, so the request is repeated.
+              while (( ${#pending[@]} > 0 && SECONDS < BUDGET )); do
+                next=()
+                for P in "${pending[@]}"; do
+                  state="$(pool_state "${P}")" || { next+=("${P}"); continue; }
+                  if [[ "${state}" == "absent" ]]; then echo "PostDelete: ${P} deleted."; continue; fi
+                  gcloud container node-pools delete "${P}" "${G[@]}" --async --quiet >/dev/null 2>&1 || true
+                  next+=("${P}")
+                done
+                pending=(${next[@]+"${next[@]}"})
+                if (( ${#pending[@]} > 0 )); then sleep 15; fi
+              done
+              for P in ${pending[@]+"${pending[@]}"}; do
+                warn "${P} is not confirmed deleted after ${BUDGET}s; the delete may still be running. The next enable removes an orphan (PreSync licence job)."
               done
               exit 0
