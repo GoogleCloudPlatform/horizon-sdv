@@ -605,8 +605,9 @@ fi
 #     from the ninjago cache, soong_build still runs locally and panics with
 #     "open /abfs/out/soong/.temp/rawN: read-only file system" (seen on
 #     aosp_cf_arm64_auto and sdk_car_x86_64 at android-15.0.0_r36).
-#   - Android 16: pass TOP and LOG_DIR through sandboxPath in
+#   - Android 16 and 17: pass TOP and LOG_DIR through sandboxPath in
 #     ui/build/soong.go; without it soong_build panics the same way.
+#     Android 17 also raises pogreb MaxValueLength (for all builders).
 # Branch names (android-latest-release, main, custom) carry no version, so
 # nothing is applied for them; use POST_REPO_COMMAND to add the fix by hand.
 #
@@ -653,7 +654,7 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
             ABFS_SOONG_CHERRY_PICK="true"
             ABFS_SOONG_SED="true"
             ;;
-        android-16*)
+        android-16*|android-17*)
             ABFS_SOONG_SED="true"
             ABFS_ANDROID16_RELEASE_FIX="true"
             ;;
