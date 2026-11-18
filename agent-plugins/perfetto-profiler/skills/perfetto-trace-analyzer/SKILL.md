@@ -14,23 +14,35 @@ You must follow this workflow sequentially without requiring human intervention 
 ## 0. Bootstrap SHA-256 Verified `trace_processor` (`v59.1`) & Stage Trace from GCS
 
 1. **Bootstrap & Verify `trace_processor` (`v59.1` Release Tag)**:
-   Download the official Google Perfetto `v59.1` release binary directly from Google's Perfetto release bucket into `/tmp/perfetto-traces/bin/trace_processor` and verify its SHA-256 checksum (`2434129a3af4dc9e2034a476f7b76447b490975213e301769310d3bd0d5d6458`) with explicit failure handling before marking it executable:
+   Verify the SHA-256 checksum (`2434129a3af4dc9e2034a476f7b76447b490975213e301769310d3bd0d5d6458`) of `/tmp/perfetto-traces/bin/trace_processor` even if a cached binary already exists; if missing or mismatched, download the official Google Perfetto `v59.1` release binary from Google's Perfetto release bucket (up to 3 attempts) and verify its SHA-256 checksum before marking it executable:
 
    ```bash
    set -euo pipefail
    PERFETTO_VERSION="v59.1"
    PERFETTO_SHA256="2434129a3af4dc9e2034a476f7b76447b490975213e301769310d3bd0d5d6458"
+   TP_BIN="/tmp/perfetto-traces/bin/trace_processor"
    mkdir -p /tmp/perfetto-traces/bin
+   chmod 700 /tmp/perfetto-traces
    export PATH="/tmp/perfetto-traces/bin:$PATH"
-   if [ ! -x /tmp/perfetto-traces/bin/trace_processor ]; then
-     curl -fsSL "https://commondatastorage.googleapis.com/perfetto-luci-artifacts/${PERFETTO_VERSION}/linux-amd64/trace_processor_shell" \
-       -o /tmp/perfetto-traces/bin/trace_processor
-     if ! echo "${PERFETTO_SHA256}  /tmp/perfetto-traces/bin/trace_processor" | sha256sum -c -; then
-       rm -f /tmp/perfetto-traces/bin/trace_processor
-       echo "ERROR: SHA-256 checksum verification failed for Perfetto ${PERFETTO_VERSION}." >&2
+
+   if [ ! -f "${TP_BIN}" ] || ! echo "${PERFETTO_SHA256}  ${TP_BIN}" | sha256sum -c - >/dev/null 2>&1; then
+     rm -f "${TP_BIN}"
+     VERIFIED=0
+     for attempt in 1 2 3; do
+       if curl -fsSL "https://commondatastorage.googleapis.com/perfetto-luci-artifacts/${PERFETTO_VERSION}/linux-amd64/trace_processor_shell" -o "${TP_BIN}" \
+         && echo "${PERFETTO_SHA256}  ${TP_BIN}" | sha256sum -c -; then
+         VERIFIED=1
+         break
+       fi
+       rm -f "${TP_BIN}"
+       echo "WARN: Attempt ${attempt}/3 failed download or SHA-256 check; retrying..." >&2
+       sleep 1
+     done
+     if [ "${VERIFIED}" -ne 1 ]; then
+       echo "ERROR: Failed to download and verify Perfetto ${PERFETTO_VERSION} after 3 attempts." >&2
        exit 1
      fi
-     chmod +x /tmp/perfetto-traces/bin/trace_processor
+     chmod +x "${TP_BIN}"
    fi
    trace_processor --version
    ```
@@ -41,19 +53,19 @@ You must follow this workflow sequentially without requiring human intervention 
      ```bash
      gcloud storage ls -l "gs://<bucket-name>/<optional-prefix>"
      ```
-   - Stage the target trace into `/tmp/perfetto-traces/`, enforce the **1 GB (`1073741824` bytes) maximum trace size limit**, and compute its SHA-256 checksum:
+   - Check the remote object size **before** downloading to enforce the **1 GB (`1073741824` bytes) maximum trace size limit**, then stage the trace into `/tmp/perfetto-traces/`:
      ```bash
      set -euo pipefail
      MAX_TRACE_BYTES=1073741824  # 1 GB max trace size limit
+     TRACE_URI="gs://<bucket-name>/path/to/<trace-file>"
      LOCAL_TRACE="/tmp/perfetto-traces/<trace-file>"
-     gcloud storage cp "gs://<bucket-name>/path/to/<trace-file>" "${LOCAL_TRACE}"
-     TRACE_BYTES="$(stat -c %s "${LOCAL_TRACE}")"
-     if [ "${TRACE_BYTES}" -gt "${MAX_TRACE_BYTES}" ]; then
-       rm -f "${LOCAL_TRACE}"
-       echo "ERROR: Trace size (${TRACE_BYTES} bytes) exceeds the 1 GB limit (${MAX_TRACE_BYTES} bytes)." >&2
+
+     TRACE_BYTES="$(gcloud storage objects describe "${TRACE_URI}" --format="value(size)")"
+     if [ -z "${TRACE_BYTES}" ] || [ "${TRACE_BYTES}" -gt "${MAX_TRACE_BYTES}" ]; then
+       echo "ERROR: Remote trace size (${TRACE_BYTES:-unknown} bytes) exceeds the 1 GB limit (${MAX_TRACE_BYTES} bytes)." >&2
        exit 1
      fi
-     sha256sum "${LOCAL_TRACE}"
+     gcloud storage cp "${TRACE_URI}" "${LOCAL_TRACE}"
      ```
 
 3. **Start a Warm `trace_processor` Daemon Session**:
