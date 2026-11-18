@@ -51,7 +51,7 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: nginx:1.23
+          image: {{ .Values.config.nginx.image }}:{{ .Values.config.nginx.tag }}
           ports:
             - containerPort: 80
               name: http

@@ -89,20 +89,22 @@ Horizon uses nginx in more than one place:
 
 The **single source of truth** for that tag is:
 
-```hcl
-# terraform/modules/base/locals.tf
-common_nginx_version = "1.31.2-alpine3.23"
+```yaml
+# versions.yaml (repo root)
+tools:
+  nginx:
+    tag: "1.31.2-alpine3.23"
 ```
 
 That value is wired as follows:
 
-1. **GitOps sidecars** — `base/main.tf` passes `common_nginx_version` into the `sdv-gke-apps` module. That module publishes it on the root Argo CD Application as `config.nginx.image` / `config.nginx.tag`.
+1. **GitOps sidecars** — `base/locals.tf` reads `tools.nginx.tag` from `versions.yaml` into `common_nginx_version`, and `base/main.tf` passes it into the `sdv-gke-apps` module. That module publishes it on the root Argo CD Application as `config.nginx.image` / `config.nginx.tag`.
 2. **token-injector** — `gitops/templates/headlamp-token-injector.yaml` forwards `config.nginx` into the chart; the Deployment uses `{{ .Values.config.nginx.image }}:{{ .Values.config.nginx.tag }}`.
 3. **module-overview** — `gitops/templates/module-manager.yaml` includes `nginx` in `MODULE_CONFIG` so enabled module charts receive the same `config.nginx` values.
 
 To remediate a nginx CVE (Type B base bump):
 
-1. Set `common_nginx_version` in [`terraform/modules/base/locals.tf`](../../terraform/modules/base/locals.tf) to the fixed Docker Hub tag (for example `1.31.2-alpine3.23`).
+1. Set `tools.nginx.tag` in [`versions.yaml`](../../versions.yaml) to the fixed Docker Hub tag (for example `1.31.2-alpine3.23`).
 2. Commit, push, and deploy ([Section #1](#section-1---version-bump-upgrade) steps 2–5).
 3. Verify with `nginx -v` on token-injector and module-overview pods (both should report the same nginx binary version). Both are Docker Hub consumers, so use a live `kubectl exec ... nginx -v` check. The probe script in [Section #4](#section-4---testing) does not cover nginx.
 
@@ -131,7 +133,7 @@ A real remediation batch flagged multiple images. Classifying each as Type A or 
 | Kind | Mechanism | Images (example) |
 |------|-----------|------------------|
 | **A - bump only (self-heal)** | bump `build_version` / `deploy_version` | `gerrit-post`, `gerrit-mcp-server-app`, `mtk-connect-post`, `grafana-post`, `keycloak-post-jenkins`, `keycloak-post-argocd`, `keycloak-post-grafana`, `keycloak-post-headlamp`, `keycloak-post-mcp-gateway-registry`, `keycloak-post-mtk-connect` |
-| **B - code change** | Dockerfile / base bump + version bump | `keycloak-post` (add `apk update && apk upgrade`), `keycloak-post-gerrit` (pull `openssh-client` from Alpine [edge](https://dl-cdn.alpinelinux.org/alpine/edge/main) for `>= 10.3`), `mtk-connect-post-key` (base -> `python:3.13-slim-bookworm`); nginx sidecars via `common_nginx_version` (e.g. `1.28.1` -> `1.31.2-alpine3.23`) |
+| **B - code change** | Dockerfile / base bump + version bump | `keycloak-post` (add `apk update && apk upgrade`), `keycloak-post-gerrit` (pull `openssh-client` from Alpine [edge](https://dl-cdn.alpinelinux.org/alpine/edge/main) for `>= 10.3`), `mtk-connect-post-key` (base -> `python:3.13-slim-bookworm`); nginx sidecars via `versions.yaml` `tools.nginx.tag` (e.g. `1.28.1` -> `1.31.2-alpine3.23`) |
 
 > [!NOTE]
 > The split above is specific to this batch. **Derive your own:** for each flagged image, check whether a fresh rebuild already lands the required version. If yes, it is Type A; if not, it is Type B.
@@ -211,7 +213,7 @@ The upstream change already carries the bumped versions for the Type B images. A
 Type B specifics worth validating after rollout (from the example batch):
 - `keycloak-post-gerrit`: `openssh` comes from the Alpine **edge** branch (which also bumps **musl** image-wide) - sanity-check SSH and the Node runtime.
 - `mtk-connect-post-key`: now on **Python 3.13** - sanity-check the job/script runs.
-- nginx sidecars (token-injector, module-overview): pin via `common_nginx_version` (see [Nginx version: single source of truth](#nginx-single-source-of-truth)).
+- nginx sidecars (token-injector, module-overview): pin via `tools.nginx.tag` in `versions.yaml` (see [Nginx version: single source of truth](#nginx-single-source-of-truth)).
 
 
 ---
@@ -386,7 +388,7 @@ Override with `--gerrit-ns`, `--mtk-connect-ns`, `--mtk-cronjob`, or pass `--ski
 | New image in registry but running pods unchanged | Bumped `build_version` only | Also bump `deploy_version` |
 | Nothing rebuilds after deploy | Reused the same tag | Bump the version ([Section #1](#section-1---version-bump-upgrade)) or pull the upstream change ([Section #2](#section-2---code-change-upgrade)) |
 | Old-tag `Completed` Job/CronJob pods still present | Historical job runs | Harmless; they age out via the job history limit |
-| token-injector / module-overview still on an old `nginx:` tag | Sidecars not reading `config.nginx`, or `common_nginx_version` not passed into root GitOps values | Update `common_nginx_version` only in `locals.tf` and keep consumers on `config.nginx` ([Nginx version: single source of truth](#nginx-single-source-of-truth)) |
+| token-injector / module-overview still on an old `nginx:` tag | Sidecars not reading `config.nginx`, or `common_nginx_version` not passed into root GitOps values | Update `tools.nginx.tag` only in `versions.yaml` and keep consumers on `config.nginx` ([Nginx version: single source of truth](#nginx-single-source-of-truth)) |
 
 ---
 
@@ -400,7 +402,7 @@ Override with `--gerrit-ns`, `--mtk-connect-ns`, `--mtk-cronjob`, or pass `--ski
 | Release-to-release upgrades | [guides/README.md](README.md#upgrade-guides) |
 | Terraform variables | [terraform.md](../terraform.md) |
 | Image versions & build args | [terraform/modules/base/locals.tf](../../terraform/modules/base/locals.tf) |
-| Nginx pin (`common_nginx_version` → `config.nginx`) | [Nginx version: single source of truth](#nginx-single-source-of-truth) |
+| Nginx pin (`versions.yaml` `tools.nginx.tag` → `common_nginx_version` → `config.nginx`) | [Nginx version: single source of truth](#nginx-single-source-of-truth) |
 | Image build behaviour (`no_cache`, triggers) | [terraform/modules/sdv-container-images/main.tf](../../terraform/modules/sdv-container-images/main.tf) |
 | Image build & version-bump test script | [tools/scripts/container-images/](../../tools/scripts/container-images/) |
 | Container image security upgrade test script (Section #4) | [container-image-version-bump-test.sh](../../tools/scripts/container-images/container-image-version-bump-test.sh) |

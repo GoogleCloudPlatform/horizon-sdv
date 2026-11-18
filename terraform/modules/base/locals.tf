@@ -20,10 +20,13 @@ locals {
     module.sdv_gke_cluster.name
   )
 
-  common_nginx_version = "1.31.2-alpine3.23"
+  # nginx image tag for GitOps sidecars (token-injector, module-overview). Source: tools.nginx.tag
+  # in the repo-root versions.yaml; do not hardcode it here.
+  common_nginx_version = local.versions.tools.nginx.tag
 
   # Horizon platform version(s) from the repo-root versions.yaml. components.horizoncore is also the
   # Developer Portal image tag (build_version / deploy_version of "horizon-dev-portal" below).
+  # tools.nginx.tag from the same file feeds common_nginx_version above.
   versions             = yamldecode(file("${path.module}/../../../versions.yaml"))
   horizon_core_version = local.versions.components.horizoncore
 
