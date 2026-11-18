@@ -24,7 +24,7 @@ Templates of openbsw-bsw-builder (port of workloads/openbsw/pipelines/builds/bsw
   ai-review             on build failure: workloads/common/agentic-ai/gemini/run_ai_review.sh (agy by default)
   storage               bsw_storage.sh
   retain                optional sleep with the workspace mounted (Jenkins "Retain instance")
-  fail-if-build-failed  marks the workflow Failed after storage when the build failed
+  fail-if-build-or-storage-failed  marks the workflow Failed after retain when the build or storage failed
 
 The bsw-workspace volume holds /horizon (checkout; Jenkins WORKSPACE, where logs and AI review output
 are written) and /home/builder/bsw-builds (bsw_environment.sh build directory with the OpenBSW clone).
@@ -103,7 +103,10 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
   dag:
     tasks:
 {{- if $creds }}
-{{- include "openbsw.prepareGitCredsTask" . | nindent 6 }}
+{{- /* After build-image: build-defaults mints the same {{workflow.uid}}-pipeline-git-creds Secret, so running
+       in parallel could collide (userpass delete-then-create), and an app token minted before a long image
+       build can expire before fetch-pipeline (about an hour). */}}
+{{- include "openbsw.prepareGitCredsTask" (dict "root" . "depends" "build-image.Succeeded || build-image.Skipped") | nindent 6 }}
 {{- end }}
       - name: check-image
         template: check-image
@@ -152,8 +155,9 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
           storage.Skipped
         when: >-
           '{{ "{{" }}workflow.parameters.instanceRetentionTime{{ "}}" }}' != "0"
-      - name: fail-if-build-failed
-        # Without this the workflow ends Succeeded, because ai-review and storage handle build.Failed.
+      - name: fail-if-build-or-storage-failed
+        # Without this the workflow ends Succeeded: ai-review and storage handle build.Failed,
+        # and a successful retain hides storage.Failed when instanceRetentionTime is not 0.
         template: fail-workflow
         depends: >-
           retain.Succeeded ||
@@ -162,15 +166,20 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
           retain.Skipped
         when: >-
           '{{ "{{" }}tasks.build.status{{ "}}" }}' == "Failed" ||
-          '{{ "{{" }}tasks.build.status{{ "}}" }}' == "Error"
+          '{{ "{{" }}tasks.build.status{{ "}}" }}' == "Error" ||
+          '{{ "{{" }}tasks.storage.status{{ "}}" }}' == "Failed" ||
+          '{{ "{{" }}tasks.storage.status{{ "}}" }}' == "Error"
 {{- end -}}
 
 {{- define "openbsw.bswBuilder.template.check-image" -}}
 - name: check-image
   script:
-    # cloud-sdk image, so the check runs before the builder image exists.
-    image: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    # Cloud SDK tag from values, so the check runs before the builder image exists.
+    image: {{ .Values.bswBuilder.checkImage | quote }}
+    imagePullPolicy: IfNotPresent
     command: [bash, -euo, pipefail]
+    resources:
+{{- include "openbsw.stepResources" (dict "root" . "step" "checkImage") | nindent 6 }}
     env:
       - name: IMAGE
         value: {{ include "openbsw.bswBuilder.image" . | quote }}
@@ -201,8 +210,6 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
 
 {{- define "openbsw.bswBuilder.template.fetch-pipeline" -}}
 - name: fetch-pipeline
-  podSpecPatch: |
-{{- include "openbsw.podAffinitySameWorkflow" . | nindent 4 }}
   inputs:
     artifacts:
       - name: pipeline-repo
@@ -232,8 +239,6 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
 
 {{- define "openbsw.bswBuilder.template.build" -}}
 - name: build
-  podSpecPatch: |
-{{- include "openbsw.podAffinitySameWorkflow" . | nindent 4 }}
   container:
     image: {{ include "openbsw.bswBuilder.image" . | quote }}
     workingDir: {{ include "openbsw.bswBuilder.workspacePath" . | quote }}
@@ -309,8 +314,6 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
 {{- $ws := include "openbsw.bswBuilder.workspacePath" . -}}
 {{- $prompts := printf "%s/workloads/openbsw/pipelines/builds/bsw_builder/prompt/sequenced" $ws -}}
 - name: ai-review
-  podSpecPatch: |
-{{- include "openbsw.podAffinitySameWorkflow" . | nindent 4 }}
   container:
     image: {{ include "openbsw.bswBuilder.image" . | quote }}
     workingDir: {{ $ws | quote }}
@@ -366,8 +369,6 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
 
 {{- define "openbsw.bswBuilder.template.storage" -}}
 - name: storage
-  podSpecPatch: |
-{{- include "openbsw.podAffinitySameWorkflow" . | nindent 4 }}
   container:
     image: {{ include "openbsw.bswBuilder.image" . | quote }}
     workingDir: {{ include "openbsw.bswBuilder.workspacePath" . | quote }}
@@ -390,8 +391,6 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
 
 {{- define "openbsw.bswBuilder.template.retain" -}}
 - name: retain
-  podSpecPatch: |
-{{- include "openbsw.podAffinitySameWorkflow" . | nindent 4 }}
   container:
     image: {{ include "openbsw.bswBuilder.image" . | quote }}
     workingDir: /home/builder/bsw-builds
@@ -419,10 +418,12 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
 {{- define "openbsw.bswBuilder.template.fail-workflow" -}}
 - name: fail-workflow
   container:
-    image: {{ include "openbsw.bswBuilder.image" . | quote }}
-    command: [bash, -c]
+    image: {{ .Values.bswBuilder.failImage | quote }}
+    command: [sh, -c]
+    resources:
+{{- include "openbsw.stepResources" (dict "root" . "step" "failWorkflow") | nindent 6 }}
     args:
-      - "echo 'Build failed; marking workflow as Failed.'; exit 1"
+      - "echo 'Build or storage failed; marking workflow as Failed.'; exit 1"
 {{- end -}}
 
 {{- define "openbsw.bswBuilder.templates" -}}

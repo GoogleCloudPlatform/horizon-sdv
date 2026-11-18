@@ -41,6 +41,8 @@ cloud:
   project: ""
   region: ""
 # Horizon monorepo cloned by the workflows (the scripts under workloads/openbsw/ run from it).
+# Set by the parent Application to its own repo.url and repo.revision. Required when rendering
+# WorkflowTemplates, empty here for helm lint of the chart defaults.
 pipelineRepo:
   url: ""
   revision: ""
@@ -53,8 +55,8 @@ cloudEnvConfigMapName: horizon-workflow-cloud-env
 # true: pods run as workflow-executor-elevated (Artifact Registry push, GCS upload, Vertex AI).
 useElevatedWorkflowIam: true
 serviceAccountName: workflow-executor
-# OnWorkflowCompletion keeps step pods until the workflow ends, so the bsw-workspace
-# pod affinity can find its siblings and logs stay live in the portal.
+# OnWorkflowCompletion keeps completed step pods until the workflow ends, so their logs
+# stay live in the portal. The RWO workspace reattaches to whichever node the next step lands on.
 podGcStrategy: OnWorkflowCompletion
 # Seconds after completion before the Workflow object is deleted. Empty keeps it.
 workflowTtlSecondsAfterCompletion:
@@ -177,10 +179,22 @@ bswBuilder:
   geminiCommandLine: gemini --yolo --output-format json
   geminiPreviewFeatures: "true"
   geminiLocationGlobal: "true"
+  # check-image runs before the builder image exists, so it uses the Cloud SDK.
+  # :slim is the moving tag. A node that does not already have it pulls the current image.
+  checkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+  # fail-workflow only prints a line and exits 1. A small image avoids pulling the builder
+  # image onto a node that has not run a build step. 3.19 is past Alpine support.
+  failImage: alpine:3.24.4
   # Sized for c2d-highcpu-8 (sdv-openbsw-build-node-pool, 16Gi). The Argo wait sidecar
   # requests another 2Gi, and GKE system DaemonSets take about 1.5Gi, so the build
   # container itself must stay at 8Gi/10Gi or the pod never fits and the pool will not scale.
   resources:
+    checkImage:
+      requests: {cpu: "100m", memory: "512Mi"}
+      limits: {cpu: "1000m", memory: "1Gi"}
+    failWorkflow:
+      requests: {cpu: "50m", memory: "32Mi"}
+      limits: {cpu: "200m", memory: "128Mi"}
     fetchPipeline:
       requests: {cpu: "500m", memory: "1Gi"}
       limits: {cpu: "2000m", memory: "4Gi"}

@@ -59,14 +59,14 @@ Parameters use the Jenkins names in camelCase with the same defaults. They are d
 
 `openbsw-bsw-builder` runs these steps:
 
-1. `prepare-pipeline-git-creds` (when `config.scm.authMethod` is `app` or `userpass`).
-2. `check-image`, then `build-image` (via `openbsw-builder-image`) when the `imageTag` image is missing or `forceImageBuild` is `true`.
-3. `fetch-pipeline`: copies the Horizon repo (`config.workloads.android.url` / `branch`) onto the per-workflow volume `bsw-workspace` (`standard-rwo`, 50Gi, deleted on completion).
+1. `check-image`, then `build-image` (via `openbsw-builder-image`) when the `imageTag` image is missing or `forceImageBuild` is `true`. The image build mints its own git credentials.
+2. `prepare-pipeline-git-creds` (when `config.scm.authMethod` is `app` or `userpass`), after `build-image` succeeded or was skipped. It writes the same per-workflow Secret as the image build, so it must not overlap it, and the GitHub App token is then fresh for `fetch-pipeline`.
+3. `fetch-pipeline`: copies the Horizon repo (the module's own `repo.url` / `repo.revision`, the same ones the chart is synced from, so templates and scripts stay on one revision) onto the per-workflow volume `bsw-workspace` (`standard-rwo`, 50Gi, deleted on completion). The volume is ReadWriteOnce and reattaches to whichever node the next step lands on.
 4. `build`: `bsw_initialise.sh`, then each Jenkins stage via `bsw_build.sh` in one pod, as user `builder`.
 5. `ai-review`: on build failure when `enableGeminiAiAssistant` is `true`. Runs `workloads/common/agentic-ai/gemini/run_ai_review.sh` with `AI_REVIEW_RUNTIME=aiReviewRuntime` (default `agy`, the Google Antigravity SDK, as for the AAOS builder). Skill: `workloads/common/agentic-ai/antigravity/skills/openbsw/SKILL.md`.
 6. `storage`: `bsw_storage.sh` to `gs://<project>-openbsw/OpenBSW/Builds/BSW_Builder/<date>-<time>_<workflow>` unless `storageBucketDestination` is set.
 7. `retain`: keeps a pod with the workspace for `instanceRetentionTime` minutes.
-8. `fail-if-build-failed`: marks the workflow Failed after storage and AI review.
+8. `fail-if-build-or-storage-failed`: marks the workflow Failed after retain when the build or the storage upload failed. It runs a small image, so a fresh node does not pull the builder image just to exit.
 
 Workflow pods run as `workflow-executor-elevated` (Artifact Registry push, GCS upload, Vertex AI) while `useElevatedWorkflowIam` is `true`, otherwise as `serviceAccountName`. They read the `horizon-workflow-cloud-env` ConfigMap, as in the AAOS builder.
 

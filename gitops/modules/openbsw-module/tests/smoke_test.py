@@ -48,6 +48,10 @@ LINT_VALUES = (
 )
 MODULE_MANAGER = ROOT / "gitops/apps/module-manager"
 CHILD_FINALIZER = "resources-finalizer.argocd.argoproj.io"
+PIPELINE_REPO_SET = [
+    "--set", "pipelineRepo.url=https://example.com/horizon-sdv.git",
+    "--set", "pipelineRepo.revision=main",
+]
 
 
 def fail(message):
@@ -74,7 +78,7 @@ def docs(text):
 
 def lint():
     run(["helm", "lint", str(CHART), "-f", str(LINT_VALUES)])
-    run(["helm", "lint", str(CHART / "argo-workflows")])
+    run(["helm", "lint", str(CHART / "argo-workflows"), *PIPELINE_REPO_SET])
     print("helm lint: ok")
 
 
@@ -218,6 +222,14 @@ def check_applications():
         fail("child Application source path")
     if app["spec"]["destination"]["namespace"] != "workflows":
         fail("child Application destination namespace")
+    source = app["spec"]["source"]
+    child_values = yaml.safe_load(source["helm"]["values"])
+    lint_repo = yaml.safe_load(LINT_VALUES.read_text())["repo"]
+    if source["repoURL"] != lint_repo["url"] or source["targetRevision"] != lint_repo["revision"]:
+        fail("child Application must sync from repo.url@repo.revision")
+    pipeline_repo = child_values["pipelineRepo"]
+    if pipeline_repo["url"] != lint_repo["url"] or pipeline_repo["revision"] != lint_repo["revision"]:
+        fail(f"pipelineRepo must be repo.url@repo.revision so templates and scripts share a revision, got {pipeline_repo}")
     print("enable/disable Applications: child is rendered with prune and the resources finalizer")
 
 
@@ -272,11 +284,54 @@ def check_workflows():
             if names[index] != key:
                 fail(f"{sensor_name} maps body.{key} to parameter {names[index]}")
 
+    # build-defaults mints {{workflow.uid}}-pipeline-git-creds itself, so the builder's own creds task must
+    # run after build-image: no overlapping writes, and a token that is fresh when fetch-pipeline starts.
+    def dag_tasks(template, name):
+        dag = next(t for t in template["spec"]["templates"] if t["name"] == name)["dag"]
+        return {task["name"]: task for task in dag["tasks"]}
+
+    main = dag_tasks(templates["openbsw-bsw-builder"], "main")
+    if main["prepare-pipeline-git-creds"].get("depends") != "build-image.Succeeded || build-image.Skipped":
+        fail("prepare-pipeline-git-creds must depend on build-image.Succeeded || build-image.Skipped")
+    if "prepare-pipeline-git-creds.Succeeded" not in main["fetch-pipeline"]["depends"]:
+        fail("fetch-pipeline must wait for prepare-pipeline-git-creds")
+    # The workflow-level mutex only covers standalone image runs. build-defaults is called from
+    # openbsw-bsw-builder through templateRef, so it needs the same mutex at template level.
+    image_spec = templates["openbsw-builder-image"]["spec"]
+    workflow_mutex = image_spec["synchronization"]["mutex"]["name"]
+    build_defaults = next(t for t in image_spec["templates"] if t["name"] == "build-defaults")
+    if build_defaults.get("synchronization", {}).get("mutex", {}).get("name") != workflow_mutex:
+        fail("build-defaults must lock the same mutex as the openbsw-builder-image workflow")
+    if "synchronization" in next(t for t in image_spec["templates"] if t["name"] == "build"):
+        fail("the build entrypoint must not lock again: the workflow-level mutex already covers it")
+    image_tasks = dag_tasks(templates["openbsw-builder-image"], "build-defaults")
+    if "depends" in image_tasks["prepare-pipeline-git-creds"]:
+        fail("prepare-pipeline-git-creds in the image build must run first")
+    if image_tasks["build-image"]["depends"] != "prepare-pipeline-git-creds.Succeeded":
+        fail("the image build must wait for its git credentials")
+
+    steps = {t["name"]: t for t in templates["openbsw-bsw-builder"]["spec"]["templates"]}
+    check_image = steps["check-image"]["script"]
+    if check_image["image"] != "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim" or "@sha256:" in check_image["image"]:
+        fail(f"check-image must use the moving Cloud SDK tag, got {check_image['image']}")
+    if "resources" not in check_image:
+        fail("check-image must set resources")
+    fail_step = steps["fail-workflow"]["container"]
+    if "openbsw-builder" in fail_step["image"] or "resources" not in fail_step:
+        fail(f"fail-workflow must use a small image and set resources, got {fail_step['image']}")
+
     params = {p["name"]: p for p in templates["openbsw-bsw-builder"]["spec"]["arguments"]["parameters"]}
     if params["aiReviewRuntime"]["value"] != "agy":
         fail("openbsw-bsw-builder aiReviewRuntime must default to agy")
-    if "ai-review" not in run(["helm", "template", str(CHART / "argo-workflows"), "--set", "cloud.project=p1"]):
+    if "ai-review" not in run(["helm", "template", str(CHART / "argo-workflows"), "--set", "cloud.project=p1", *PIPELINE_REPO_SET]):
         fail("openbsw-bsw-builder must render the ai-review step")
+    for missing in ("pipelineRepo.url", "pipelineRepo.revision"):
+        unset = subprocess.run(
+            ["helm", "template", str(CHART / "argo-workflows"), "--set", "cloud.project=p1", *PIPELINE_REPO_SET, "--set", f"{missing}="],
+            cwd=ROOT, text=True, capture_output=True,
+        )
+        if unset.returncode == 0 or f"{missing} is required" not in unset.stderr:
+            fail(f"rendering without {missing} must fail with a 'required' error")
     print("WorkflowTemplates and Sensors: ok")
 
 WORKFLOW_CHART = CHART / "argo-workflows"
@@ -302,7 +357,11 @@ def render_workflow_resources(auth_method):
 
 
 class FakeKubeApi(BaseHTTPRequestHandler):
-    """Serves GETs for WorkflowTemplates and ClusterWorkflowTemplates only."""
+    """Serves template GETs, plus the SelfSubjectAccessReview POST from argo CLI v3.7+.
+
+    v3.5.10 only GETs WorkflowTemplates. v3.7.10 posts a SelfSubjectAccessReview
+    (get/list/watch on clusterworkflowtemplates) before it reads them.
+    """
 
     store = {}
     path_re = re.compile(r"/apis/argoproj.io/v1alpha1/(?:namespaces/[^/]+/)?(clusterworkflowtemplates|workflowtemplates)/([^/?]+)")
@@ -314,6 +373,15 @@ class FakeKubeApi(BaseHTTPRequestHandler):
         code, body = (200, doc) if doc else (404, {"kind": "Status", "apiVersion": "v1", "status": "Failure", "code": 404, "reason": "NotFound"})
         data = json.dumps(body).encode()
         self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        data = json.dumps({"kind": "SelfSubjectAccessReview", "apiVersion": "authorization.k8s.io/v1", "status": {"allowed": True}}).encode()
+        self.send_response(201)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()

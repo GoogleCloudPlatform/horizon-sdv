@@ -30,7 +30,7 @@ Usage: include "openbsw.builderImage.tasks" (dict "root" . "fromWorkflow" true|f
 {{- $params := $root.Values.builderImage.parameters -}}
 {{- $creds := eq (include "openbsw.useUmbrellaCreds" $root) "true" -}}
 {{- if $creds }}
-{{ include "openbsw.prepareGitCredsTask" $root }}
+{{ include "openbsw.prepareGitCredsTask" (dict "root" $root) }}
 {{- end }}
 - name: build-image
   templateRef:
@@ -98,6 +98,14 @@ Usage: include "openbsw.builderImage.tasks" (dict "root" . "fromWorkflow" true|f
     parameters:
       - name: imageTag
         value: {{ include "openbsw.paramDefault" (dict "params" .Values.builderImage.parameters "name" "imageTag") | quote }}
+{{- if .Values.builderImage.concurrencyMutexName }}
+  # The workflow-level mutex of openbsw-builder-image does not cover this template when
+  # openbsw-bsw-builder calls it through templateRef, so lock here with the same name. The
+  # standalone workflow enters through "build", never through this template, so it cannot deadlock.
+  synchronization:
+    mutex:
+      name: {{ .Values.builderImage.concurrencyMutexName | quote }}
+{{- end }}
   dag:
     tasks:
 {{- include "openbsw.builderImage.tasks" (dict "root" . "fromWorkflow" false) | nindent 6 }}

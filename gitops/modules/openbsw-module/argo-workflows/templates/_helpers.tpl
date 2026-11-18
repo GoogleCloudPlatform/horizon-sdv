@@ -193,9 +193,16 @@ True when the pipeline repo needs per-workflow credentials (GitHub App or user/p
 
 {{/*
 DAG task that mints the per-workflow {{workflow.uid}}-pipeline-git-creds Secret.
+Usage: include "openbsw.prepareGitCredsTask" (dict "root" . "depends" "<expression>")
+depends is optional. openbsw-bsw-builder sets it so this task never overlaps the creds task that the
+image build runs inside build-defaults (same Secret name, same workflow uid).
 */}}
 {{- define "openbsw.prepareGitCredsTask" -}}
+{{- $root := .root -}}
 - name: prepare-pipeline-git-creds
+{{- with .depends }}
+  depends: {{ . | quote }}
+{{- end }}
   templateRef:
     name: prepare-pipeline-git-creds
     template: prepare-pipeline-git-creds
@@ -203,9 +210,9 @@ DAG task that mints the per-workflow {{workflow.uid}}-pipeline-git-creds Secret.
   arguments:
     parameters:
       - name: scmAuthMethod
-        value: {{ include "openbsw.scmAuthMethod" . | quote }}
+        value: {{ include "openbsw.scmAuthMethod" $root | quote }}
       - name: pipelineStaticGitSecretName
-        value: {{ .Values.pipelineRepo.secret | default "workflow-pipeline-git-creds" | quote }}
+        value: {{ $root.Values.pipelineRepo.secret | default "workflow-pipeline-git-creds" | quote }}
       - name: horizonSubmittedFrom
         value: '{{ "{{" }}workflow.parameters.horizonSubmittedFrom{{ "}}" }}'
 {{- end -}}
@@ -216,8 +223,8 @@ Usage: include "openbsw.pipelineRepoGitArtifact" . | nindent N  (under an artifa
 */}}
 {{- define "openbsw.pipelineRepoGitArtifact" -}}
 git:
-  repo: {{ .Values.pipelineRepo.url | quote }}
-  revision: {{ .Values.pipelineRepo.revision | quote }}
+  repo: {{ required "pipelineRepo.url is required (parent Application repo.url)" .Values.pipelineRepo.url | quote }}
+  revision: {{ required "pipelineRepo.revision is required (parent Application repo.revision)" .Values.pipelineRepo.revision | quote }}
 {{- if eq (include "openbsw.useUmbrellaCreds" .) "true" }}
   usernameSecret:
     name: "{{ "{{" }}workflow.uid{{ "}}" }}-pipeline-git-creds"
@@ -233,26 +240,6 @@ git:
     name: {{ .Values.pipelineRepo.secret | quote }}
     key: password
 {{- end }}
-{{- end -}}
-
-{{/*
-Prefer the node that already has another pod of this workflow, so the RWO bsw-workspace
-volume stays attached. Preferred, not required: the OpenBSW pool scales from zero, and a
-required affinity to a pod that is already gone can never be scheduled.
-*/}}
-{{- define "openbsw.podAffinitySameWorkflow" -}}
-affinity:
-  podAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 100
-        podAffinityTerm:
-          labelSelector:
-            matchExpressions:
-              - key: workflows.argoproj.io/workflow
-                operator: In
-                values:
-                  - {{ "{{workflow.name}}" }}
-          topologyKey: kubernetes.io/hostname
 {{- end -}}
 
 {{/*
