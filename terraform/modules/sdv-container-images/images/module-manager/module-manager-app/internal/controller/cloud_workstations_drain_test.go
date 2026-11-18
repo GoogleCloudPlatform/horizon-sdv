@@ -812,6 +812,54 @@ func TestDisableModuleAndRefresh_CloudWorkstationsSweepFinishesAfterCallerCancel
 	}
 }
 
+func TestDisableModuleAndRefresh_CloudWorkstationsSweepOutlivesDisableOverhead(t *testing.T) {
+	withFastCWSDrain(t, 5*time.Millisecond, 2*time.Second)
+	oldOverhead := cwsDisableOverhead
+	cwsDisableOverhead = 20 * time.Millisecond
+	t.Cleanup(func() { cwsDisableOverhead = oldOverhead })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	helperApp := ApplicationName("unused-helper")
+	swept := false
+	inner := cwsTestClient(interceptor.Funcs{
+		Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			if obj.GetName() != helperApp {
+				return cl.Delete(ctx, obj, opts...)
+			}
+			swept = true
+			if _, ok := ctx.Deadline(); ok {
+				return fmt.Errorf("dependent sweep context must not have a deadline")
+			}
+			// Longer than the old shared cap. A deadline of cwsDisableOverhead would expire this call.
+			time.Sleep(cwsDisableOverhead + 60*time.Millisecond)
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return cl.Delete(ctx, obj, opts...)
+		},
+	}, cwsDrainedFixtures()...)
+	c := &cwsCtxStrictClient{Client: inner}
+	fake := &cwsFakeStateStore{st: &State{
+		EnabledModules: []string{"mod-cws", "mod-helper"},
+		ModuleIDs: map[string]string{
+			CloudWorkstationsModuleName: "mod-cws",
+			"unused-helper":             "mod-helper",
+		},
+	}}
+	catalog := cwsFixedCatalog{{Name: "unused-helper", AutoDisableWhenUnused: true}}
+	err := DisableModuleAndRefresh(ctx, c, c, cwsCtxStrictStore{fake}, catalog, "argocd", "module-manager", CloudWorkstationsModuleName, "mod-cws", false, "")
+	if err != nil {
+		t.Fatalf("dependent sweep must outlive the old disable overhead, got %v", err)
+	}
+	if !swept {
+		t.Fatal("sweep never reached the dependent module")
+	}
+	if len(fake.st.EnabledModules) != 0 {
+		t.Errorf("disable and the dependent sweep should both finish, enabled=%v", fake.st.EnabledModules)
+	}
+}
+
 func cwsPausedApps() []client.Object {
 	apps := []*unstructured.Unstructured{cwsParentApp(), cwsCoreApp()}
 	out := make([]client.Object, 0, len(apps))
