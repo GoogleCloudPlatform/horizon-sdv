@@ -50,7 +50,7 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
   parameters {
     stringParam {
       name('AAOS_REVISION')
-      defaultValue('android-15.0.0_r36')
+      defaultValue('android-17.0.0_r1')
       description('''<p>Android revision tag/branch name<br/>
       <b>Note:</b> ensure the ABFS uploader has been run on your branch.</p>''')
       trim(true)
@@ -65,7 +65,7 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
 
     stringParam {
       name('AAOS_LUNCH_TARGET')
-      defaultValue('aosp_cf_x86_64_auto-bp1a-userdebug')
+      defaultValue('aosp_cf_x86_64_auto-cp2a-userdebug')
       description('''<p>Build Android cuttlefish, virtual devices and Pixel target.<br/>
       <b>Note:</b> RPi not supported with ABFS.</p>''')
       trim(true)
@@ -83,7 +83,7 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
     choiceParam {
       name('ANDROID_VERSION')
       description('''<p>Version of Android required for SDK generation of addons and devices.</p>''')
-      choices(['15','16','17'])
+      choices(['17','16','15'])
     }
 
     booleanParam {

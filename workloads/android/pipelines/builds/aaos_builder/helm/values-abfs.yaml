@@ -29,8 +29,8 @@ workflowTemplateName: aaos-builder-abfs
 aaosBuilderImageWorkflowTemplateName: abfs-builder-runtime-image
 
 spec:
-  lunchTarget: aosp_cf_x86_64_auto-bp1a-userdebug
-  androidRevision: android-15.0.0_r36
+  lunchTarget: aosp_cf_x86_64_auto-cp2a-userdebug
+  androidRevision: android-17.0.0_r1
   # ABFS uses one dedicated cache StorageClass and size, matching
   # ABFS_STORAGE_CLASS_SUFFIX and ABFS_STORAGE_SIZE in the Jenkins job. It does
   # not pick a class per Android revision the way the AAOS builder does.

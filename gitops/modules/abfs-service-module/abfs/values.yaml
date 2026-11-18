@@ -359,10 +359,10 @@ pusher:
   uploaderConfigMapName: abfs-uploader-config
   # -- pusher.fallbackRepo -- used only when that ConfigMap cannot be read or
   # does not have exactly one active row (e.g. abfs-data disabled or the table
-  # corrupted). Keep in line with the Android15 row in abfs-data-module.
+  # corrupted). Keep in line with the Android17 row in abfs-data-module.
   fallbackRepo:
     url: https://android.googlesource.com/platform/manifest
-    branch: android-15.0.0_r36
+    branch: android-17.0.0_r1
     file: default.xml
     fetchRefSpec:
       - refs/*:refs/*

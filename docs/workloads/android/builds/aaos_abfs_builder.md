@@ -62,7 +62,7 @@ The Android revision, i.e. branch or tag to build. It must be seeded into ABFS (
 - `android-14.0.0_r30` (ap1a)
 - `android-15.0.0_r36` (bp1a)
 - `android-16.0.0_r3` (bp3a)
-- `android-17.0.0_r1` (cp2a)
+- `android-17.0.0_r1` (cp2a - default)
 
 ### `AAOS_MANIFEST_NAME`
 
@@ -70,7 +70,7 @@ Manifest XML filename inside the manifest repository. Defaults to `default.xml` 
 
 ### `AAOS_LUNCH_TARGET` <a name="targets"></a>
 
-The Android target to build Android cuttlefish, virtual devices, Pixel and RPi targets.
+The Android target to build Android cuttlefish, virtual devices, Pixel and RPi targets. The Jenkins job default is `aosp_cf_x86_64_auto-cp2a-userdebug`.
 
 Reference: [Codenames, tags, and build numbers](https://source.android.com/docs/setup/reference/build-numbers)
 

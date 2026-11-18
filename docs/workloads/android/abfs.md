@@ -133,7 +133,7 @@ Before you attempt to enable the ABFS modules, ensure `workloads-common` and `wo
    ```
 5. **Check the ABFS workflows are visible**: `abfs-license-import`, `abfs-license-clear`, `abfs-uploader-config-select`, `abfs-spanner-backup-schedule` on the `abfs-data` page, `abfs-smoke-test` on `abfs-service-module`, `aaos-builder-abfs` and `abfs-builder-runtime-image` on `workloads-android`.
 
-Seeding starts as soon as the uploaders are Ready, for the row that is active in the uploader table (default `Android15_r36`, see [Seed Spanner](#seed)). Seeding time depends on what was seeded before (see [Seed Spanner](#seed)); builds for that revision work only after seeding completed.
+Seeding starts as soon as the uploaders are Ready, for the row that is active in the uploader table (default `Android17_r1`, see [Seed Spanner](#seed)). Seeding time depends on what was seeded before (see [Seed Spanner](#seed)); builds for that revision work only after seeding completed.
 
 ### Import the ABFS license <a name="license"></a>
 
@@ -164,9 +164,9 @@ Seeding is driven by the uploader table, ConfigMap `horizon/abfs-uploader-config
 | Row | Manifest branch | Note |
 |-----|-----------------|------|
 | `Android14_r30` | `android-14.0.0_r30` | |
-| `Android15_r36` | `android-15.0.0_r36` | active by default |
+| `Android15_r36` | `android-15.0.0_r36` | |
 | `Android16_r3` | `android-16.0.0_r3` | |
-| `Android17_r1` | `android-17.0.0_r1` | |
+| `Android17_r1` | `android-17.0.0_r1` | active by default |
 | `AndroidLatest` | `android-latest-release` | moving branch |
 | `AndroidCustom` | editable | any manifest `url`, `branch`, `file`, `fetch-ref-spec` |
 
@@ -204,8 +204,8 @@ Prerequisites: all three ABFS modules enabled, the builder image pushed, and the
 
 | Parameter | Default | Notes |
 |-----------|---------|-------|
-| `androidRevision` | `android-15.0.0_r36` | Tag or branch to mount (`abfs mount -b`). Must be seeded. |
-| `lunchTarget` | `aosp_cf_x86_64_auto-bp1a-userdebug` | Any AOSP target; `sdk_car_*`, `aosp_cf_*`, `aosp_tangorpro_car`. |
+| `androidRevision` | `android-17.0.0_r1` | Tag or branch to mount (`abfs mount -b`). Must be seeded. |
+| `lunchTarget` | `aosp_cf_x86_64_auto-cp2a-userdebug` | Any AOSP target; `sdk_car_*`, `aosp_cf_*`, `aosp_tangorpro_car`. |
 | `postRepoCommand` | empty | Extra commands after mount. The build/soong sandbox fix is applied automatically per revision (table below). |
 | `parallelBuildJobs` | `16` | Lower it if cacheman reports `resource temporarily unavailable`. Clear it to let the build system use as many jobs as it wants (limited by the number of available cores). |
 | `abfs.server` | `abfs-server.abfs.svc.cluster.local:50051` | In-cluster Service of the server. |
