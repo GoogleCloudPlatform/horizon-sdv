@@ -29,10 +29,11 @@ This need only be run once, or when Dockerfile is updated. There is an option no
 ### Git LFS
 
 The image includes `git-lfs` and enables its filters for all users (`git lfs install --system`).
-Git then checks out files stored as LFS objects with their real content.
 
+- `git clone` checks out files stored as LFS objects with their real content.
+- `repo` downloads LFS objects only when the client is initialised with `--git-lfs`. In `AAOS Build`, set `POST_REPO_INITIALISE_COMMAND` to `repo init --git-lfs`. Without it the files are checked out as small pointer files.
+- To skip the download of LFS objects, for example to diagnose a sync problem, leave that command out or set `GIT_LFS_SKIP_SMUDGE=1` in the environment.
 - Repositories without LFS objects are not affected.
-- To skip the download of LFS objects in `AAOS Build`, for example to diagnose a sync problem, set `POST_REPO_INITIALISE_COMMAND` to `export GIT_LFS_SKIP_SMUDGE=1`. The files are then checked out as small pointer files.
 
 ### References
 - [buildkit](https://hub.docker.com/r/moby/buildkit)
