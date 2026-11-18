@@ -183,7 +183,7 @@ bswBuilder:
   # :slim is the moving tag. A node that does not already have it pulls the current image.
   checkImage: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
   # fail-workflow only prints a line and exits 1. A small image avoids pulling the builder
-  # image onto a node that has not run a build step. 3.19 is past Alpine support.
+  # image onto a node that has not run a build step.
   failImage: alpine:3.24.4
   # Sized for c2d-highcpu-8 (sdv-openbsw-build-node-pool, 16Gi). The Argo wait sidecar
   # requests another 2Gi, and GKE system DaemonSets take about 1.5Gi, so the build
