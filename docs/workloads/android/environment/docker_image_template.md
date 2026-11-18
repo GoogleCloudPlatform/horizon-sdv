@@ -26,6 +26,14 @@ This pipeline builds the container image used on Kubernetes for building Android
 
 This need only be run once, or when Dockerfile is updated. There is an option not to push the resulting image to the registry, so that devs can test their changes before committing the image.
 
+### Git LFS
+
+The image includes `git-lfs` and enables its filters for all users (`git lfs install --system`).
+Git then checks out files stored as LFS objects with their real content.
+
+- Repositories without LFS objects are not affected.
+- To skip the download of LFS objects in `AAOS Build`, for example to diagnose a sync problem, set `POST_REPO_INITIALISE_COMMAND` to `export GIT_LFS_SKIP_SMUDGE=1`. The files are then checked out as small pointer files.
+
 ### References
 - [buildkit](https://hub.docker.com/r/moby/buildkit)
 
