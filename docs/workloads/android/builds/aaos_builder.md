@@ -81,7 +81,7 @@ The Android revision, i.e. branch or tag to build. Configured revisions include:
 
 ### `AAOS_LUNCH_TARGET` <a name="targets"></a>
 
-The Android target to build Android cuttlefish, virtual devices, Pixel and RPi targets.
+The Android target to build Android cuttlefish, virtual devices, Pixel and RPi targets. The Jenkins job default is `aosp_cf_x86_64_auto-cp2a-userdebug`.
 
 Reference: [Codenames, tags, and build numbers](https://source.android.com/docs/setup/reference/build-numbers)
 

@@ -32,7 +32,8 @@
 #  - AAOS_ARTIFACT_ROOT_NAME: the name of the bucket to store artifacts.
 #  - AAOS_BUILD_STAGE_FAILED: when "true", OUT_DIR artifacts are not added to
 #        AAOS_ARTIFACT_LIST (used by storage when build failed but AI Review ran).
-#  - ANDROID_VERSION: the Android version (default: 14).
+#  - ANDROID_VERSION: the Android version. Unset or "default" follows AAOS_REVISION
+#        (e.g. android-17 -> 17). An unrecognised revision falls back to 14.
 #  - REPO_SYNC_JOBS: the number of parallel repo sync jobs to use Default: 3).
 #  - MAX_REPO_SYNC_JOBS: the maximum number of parallel repo sync jobs
 #        supported. (Default: 14).
@@ -122,15 +123,23 @@ AOSP_MIRROR_DIR_NAME=${AOSP_MIRROR_DIR_NAME:-}
 
 # Check we have a target defined.
 AAOS_LUNCH_TARGET=$(echo "${AAOS_LUNCH_TARGET}" | xargs)
-# Default if not defined (important for initial pipeline build)
-AAOS_LUNCH_TARGET=${AAOS_LUNCH_TARGET:-sdk_car_x86_64-ap1a-userdebug}
+# Default if not defined (important for initial pipeline build).
+AAOS_LUNCH_TARGET=${AAOS_LUNCH_TARGET:-aosp_cf_x86_64_auto-cp2a-userdebug}
 if [ -z "${AAOS_LUNCH_TARGET}" ]; then
     echo -e "\033[1;31mError: please define AAOS_LUNCH_TARGET\033[0m"
     exit 1
 fi
 
-# Android Version
-ANDROID_VERSION=${ANDROID_VERSION:-14}
+# Android version follows the revision when unset or left as "default".
+# Jenkins resolves "default" before calling this script; standalone runs do not.
+if [ -z "${ANDROID_VERSION}" ] || [ "${ANDROID_VERSION}" = "default" ]; then
+    case "${AAOS_REVISION}" in
+        *android-17*) ANDROID_VERSION=17 ;;
+        *android-16*) ANDROID_VERSION=16 ;;
+        *android-15*) ANDROID_VERSION=15 ;;
+        *) ANDROID_VERSION=14 ;;
+    esac
+fi
 case "${ANDROID_VERSION}" in
     17)
         ANDROID_API_LEVEL=37
