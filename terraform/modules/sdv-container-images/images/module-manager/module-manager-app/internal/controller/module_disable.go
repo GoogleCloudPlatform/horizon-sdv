@@ -43,7 +43,8 @@ import (
 // without touching state or the parent Application if that times out. Each Application is deleted while still
 // paused and resumed only afterwards, so Argo CD cannot recreate the drained cluster. If the parent delete
 // fails after the state already says disabled, the parent stays paused. After the parent Application is gone,
-// RemoveCloudWorkstationsCRDs deletes the module's three Horizon CRDs.
+// RemoveCloudWorkstationsCRDs deletes the module's three Horizon CRDs. Once validation passes, the whole
+// sequence runs detached from the caller's cancellation, so a client disconnect does not abort it.
 //
 // Ordering note (vs platform drain): this path updates ModuleManagerState before deleting the parent
 // mod-* Application so the Portal API reflects disabled during long Argo prunes. PlatformDrainer
@@ -77,6 +78,18 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 		if len(deps) > 0 {
 			return fmt.Errorf("perform module disable: module %q still has hard dependents %v", moduleName, deps)
 		}
+	}
+
+	if moduleName == CloudWorkstationsModuleName {
+		callerCtx := ctx
+		var cancel context.CancelFunc
+		ctx, cancel = cloudWorkstationsDisableContext(ctx)
+		defer cancel()
+		defer func() {
+			if callerCtx.Err() != nil {
+				logger.Info("caller disconnected; Cloud Workstations disable ran detached from the request")
+			}
+		}()
 	}
 
 	// Drain Horizon CRs while the controller (core child) is still running; it alone releases their finalizers.
@@ -159,11 +172,17 @@ func PerformModuleDisable(ctx context.Context, c client.Client, stateStore State
 }
 
 // DisableModuleAndRefresh performs the shared disable workflow used by the REST API:
-// disable the module, refresh dependents, then resync soft-feature parents.
+// disable the module, refresh dependents, then resync soft-feature parents. For cloud-workstations the
+// refresh runs detached from the caller's cancellation and has no deadline of its own. The drain keeps its
+// budget inside PerformModuleDisable. A deadline here could stop a slow dependent halfway, and that
+// disable cannot be retried through the API.
 // moduleConfig is passed to PerformModuleDisable (prefixed child teardown for workloads-android / workloads-common).
 func DisableModuleAndRefresh(ctx context.Context, apiReader client.Reader, c client.Client, stateStore StateStoreInterface, catalogStore CatalogStoreInterface, argocdNamespace, mmNamespace, moduleName, moduleID string, enforceNoHardDependents bool, moduleConfig string) error {
 	if err := PerformModuleDisable(ctx, c, stateStore, catalogStore, argocdNamespace, mmNamespace, moduleName, moduleID, enforceNoHardDependents, moduleConfig); err != nil {
 		return err
+	}
+	if moduleName == CloudWorkstationsModuleName {
+		ctx = context.WithoutCancel(ctx)
 	}
 	if err := RunAutoDisableSweep(ctx, apiReader, c, mmNamespace, argocdNamespace, stateStore, catalogStore); err != nil {
 		return fmt.Errorf("refresh dependents after disabling %q: %w", moduleName, err)
