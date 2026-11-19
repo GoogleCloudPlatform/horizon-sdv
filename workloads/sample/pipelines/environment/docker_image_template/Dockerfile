@@ -17,7 +17,7 @@
 
 # syntax=docker/dockerfile:1
 
-ARG LINUX_DISTRIBUTION=alpine:3.19
+ARG LINUX_DISTRIBUTION=alpine:3.24
 ARG GO_VERSION
 
 FROM golang:${GO_VERSION}-alpine AS horizon-build

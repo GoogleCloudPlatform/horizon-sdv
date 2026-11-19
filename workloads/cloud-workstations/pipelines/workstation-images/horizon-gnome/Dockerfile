@@ -24,7 +24,7 @@
 ARG GCP_REGION=us-central1
 ARG CWS_BASE_IMAGE_TAG=latest
 
-ARG ALPINE_VERSION=3.19
+ARG ALPINE_VERSION=3.24
 
 # Published horizon-preflight image URI (Alpine /export/ provider).
 ARG BASE_IMAGE
