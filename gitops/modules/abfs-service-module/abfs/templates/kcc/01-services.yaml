@@ -20,6 +20,8 @@
 # (bootstrap). See docs/02-prerequisites-cluster-and-kcc.md.
 #
 # deletion-policy: abandon keeps the APIs enabled if these resources are deleted.
+# project-id names the project on every resource: without it Config Connector
+# uses the namespace name ("abfs") as the project.
 ---
 apiVersion: serviceusage.cnrm.cloud.google.com/v1beta1
 kind: Service
@@ -27,6 +29,7 @@ metadata:
   name: compute.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
     cnrm.cloud.google.com/disable-dependent-services: "false"
 spec:
@@ -38,6 +41,7 @@ metadata:
   name: container.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: container.googleapis.com
@@ -48,6 +52,7 @@ metadata:
   name: spanner.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: spanner.googleapis.com
@@ -58,6 +63,7 @@ metadata:
   name: storage.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: storage.googleapis.com
@@ -68,6 +74,7 @@ metadata:
   name: secretmanager.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: secretmanager.googleapis.com
@@ -78,6 +85,7 @@ metadata:
   name: iam.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: iam.googleapis.com
@@ -88,6 +96,7 @@ metadata:
   name: monitoring.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: monitoring.googleapis.com
@@ -98,6 +107,7 @@ metadata:
   name: logging.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: logging.googleapis.com
@@ -108,6 +118,7 @@ metadata:
   name: dns.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: dns.googleapis.com
@@ -119,6 +130,7 @@ metadata:
   name: artifactregistry.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: artifactregistry.googleapis.com
@@ -129,6 +141,7 @@ metadata:
   name: cloudbuild.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: cloudbuild.googleapis.com
@@ -139,6 +152,7 @@ metadata:
   name: cloudscheduler.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: cloudscheduler.googleapis.com
@@ -149,6 +163,7 @@ metadata:
   name: securesourcemanager.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: securesourcemanager.googleapis.com
@@ -159,6 +174,7 @@ metadata:
   name: workstations.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: workstations.googleapis.com
@@ -169,6 +185,7 @@ metadata:
   name: privateca.googleapis.com
   namespace: {{ .Values.namespace }}
   annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: privateca.googleapis.com
