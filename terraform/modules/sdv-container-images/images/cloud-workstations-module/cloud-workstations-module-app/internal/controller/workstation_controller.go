@@ -75,8 +75,9 @@ func (r *WorkstationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Ensure finalizer
 	if !controllerutil.ContainsFinalizer(&ws, WorkstationFinalizer) {
+		base := ws.DeepCopy()
 		controllerutil.AddFinalizer(&ws, WorkstationFinalizer)
-		if err := r.Update(ctx, &ws); err != nil {
+		if err := r.Patch(ctx, &ws, finalizerPatch(base)); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
