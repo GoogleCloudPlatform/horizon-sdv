@@ -113,8 +113,8 @@ locals {
     }
     "keycloak-post-horizon-api" = {
       directory      = "keycloak"
-      build_version  = "1.0.0"
-      deploy_version = "1.0.0"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
     }
     # Developer portal (Vite + Go proxy). context_path is set so sdv-container-images trigger hashing skips node_modules/dist (same as former external client tree).
     # Image tag (build_version / deploy_version) follows components.horizoncore from the repo-root versions.yaml; do not edit here.
