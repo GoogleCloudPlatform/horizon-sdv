@@ -22,7 +22,7 @@ Dependencies: outputs sdkAndroidVersion for init/build/storage.
 {{- define "aaos-builder.template.compute-vars" -}}
 - name: compute-vars
   script:
-    image: alpine:3.20
+    image: alpine:3.24
     command: [sh]
     # Parameters via env vars, never interpolated into the script source.
     env:
