@@ -18,10 +18,24 @@
 Runs helm lint and helm template, checks the openbsw-module ModuleCatalog
 entry, and checks that the child Application is labeled and finalized so
 enable renders it and disable prunes it with the parent.
+
+When the argo CLI is installed it also runs `argo lint --offline` and a
+client-side `argo submit --dry-run --from workflowtemplate/...` for both
+WorkflowTemplates, and simulates a webhook event for each Sensor. The dry-run
+talks to a local fake Kubernetes API that serves the rendered templates, so no
+cluster is needed or contacted.
 """
 
+import copy
+import json
+import os
+import re
+import shutil
 import subprocess
 import sys
+import tempfile
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import yaml
@@ -34,6 +48,10 @@ LINT_VALUES = (
 )
 MODULE_MANAGER = ROOT / "gitops/apps/module-manager"
 CHILD_FINALIZER = "resources-finalizer.argocd.argoproj.io"
+PIPELINE_REPO_SET = [
+    "--set", "pipelineRepo.url=https://example.com/horizon-sdv.git",
+    "--set", "pipelineRepo.revision=main",
+]
 
 
 def fail(message):
@@ -60,7 +78,7 @@ def docs(text):
 
 def lint():
     run(["helm", "lint", str(CHART), "-f", str(LINT_VALUES)])
-    run(["helm", "lint", str(CHART / "argo-workflows")])
+    run(["helm", "lint", str(CHART / "argo-workflows"), *PIPELINE_REPO_SET])
     print("helm lint: ok")
 
 
@@ -204,7 +222,267 @@ def check_applications():
         fail("child Application source path")
     if app["spec"]["destination"]["namespace"] != "workflows":
         fail("child Application destination namespace")
+    source = app["spec"]["source"]
+    child_values = yaml.safe_load(source["helm"]["values"])
+    lint_repo = yaml.safe_load(LINT_VALUES.read_text())["repo"]
+    if source["repoURL"] != lint_repo["url"] or source["targetRevision"] != lint_repo["revision"]:
+        fail("child Application must sync from repo.url@repo.revision")
+    pipeline_repo = child_values["pipelineRepo"]
+    if pipeline_repo["url"] != lint_repo["url"] or pipeline_repo["revision"] != lint_repo["revision"]:
+        fail(f"pipelineRepo must be repo.url@repo.revision so templates and scripts share a revision, got {pipeline_repo}")
     print("enable/disable Applications: child is rendered with prune and the resources finalizer")
+
+
+def check_workflows():
+    rendered = docs(run([
+        "helm",
+        "template",
+        "mod-openbsw-module-argo-workflows",
+        str(CHART / "argo-workflows"),
+        "--set", "moduleName=openbsw-module",
+        "--set", "cloud.project=p1",
+        "--set", "cloud.region=europe-west1",
+        "--set", "pipelineRepo.url=https://example.com/horizon-sdv.git",
+        "--set", "pipelineRepo.revision=main",
+        "--set", "git.authMethod=app",
+    ]))
+    templates = {doc["metadata"]["name"]: doc for doc in by_kind(rendered, "WorkflowTemplate")}
+    sensors = {doc["metadata"]["name"]: doc for doc in by_kind(rendered, "Sensor")}
+    expected = {
+        "openbsw-bsw-builder": "webhook-openbsw-bsw-builder",
+        "openbsw-builder-image": "webhook-openbsw-builder-image",
+    }
+    if sorted(templates) != sorted(expected) or sorted(sensors) != sorted(expected.values()):
+        fail(f"expected WorkflowTemplates {sorted(expected)} and Sensors {sorted(expected.values())}, got {sorted(templates)} and {sorted(sensors)}")
+
+    for name, sensor_name in expected.items():
+        template = templates[name]
+        labels = template["metadata"].get("labels", {})
+        if labels.get("horizon-sdv.io/expose") != "true" or labels.get("horizon-sdv.io/module") != "openbsw-module":
+            fail(f"{name} must carry the expose and openbsw-module labels")
+        if template["metadata"]["namespace"] != "workflows":
+            fail(f"{name} must be in the workflows namespace")
+        if template["spec"]["templateDefaults"]["nodeSelector"].get("workloadLabel") != "openbsw":
+            fail(f"{name} pods must select the OpenBSW node pool")
+
+        sensor = sensors[sensor_name]
+        if sensor["metadata"]["namespace"] != "argo-events":
+            fail(f"{sensor_name} must be in the argo-events namespace")
+        trigger = sensor["spec"]["triggers"][0]["template"]["argoWorkflow"]
+        workflow = trigger["source"]["resource"]
+        if workflow["spec"]["workflowTemplateRef"]["name"] != name:
+            fail(f"{sensor_name} must submit {name}")
+        names = [p["name"] for p in workflow["spec"]["arguments"]["parameters"]]
+        template_names = [p["name"] for p in template["spec"]["arguments"]["parameters"]]
+        if names != template_names:
+            fail(f"{sensor_name} parameters do not match {name}")
+        for mapping in trigger["parameters"]:
+            if not mapping["dest"].startswith("spec.arguments.parameters."):
+                continue
+            index = int(mapping["dest"].split(".")[3])
+            key = mapping["src"]["dataKey"].removeprefix("body.")
+            if names[index] != key:
+                fail(f"{sensor_name} maps body.{key} to parameter {names[index]}")
+
+    # build-defaults mints {{workflow.uid}}-pipeline-git-creds itself, so the builder's own creds task must
+    # run after build-image: no overlapping writes, and a token that is fresh when fetch-pipeline starts.
+    def dag_tasks(template, name):
+        dag = next(t for t in template["spec"]["templates"] if t["name"] == name)["dag"]
+        return {task["name"]: task for task in dag["tasks"]}
+
+    main = dag_tasks(templates["openbsw-bsw-builder"], "main")
+    if main["prepare-pipeline-git-creds"].get("depends") != "build-image.Succeeded || build-image.Skipped":
+        fail("prepare-pipeline-git-creds must depend on build-image.Succeeded || build-image.Skipped")
+    if "prepare-pipeline-git-creds.Succeeded" not in main["fetch-pipeline"]["depends"]:
+        fail("fetch-pipeline must wait for prepare-pipeline-git-creds")
+    # The workflow-level mutex only covers standalone image runs. build-defaults is called from
+    # openbsw-bsw-builder through templateRef, so it needs the same mutex at template level.
+    image_spec = templates["openbsw-builder-image"]["spec"]
+    workflow_mutex = image_spec["synchronization"]["mutex"]["name"]
+    build_defaults = next(t for t in image_spec["templates"] if t["name"] == "build-defaults")
+    if build_defaults.get("synchronization", {}).get("mutex", {}).get("name") != workflow_mutex:
+        fail("build-defaults must lock the same mutex as the openbsw-builder-image workflow")
+    if "synchronization" in next(t for t in image_spec["templates"] if t["name"] == "build"):
+        fail("the build entrypoint must not lock again: the workflow-level mutex already covers it")
+    image_tasks = dag_tasks(templates["openbsw-builder-image"], "build-defaults")
+    if "depends" in image_tasks["prepare-pipeline-git-creds"]:
+        fail("prepare-pipeline-git-creds in the image build must run first")
+    if image_tasks["build-image"]["depends"] != "prepare-pipeline-git-creds.Succeeded":
+        fail("the image build must wait for its git credentials")
+
+    steps = {t["name"]: t for t in templates["openbsw-bsw-builder"]["spec"]["templates"]}
+    check_image = steps["check-image"]["script"]
+    if check_image["image"] != "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim" or "@sha256:" in check_image["image"]:
+        fail(f"check-image must use the moving Cloud SDK tag, got {check_image['image']}")
+    if "resources" not in check_image:
+        fail("check-image must set resources")
+    fail_step = steps["fail-workflow"]["container"]
+    if "openbsw-builder" in fail_step["image"] or "resources" not in fail_step:
+        fail(f"fail-workflow must use a small image and set resources, got {fail_step['image']}")
+
+    params = {p["name"]: p for p in templates["openbsw-bsw-builder"]["spec"]["arguments"]["parameters"]}
+    if params["aiReviewRuntime"]["value"] != "agy":
+        fail("openbsw-bsw-builder aiReviewRuntime must default to agy")
+    if "ai-review" not in run(["helm", "template", str(CHART / "argo-workflows"), "--set", "cloud.project=p1", *PIPELINE_REPO_SET]):
+        fail("openbsw-bsw-builder must render the ai-review step")
+    for missing in ("pipelineRepo.url", "pipelineRepo.revision"):
+        unset = subprocess.run(
+            ["helm", "template", str(CHART / "argo-workflows"), "--set", "cloud.project=p1", *PIPELINE_REPO_SET, "--set", f"{missing}="],
+            cwd=ROOT, text=True, capture_output=True,
+        )
+        if unset.returncode == 0 or f"{missing} is required" not in unset.stderr:
+            fail(f"rendering without {missing} must fail with a 'required' error")
+    print("WorkflowTemplates and Sensors: ok")
+
+WORKFLOW_CHART = CHART / "argo-workflows"
+COMMON_IMAGE_CHART = ROOT / "workloads/common/common_docker_image/helm"
+GIT_CREDS_CHART = ROOT / "gitops/modules/workloads-common/prepare-github-app-git-creds"
+TEMPLATE_KINDS = ("WorkflowTemplate", "ClusterWorkflowTemplate")
+
+
+def render_workflow_resources(auth_method):
+    """Render the OpenBSW chart plus the ClusterWorkflowTemplates it calls."""
+    own = docs(run([
+        "helm", "template", "mod-openbsw-module-argo-workflows", str(WORKFLOW_CHART),
+        "--set", "moduleName=openbsw-module",
+        "--set", "cloud.project=p1",
+        "--set", "cloud.region=europe-west1",
+        "--set", "pipelineRepo.url=https://example.com/horizon-sdv.git",
+        "--set", "pipelineRepo.revision=main",
+        "--set", f"git.authMethod={auth_method}",
+    ]))
+    common = docs(run(["helm", "template", "common", str(COMMON_IMAGE_CHART), "--set", "cloud.project=p1"]))
+    creds = docs(run(["helm", "template", "creds", str(GIT_CREDS_CHART), "--set", "scm.authMethod=app"]))
+    return own, [d for d in common + creds if d.get("kind") == "ClusterWorkflowTemplate"]
+
+
+class FakeKubeApi(BaseHTTPRequestHandler):
+    """Serves template GETs, plus the SelfSubjectAccessReview POST from argo CLI v3.7+.
+
+    v3.5.10 only GETs WorkflowTemplates. v3.7.10 posts a SelfSubjectAccessReview
+    (get/list/watch on clusterworkflowtemplates) before it reads them.
+    """
+
+    store = {}
+    path_re = re.compile(r"/apis/argoproj.io/v1alpha1/(?:namespaces/[^/]+/)?(clusterworkflowtemplates|workflowtemplates)/([^/?]+)")
+    kinds = {"clusterworkflowtemplates": "ClusterWorkflowTemplate", "workflowtemplates": "WorkflowTemplate"}
+
+    def do_GET(self):
+        match = self.path_re.match(self.path)
+        doc = match and self.store.get((self.kinds[match.group(1)], match.group(2)))
+        code, body = (200, doc) if doc else (404, {"kind": "Status", "apiVersion": "v1", "status": "Failure", "code": 404, "reason": "NotFound"})
+        data = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        data = json.dumps({"kind": "SelfSubjectAccessReview", "apiVersion": "authorization.k8s.io/v1", "status": {"allowed": True}}).encode()
+        self.send_response(201)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def log_message(self, *args):
+        pass
+
+
+def argo(args, env, check=True):
+    result = subprocess.run(["argo", *args], cwd=ROOT, text=True, capture_output=True, env=env, timeout=120)
+    if check and result.returncode != 0:
+        fail("$ argo " + " ".join(args) + "\n" + result.stdout + result.stderr)
+    return result
+
+
+def simulate_event(sensor, body):
+    """Apply a Sensor trigger to a webhook body. Returns the Workflow, or None when the filter drops the event."""
+    dependency = sensor["spec"]["dependencies"][0]
+    for flt in dependency["filters"]["data"]:
+        key = flt["path"].removeprefix("body.")
+        if not any(re.search(pattern, str(body.get(key, ""))) for pattern in flt["value"]):
+            return None
+    trigger = sensor["spec"]["triggers"][0]["template"]["argoWorkflow"]
+    workflow = copy.deepcopy(trigger["source"]["resource"])
+    for mapping in trigger["parameters"]:
+        dest = mapping["dest"]
+        if not dest.startswith("spec.arguments.parameters."):
+            continue
+        key = mapping["src"]["dataKey"].removeprefix("body.")
+        value = body.get(key, mapping["src"].get("value", ""))
+        workflow["spec"]["arguments"]["parameters"][int(dest.split(".")[3])]["value"] = str(value)
+    return workflow
+
+
+def check_argo():
+    if shutil.which("argo") is None:
+        print("argo lint / dry-run submit / Sensor events: SKIPPED (argo CLI not installed)")
+        return
+    for auth_method in ("app", ""):
+        label = f"git.authMethod={auth_method or 'none'}"
+        own, cluster_templates = render_workflow_resources(auth_method)
+        templates = [d for d in own if d.get("kind") in TEMPLATE_KINDS] + cluster_templates
+        sensors = {d["metadata"]["name"]: d for d in by_kind(own, "Sensor")}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for doc in templates:
+                (Path(tmp) / f"{doc['kind']}-{doc['metadata']['name']}.yaml").write_text(yaml.safe_dump(doc))
+            kubeconfig = Path(tmp) / "kubeconfig"
+
+            env = {**os.environ, "KUBECONFIG": "/dev/null"}
+            argo(["lint", "--offline", tmp], env)
+
+            FakeKubeApi.store = {(d["kind"], d["metadata"]["name"]): d for d in templates}
+            server = HTTPServer(("127.0.0.1", 0), FakeKubeApi)
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                kubeconfig.write_text(yaml.safe_dump({
+                    "apiVersion": "v1", "kind": "Config",
+                    "clusters": [{"name": "c", "cluster": {"server": f"http://127.0.0.1:{server.server_port}"}}],
+                    "users": [{"name": "u", "user": {"token": "x"}}],
+                    "contexts": [{"name": "x", "context": {"cluster": "c", "user": "u"}}],
+                    "current-context": "x",
+                }))
+                env = {**os.environ, "KUBECONFIG": str(kubeconfig)}
+
+                for name in ("openbsw-bsw-builder", "openbsw-builder-image"):
+                    argo(["submit", "--dry-run", "-n", "workflows", "--from", f"workflowtemplate/{name}", "-o", "name"], env)
+
+                missing = argo(["submit", "--dry-run", "-n", "workflows", "--from", "workflowtemplate/no-such-template", "-o", "name"], env, check=False)
+                if missing.returncode == 0:
+                    fail("dry-run of an unknown WorkflowTemplate must fail")
+
+                for sensor_name, sensor in sensors.items():
+                    name = sensor_name.removeprefix("webhook-")
+                    other = next(n for n in sensors if n != sensor_name).removeprefix("webhook-")
+                    body = {"workflowTemplateName": name, "horizonSubmittedFrom": "cli"}
+                    workflow = simulate_event(sensor, body)
+                    if workflow is None:
+                        fail(f"{sensor_name} must trigger on workflowTemplateName={name}")
+                    for body_name in (other, name + "-extra", "x" + name, ""):
+                        if simulate_event(sensor, {"workflowTemplateName": body_name}) is not None:
+                            fail(f"{sensor_name} must not trigger on workflowTemplateName={body_name!r}")
+                    if workflow["spec"]["workflowTemplateRef"]["name"] != name:
+                        fail(f"{sensor_name} must submit {name}")
+                    params = {p["name"]: p["value"] for p in workflow["spec"]["arguments"]["parameters"]}
+                    if params["horizonSubmittedFrom"] != "cli":
+                        fail(f"{sensor_name} did not pass body.horizonSubmittedFrom")
+                    event_path = Path(tmp) / f"event-{name}.yaml"
+                    workflow["metadata"].pop("namespace", None)
+                    event_path.write_text(yaml.safe_dump(workflow))
+                    argo(["submit", "--dry-run", "-n", "workflows", str(event_path), "-o", "name"], env)
+                    for key, value in {"imageTag": "custom-tag", "rtosPlatform": "rust", "dryRun": "true"}.items():
+                        if key in params:
+                            changed = simulate_event(sensor, {**body, key: value})
+                            got = {p["name"]: p["value"] for p in changed["spec"]["arguments"]["parameters"]}
+                            if got[key] != value:
+                                fail(f"{sensor_name} did not map body.{key}")
+            finally:
+                server.shutdown()
+        print(f"argo lint, dry-run submit and Sensor events ({label}): ok")
 
 
 def main():
@@ -212,6 +490,8 @@ def main():
     check_render()
     check_catalog()
     check_applications()
+    check_workflows()
+    check_argo()
     print("openbsw-module smoke: ok")
 
 
