@@ -14,7 +14,8 @@
 #
 # Minimal image for kcc-webhook-cert-monitor CronJob: openssl, curl, jq (no runtime apk).
 # Matches Kubernetes pod securityContext runAsUser 65534 (nobody).
-FROM --platform=linux/amd64 alpine:3.20
+# Alpine 3.24 is still supported. USER nobody matches runAsUser 65534.
+FROM --platform=linux/amd64 alpine:3.24
 
 RUN apk add --no-cache openssl curl jq \
   && rm -rf /var/cache/apk/*
