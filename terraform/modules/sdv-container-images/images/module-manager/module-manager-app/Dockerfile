@@ -21,8 +21,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /module-manager .
 
-FROM --platform=linux/amd64 alpine:3.19
-RUN apk --no-cache add ca-certificates
-COPY --from=builder --chown=nobody:nobody /module-manager /module-manager
-USER nobody
+FROM --platform=linux/amd64 gcr.io/distroless/static-debian12:nonroot
+COPY --from=builder /module-manager /module-manager
+USER nonroot:nonroot
 ENTRYPOINT ["/module-manager"]
