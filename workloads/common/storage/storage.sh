@@ -29,7 +29,9 @@ IFS=$'\n' read -r -d '' -a POST_CLEANUP_COMMANDS <<< "$POST_CLEANUP_STRING"
 
 # shellcheck disable=SC2329
 function gcs_bucket() {
-    # Remove the old artifacts
+    local failed=0
+    # A new destination has nothing to remove, so a not-found here is expected.
+    # A copy that fails is what fails the store.
     gcloud storage rm -r "${STORAGE_BUCKET_DESTINATION}" || true
 
     # Wait for old artifacts to be removed.
@@ -83,6 +85,11 @@ function gcs_bucket() {
                     continue
                 fi
                 if [ -d "${file}" ]; then
+                    # gcloud fails on a directory that holds no files, so skip it like an empty file.
+                    if [ -z "$(find -L "${file}" -type f -print -quit 2>/dev/null)" ]; then
+                        echo "Skipped empty directory (not uploaded): ${file}"
+                        continue
+                    fi
                     copycmd="cp -r"
                     directory=$(basename "$file")
                     gcloud storage ls "${STORAGE_BUCKET_DESTINATION}/${directory}" 2>/dev/null | grep -q "/$"
@@ -96,14 +103,17 @@ function gcs_bucket() {
 
                 # Copy the artifact to the bucket (do not use quotes for cp!)
                 # shellcheck disable=SC2086
-                gcloud storage ${copycmd} "${file}" "${STORAGE_BUCKET_DESTINATION}"/ || true
-                if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+                if gcloud storage ${copycmd} "${file}" "${STORAGE_BUCKET_DESTINATION}"/; then
                     echo "Copied ${file} to ${STORAGE_BUCKET_DESTINATION}"
                     echo "    gcloud storage ${copycmd} ${STORAGE_BUCKET_DESTINATION}/$(basename "$file") ." | tee -a "${ARTIFACT_SUMMARY}"
+                else
+                    echo "ERROR: failed to copy ${file} to ${STORAGE_BUCKET_DESTINATION}" >&2
+                    failed=1
                 fi
             fi
         done
     done
+    return "${failed}"
 }
 
 #
@@ -135,10 +145,12 @@ case "${ARTIFACT_STORAGE_SOLUTION}" in
         ;;
 esac
 
+RESULT=0
+
 # Store artifacts to artifact storage.
 if [ -n "${ARTIFACT_STORAGE_SOLUTION}" ] && [ -n "${STORAGE_BUCKET_DESTINATION}" ]; then
     if [ "${#ARTIFACT_LIST[@]}" -gt 0 ]; then
-        "${ARTIFACT_STORAGE_SOLUTION_FUNCTION}"
+        "${ARTIFACT_STORAGE_SOLUTION_FUNCTION}" || RESULT=1
     else
         echo "No artifacts to store to ${ARTIFACT_STORAGE_SOLUTION}, ignored."
     fi
@@ -147,14 +159,11 @@ else
     noop
 fi
 
-RESULT=0
-
-# Post storage commands.
+# Post storage commands. A successful command must not clear a store failure.
 echo "Post storage commands:"
 for command in "${POST_CLEANUP_COMMANDS[@]}"; do
     echo "${command}"
-    eval "${command}"
-    RESULT="$?"
+    eval "${command}" || RESULT=$?
 done
 
 if [ -f "${ARTIFACT_SUMMARY}" ]; then
