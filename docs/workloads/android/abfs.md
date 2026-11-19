@@ -211,6 +211,7 @@ Prerequisites: all three ABFS modules enabled, the builder image pushed, and the
 | `abfs.clientFlags` | `--disable-tls=true --auth-type none` | Must match how the server listens (no TLS, no auth in this chart). |
 | `abfs.version` / `abfs.casfsVersion` / `abfs.repository` | `0.1.14` / `0.1.14` / `abfs-apt-alpha-public` | Client package to install. Kernel driver package to install. Apt repository to fetch these packages from. |
 | `abfs.cachedBuild`, `abfs.cleanCache`, `abfs.cachemanTimeout` | `false`, `false`, `180` | Keep the cacheman cache on the per-workflow PVC (`750Gi`, class `reclaimable-storage-class-android-abfs`). |
+| `abfs.sharedCacheman.enabled` (chart value, not a workflow parameter) | `false` | Build pods use one cacheman per node (DaemonSet `abfs-cacheman` of the `abfs-client-ubuntu` module, `cacheman.enabled: true` there) and about 10 build pods share a node. `cachedBuild`, `cleanCache` and `cachemanTimeout` then have no effect. See the [module README](../../../gitops/modules/abfs-client-module-ubuntu/README.md). |
 
 Soong runs `soong_build` in an nsjail sandbox where the ABFS mount is read-only and `out` is writable only at `/src/out`; `aaos_environment.sh` fixes `build/soong` per `AAOS_REVISION`:
 

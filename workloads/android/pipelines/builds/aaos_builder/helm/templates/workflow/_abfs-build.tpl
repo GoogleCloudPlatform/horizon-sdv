@@ -40,6 +40,7 @@ currentBuild.currentResult.
           revision: {{ .Values.spec.pipelineRepoRevision | quote }}
 {{- include "aaos-builder.gitArtifactCredsContent" . | nindent 10 }}
 {{- end }}
+{{- if ne (include "aaos-builder.abfsSharedCacheman" .) "true" }}
   # Enforce one build pod per node.
   podSpecPatch: |
     affinity:
@@ -50,6 +51,7 @@ currentBuild.currentResult.
                 - key: aaos_abfs_pod
                   operator: Exists
             topologyKey: kubernetes.io/hostname
+{{- end }}
   container:
     image: {{ include "aaos-builder.builderImage" . | quote }}
     workingDir: {{ include "aaos-builder.pipelineMonorepoPath" . | quote }}
@@ -91,7 +93,12 @@ currentBuild.currentResult.
       # The ABFS workspace: /aaos-cache/abfs when cached, /abfs when not
       # (aaos_environment.sh); the Jenkins job derives it the same way.
       - name: GEMINI_ANALYSIS_PATH
+{{- if eq (include "aaos-builder.abfsSharedCacheman" .) "true" }}
+        # Shared cacheman: never a cached build, the workspace is always /abfs.
+        value: "/abfs"
+{{- else }}
         value: '{{ printf "{{=workflow.parameters.abfsCachedBuild == \"true\" ? \"/aaos-cache/abfs\" : \"/abfs\"}}" }}'
+{{- end }}
       # Gemini's own output goes to a plain directory on the PVC, outside the
       # casfs mount, where storage picks it up. Jenkins does not set this.
       - name: GEMINI_ARTIFACT_WRITE_ROOT
@@ -107,6 +114,10 @@ currentBuild.currentResult.
       - name: GEMINI_AAOS_LOG_TAIL_MODE
         value: "fullcopy"
     resources:
+{{- if eq (include "aaos-builder.abfsSharedCacheman" .) "true" }}
+      # Shared cacheman: several build pods per node, sized in values-abfs.yaml.
+{{- toYaml .Values.spec.abfs.sharedCacheman.resources | nindent 6 }}
+{{- else }}
       # Build step sizing for c2d-highcpu-112 (leave headroom for system/Argo).
       limits:
         cpu: "104000m"
@@ -114,6 +125,7 @@ currentBuild.currentResult.
       requests:
         cpu: "90000m"
         memory: "180000Mi"
+{{- end }}
     securityContext:
       privileged: true
       # As both Jenkins ABFS pod templates.
@@ -122,6 +134,12 @@ currentBuild.currentResult.
     volumeMounts:
       - name: aaos-cache
         mountPath: /aaos-cache
+{{- if eq (include "aaos-builder.abfsSharedCacheman" .) "true" }}
+      # Instance directory (cacheman socket) and cache of the node's cacheman.
+      - name: abfs-shared
+        mountPath: {{ .Values.spec.abfs.sharedCacheman.hostDir | quote }}
+        mountPropagation: HostToContainer
+{{- end }}
 {{- if eq (include "aaos-builder.useSharedPipelineWorkspaceVolume" .) "true" }}
       - name: pipeline-workspace
         mountPath: {{ include "aaos-builder.pipelineMonorepoPath" . | quote }}
@@ -178,8 +196,10 @@ currentBuild.currentResult.
         # Cache Sync: let cacheman finish uploading to the cache before the pod
         # and its daemon go away. Same command and semantics as the Jenkins
         # stage: a failed wait does not fail the build, a failed sync does.
-        # Like Jenkins, only when a lunch target was built.
-        if [ "${RESULT}" = "SUCCESS" ] && [ -n "${AAOS_LUNCH_TARGET:-}" ] && [ "${ABFS_CACHEMAN_TIMEOUT:-0}" != "0" ]; then
+        # Like Jenkins, only when a lunch target was built. Not with the shared
+        # cacheman: it outlives the pod and serves other builds, so it is
+        # never idle and nothing has to be waited for.
+        if [ "${RESULT}" = "SUCCESS" ] && [ -n "${AAOS_LUNCH_TARGET:-}" ] && [ "${ABFS_CACHEMAN_TIMEOUT:-0}" != "0" ] && [ "${ABFS_SHARED_CACHEMAN:-false}" != "true" ]; then
           stage "Cache Sync"
           echo "Waiting on cacheman to sync ..."
           abfs cacheman wait -t "${ABFS_CACHEMAN_TIMEOUT}"

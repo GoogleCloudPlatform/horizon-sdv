@@ -48,6 +48,7 @@ Enable order: `abfs-data` → license → `abfs-service-module` → **abfs-clien
 | Child Application `mod-abfs-client-ubuntu-node-pool` (chart `node-pool/`) | `argocd` | KCC `ContainerNodePool` **`abfs-build-node-pool-ubuntu`** |
 | DaemonSet `abfs-casfs-installer-client` + ConfigMap (`install_casfs_client.sh`) | `module-manager` (destination namespace of the parent module Application) | Loads `casfs` on each node of the pool |
 | Overview Deployment/Service | `abfs-client-module-ubuntu-overview` | Portal overview page |
+| DaemonSet `abfs-cacheman` (only with `cacheman.enabled: true`) | `module-manager` | One shared `abfs cacheman` per node of the pool |
 
 ### Node pool
 
@@ -67,6 +68,23 @@ Build pods select the pool with the `nodeSelector` / `tolerations` above (`value
 `casfs.provider: daemonset`. The script, run privileged with the host filesystem mounted, first looks for the prebuilt package `casfs-kmod-<kernel>_<casfs.daemonset.version>` in Artifact Registry `abfs-binaries/us/abfs-apt-alpha-public` and installs it; if the package is missing or does not load, it downloads `casfs-<version>.tar.gz` from `casfs.daemonset.sourceUrl` (`gs://cos-localmirror/distfiles`) and builds the module for the running kernel with the node toolchain (`make ko KERNEL_RELEASE=$(uname -r)`), then `modprobe casfs`. The build pod waits up to 600 s for `/sys/module/casfs` (`abfs_wait_for_casfs` in `aaos_initialise.sh`) before installing the ABFS client.
 
 Versions to keep aligned on an ABFS release: `casfs.daemonset.version` and `image.tag` here (0.1.14), `casfs.daemonset.sourceUrl` in `abfs-service-module/abfs/values.yaml`, and the client package versions in the builder chart (`values-abfs.yaml`) and Jenkins seed.
+
+### Shared cacheman (optional)
+
+`cacheman.enabled: false` by default: every build pod starts its own `abfs cacheman` and one build pod runs per node.
+
+With `cacheman.enabled: true` the module deploys DaemonSet `abfs-cacheman` in `module-manager`: one `abfs cacheman run` per node of the pool, started on the host side (host network and PID namespace, privileged). It waits for `casfs`, sets the node's `net.core.somaxconn` (`cacheman.somaxconn`), runs `abfs init` and `abfs config -w` against `cacheman.server`, and keeps the instance directory and the cache in `cacheman.hostDir` (`/var/lib/abfs`) on the node disk.
+
+The build pods must be switched at the same time with `spec.abfs.sharedCacheman.enabled: true` in the builder chart (`values-abfs.yaml`). They then mount the same node directory, skip `abfs init` / `config` / `cacheman run`, and only do `abfs mount` and `abfs setup`. The one-pod-per-node rule is removed and the pod requests are reduced, so about 10 build pods share a node and its cacheman.
+
+| Value | Default | Meaning |
+|-------|---------|---------|
+| `cacheman.enabled` | `false` | Deploy the shared cacheman DaemonSet |
+| `cacheman.hostDir` | `/var/lib/abfs` | Node directory shared with the build pods; same value as `spec.abfs.sharedCacheman.hostDir` |
+| `cacheman.server`, `cacheman.clientFlags`, `cacheman.manifestServer` | as the builder chart | ABFS server, TLS/auth flags and manifest host |
+| `cacheman.somaxconn` | `65535` | Listen backlog of the node |
+
+The DaemonSet uses `updateStrategy: OnDelete`: a restart of cacheman breaks the builds running on that node, so a changed DaemonSet reaches a node when its pod is deleted by hand or the node is replaced. The Jenkins `AAOS Builder ABFS` job does not use the shared cacheman.
 
 ### COS variant
 

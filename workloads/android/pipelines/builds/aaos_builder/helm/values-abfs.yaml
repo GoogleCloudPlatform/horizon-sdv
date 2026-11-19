@@ -81,6 +81,25 @@ spec:
     # cacheman sync timeout in seconds; 0 disables the wait. Only meaningful
     # when cachedBuild is true.
     cachemanTimeout: "180"
+    # Shared cacheman: build pods use the cacheman that the abfs-client-ubuntu
+    # module runs on the node (DaemonSet abfs-cacheman, cacheman.enabled in that
+    # module) instead of starting their own. Several build pods then share one
+    # node, as many as the requests below allow. Off: one build pod per node
+    # with its own cacheman. With it on, the local ABFS cache is on the node,
+    # so cachedBuild, cleanCache and cachemanTimeout have no effect.
+    sharedCacheman:
+      enabled: false
+      # Same directory as cacheman.hostDir in abfs-client-module-ubuntu.
+      hostDir: /var/lib/abfs
+      # Build pod sizing in shared mode: about 10 pods on a c2d-highcpu-112
+      # node (112 vCPU, 224 GiB) next to cacheman.
+      resources:
+        requests:
+          cpu: "10000m"
+          memory: "18000Mi"
+        limits:
+          cpu: "16000m"
+          memory: "36000Mi"
   imageBuild:
     # The image the Jenkins ABFS job runs (ABFS_BUILD_DOCKER_ARTIFACT_PATH_NAME
     # in values-jenkins.yaml, tag latest in its Jenkinsfile). It adds the ABFS
