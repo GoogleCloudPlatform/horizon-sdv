@@ -18,14 +18,19 @@ Helm chart: `gitops/modules/openbsw-module`
 
 The module runs on the main environment only. It is not deployed on a sub-environment, because the OpenBSW node pool is shared by the cluster.
 
+---
+
 ## Module Metadata
 
 | Metadata Field | Value |
 | :--- | :--- |
+| **STATUS** | horizon-verified |
 | **OWNER** | Accenture |
 | **CONTACT** | [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com) |
 | **CHART VERSION** | 0.1.0 |
 | **CONTAINS_COMMERCIAL** | no |
+
+---
 
 ## What this chart deploys
 
@@ -33,7 +38,7 @@ The module runs on the main environment only. It is not deployed on a sub-enviro
 |----------|-----------|---------|
 | Namespace `openbsw` | — | Module-owned namespace. Annotated with `horizon-sdv.io/node-pool` |
 | ConfigMap `openbsw-workflow-scheduling` | `openbsw` | Node selector and tolerations for OpenBSW workflow pods |
-| Child Application `mod-openbsw-module-argo-workflows` | `workflows` | Placeholder. Syncs the `argo-workflows` chart, which renders no resources until WorkflowTemplates are added (follow-up ticket) |
+| Child Application `mod-openbsw-module-argo-workflows` | `workflows` | Syncs the `argo-workflows` chart: WorkflowTemplates `openbsw-bsw-builder` and `openbsw-builder-image` (in `workflows`) and their webhook Sensors (in `argo-events`) |
 | NetworkPolicies `default-deny-all`, `allow-dns` | `openbsw` | Baseline perimeter when `config.enableNetworkPolicies` is true |
 | ServiceAccount `openbsw-can-kernel` | `openbsw` | Identity for the CAN DaemonSet. No Role or binding |
 | DaemonSet `openbsw-can-kernel` | `openbsw` | Loads `can`, `can-raw`, and `vcan` on the OpenBSW node pool |
@@ -41,9 +46,29 @@ The module runs on the main environment only. It is not deployed on a sub-enviro
 
 Module Manager injects `moduleName`, `config`, `repo.url`, and `repo.revision` when the module is enabled. `moduleName` stays empty in `values.yaml`.
 
-## Status: placeholder workflows
+## Workflows
 
-The `argo-workflows/` chart has no WorkflowTemplates yet. Its child Application `mod-openbsw-module-argo-workflows` therefore syncs an empty chart, and enabling the module creates no workflows. Adding the OpenBSW WorkflowTemplates and their Sensors is tracked as a follow-up ticket. The scheduling helper below is ready for those templates but is not used by any template yet.
+The `argo-workflows/` chart ports the two OpenBSW Jenkins jobs. Both WorkflowTemplates carry `horizon-sdv.io/expose: "true"` and `horizon-sdv.io/module: openbsw-module`, so they appear in the Developer Portal and Horizon CLI. Each has a Sensor on EventSource `webhook`, event `workflow-dispatch`, matching `body.workflowTemplateName`.
+
+| WorkflowTemplate | Sensor | Jenkins job | Notes |
+|------------------|--------|-------------|-------|
+| `openbsw-bsw-builder` | `webhook-openbsw-bsw-builder` | OpenBSW Workflows/Builds/BSW Builder | Build, AI review on failure, GCS storage, optional retention |
+| `openbsw-builder-image` | `webhook-openbsw-builder-image` | OpenBSW Workflows/Environment/Docker Image Template | Calls ClusterWorkflowTemplate `common-docker-image-build` (workloads-common) |
+
+Parameters use the Jenkins names in camelCase with the same defaults. They are defined once, in order, under `bswBuilder.parameters` and `builderImage.parameters` in `argo-workflows/values.yaml`. The WorkflowTemplate arguments and the Sensor mappings are both generated from those lists. Job details are in the [BSW Builder](../../../workloads/openbsw/pipelines/builds/bsw_builder/README.md) and [Docker Image Template](../../../workloads/openbsw/pipelines/environment/docker_image_template/README.md) READMEs.
+
+`openbsw-bsw-builder` runs these steps:
+
+1. `check-image`, then `build-image` (via `openbsw-builder-image`) when the `imageTag` image is missing or `forceImageBuild` is `true`. The image build mints its own git credentials.
+2. `prepare-pipeline-git-creds` (when `config.scm.authMethod` is `app` or `userpass`), after `build-image` succeeded or was skipped. It writes the same per-workflow Secret as the image build, so it must not overlap it, and the GitHub App token is then fresh for `fetch-pipeline`.
+3. `fetch-pipeline`: copies the Horizon repo (the module's own `repo.url` / `repo.revision`, the same ones the chart is synced from, so templates and scripts stay on one revision) onto the per-workflow volume `bsw-workspace` (`standard-rwo`, 50Gi, deleted on completion). The volume is ReadWriteOnce and reattaches to whichever node the next step lands on.
+4. `build`: `bsw_initialise.sh`, then each Jenkins stage via `bsw_build.sh` in one pod, as user `builder`.
+5. `ai-review`: on build failure when `enableGeminiAiAssistant` is `true`. Runs `workloads/common/agentic-ai/gemini/run_ai_review.sh` with `AI_REVIEW_RUNTIME=aiReviewRuntime` (default `agy`, the Google Antigravity SDK, as for the AAOS builder). Skill: `workloads/common/agentic-ai/antigravity/skills/openbsw/SKILL.md`.
+6. `storage`: `bsw_storage.sh` to `gs://<project>-openbsw/OpenBSW/Builds/BSW_Builder/<date>-<time>_<workflow>` unless `storageBucketDestination` is set.
+7. `retain`: keeps a pod with the workspace for `instanceRetentionTime` minutes.
+8. `fail-if-build-or-storage-failed`: marks the workflow Failed after retain when the build or the storage upload failed. It runs a small image, so a fresh node does not pull the builder image just to exit.
+
+Workflow pods run as `workflow-executor-elevated` (Artifact Registry push, GCS upload, Vertex AI) while `useElevatedWorkflowIam` is `true`, otherwise as `serviceAccountName`. They read the `horizon-workflow-cloud-env` ConfigMap, as in the AAOS builder.
 
 ## Scheduling
 
@@ -148,11 +173,22 @@ kubectl -n openbsw exec ds/openbsw-can-kernel -- nsenter -t 1 -m -p -- lsmod | g
 # expect: can, can_raw and vcan listed
 ```
 
-The `argo-workflows` child is a placeholder, so no WorkflowTemplates appear in the Developer Portal yet (see [Status: placeholder workflows](#status-placeholder-workflows)).
+Workflow checks:
+
+```bash
+kubectl -n workflows get workflowtemplates -l horizon-sdv.io/module=openbsw-module
+# expect: openbsw-bsw-builder, openbsw-builder-image
+
+kubectl -n argo-events get sensors webhook-openbsw-bsw-builder webhook-openbsw-builder-image
+# expect: both listed
+
+horizon workflow submit --module openbsw-module --template openbsw-bsw-builder
+# expect: a workflow named openbsw-bsw-builder-*. The first run also builds the argowf-latest image
+```
 
 ## After disable
 
-Disabling the module deletes the parent Application `mod-openbsw-module`. Argo CD then prunes the child `mod-openbsw-module-argo-workflows`, the `openbsw` namespace with the CAN DaemonSet, its ServiceAccount, the workflow-scheduling ConfigMap and the NetworkPolicies, and the `openbsw-overview` namespace.
+Disabling the module deletes the parent Application `mod-openbsw-module`. Argo CD then prunes the child `mod-openbsw-module-argo-workflows` with its WorkflowTemplates and Sensors, the `openbsw` namespace with the CAN DaemonSet, its ServiceAccount, the workflow-scheduling ConfigMap and the NetworkPolicies, and the `openbsw-overview` namespace.
 
 ```bash
 kubectl -n argocd get applications -l horizon-sdv.io/module=openbsw-module
@@ -173,5 +209,13 @@ python3 gitops/modules/openbsw-module/tests/smoke_test.py
 ```
 
 The smoke test lints both charts, renders them with `helm template`, checks the `openbsw-module` ModuleCatalog fields, and checks that the child Application is rendered with `prune: true` and the Argo CD resources finalizer. It is not part of CI.
+
+If the `argo` CLI is installed, the smoke test also covers the workflows, with `git.authMethod` set to `app` and to empty:
+
+- `argo lint --offline` on both WorkflowTemplates and the ClusterWorkflowTemplates they call (`common-docker-image-build`, `prepare-pipeline-git-creds`).
+- A client-side `argo submit --dry-run --from workflowtemplate/<name>` for both templates. It talks to a local fake Kubernetes API that serves the rendered templates, so it needs no cluster and does not touch your kube context.
+- A simulated webhook event per Sensor. Each Sensor must fire on its own `workflowTemplateName` and on no other (including `<name>-extra` and `x<name>`). The Workflow it would create is then dry-run submitted, and body fields must land in the matching parameters.
+
+Without the `argo` CLI those checks print `SKIPPED`.
 
 Enable creates the parent Application `mod-openbsw-module`. Disable deletes that parent. The child Application is part of the parent chart, so the parent finalizer prunes it. Those two steps are covered by the Module Manager unit tests `TestEnableOpenBSW_CreatesParentApplication` and `TestPerformModuleDisable_OpenBSWDeletesParentApplication`.
