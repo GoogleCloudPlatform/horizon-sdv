@@ -96,6 +96,10 @@ ARG INSTALL_GEMINI_CLI=true
 ARG INSTALL_AGENT_DEVELOPMENT_KIT_PYTHON=true
 ARG INSTALL_CHROME_REMOTE_DESKTOP=false
 ARG INSTALL_ANTIGRAVITY_AGENT=true
+ARG INSTALL_HORIZON_CLI=true
+ARG HORIZON_CLI_URL=""
+ARG HORIZON_CLI_SHA256=""
+ARG HORIZON_CLI_BEARER=""
 ARG ANTIGRAVITY_2_VERSION=2.2.1
 ARG ANTIGRAVITY_2_INSTALL_MODE=tarball
 ARG ANTIGRAVITY_2_TARBALL_URL=https://storage.googleapis.com/antigravity-public/antigravity-hub/2.2.1-5287492581195776/linux-x64/Antigravity.tar.gz
@@ -176,6 +180,7 @@ ENV GUACAMOLE_VERSION="${GUACAMOLE_VERSION}"
 ENV INSTALL_GEMINI_CLI="${INSTALL_GEMINI_CLI}"
 ENV INSTALL_AGENT_DEVELOPMENT_KIT_PYTHON="${INSTALL_AGENT_DEVELOPMENT_KIT_PYTHON}"
 ENV INSTALL_ANTIGRAVITY_AGENT="${INSTALL_ANTIGRAVITY_AGENT}"
+ENV INSTALL_HORIZON_CLI="${INSTALL_HORIZON_CLI}"
 ENV ENABLE_TIGERVNC=${INSTALL_TIGERVNC}
 ENV ENABLE_CRD=${INSTALL_CHROME_REMOTE_DESKTOP}
 ENV DEFAULT_ENABLE_AUDIO_INPUT=${DEFAULT_ENABLE_AUDIO_INPUT}
@@ -215,6 +220,19 @@ RUN if [ "$INSTALL_ANTIGRAVITY_AGENT" = "true" ]; then \
       ! test -f /etc/xdg/autostart/antigravity.desktop; \
     fi && \
     rm -rf /tmp/install-antigravity-agent.sh /tmp/icon
+
+# Horizon CLI on default PATH; inherited by GNOME thin-children (Android Studio, ASfP).
+COPY --chmod=755 ./common-utils/horizon-cli/install-horizon-cli.sh /tmp/install-horizon-cli.sh
+RUN if [ "$INSTALL_HORIZON_CLI" = "true" ]; then \
+      HORIZON_DOMAIN="${HORIZON_DOMAIN}" \
+      HORIZON_CLI_URL="${HORIZON_CLI_URL}" \
+      HORIZON_CLI_SHA256="${HORIZON_CLI_SHA256}" \
+      HORIZON_CLI_BEARER="${HORIZON_CLI_BEARER}" \
+      INSTALL_HORIZON_CLI="${INSTALL_HORIZON_CLI}" \
+      /tmp/install-horizon-cli.sh && \
+      test -x /usr/local/bin/horizon; \
+    fi && \
+    rm -f /tmp/install-horizon-cli.sh
 
 # Entrypoint hands over execution to start_systemd.sh for final initialization.
 ENTRYPOINT ["/google/scripts/entrypoint.sh"]
