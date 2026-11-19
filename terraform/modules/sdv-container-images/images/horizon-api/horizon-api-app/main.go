@@ -34,10 +34,10 @@ import (
 
 	"github.com/acn-horizon-sdv/horizon-api/internal/api"
 	"github.com/acn-horizon-sdv/horizon-api/internal/argo"
-	"github.com/acn-horizon-sdv/horizon-api/internal/auth"
 	"github.com/acn-horizon-sdv/horizon-api/internal/catalog"
 	"github.com/acn-horizon-sdv/horizon-api/internal/controller"
 	"github.com/acn-horizon-sdv/horizon-api/internal/workflow"
+	"github.com/acn-horizon-sdv/horizonauth"
 )
 
 var scheme = runtime.NewScheme()
@@ -59,7 +59,8 @@ func main() {
 		catalogCRName           string
 		oidcIssuerURL           string
 		oidcClientID            string
-		skipClientIDCheck       bool
+		roleOrder               string
+		roleChecks              bool
 		eventsWebhookURL        string
 		argoBaseURL             string
 		logReadIdle             time.Duration
@@ -84,8 +85,9 @@ func main() {
 	flag.StringVar(&stateCRName, "module-manager-state-name", "cluster", "ModuleManagerState resource name")
 	flag.StringVar(&catalogCRName, "module-manager-catalog-name", "cluster", "ModuleCatalog resource name in module-manager namespace")
 	flag.StringVar(&oidcIssuerURL, "oidc-issuer-url", "", "Keycloak realm issuer, e.g. https://domain/auth/realms/horizon")
-	flag.StringVar(&oidcClientID, "oidc-client-id", "", "Expected access-token audience / client (optional)")
-	flag.BoolVar(&skipClientIDCheck, "oidc-skip-client-id-check", true, "Skip OIDC azp/aud client check (needed for some Keycloak access tokens)")
+	flag.StringVar(&oidcClientID, "oidc-client-id", "horizon-api", "Keycloak client an access token must be meant for (aud); roles are read from resource_access.<client>.roles")
+	flag.StringVar(&roleOrder, "role-order", horizonauth.DefaultRoleOrder, "Horizon roles, lowest first; each includes the roles before it and the first is implicit for every signed-in user")
+	flag.BoolVar(&roleChecks, "role-checks", false, "Enforce endpoint minimum roles; off keeps today's access for every signed-in user (the audience check stays on)")
 	flag.StringVar(&eventsWebhookURL, "events-webhook-url", "", "Argo Events EventSource POST URL (required, e.g. .../events/workflow)")
 	flag.StringVar(&argoBaseURL, "argo-base-url", "", "Argo Server base URL with base href (e.g. http://argo-workflows-server.NS.svc:2746/workflows); ARGO_BASE_URL")
 	flag.DurationVar(&logReadIdle, "log-read-idle-deadline", 30*time.Second, "Emit heartbeat if Argo sends no log line within this duration")
@@ -184,10 +186,15 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	authz, err := auth.NewOIDC(ctx, oidcIssuerURL, oidcClientID, skipClientIDCheck)
+	verifier, err := horizonauth.NewVerifier(ctx, oidcIssuerURL, oidcClientID)
 	if err != nil {
 		log.Fatalf("oidc: %v", err)
 	}
+	order, err := horizonauth.ParseRoleOrder(roleOrder)
+	if err != nil {
+		log.Fatalf("role-order: %v", err)
+	}
+	log.Printf("auth: tokens must have aud %q; roles %s; role checks %t", oidcClientID, order, roleChecks)
 
 	cfg := ctrl.GetConfigOrDie()
 	wfStore, err := workflow.NewStore(cfg, workflowsNS)
@@ -240,7 +247,7 @@ func main() {
 
 	handler := api.New(api.Options{
 		Catalog:                       cat,
-		OIDC:                          authz,
+		Verifier:                      verifier,
 		WorkflowsNS:                   workflowsNS,
 		HTTPAddr:                      httpAddr,
 		EventsWebhookURL:              eventsWebhookURL,

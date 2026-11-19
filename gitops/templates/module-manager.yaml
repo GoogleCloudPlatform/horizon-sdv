@@ -35,6 +35,7 @@ spec:
           namespace: {{ .Values.config.namespacePrefix }}argocd
           project: {{ .Values.config.namespacePrefix }}horizon-sdv
         gitopsRootAppName: {{ .Values.config.namespacePrefix }}horizon-sdv
+        roleChecks: {{ .Values.config.roleChecks | default false }}
         repo:
           url: {{ .Values.spec.source.repoURL | quote }}
           revision: {{ .Values.spec.source.targetRevision | quote }}

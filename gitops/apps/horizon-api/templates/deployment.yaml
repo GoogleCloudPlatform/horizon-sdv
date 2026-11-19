@@ -44,10 +44,9 @@ spec:
             {{- $wfNs := .Values.workflowsNamespace | default "workflows" }}
             - "--workflows-namespace={{ $wfNs }}"
             - "--oidc-issuer-url={{ .Values.oidcIssuerUrl }}"
-            {{- if .Values.oidcClientId }}
             - "--oidc-client-id={{ .Values.oidcClientId }}"
-            {{- end }}
-            - "--oidc-skip-client-id-check={{ .Values.oidcSkipClientIdCheck }}"
+            - "--role-order={{ .Values.roleOrder }}"
+            - "--role-checks={{ .Values.roleChecks }}"
             - "--events-webhook-url={{ .Values.eventsWebhookUrl }}"
             # API lives at /api/v1/... ; /workflows/ is only the UI baseHref (requests under /workflows/api/... return HTML SPA).
             # Default namespace when parent Application omits argoWorkflowsNamespace (empty → broken host ..svc).

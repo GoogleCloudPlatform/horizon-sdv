@@ -26,17 +26,17 @@ import (
 	"time"
 
 	"github.com/acn-horizon-sdv/horizon-api/internal/argo"
-	"github.com/acn-horizon-sdv/horizon-api/internal/auth"
 	"github.com/acn-horizon-sdv/horizon-api/internal/catalog"
 	"github.com/acn-horizon-sdv/horizon-api/internal/invoke"
 	"github.com/acn-horizon-sdv/horizon-api/internal/softfeature"
 	"github.com/acn-horizon-sdv/horizon-api/internal/workflow"
+	"github.com/acn-horizon-sdv/horizonauth"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type Options struct {
 	Catalog          *catalog.Catalog
-	OIDC             *auth.OIDC
+	Verifier         *horizonauth.Verifier
 	WorkflowsNS      string
 	HTTPAddr         string
 	EventsWebhookURL string
@@ -121,23 +121,15 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
-func (s *Server) bearerAuth(r *http.Request) (*auth.Principal, error) {
-	h := strings.TrimSpace(r.Header.Get("Authorization"))
-	parts := strings.SplitN(h, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-		return nil, fmt.Errorf("missing bearer")
+func (s *Server) bearerAuth(r *http.Request) (*horizonauth.Principal, error) {
+	raw, err := horizonauth.BearerToken(r)
+	if err != nil {
+		return nil, err
 	}
-	raw := strings.TrimSpace(parts[1])
-	if raw == "" {
-		return nil, fmt.Errorf("empty token")
-	}
-	if strings.Count(raw, ".") != 2 {
-		return nil, fmt.Errorf("Keycloak access token JWT required")
-	}
-	return s.opt.OIDC.Verify(r.Context(), raw)
+	return s.opt.Verifier.Verify(r.Context(), raw)
 }
 
-func (s *Server) withAuth(next func(http.ResponseWriter, *http.Request, *auth.Principal)) http.HandlerFunc {
+func (s *Server) withAuth(next func(http.ResponseWriter, *http.Request, *horizonauth.Principal)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.bearerAuth(r)
 		if err != nil {
@@ -148,7 +140,7 @@ func (s *Server) withAuth(next func(http.ResponseWriter, *http.Request, *auth.Pr
 	}
 }
 
-func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
+func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request, _ *horizonauth.Principal) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -185,7 +177,7 @@ func (s *Server) handleSwagger(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(html))
 }
 
-func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request, p *horizonauth.Principal) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return

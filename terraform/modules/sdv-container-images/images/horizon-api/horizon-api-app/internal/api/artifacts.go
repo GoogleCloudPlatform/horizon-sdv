@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/acn-horizon-sdv/horizon-api/internal/auth"
+	"github.com/acn-horizon-sdv/horizonauth"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -315,7 +315,7 @@ func (s *Server) artifactsBucketAllowed(ctx context.Context, bucket string) (boo
 }
 
 // handleArtifactsListBuckets lists allowed buckets from static allowlist and GCSBucket CRs
-func (s *Server) handleArtifactsListBuckets(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+func (s *Server) handleArtifactsListBuckets(w http.ResponseWriter, r *http.Request, p *horizonauth.Principal) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -342,7 +342,7 @@ func (s *Server) handleArtifactsListBuckets(w http.ResponseWriter, r *http.Reque
 // POST .../objects/filter is the wrong API for this: filterType selects
 // metadata ("specific metadata", "any metadata", "no metadata"), an empty
 // path is rejected, and a path without a trailing slash is one object name.
-func (s *Server) handleArtifactsListObjects(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+func (s *Server) handleArtifactsListObjects(w http.ResponseWriter, r *http.Request, p *horizonauth.Principal) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return

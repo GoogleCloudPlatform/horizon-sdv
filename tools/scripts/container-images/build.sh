@@ -39,6 +39,10 @@ TFVARS_FILE="${REPO_ROOT}/terraform/env/terraform.tfvars"
 LOCALS_FILE="${REPO_ROOT}/terraform/modules/base/locals.tf"
 VERSIONS_FILE="${REPO_ROOT}/versions.yaml"
 ENV_MAIN_FILE="${REPO_ROOT}/terraform/env/main.tf"
+# Images whose go.mod replaces the shared Go auth library with ../../shared/horizonauth.
+# Keep in sync with horizonauth_image_keys in terraform/modules/sdv-container-images/main.tf.
+HORIZONAUTH_DIR="${IMAGES_DIR}/shared/horizonauth"
+HORIZONAUTH_IMAGES=(horizon-api-app module-manager-app)
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -508,6 +512,17 @@ configure_docker_auth() {
 }
 
 # ---------------------------------------------------------------------------
+# Stage the shared Go auth library into a build context (as Terraform does)
+# ---------------------------------------------------------------------------
+stage_horizonauth() {
+  local dest="$1/shared/horizonauth" f
+  rm -rf "$dest"
+  while IFS= read -r f; do
+    mkdir -p "$dest/$(dirname "$f")" && cp "$HORIZONAUTH_DIR/$f" "$dest/$f" || return 1
+  done < <(cd "$HORIZONAUTH_DIR" && find . -type f \( \( -name '*.go' ! -name '*_test.go' \) -o -name go.mod -o -name go.sum \))
+}
+
+# ---------------------------------------------------------------------------
 # Build a Single Image
 # ---------------------------------------------------------------------------
 build_image() {
@@ -586,6 +601,10 @@ build_image() {
   if [[ "$DRY_RUN" == "true" ]]; then
     log_info "  ${DIM}[DRY RUN] ${cmd[*]}${NC}"
     return 0
+  fi
+
+  if [[ " ${HORIZONAUTH_IMAGES[*]} " == *" ${name} "* ]]; then
+    stage_horizonauth "$context_dir" || return 1
   fi
 
   local build_start=$SECONDS
