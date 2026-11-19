@@ -31,8 +31,15 @@ IFS=$'\n' read -r -d '' -a POST_CLEANUP_COMMANDS <<< "$POST_CLEANUP_STRING"
 function gcs_bucket() {
     local failed=0
     # A new destination has nothing to remove, so a not-found here is expected.
-    # A copy that fails is what fails the store.
-    gcloud storage rm -r "${STORAGE_BUCKET_DESTINATION}" || true
+    # Any other delete error (for example 403 denied) leaves old artifacts behind and fails the store.
+    local rm_output rm_status
+    rm_output="$(gcloud storage rm -r "${STORAGE_BUCKET_DESTINATION}" 2>&1)"
+    rm_status=$?
+    [ -n "${rm_output}" ] && echo "${rm_output}"
+    if [ "${rm_status}" -ne 0 ] && ! grep -Eqi 'matched no objects|not found: 404|HTTPError 404' <<< "${rm_output}"; then
+        echo "ERROR: failed to remove old artifacts from ${STORAGE_BUCKET_DESTINATION}" >&2
+        failed=1
+    fi
 
     # Wait for old artifacts to be removed.
     # Note: belts and braces because removal used to take time and appear to run in background. Now rm finishes cleanly.
@@ -43,21 +50,19 @@ function gcs_bucket() {
         ((attempts++))
         if [ "${attempts}" -gt "${max_attempts}" ]; then
             echo "ERROR: ${STORAGE_BUCKET_DESTINATION} still exists after ${max_attempts}s." >&2
-            # Brute force just let it continue.
+            # Old artifacts remain, and an existing folder is skipped below, so the store fails.
+            # Carry on copying what can be copied.
+            failed=1
             break
         fi
     done
 
     rm -f "${ARTIFACT_SUMMARY}"
 
-    # Print download URL links in console log and file..
-    echo ""
-    echo "Artifacts stored in ${STORAGE_BUCKET_DESTINATION}" | tee -a "${ARTIFACT_SUMMARY}"
-    echo "Bucket URL: ${STORAGE_CLOUD_URL}" | tee -a "${ARTIFACT_SUMMARY}"
-    echo "" | tee -a "${ARTIFACT_SUMMARY}"
-
-    # Copy artifacts to Google Cloud Storage bucket
+    # Copy artifacts to Google Cloud Storage bucket.
+    # The success banner is printed after this loop, and only when nothing failed.
     echo "Storing artifacts to bucket."
+    local -a summary_lines=()
     for artifact in "${ARTIFACT_LIST[@]}"; do
         # Check for wildcards (* or ?)
         if [[ "$artifact" == *[*?]* ]]; then
@@ -85,8 +90,17 @@ function gcs_bucket() {
                     continue
                 fi
                 if [ -d "${file}" ]; then
-                    # gcloud fails on a directory that holds no files, so skip it like an empty file.
-                    if [ -z "$(find -L "${file}" -type f -print -quit 2>/dev/null)" ]; then
+                    # gcloud fails on a directory that holds no files, so skip a clean empty one.
+                    # find exits 1 and prints nothing when it cannot search (mode 000,
+                    # permission error, symlink loop with -L). That is not an empty directory.
+                    dir_files="$(find -L "${file}" -type f -print -quit)"
+                    find_status=$?
+                    if [ "${find_status}" -ne 0 ]; then
+                        echo "ERROR: failed to search ${file}" >&2
+                        failed=1
+                        continue
+                    fi
+                    if [ -z "${dir_files}" ]; then
                         echo "Skipped empty directory (not uploaded): ${file}"
                         continue
                     fi
@@ -105,7 +119,7 @@ function gcs_bucket() {
                 # shellcheck disable=SC2086
                 if gcloud storage ${copycmd} "${file}" "${STORAGE_BUCKET_DESTINATION}"/; then
                     echo "Copied ${file} to ${STORAGE_BUCKET_DESTINATION}"
-                    echo "    gcloud storage ${copycmd} ${STORAGE_BUCKET_DESTINATION}/$(basename "$file") ." | tee -a "${ARTIFACT_SUMMARY}"
+                    summary_lines+=("    gcloud storage ${copycmd} ${STORAGE_BUCKET_DESTINATION}/$(basename "$file") .")
                 else
                     echo "ERROR: failed to copy ${file} to ${STORAGE_BUCKET_DESTINATION}" >&2
                     failed=1
@@ -113,6 +127,18 @@ function gcs_bucket() {
             fi
         done
     done
+
+    if [ "${failed}" -eq 0 ]; then
+        {
+            echo ""
+            echo "Artifacts stored in ${STORAGE_BUCKET_DESTINATION}"
+            echo "Bucket URL: ${STORAGE_CLOUD_URL}"
+            echo ""
+            if [ "${#summary_lines[@]}" -gt 0 ]; then
+                printf '%s\n' "${summary_lines[@]}"
+            fi
+        } | tee -a "${ARTIFACT_SUMMARY}"
+    fi
     return "${failed}"
 }
 
