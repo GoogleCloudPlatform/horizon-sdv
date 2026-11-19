@@ -22,6 +22,7 @@
 # deletion-policy: abandon keeps the APIs enabled if these resources are deleted.
 # project-id names the project on every resource: without it Config Connector
 # uses the namespace name ("abfs") as the project.
+{{- if .Values.kcc.services.enabled }}
 ---
 apiVersion: serviceusage.cnrm.cloud.google.com/v1beta1
 kind: Service
@@ -189,3 +190,4 @@ metadata:
     cnrm.cloud.google.com/deletion-policy: "abandon"
 spec:
   resourceID: privateca.googleapis.com
+{{- end }}

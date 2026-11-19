@@ -24,6 +24,7 @@
 # auto-creates the necessary load-balancer + health-check firewall rules. The rule
 # below lets ABFS clients (in-cluster nodes / CI) reach the ABFS server LB on 50051.
 # Adjust source ranges to your client subnets.
+{{- if .Values.kcc.firewall.enabled }}
 ---
 apiVersion: compute.cnrm.cloud.google.com/v1beta1
 kind: ComputeFirewall
@@ -65,3 +66,4 @@ spec:
     - protocol: tcp
       ports:
         - "8086"
+{{- end }}

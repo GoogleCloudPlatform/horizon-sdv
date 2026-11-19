@@ -23,6 +23,7 @@
 # ("abfs") as the project.
 
 # ===================== googleapis.com =====================
+{{- if .Values.kcc.dns.enabled }}
 ---
 apiVersion: dns.cnrm.cloud.google.com/v1beta1
 kind: DNSManagedZone
@@ -127,3 +128,4 @@ spec:
     - "199.36.153.9"
     - "199.36.153.10"
     - "199.36.153.11"
+{{- end }}
