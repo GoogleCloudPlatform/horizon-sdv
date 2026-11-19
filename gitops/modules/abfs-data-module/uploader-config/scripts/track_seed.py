@@ -37,18 +37,20 @@
 #                         count of the last full check of this row. Without
 #                         that count the result is "unconfirmed", never seeded.
 #
-# synced is set true only here, after such a confirmation. A flag that is true
-# without a recorded "seeded" result for the row is cleared when a check starts.
+# synced is set true only here, after such a confirmation, and it is false
+# while a check runs: a check that starts on a synced row clears the flag first,
+# so a tracker that dies never leaves synced true next to state "seeding".
 # Progress is written to key seed-status of the uploader-config ConfigMap as
 # JSON. States: seeding, seeded, and without synced: timeout (not finished
-# after SEED_TIMEOUT_SECONDS), unconfirmed (see above), incomplete (the only
-# projects left have failed SEED_FAIL_LIMIT pushes or more without a success;
-# they are named). The module overview page shows it.
+# after SEED_TIMEOUT_SECONDS), unconfirmed (see above), incomplete (the full
+# project list is known and the only projects left have failed SEED_FAIL_LIMIT
+# pushes or more without a success; they are named). The module overview page
+# shows it.
 # The tracker also stops with an error when another row becomes active or a
 # newer workflow takes over. It also runs, without an uploader restart, when
-# the active row is selected again; a row confirmed before keeps synced during
-# that check. Table writes carry the ConfigMap resourceVersion, so a selection
-# made in between is not overwritten.
+# the active row is selected again. Every write carries the ConfigMap
+# resourceVersion and is made only while this run still owns the status, so a
+# selection or a newer run in between is not overwritten.
 
 import json
 import os
@@ -79,6 +81,7 @@ PROCESS_START = " Starting pusher loop for manifest "
 LOOP_RE = re.compile(r" Starting pusher loop for project (\S+)")
 PUSHING_RE = re.compile(r" Pushing project (?:https?://)?(\S+)")
 RESULT_RE = re.compile(r" Project push (\S+) (succeeded|failed)")
+TIMESTAMP_RE = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?(?:Z|[+-]\d{2}:\d{2}) ")
 
 
 def now():
@@ -148,9 +151,39 @@ def patch_config(data, version=None):
     return code == 0
 
 
+def stop_if_superseded(stored, status):
+    """Exit when a run that started later tracks this row.
+
+    Two runs can track the same row for a moment. The one started last keeps
+    going; with the same start second the workflow name decides.
+    """
+    other = stored.get("workflow")
+    if stored.get("row") != ROW or other in (None, "", WORKFLOW):
+        return
+    if (str(stored.get("trackingSince") or ""), str(other)) > (status["trackingSince"], WORKFLOW):
+        raise SystemExit("ERROR: workflow %s now tracks row %s; this run stopped" % (other, ROW))
+
+
 def write_status(status):
-    """Write seed-status only. The table is not touched."""
-    return patch_config({STATUS_KEY: json.dumps(status, sort_keys=True)})
+    """Write seed-status only. The table is not touched.
+
+    The ConfigMap is read again and the patch carries its resourceVersion, so
+    the status of a newer run is never overwritten by a slower one: the patch
+    is refused, and the next try sees who owns the status now. Return False
+    when the write keeps failing.
+    """
+    for _ in range(5):
+        rows, stored, version = read_config()
+        if rows is None or version is None:
+            time.sleep(2)
+            continue
+        if active_row(rows) != ROW:
+            raise SystemExit("ERROR: row %s is no longer active (now %s); seed tracking stopped" % (ROW, active_row(rows)))
+        stop_if_superseded(stored, status)
+        if patch_config({STATUS_KEY: json.dumps(status, sort_keys=True)}, version):
+            return True
+        time.sleep(2)
+    return False
 
 
 def write_synced(status, synced):
@@ -162,12 +195,13 @@ def write_synced(status, synced):
     no longer the active row or the write keeps failing.
     """
     for _ in range(5):
-        rows, _stored, version = read_config()
+        rows, stored, version = read_config()
         if rows is None or version is None:
             time.sleep(2)
             continue
         if active_row(rows) != ROW:
             return False
+        stop_if_superseded(stored, status)
         for row in rows:
             if isinstance(row, dict):
                 row["synced"] = synced and row.get("name") == ROW
@@ -176,6 +210,17 @@ def write_synced(status, synced):
             return True
         time.sleep(2)
     return False
+
+
+def line_key(line):
+    """Sortable form of the kubectl timestamp that starts a log line, or "" without one.
+
+    2026-01-31T12:00:00.5Z and 2026-01-31T12:00:00.500000000Z give the same key.
+    """
+    match = TIMESTAMP_RE.match(line)
+    if not match:
+        return ""
+    return "%s.%s" % (match.group(1), (match.group(2) or "").ljust(9, "0"))
 
 
 class Uploader:
@@ -189,6 +234,26 @@ class Uploader:
         self.saw_start_lines = False
         self.in_header = False
         self.since = None
+        self.last_key = ""
+        self.last_lines = set()
+
+    def seen_before(self, line):
+        """True when this line was already read by an earlier call.
+
+        --since-time takes whole seconds, so every call returns the last second
+        again. Lines are told apart by their full timestamp; lines that share
+        the newest timestamp are remembered as text.
+        """
+        key = line_key(line)
+        if not key:
+            return False
+        if key < self.last_key or (key == self.last_key and line in self.last_lines):
+            return True
+        if key > self.last_key:
+            self.last_key = key
+            self.last_lines = set()
+        self.last_lines.add(line)
+        return False
 
     def read(self):
         """Read the log lines since the last call. Return False when the log cannot be read."""
@@ -203,6 +268,8 @@ class Uploader:
             head = line[:20]
             if len(head) == 20 and head[4] == "-" and head[10] == "T":
                 last = head[:19] + "Z"
+            if self.seen_before(line):
+                continue
             if PROCESS_START in line:
                 # A new git-pusher process (pod or container restart): what the
                 # previous one pushed may belong to another row, so start again.
@@ -242,9 +309,9 @@ class Uploader:
 def stop(status, state, message):
     """End without a confirmed seed: write the state, make sure the row is not synced, exit 1."""
     status["state"] = state
+    print("ERROR: %s" % message, file=sys.stderr, flush=True)
     if not write_synced(status, False):
         write_status(status)
-    print("ERROR: %s" % message, file=sys.stderr, flush=True)
     raise SystemExit(1)
 
 
@@ -271,13 +338,19 @@ def main():
         status["fullTotal"] = full_total
     print("track_seed: row=%s timeout=%ss poll=%ss stable_polls=%s known_total=%s"
           % (ROW, TIMEOUT, POLL, STABLE, full_total or "none"), flush=True)
-    # synced may only be true when this tracker has confirmed the seed. A flag
-    # that is true without a "seeded" result for this row (written by an older
-    # chart at selection time) is cleared before the check starts.
+    # synced may only be true when this tracker has confirmed the seed, so it is
+    # false while a check runs. A synced row is cleared before the check starts:
+    # a row confirmed earlier (re-check), and a flag without a "seeded" result
+    # (written by an older chart at selection time). If this tracker dies, the
+    # flag is then not left true next to state "seeding".
     row_synced = any(isinstance(row, dict) and row.get("name") == ROW and row.get("synced") is True for row in rows or [])
-    if row_synced and previous.get("state") != "seeded":
-        print("row %s is marked synced but no finished seed is recorded for it; clearing the flag until it is confirmed" % ROW, flush=True)
-        write_synced(status, False)
+    if row_synced:
+        if previous.get("state") == "seeded":
+            print("row %s was confirmed before; synced is false until this check confirms it again" % ROW, flush=True)
+        else:
+            print("row %s is marked synced but no finished seed is recorded for it; clearing the flag until it is confirmed" % ROW, flush=True)
+        if not write_synced(status, False):
+            raise SystemExit("ERROR: cannot clear synced for row %s (row no longer active, or the ConfigMap keeps changing)" % ROW)
     else:
         write_status(status)
     uploaders = {}
@@ -290,10 +363,7 @@ def main():
         if rows is not None:
             if active_row(rows) != ROW:
                 raise SystemExit("ERROR: row %s is no longer active (now %s); seed tracking stopped" % (ROW, active_row(rows)))
-            # Two runs can track the same row for a moment. The one started last keeps going.
-            if (stored.get("row") == ROW and stored.get("workflow") not in (None, "", WORKFLOW)
-                    and str(stored.get("trackingSince") or "") > status["trackingSince"]):
-                raise SystemExit("ERROR: workflow %s now tracks row %s; this run stopped" % (stored.get("workflow"), ROW))
+            stop_if_superseded(stored, status)
 
         replicas, ready = uploader_state()
         pods = ["%s-%d" % (STATEFULSET, index) for index in range(replicas)]
@@ -318,7 +388,9 @@ def main():
         else:
             stable = 1 if complete else 0
         failing = [project for project in pending if fails.get(project, 0) >= FAIL_LIMIT]
-        only_failing = healthy and pending and len(failing) == len(pending) and len(started) == last_total
+        # "The only projects left keep failing" needs the full list too: on a
+        # re-check with rotated logs other projects may not have logged yet.
+        only_failing = healthy and all_known and pending and len(failing) == len(pending) and len(started) == last_total
         stuck = stuck + 1 if only_failing else 0
         blind = healthy and not pending and not full and full_total is None and len(started) == last_total
         blind_polls = blind_polls + 1 if blind else 0

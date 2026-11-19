@@ -22,7 +22,8 @@
 # synced means "the uploaders have finished seeding this row". A newly selected
 # row, or a changed AndroidCustom repo, starts with synced false; the seed
 # tracker (track_seed.py) sets it true. Selecting the row that is already
-# active keeps its synced value while the tracker checks the seed again.
+# active leaves its synced value to the tracker, which sets it false while it
+# checks the seed again and true when the check confirms it.
 # /tmp/active-row names the row the tracker watches.
 # The patch is written to /tmp/uploader-config-patch.json. An AndroidCustom
 # submit also writes that entry to /tmp/android-custom-saved.yaml so the form
