@@ -191,7 +191,9 @@ if [[ -n "${POST_HOOK}" && -f "${POST_HOOK}" ]]; then
   # CVD/CTS post-hook uploads artifacts. A failed upload fails the review.
   if ! bash "${POST_HOOK}"; then
     echo -e "${RED}ERROR: post-hook failed: ${POST_HOOK}${NC}" >&2
-    GEMINI_EXIT_CODE=1
+    if [[ "${GEMINI_EXIT_CODE}" -eq 0 ]]; then
+      GEMINI_EXIT_CODE=1
+    fi
   fi
 fi
 

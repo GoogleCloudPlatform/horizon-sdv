@@ -82,6 +82,9 @@ function gcs_bucket() {
         fi
 
         for file in "${files[@]}"; do
+            if [ -z "${file}" ]; then
+                continue
+            fi
             if [ -f "$file" ] || [ -d "$file" ]; then
                 # Check whether we have created a contents from a directory.
                 # Remove 0-byte (empty) files so they are not uploaded
