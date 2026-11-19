@@ -133,7 +133,7 @@ configParameters:
     value: ""
     description: "JSON list, e.g. [{\"first\":80,\"last\":80}]. Empty = 80 and 1024-65535."
   - name: wsAdminIamMembers
-    description: "REQUIRED: Comma-separated emails granted Workstation Admin (full list)."
+    description: "REQUIRED: Comma-separated emails, or user:, group: or serviceAccount: members, granted Workstation Admin (full list)."
 
 deleteConfigParameters:
   - name: cloudWsConfigName

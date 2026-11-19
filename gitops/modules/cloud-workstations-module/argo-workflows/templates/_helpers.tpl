@@ -617,21 +617,25 @@ param_ports() {
 
 # Bare emails become user:<email> (as the Terraform IAM binding did). Bare, user:, group: and
 # serviceAccount: entries must be emails, so a typo fails here rather than at IAM after the config exists.
+# domain:, principal:// and principalSet:// are rejected: they would grant a whole domain or principal set.
+# Same email rule as principals_json in the workstation helpers.
 # Duplicates are dropped ignoring case, first spelling kept, as the controller compares members.
 param_admins() {
-  local parsed bad
+  local parsed bad rejected
   parsed=$(jq -cn --arg v "$wsAdminIamMembers" '
-    def email: test("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+    def email: "[^@[:space:]:]+@[^@[:space:].]+(\\.[^@[:space:].]+)+";
     ($v | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) as $in
+    | ($in | map(select(test("^(user:|group:|serviceAccount:)" + email + "$") or test("^" + email + "$") | not))) as $invalid
     | {
-        bad: ($in | map(select(
-          if test("^(user|group|serviceAccount):") then (sub("^[^:]+:"; "") | email | not)
-          elif test("^(domain:|principal://|principalSet://)") then false
-          else (email | not) end)) | join(", ")),
+        rejected: ($invalid | map(select(test("^(domain|principal|principalSet):"))) | join(", ")),
+        bad: ($invalid | map(select(test("^(domain|principal|principalSet):") | not)) | join(", ")),
         members: ($in
-          | map(if test("^(user:|group:|serviceAccount:|domain:|principal://|principalSet://)") then . else "user:" + . end)
+          | map(if test("^(user:|group:|serviceAccount:)") then . else "user:" + . end)
           | reduce .[] as $m ([]; if any(.[]; ascii_downcase == ($m | ascii_downcase)) then . else . + [$m] end))
       }')
+  rejected=$(jq -r .rejected <<<"$parsed")
+  [[ -z "$rejected" ]] \
+    || log_error "wsAdminIamMembers entries must be a person, a group or a service account. domain:, principal:// and principalSet:// are not allowed, got '${rejected}'."
   bad=$(jq -r .bad <<<"$parsed")
   [[ -z "$bad" ]] \
     || log_error "wsAdminIamMembers entries must be email addresses, optionally prefixed with user:, group: or serviceAccount:, got '${bad}'."

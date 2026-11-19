@@ -123,6 +123,6 @@ Lists workstation names that use one configuration. It does not change anything.
 - `ASfP` for ASfP
 - a full image address, used as written
 
-`wsAdminIamMembers` is the full admin list, not a list of people to add. Anyone left off loses workstation admin access that was granted without an extra condition, including access added outside Horizon. Conditional grants stay as they are. Use comma-separated email addresses. A bare email is stored as `user:email`. `user:`, `group:`, and `serviceAccount:` must be followed by an email. `domain:`, `principal://`, and `principalSet://` are also accepted. Repeated addresses are kept once.
+`wsAdminIamMembers` is the full admin list, not a list of people to add. Anyone left off loses workstation admin access that was granted without an extra condition, including access added outside Horizon. Conditional grants stay as they are. Use comma-separated email addresses. A bare email is stored as `user:email`. `user:`, `group:`, and `serviceAccount:` must be followed by an email. `domain:`, `principal://`, and `principalSet://` are rejected, because they grant a whole domain or principal set. Repeated addresses are kept once.
 
 A persistent-disk snapshot only works when `pdFsType` and `pdSizeGb` are empty. Clear the values the form starts with.

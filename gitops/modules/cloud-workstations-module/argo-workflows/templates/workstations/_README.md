@@ -35,7 +35,7 @@ Creates a workstation from an existing configuration and waits until it is ready
 | `workstationId` | Yes | New workstation id. |
 | `configName` | Yes | Name of an existing configuration. |
 | `displayName` | No | A readable name. Empty means none. |
-| `users` | No | Comma-separated emails or IAM principals who can use it. Empty means nobody. |
+| `users` | No | Comma-separated emails, or `user:`, `group:` or `serviceAccount:` members, who can use it. Empty means nobody. |
 
 ### cws-admin-delete-workstation
 
@@ -75,7 +75,7 @@ If Google Cloud rejects the new list, this run removes only the people it just a
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|
 | `workstationId` | Yes | Workstation to change. |
-| `users` | Yes | Comma-separated emails or IAM principals to add. |
+| `users` | Yes | Comma-separated emails, or `user:`, `group:` or `serviceAccount:` members, to add. |
 
 ### cws-admin-remove-workstation-users
 
@@ -86,11 +86,11 @@ If nobody remains, workstation user access granted without an extra condition is
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|
 | `workstationId` | Yes | Workstation to change. |
-| `users` | Yes | Comma-separated emails or IAM principals to remove. |
+| `users` | Yes | Comma-separated emails, or `user:`, `group:` or `serviceAccount:` members, to remove. |
 
 ### How to write a user
 
-Use a comma-separated list. A bare email is stored as `user:email`. `user:`, `group:`, and `serviceAccount:` must be followed by an email. `domain:`, `principal://`, and `principalSet://` are also accepted. The same address is kept once. Comparison ignores case.
+Use a comma-separated list. A bare email is stored as `user:email`. `user:`, `group:`, and `serviceAccount:` must be followed by an email. `domain:`, `principal://`, and `principalSet://` are rejected, because they grant a whole domain or principal set. The same address is kept once. Comparison ignores case.
 
 Each person must be a real Google account, group, or service account. An address Google does not know is rejected.
 
