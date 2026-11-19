@@ -34,7 +34,10 @@ spec:
   resourceID: {{ .Values.nodePool.name }}
   location: {{ .Values.location | quote }}
   clusterRef:
-    external: projects/{{ .Values.gcpProjectId }}/locations/{{ .Values.location }}/clusters/{{ .Values.clusterName }}
+    # Cluster name only. Config Connector builds the node pool path from project, location, this
+    # value and the pool name; with a full "projects/.../clusters/<name>" path here it reads a
+    # wrong pool, reports "already exists" and leaves the GKE pool behind when the CR is deleted.
+    external: {{ .Values.clusterName | quote }}
   {{- /* Version pin is only meaningful with autoUpgrade false (UNSPECIFIED channel). With autoUpgrade
        true (channel-enrolled clusters), GKE may upgrade past this value — omit it so we do not imply a pin. */}}
   {{- if and (not $autoUpgrade) .Values.nodePool.version }}

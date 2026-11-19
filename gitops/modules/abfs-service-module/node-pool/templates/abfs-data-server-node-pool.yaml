@@ -69,7 +69,10 @@ spec:
   clusterRef:
     # The GKE cluster is created by Terraform (terraform/modules/sdv-gke-cluster);
     # this module only attaches a pool to it.
-    external: projects/{{ $project }}/locations/{{ $location }}/clusters/{{ .Values.clusterName }}
+    # Cluster name only. Config Connector builds the node pool path from project, location, this
+    # value and the pool name; with a full "projects/.../clusters/<name>" path here it reads a
+    # wrong pool, reports "already exists" and leaves the GKE pool behind when the CR is deleted.
+    external: {{ .Values.clusterName | quote }}
   {{- /* A version pin is only meaningful with autoUpgrade false, i.e. an UNSPECIFIED
        channel. With autoUpgrade true GKE may upgrade past this value, so emitting it
        would state a pin the cluster does not hold — omit it instead. Same handling as

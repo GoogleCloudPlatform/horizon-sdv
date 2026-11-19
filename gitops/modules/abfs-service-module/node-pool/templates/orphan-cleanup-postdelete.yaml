@@ -14,10 +14,11 @@
 
 # PostDelete: after abfs-service-module is disabled and Argo CD pruned both ContainerNodePool CRs,
 # delete the server and uploader GKE pools with gcloud if they are still there.
-# Config Connector does not delete the GKE pool when the CR is removed ("underlying resource does not
-# exist; no API call necessary"), which leaves orphans that make the next enable fail with "already
-# exists". The PreSync licence job (license-metadata-inject-job.yaml) removes such orphans on enable;
-# this hook removes them at disable time.
+# Config Connector deletes the GKE pool with the CR when the CR carries the cluster name in clusterRef.
+# A CR written by an earlier release (full cluster path) is removed without the pool ("underlying
+# resource does not exist; no API call necessary"), and a delete can also fail on the GKE side; such
+# a pool makes the next enable fail with "already exists". The PreSync licence job
+# (license-metadata-inject-job.yaml) removes such orphans on enable; this hook removes them at disable time.
 # - It never fails and its waits end well before the Job deadline, so it cannot block the module disable.
 # - A pool is deleted only when its ContainerNodePool is confirmed absent and the pool was read from GKE.
 #   A CR that still exists, or any read that fails, leaves the pool alone (a warning is logged; the next

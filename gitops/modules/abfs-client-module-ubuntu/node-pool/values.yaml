@@ -39,8 +39,8 @@ nodePool:
   workloadLabel: android-abfs-build
   workloadType: android-abfs-build
 # Orphan GKE pool cleanup hooks (templates/orphan-cleanup-hooks.yaml): PreSync deletes a pool that has no
-# ContainerNodePool, PostDelete deletes the pool after module disable. Needed because Config Connector does
-# not delete the GKE pool when the CR is removed.
+# ContainerNodePool, PostDelete deletes the pool after module disable if it is still there. PreSync also
+# replaces, once, a ContainerNodePool of an earlier release (full cluster path in clusterRef.external) and its pool.
 cleanup:
   enabled: true
   workflowsNamespace: workflows
