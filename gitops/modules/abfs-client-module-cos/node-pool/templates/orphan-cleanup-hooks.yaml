@@ -14,12 +14,17 @@
 
 # Orphan GKE node pool cleanup for the ABFS build pool.
 #
-# Config Connector cannot read back the ContainerNodePool it created: a few minutes after create
-# the CR reports "already exists", and when the CR is deleted KCC logs "underlying resource does not
-# exist; no API call necessary" and leaves the GKE pool behind. The next enable then fails with
-# "already exists". These hooks remove the GKE pool with gcloud instead of relying on KCC:
-#   PreSync    – CR absent but GKE pool present (left over from an earlier disable) → delete the pool,
-#                so the sync creates a fresh one. A pool that still has a CR is never touched.
+# Earlier releases wrote the full cluster path ("projects/.../clusters/<name>") into
+# clusterRef.external of the ContainerNodePool. Config Connector then read a wrong pool: a few minutes
+# after create the CR reported "already exists", and when the CR was deleted KCC logged "underlying
+# resource does not exist; no API call necessary" and left the GKE pool behind, so the next enable
+# failed with "already exists". The CR now carries the cluster name only (containernodepool.yaml) and
+# KCC deletes the pool itself. These hooks cover what that change alone cannot:
+#   PreSync    – CR with the full cluster path (upgrade from an earlier release): clusterRef is
+#                immutable, so the CR and its GKE pool are deleted once and the sync creates both again.
+#              – CR absent but GKE pool present (left over from an earlier disable) → delete the pool,
+#                so the sync creates a fresh one.
+#                A pool whose CR carries the cluster name is never touched.
 #   PostDelete – after the module is disabled and Argo CD pruned the CR → delete the GKE pool if it
 #                is still there. Never fails the deletion (logs a warning instead) and stops waiting
 #                well before the Job deadline.
@@ -49,7 +54,9 @@ metadata:
 rules:
   - apiGroups: ["container.cnrm.cloud.google.com"]
     resources: ["containernodepools"]
-    verbs: ["get", "list"]
+    # delete, watch: PreSync replaces a CR written by an earlier release (full cluster path in
+    # clusterRef) and waits until it is gone.
+    verbs: ["get", "list", "watch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -155,8 +162,27 @@ spec:
 
               if [[ "${PHASE}" == "PreSync" ]]; then
                 if out="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" -o name 2>&1)"; then
-                  echo "PreSync: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} exists – the pool is managed, nothing to do."
-                  exit 0
+                  if ! ref="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" -o jsonpath='{.spec.clusterRef.external}' 2>&1)"; then
+                    echo "ERROR: cannot read clusterRef of ContainerNodePool ${CR_NS}/${NODE_POOL_NAME}: ${ref}" >&2
+                    exit 1
+                  fi
+                  if [[ "${ref}" != */* ]]; then
+                    echo "PreSync: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} exists – the pool is managed, nothing to do."
+                    exit 0
+                  fi
+                  # Upgrade from a release that wrote the full cluster path. KCC cannot manage the pool through
+                  # that CR and clusterRef is immutable, so the sync could not change it: delete the CR (KCC
+                  # leaves the GKE pool) and then the pool, below. This runs once; the new CR has the name only.
+                  echo "PreSync: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} has clusterRef.external=${ref} (full cluster path, written by an earlier release) – replacing the CR and the GKE pool once."
+                  state="$(pool_state)" || exit 1
+                  if [[ "${state}" == "present" ]] && ! pool_is_ours; then
+                    echo "ERROR: GKE node pool ${NODE_POOL_NAME} does not carry workloadLabel=${WORKLOAD_LABEL} (or its labels could not be read). Nothing is deleted; the ContainerNodePool has to be replaced by hand (delete the CR, then remove or rename the pool)." >&2
+                    exit 1
+                  fi
+                  if ! kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" --ignore-not-found=true --wait=true --timeout=300s; then
+                    echo "ERROR: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} could not be deleted; the GKE pool is not deleted." >&2
+                    exit 1
+                  fi
                 elif ! grep -q -i 'not found' <<<"${out}"; then
                   echo "ERROR: cannot read ContainerNodePool ${CR_NS}/${NODE_POOL_NAME}: ${out}" >&2
                   exit 1

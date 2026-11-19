@@ -27,6 +27,10 @@
 #              Ready CR just because abfs-license is missing: Argo often does not
 #              recreate that CR in the same sync, so PostSync then sees
 #              "ContainerNodePool missing; cannot inject licence".
+#              One exception, once per pool: a CR written by an earlier release
+#              has the full cluster path in clusterRef.external. Config Connector
+#              cannot manage the pool through it and the field is immutable, so
+#              the CR and its GKE pool are deleted and the sync creates both again.
 #   Sync     — Helm creates/updates CRs (lookup best-effort for the licence key).
 #   PostSync — wait until each CR exists, then if metadata != Secret, dump the
 #              CR, stamp abfs-license, delete+apply (create-time metadata).
@@ -190,6 +194,19 @@ spec:
                   continue
                 fi
 
+                # Upgrade from a release that wrote "projects/.../clusters/<name>" into clusterRef.external:
+                # KCC reads a wrong pool through that CR ("already exists", no delete of the GKE pool) and
+                # clusterRef is immutable, so the sync could not change it. Replace CR and pool once; the
+                # CR created by this sync has the cluster name only and does not match this branch again.
+                ref="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" -o jsonpath='{.spec.clusterRef.external}')" \
+                  || die "cannot read clusterRef of ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME} — nothing deleted"
+                if [[ "${ref}" == */* ]]; then
+                  pool="$(gke_pool_state)" || exit 1
+                  echo "CR ${NODE_POOL_NAME} has clusterRef.external=${ref} (full cluster path, written by an earlier release; GKE pool ${pool}) — deleting CR + pool once so Sync can recreate them."
+                  delete_cr_and_gcp_pool
+                  continue
+                fi
+
                 live="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
                   -o json 2>/dev/null \
                   | python3 -c "import json,sys; m=(((json.load(sys.stdin).get('spec') or {}).get('nodeConfig') or {}).get('metadata') or {}); print(m.get('${METADATA_KEY}',''))" \
@@ -199,7 +216,7 @@ spec:
                   -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].reason}' 2>/dev/null || true)"
 
                 if [[ "${ready}" == "UpdateFailed" ]]; then
-                  # KCC reports "already exists" for a pool it created itself, see the README known issues. If the running GKE pool
+                  # UpdateFailed says that KCC could not apply the CR, not that the pool is wrong. If the running GKE pool
                   # already carries the Secret licence it is correct: keep it (deleting it would kill abfs-server
                   # and the uploaders for nothing). Delete only when the licence on GKE was read and is wrong.
                   pool="$(gke_pool_state)" || exit 1
@@ -500,9 +517,9 @@ spec:
                 ready_message="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
                   -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || true)"
 
-                # GKE is the source of truth for the running pool (KCC cannot read back the pool it
-                # created, so the CR flips to UpdateFailed "already exists" while the pool is fine). If GKE already
-                # carries the Secret licence, do not recreate: recreate_cr_with_license deletes the GKE pool.
+                # GKE is the source of truth for the running pool (a CR can be UpdateFailed while the
+                # pool is fine). If GKE already carries the Secret licence, do not recreate:
+                # recreate_cr_with_license deletes the GKE pool.
                 if [[ -n "${desired}" ]]; then
                   pool="$(gke_pool_state)" || { write_status "error" "cannot read GKE pool ${NODE_POOL_NAME}; nothing recreated"; exit 1; }
                   if [[ "${pool}" == "present" ]]; then
@@ -512,7 +529,7 @@ spec:
                       exit 1
                     fi
                     if [[ "${live_gke_now}" == "${desired}" ]]; then
-                      echo "GKE pool ${NODE_POOL_NAME} already has the Secret licence (length=${#desired}); CR state '${ready_reason}' ignored (stale KCC state) — no recreate."
+                      echo "GKE pool ${NODE_POOL_NAME} already has the Secret licence (length=${#desired}; CR state '${ready_reason}') — no recreate."
                       echo "Licence metadata applied on pool ${NODE_POOL_NAME}."
                       continue
                     fi
