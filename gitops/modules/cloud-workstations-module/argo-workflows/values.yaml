@@ -41,7 +41,7 @@ configParameters:
   - name: containerImage
     value: "C-OSS (VCS)"
     updateRequired: true
-    description: "C-OSS (VCS), AS, ASfP, or a full image URI (tag ignored)."
+    description: "C-OSS (VCS), AS, ASfP, or a full image URI in this environment's Artifact Registry (tag ignored)."
   - name: containerImageTag
     value: "latest"
     description: "Tag appended to the selected image. Empty = latest."
@@ -188,13 +188,13 @@ imageBuild:
       description: "Build and push horizon-preflight. false = reuse preflightImage."
     - name: preflightImage
       value: "-"
-      description: "Published preflight URI when buildPreflight is false. Default - means unused."
+      description: "Published preflight URI in this environment's Artifact Registry when buildPreflight is false. Default - means unused."
     - name: buildGnome
       value: "true"
       description: "Build and push horizon-gnome. false = reuse gnomeImage."
     - name: gnomeImage
       value: "-"
-      description: "Published GNOME URI when buildGnome is false. Default - means unused."
+      description: "Published GNOME URI in this environment's Artifact Registry when buildGnome is false. Default - means unused."
     - name: buildCodeOss
       value: "true"
       description: "Build and push horizon-code-oss. false = reuse codeOssImage."
