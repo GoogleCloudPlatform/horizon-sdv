@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 golang:1.27.2-bookworm AS build
+FROM --platform=linux/amd64 golang:1.27.4-bookworm AS build
 
 WORKDIR /src
 

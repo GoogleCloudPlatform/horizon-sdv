@@ -16,7 +16,7 @@ module local.dev/horizon-dev-portal/proxy
 
 go 1.27.0
 
-toolchain go1.27.2
+toolchain go1.27.4
 
 require github.com/coreos/go-oidc/v3 v3.17.0
 
