@@ -328,3 +328,106 @@ bswBuilder:
     - name: storageLabels
       value: ""
       description: "Optional labels for stored artifacts, comma or space separated (e.g. Release=X.Y.Z,Workload=OpenBSW)."
+
+# MTK Connect, used by posixTest, devInstance and deleteMtkcTestbench through
+# workloads/common/mtk-connect/mtk_connect.sh. mtk-connect-post creates the Secret in the workflows
+# namespace with the same API key as Jenkins jenkins-mtk-connect-apikey.
+mtkConnect:
+  secretName: workflow-mtk-connect-apikey
+  usernameKey: username
+  passwordKey: password
+  # Device names are "<devicePrefix> <index>", as in Jenkins.
+  devicePrefix: BSW
+  maxDevices: 8
+  # Only testbenches whose name contains this can be deleted (Jenkins: =~ /(OpenBSW)/).
+  # posixTest.testbenchPrefix and devInstance.testbenchPrefix must contain it.
+  testbenchMustContain: OpenBSW
+  # Seconds before the exit handler deletes a testbench, so MTK Connect marks the stopped agent offline.
+  cleanupDelaySeconds: 60
+  # Pod termination grace period, so mtk_connect.sh --stop finishes after SIGTERM.
+  stopGracePeriodSeconds: 120
+  # Delete only calls the MTK Connect API (Node.js and npm), so it does not need the builder image.
+  # :22-bookworm-slim is the moving Node 22 tag.
+  apiImage: node:22-bookworm-slim
+  resources:
+    delete:
+      requests: {cpu: "250m", memory: "512Mi"}
+      limits: {cpu: "1000m", memory: "1Gi"}
+
+# WorkflowTemplate openbsw-posix-test (Jenkins: OpenBSW/Tests/POSIX).
+posixTest:
+  workflowTemplateName: openbsw-posix-test
+  # Testbench <testbenchPrefix>-<workflow name> (Jenkins <job name>-<build number>).
+  testbenchPrefix: OpenBSW/Tests/POSIX
+  # Allowed openbswDownloadUrl prefixes. Empty: gs://<cloud.project>-<bswBuilder.storageBucketSuffix>/,
+  # where openbsw-bsw-builder stores its artifacts.
+  downloadUrlAllowPrefixes: []
+  resources:
+    test:
+      requests: {cpu: "1000m", memory: "2Gi"}
+      limits: {cpu: "4000m", memory: "6Gi"}
+  # Workflow parameters, in order (the Sensor mapping is generated from this list).
+  parameters:
+    - name: openbswDownloadUrl
+      value: ""
+      description: "Required. GCS folder with posix.tgz from openbsw-bsw-builder, e.g. gs://<project>-openbsw/OpenBSW/Builds/BSW_Builder/<date>-<time>_<workflow>/posix/. For Rust use a build with rtosPlatform=rust."
+    - name: imageTag
+      value: argowf-latest
+      description: "openbsw-builder image tag to run."
+    - name: posixKeepAliveTime
+      value: "5"
+      enum: ["5", "15", "30", "60", "90", "120", "180"]
+      description: "Minutes to keep the MTK Connect devices before stopping them."
+    - name: numHostInstances
+      value: "2"
+      description: "Number of devices in the MTK Connect testbench (1 to 8)."
+    - name: mtkConnectPublic
+      value: "false"
+      enum: ["true", "false"]
+      description: "When true the testbench is visible to everyone. Otherwise only to you and MTK Connect administrators."
+    - name: submittedBy
+      value: ""
+      description: "MTK Connect testbench owner. Horizon sets it to the signed-in user."
+
+# WorkflowTemplate openbsw-dev-instance (Jenkins: OpenBSW/Environment/Development Instance).
+devInstance:
+  workflowTemplateName: openbsw-dev-instance
+  testbenchPrefix: OpenBSW/Environment/Development_Instance
+  # Sized like the build step so a development instance gets a node of its own, as the Jenkins
+  # pod anti-affinity did.
+  resources:
+    instance:
+      requests: {cpu: "6000m", memory: "8Gi"}
+      limits: {cpu: "7500m", memory: "10Gi"}
+  parameters:
+    - name: imageTag
+      value: argowf-latest
+      description: "openbsw-builder image tag to run."
+    - name: instanceMaxUptime
+      value: "1"
+      enum: ["1", "2", "4", "8"]
+      description: "Hours to keep the instance before it stops. Save your work first."
+    - name: mtkConnectEnable
+      value: "false"
+      enum: ["true", "false"]
+      description: "When true, the instance is also reachable through an MTK Connect testbench."
+    - name: mtkConnectPublic
+      value: "false"
+      enum: ["true", "false"]
+      description: "When true the testbench is visible to everyone. Otherwise only to you and MTK Connect administrators."
+    - name: numHostInstances
+      value: "1"
+      description: "Number of devices in the MTK Connect testbench (1 to 8)."
+    - name: submittedBy
+      value: ""
+      description: "MTK Connect testbench owner. Horizon sets it to the signed-in user."
+
+# WorkflowTemplate openbsw-delete-mtkc-testbench (Jenkins: OpenBSW/Environment/Delete MTK Connect Testbench).
+deleteMtkcTestbench:
+  workflowTemplateName: openbsw-delete-mtkc-testbench
+  # One delete at a time (Jenkins blockOn 'OpenBSW*.*Delete.*MTK.*'). "" disables it.
+  concurrencyMutexName: openbsw-delete-mtkc-testbench
+  parameters:
+    - name: mtkConnectTestbench
+      value: ""
+      description: "Offline testbench to delete, as printed by the test workflow, e.g. OpenBSW/Tests/POSIX-webhook-openbsw-posix-test-abcde. Online testbenches are skipped."

@@ -84,6 +84,13 @@ openbsw-builder image without its tag. The tag comes from the workflow (imageTag
 {{- end -}}
 
 {{/*
+openbsw-builder image with the tag from the workflow parameter imageTag.
+*/}}
+{{- define "openbsw.builderImageRef" -}}
+{{ include "openbsw.builderImageRepository" . }}:{{ "{{" }}workflow.parameters.imageTag{{ "}}" }}
+{{- end -}}
+
+{{/*
 WorkflowTemplate spec.arguments.parameters: horizonSubmittedFrom, then each entry of a values parameter list.
 */}}
 {{- define "openbsw.workflowParameters" -}}
@@ -192,16 +199,20 @@ True when the pipeline repo needs per-workflow credentials (GitHub App or user/p
 {{- end -}}
 
 {{/*
-DAG task that mints the per-workflow {{workflow.uid}}-pipeline-git-creds Secret.
-Usage: include "openbsw.prepareGitCredsTask" (dict "root" . "depends" "<expression>")
-depends is optional. openbsw-bsw-builder sets it so this task never overlaps the creds task that the
-image build runs inside build-defaults (same Secret name, same workflow uid).
+DAG task (or step) that mints the per-workflow {{workflow.uid}}-pipeline-git-creds Secret.
+Usage: include "openbsw.prepareGitCredsTask" (dict "root" . "depends" "<expression>" "when" "<expression>")
+depends and when are optional. openbsw-bsw-builder sets depends so this task never overlaps the creds
+task that the image build runs inside build-defaults (same Secret name, same workflow uid). The MTK
+Connect exit handlers set when, and mint again because a GitHub App token expires after an hour.
 */}}
 {{- define "openbsw.prepareGitCredsTask" -}}
 {{- $root := .root -}}
 - name: prepare-pipeline-git-creds
 {{- with .depends }}
   depends: {{ . | quote }}
+{{- end }}
+{{- with .when }}
+  when: {{ . | quote }}
 {{- end }}
   templateRef:
     name: prepare-pipeline-git-creds
@@ -243,10 +254,11 @@ git:
 {{- end -}}
 
 {{/*
-Resources block from bswBuilder.resources.<step>.
+Resources block from <resources>.<step>, where resources defaults to bswBuilder.resources.
+Usage: include "openbsw.stepResources" (dict "root" . "step" "build" ["resources" .Values.posixTest.resources])
 */}}
 {{- define "openbsw.stepResources" -}}
-{{- $r := index .root.Values.bswBuilder.resources .step -}}
+{{- $r := index (.resources | default .root.Values.bswBuilder.resources) .step -}}
 requests:
   cpu: {{ $r.requests.cpu | quote }}
   memory: {{ $r.requests.memory | quote }}

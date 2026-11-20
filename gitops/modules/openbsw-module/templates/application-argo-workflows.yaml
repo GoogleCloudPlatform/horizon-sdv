@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Child Application: OpenBSW WorkflowTemplates openbsw-bsw-builder and openbsw-builder-image,
-# and their webhook Sensors. Templates live in the platform workflows namespace, Sensors in
-# argo-events. Their pods schedule onto sdv-openbsw-build-node-pool via openbsw.templateDefaults.
+# Child Application: OpenBSW WorkflowTemplates openbsw-bsw-builder, openbsw-builder-image,
+# openbsw-posix-test, openbsw-dev-instance and openbsw-delete-mtkc-testbench, and their webhook
+# Sensors. Templates live in the platform workflows namespace, Sensors in argo-events. Builder
+# pods schedule onto sdv-openbsw-build-node-pool via openbsw.templateDefaults.
 # Main environment only. workflows is unprefixed there (namespacePrefix is empty).
 {{- if not (default false .Values.config.isSubEnvironment) }}
 {{- if and .Values.repo.url .Values.repo.revision }}

@@ -33,7 +33,7 @@ are written) and /home/builder/bsw-builds (bsw_environment.sh build directory wi
 {{- define "openbsw.bswBuilder.workspacePath" -}}/horizon{{- end -}}
 
 {{- define "openbsw.bswBuilder.image" -}}
-{{ include "openbsw.builderImageRepository" . }}:{{ "{{" }}workflow.parameters.imageTag{{ "}}" }}
+{{ include "openbsw.builderImageRef" . }}
 {{- end -}}
 
 {{/*

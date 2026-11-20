@@ -20,8 +20,8 @@ entry, and checks that the child Application is labeled and finalized so
 enable renders it and disable prunes it with the parent.
 
 When the argo CLI is installed it also runs `argo lint --offline` and a
-client-side `argo submit --dry-run --from workflowtemplate/...` for both
-WorkflowTemplates, and simulates a webhook event for each Sensor. The dry-run
+client-side `argo submit --dry-run --from workflowtemplate/...` for every
+WorkflowTemplate, and simulates a webhook event for each Sensor. The dry-run
 talks to a local fake Kubernetes API that serves the rendered templates, so no
 cluster is needed or contacted.
 """
@@ -48,6 +48,18 @@ LINT_VALUES = (
 )
 MODULE_MANAGER = ROOT / "gitops/apps/module-manager"
 CHILD_FINALIZER = "resources-finalizer.argocd.argoproj.io"
+WORKFLOW_TEMPLATES = {
+    "openbsw-bsw-builder": "webhook-openbsw-bsw-builder",
+    "openbsw-builder-image": "webhook-openbsw-builder-image",
+    "openbsw-posix-test": "webhook-openbsw-posix-test",
+    "openbsw-dev-instance": "webhook-openbsw-dev-instance",
+    "openbsw-delete-mtkc-testbench": "webhook-openbsw-delete-mtkc-testbench",
+}
+# Only calls the MTK Connect API, so it does not schedule onto the OpenBSW pool.
+DEFAULT_POOL_TEMPLATES = {"openbsw-delete-mtkc-testbench"}
+# MTK Connect session templates: one long-running pod, plus an exit handler that deletes the testbench.
+MTK_SESSIONS = {"openbsw-posix-test": "test", "openbsw-dev-instance": "instance"}
+MTK_SECRET = "workflow-mtk-connect-apikey"
 PIPELINE_REPO_SET = [
     "--set", "pipelineRepo.url=https://example.com/horizon-sdv.git",
     "--set", "pipelineRepo.revision=main",
@@ -248,10 +260,7 @@ def check_workflows():
     ]))
     templates = {doc["metadata"]["name"]: doc for doc in by_kind(rendered, "WorkflowTemplate")}
     sensors = {doc["metadata"]["name"]: doc for doc in by_kind(rendered, "Sensor")}
-    expected = {
-        "openbsw-bsw-builder": "webhook-openbsw-bsw-builder",
-        "openbsw-builder-image": "webhook-openbsw-builder-image",
-    }
+    expected = WORKFLOW_TEMPLATES
     if sorted(templates) != sorted(expected) or sorted(sensors) != sorted(expected.values()):
         fail(f"expected WorkflowTemplates {sorted(expected)} and Sensors {sorted(expected.values())}, got {sorted(templates)} and {sorted(sensors)}")
 
@@ -262,7 +271,10 @@ def check_workflows():
             fail(f"{name} must carry the expose and openbsw-module labels")
         if template["metadata"]["namespace"] != "workflows":
             fail(f"{name} must be in the workflows namespace")
-        if template["spec"]["templateDefaults"]["nodeSelector"].get("workloadLabel") != "openbsw":
+        if name in DEFAULT_POOL_TEMPLATES:
+            if "templateDefaults" in template["spec"]:
+                fail(f"{name} only calls the MTK Connect API and must not select the OpenBSW node pool")
+        elif template["spec"]["templateDefaults"]["nodeSelector"].get("workloadLabel") != "openbsw":
             fail(f"{name} pods must select the OpenBSW node pool")
 
         sensor = sensors[sensor_name]
@@ -332,7 +344,80 @@ def check_workflows():
         )
         if unset.returncode == 0 or f"{missing} is required" not in unset.stderr:
             fail(f"rendering without {missing} must fail with a 'required' error")
+    check_mtk(templates, creds=True)
     print("WorkflowTemplates and Sensors: ok")
+
+
+def container_env(container):
+    return {e["name"]: e for e in container.get("env", [])}
+
+
+def check_mtk_secret(name, container):
+    env = container_env(container)
+    for var in ("MTK_CONNECT_USERNAME", "MTK_CONNECT_PASSWORD"):
+        ref = env.get(var, {}).get("valueFrom", {}).get("secretKeyRef", {})
+        if ref.get("name") != MTK_SECRET or "value" in env.get(var, {}):
+            fail(f"{name}: {var} must come from Secret {MTK_SECRET}")
+    # Jenkins passed MTK_CONNECT_PASSWORD=... on the sudo command line, where ps shows it.
+    if re.search(r"MTK_CONNECT_PASSWORD=\S", container["args"][0]):
+        fail(f"{name}: the MTK Connect password must reach mtk_connect.sh through the environment only")
+
+
+def check_mtk(templates, creds):
+    """MTK Connect wiring of the POSIX test, development instance and delete templates."""
+    for name, session in MTK_SESSIONS.items():
+        spec = templates[name]["spec"]
+        steps = {t["name"]: t for t in spec["templates"]}
+        if spec.get("onExit") != "exit-handler":
+            fail(f"{name} must run exit-handler, which deletes a testbench left by a failed session")
+        container = steps[session]["container"]
+        if container.get("securityContext", {}).get("privileged") is not True:
+            fail(f"{name}: {session} must be privileged like the Jenkins pod (tap and vcan0)")
+        if not any(m["name"] == "host-lib-modules" and m.get("readOnly") for m in container.get("volumeMounts", [])):
+            fail(f"{name}: {session} must mount /lib/modules read-only")
+        if "terminationGracePeriodSeconds" not in steps[session].get("podSpecPatch", ""):
+            fail(f"{name}: {session} needs a grace period so mtk_connect.sh --stop runs after SIGTERM")
+        args = container["args"][0]
+        for needle in ("mtk_connect.sh --start", "mtk_connect.sh --stop", "trap ", "--preserve-env"):
+            if needle not in args:
+                fail(f"{name}: {session} script is missing {needle!r}")
+        check_mtk_secret(name, container)
+        testbench = container_env(container)["MTK_CONNECT_TESTBENCH"]["value"]
+        if not testbench.startswith("OpenBSW/") or not testbench.endswith("-{{workflow.name}}"):
+            fail(f"{name}: testbench must be OpenBSW/...-{{{{workflow.name}}}}, got {testbench}")
+
+        handler = [step for group in steps["exit-handler"]["steps"] for step in group]
+        names = [step["name"] for step in handler]
+        want = (["prepare-pipeline-git-creds"] if creds else []) + ["mtk-cleanup"]
+        if names != want:
+            fail(f"{name}: exit-handler steps {names}, want {want}")
+        for step in handler:
+            if "'{{workflow.status}}' != 'Succeeded'" not in step.get("when", ""):
+                fail(f"{name}: exit-handler step {step['name']} must only run when the workflow did not succeed")
+        if name == "openbsw-dev-instance" and "mtkConnectEnable" not in handler[-1]["when"]:
+            fail(f"{name}: mtk-cleanup must only run when mtkConnectEnable is true")
+        cleanup = steps["mtk-cleanup"]["container"]
+        if container_env(cleanup)["MTK_CONNECT_TESTBENCH"]["value"] != testbench:
+            fail(f"{name}: mtk-cleanup must delete the session's own testbench")
+        check_mtk_secret(f"{name} mtk-cleanup", cleanup)
+
+    spec = templates["openbsw-delete-mtkc-testbench"]["spec"]
+    if spec.get("synchronization", {}).get("mutex", {}).get("name") != "openbsw-delete-mtkc-testbench":
+        fail("openbsw-delete-mtkc-testbench must run one at a time (Jenkins blockOn)")
+    delete = next(t for t in spec["templates"] if t["name"] == "delete")["container"]
+    if "openbsw-builder" in delete["image"] or delete.get("securityContext", {}).get("privileged"):
+        fail("openbsw-delete-mtkc-testbench must use the small unprivileged API image")
+    if "mtk_connect.sh --delete" not in delete["args"][0] or "MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES=true" not in delete["args"][0]:
+        fail("openbsw-delete-mtkc-testbench must only delete offline testbenches")
+    check_mtk_secret("openbsw-delete-mtkc-testbench", delete)
+
+    none = docs(run(["helm", "template", str(WORKFLOW_CHART), "--set", "cloud.project=p1", *PIPELINE_REPO_SET]))
+    none_templates = {d["metadata"]["name"]: d for d in by_kind(none, "WorkflowTemplate")}
+    for name in MTK_SESSIONS:
+        handler = next(t for t in none_templates[name]["spec"]["templates"] if t["name"] == "exit-handler")
+        if [s["name"] for g in handler["steps"] for s in g] != ["mtk-cleanup"]:
+            fail(f"{name}: without git credentials the exit handler must only run mtk-cleanup")
+    print("MTK Connect session, exit handler and delete templates: ok")
 
 WORKFLOW_CHART = CHART / "argo-workflows"
 COMMON_IMAGE_CHART = ROOT / "workloads/common/common_docker_image/helm"
@@ -448,7 +533,7 @@ def check_argo():
                 }))
                 env = {**os.environ, "KUBECONFIG": str(kubeconfig)}
 
-                for name in ("openbsw-bsw-builder", "openbsw-builder-image"):
+                for name in WORKFLOW_TEMPLATES:
                     argo(["submit", "--dry-run", "-n", "workflows", "--from", f"workflowtemplate/{name}", "-o", "name"], env)
 
                 missing = argo(["submit", "--dry-run", "-n", "workflows", "--from", "workflowtemplate/no-such-template", "-o", "name"], env, check=False)
@@ -474,7 +559,15 @@ def check_argo():
                     workflow["metadata"].pop("namespace", None)
                     event_path.write_text(yaml.safe_dump(workflow))
                     argo(["submit", "--dry-run", "-n", "workflows", str(event_path), "-o", "name"], env)
-                    for key, value in {"imageTag": "custom-tag", "rtosPlatform": "rust", "dryRun": "true"}.items():
+                    for key, value in {
+                        "imageTag": "custom-tag",
+                        "rtosPlatform": "rust",
+                        "dryRun": "true",
+                        "openbswDownloadUrl": "gs://p1-openbsw/OpenBSW/Builds/BSW_Builder/x/posix/",
+                        "mtkConnectTestbench": "OpenBSW/Tests/POSIX-x",
+                        "mtkConnectEnable": "true",
+                        "submittedBy": "dev@example.com",
+                    }.items():
                         if key in params:
                             changed = simulate_event(sensor, {**body, key: value})
                             got = {p["name"]: p["value"] for p in changed["spec"]["arguments"]["parameters"]}

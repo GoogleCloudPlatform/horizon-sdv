@@ -1,0 +1,50 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Description:
+# Argo WorkflowTemplate for the OpenBSW development instance (Jenkins: OpenBSW/Environment/Development Instance).
+# Keeps an openbsw-builder pod for instanceMaxUptime hours, reachable with kubectl exec and, when
+# mtkConnectEnable is true, through an MTK Connect testbench.
+# Argo Events: Sensor webhook-<workflowTemplateName> (sensors.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ .Values.devInstance.workflowTemplateName | quote }}
+  namespace: {{ .Values.workflowNamespace | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.devInstance.workflowTemplateName | quote }}
+    horizon-sdv.io/expose: "true"
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  entrypoint: main
+  onExit: exit-handler
+{{- include "openbsw.workflowSpecCommon" . | nindent 2 }}
+  workflowMetadata:
+    annotations:
+      workflows.argoproj.io/title: 'OpenBSW Development Instance ({{ "{{" }}workflow.parameters.instanceMaxUptime{{ "}}" }} h)'
+      workflows.argoproj.io/description: 'mtkConnectEnable={{ "{{" }}workflow.parameters.mtkConnectEnable{{ "}}" }}'
+  templateDefaults:
+{{- include "openbsw.templateDefaults" . | nindent 4 }}
+  arguments:
+    parameters:
+{{- include "openbsw.workflowParameters" .Values.devInstance.parameters | nindent 6 }}
+  volumes:
+    - name: host-lib-modules
+      hostPath:
+        path: /lib/modules
+        type: Directory
+  templates:
+{{- include "openbsw.devInstance.templates" . | nindent 4 }}
