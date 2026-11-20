@@ -91,6 +91,16 @@ spec:
             - {{ .Values.spanner.instance | quote }}
             - --db
             - {{ .Values.spanner.database | quote }}
+            {{- if (.Values.server.auth | default dict).enabled }}
+            {{- if eq (.Values.client.authType | default "none") "none" }}
+            {{- fail "server.auth.enabled=true requires client.authType other than none: the uploaders and the pusher-config Job would be rejected by the server" }}
+            {{- end }}
+            {{- if and (eq .Values.client.authType "gcpsa") (not .Values.client.authAudience) }}
+            {{- fail "client.authType=gcpsa requires client.authAudience: the ABFS client does not start without an audience" }}
+            {{- end }}
+            # Not through extraParams: those are also appended to the uploader command.
+            - --auth-enabled
+            {{- end }}
             {{- range .Values.extraParams }}
             - {{ . | quote }}
             {{- end }}

@@ -61,6 +61,14 @@ spec:
             namespace: {{ .Values.abfsNamespace }}
             serviceAccountName: {{ if and .Values.license (kindIs "map" .Values.license) .Values.license.validation }}{{ .Values.license.validation.serviceAccountName | default "abfs-license-validator" }}{{ else }}abfs-license-validator{{ end }}
             image: {{ .Values.license.validation.image | quote }}
+        {{- if and .Values.auth (kindIs "map" .Values.auth) .Values.auth.enabled }}
+        server:
+          auth:
+            enabled: true
+        client:
+          authType: {{ .Values.auth.clientAuthType | default "gcpsa" | quote }}
+          authAudience: {{ .Values.auth.clientAuthAudience | default "abfs-user" | quote }}
+        {{- end }}
         ui:
           enabled: {{ if and .Values.ui (kindIs "map" .Values.ui) (hasKey .Values.ui "enabled") }}{{ .Values.ui.enabled }}{{ else }}false{{ end }}
         tests:
