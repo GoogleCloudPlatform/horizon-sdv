@@ -70,8 +70,9 @@ func (r *WorkstationClusterReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	// Ensure finalizer
 	if !controllerutil.ContainsFinalizer(&cluster, ClusterFinalizer) {
+		base := cluster.DeepCopy()
 		controllerutil.AddFinalizer(&cluster, ClusterFinalizer)
-		if err := r.Update(ctx, &cluster); err != nil {
+		if err := r.Patch(ctx, &cluster, finalizerPatch(base)); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil

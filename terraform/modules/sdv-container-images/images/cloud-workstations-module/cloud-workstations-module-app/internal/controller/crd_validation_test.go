@@ -72,6 +72,20 @@ func crdSpecProperties(t *testing.T, doc map[string]interface{}) map[string]inte
 	return props
 }
 
+func specRequires(t *testing.T, doc map[string]interface{}, field string) bool {
+	t.Helper()
+	version := doc["spec"].(map[string]interface{})["versions"].([]interface{})[0].(map[string]interface{})
+	schema := version["schema"].(map[string]interface{})["openAPIV3Schema"].(map[string]interface{})
+	spec := schema["properties"].(map[string]interface{})["spec"].(map[string]interface{})
+	required, _ := spec["required"].([]interface{})
+	for _, name := range required {
+		if name == field {
+			return true
+		}
+	}
+	return false
+}
+
 func celBool(rule string, vars map[string]interface{}) (bool, error) {
 	env, err := cel.NewEnv(
 		cel.Variable("self", cel.MapType(cel.StringType, cel.StringType)),
@@ -114,6 +128,9 @@ func TestWorkstationCRDOmitsPowerState(t *testing.T) {
 	if users["x-kubernetes-list-type"] != "set" {
 		t.Fatalf("users list type = %v", users["x-kubernetes-list-type"])
 	}
+	if _, ok := users["minItems"]; ok {
+		t.Fatal("users must be allowed to be empty, but declares minItems")
+	}
 	pattern := users["items"].(map[string]interface{})["pattern"].(string)
 	assertPrincipalPattern(t, pattern)
 	status := crdStatusProperties(t, doc)
@@ -155,6 +172,13 @@ func TestWorkstationConfigCRDRules(t *testing.T) {
 	admins := props["admins"].(map[string]interface{})
 	if admins["x-kubernetes-list-type"] != "set" {
 		t.Fatal("admins is not a set")
+	}
+	// minItems rejects admins: [], required rejects an omitted field, so kubectl apply cannot drop every admin.
+	if asInt(t, admins["minItems"]) != 1 {
+		t.Fatalf("admins minItems = %v", admins["minItems"])
+	}
+	if !specRequires(t, doc, "admins") {
+		t.Fatal("spec does not require admins")
 	}
 	assertPrincipalPattern(t, admins["items"].(map[string]interface{})["pattern"].(string))
 	rules := props["ephemeralDirectories"].(map[string]interface{})["items"].(map[string]interface{})["properties"].(map[string]interface{})["gcePD"].(map[string]interface{})["x-kubernetes-validations"].([]interface{})

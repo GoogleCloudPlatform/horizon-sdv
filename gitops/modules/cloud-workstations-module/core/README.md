@@ -43,7 +43,7 @@ Start and stop are not fields. The `cws-user-start-workstation` and `cws-user-st
 | `persistentDirectories` | Config Connector. Copied fields: `mountPath`, and on `gcePD`: `diskType`, `fsType`, `reclaimPolicy`, `sizeGB`, `sourceSnapshot`. |
 | `readinessChecks`, `encryptionKey`, `labels`, `annotations` | Config Connector, when set |
 | `disableSsh`, `allowedPorts`, `ephemeralDirectories` | Workstations API. The controller sends only `host.gce_instance.disable_ssh`, `allowed_ports`, and `ephemeral_directories`. The last read is `status.posture`. |
-| `admins` | Workstations API `setIamPolicy` for `roles/workstations.admin`. An empty list removes every unconditional member of that role, including members granted outside Horizon. Other roles and conditional bindings stay. |
+| `admins` | Workstations API `setIamPolicy` for `roles/workstations.admin`. Required, with at least one entry: the API server rejects an omitted or empty list. Members not on the list lose the role, including unconditional members granted outside Horizon. Other roles and conditional bindings stay. |
 
 `clusterRef` and `resourceID` cannot be changed after they are set. `replicaZones` is create-only in the Portal workflow.
 

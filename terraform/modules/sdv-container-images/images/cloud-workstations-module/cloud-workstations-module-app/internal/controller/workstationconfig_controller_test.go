@@ -16,6 +16,8 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -27,7 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	wsv1alpha1 "cloud-workstations-module/api/v1alpha1"
 )
@@ -543,6 +547,79 @@ func TestWorkstationConfigReconcile_DeleteSucceedsWhenNoChildren(t *testing.T) {
 		if f == ConfigFinalizer {
 			t.Fatalf("expected finalizer to be removed when no children exist")
 		}
+	}
+}
+
+// A config stored with an empty admins list before admins became required must still get and lose its
+// finalizer. A full update drops the empty list and fails that rule, so only metadata may be sent.
+func TestWorkstationConfigReconcile_FinalizerWritesSendOnlyMetadata(t *testing.T) {
+	now := metav1.NewTime(time.Now())
+	key := types.NamespacedName{Namespace: "cloud-workstations", Name: "test-config"}
+	for name, objMeta := range map[string]metav1.ObjectMeta{
+		"add":    {Name: key.Name, Namespace: key.Namespace},
+		"remove": {Name: key.Name, Namespace: key.Namespace, Finalizers: []string{ConfigFinalizer}, DeletionTimestamp: &now},
+	} {
+		t.Run(name, func(t *testing.T) {
+			scheme := setupConfigTestScheme()
+			cfg := &wsv1alpha1.WorkstationConfig{
+				ObjectMeta: objMeta,
+				Spec: wsv1alpha1.WorkstationConfigSpec{
+					ClusterRef: wsv1alpha1.ClusterRef{Name: "test-cluster"},
+					Admins:     []string{},
+				},
+			}
+			var patches [][]byte
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cfg).
+				WithStatusSubresource(cfg).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+						if _, ok := obj.(*wsv1alpha1.WorkstationConfig); ok {
+							return errors.New("full update of a WorkstationConfig")
+						}
+						return c.Update(ctx, obj, opts...)
+					},
+					Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+						data, err := patch.Data(obj)
+						if err != nil {
+							return err
+						}
+						patches = append(patches, data)
+						return c.Patch(ctx, obj, patch, opts...)
+					},
+				}).
+				Build()
+
+			r := &WorkstationConfigReconciler{Client: c, Scheme: scheme, HostServiceAccount: testHostServiceAccount}
+			if _, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: key}); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(patches) != 1 {
+				t.Fatalf("got %d patches, want 1", len(patches))
+			}
+			var body map[string]json.RawMessage
+			if err := json.Unmarshal(patches[0], &body); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := body["metadata"]; !ok || len(body) != 1 {
+				t.Fatalf("patch = %s, want only metadata", patches[0])
+			}
+
+			updated := &wsv1alpha1.WorkstationConfig{}
+			err := c.Get(context.Background(), key, updated)
+			switch name {
+			case "add":
+				if err != nil || len(updated.Finalizers) != 1 || updated.Finalizers[0] != ConfigFinalizer {
+					t.Fatalf("finalizers = %v, err = %v, want %s", updated.Finalizers, err, ConfigFinalizer)
+				}
+			case "remove":
+				if !apierrors.IsNotFound(err) {
+					t.Fatalf("err = %v, want the config gone once its finalizer is removed", err)
+				}
+			}
+		})
 	}
 }
 

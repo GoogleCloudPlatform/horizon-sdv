@@ -137,9 +137,17 @@ func finishKCCDelete(ctx context.Context, c client.Client, owner client.Object, 
 		logger.Info("waiting for Config Connector object to be deleted", "kind", gvk.Kind, "name", owner.GetName())
 		return kccWait(), nil
 	case apierrors.IsNotFound(err):
+		base := owner.DeepCopyObject().(client.Object)
 		controllerutil.RemoveFinalizer(owner, finalizer)
-		return ctrl.Result{}, c.Update(ctx, owner)
+		return ctrl.Result{}, c.Patch(ctx, owner, finalizerPatch(base))
 	default:
 		return ctrl.Result{}, err
 	}
+}
+
+// finalizerPatch sends only what changed since base, with the same conflict check as Update.
+// A full Update re-sends spec, which the API server can reject for an object stored before a
+// schema rule was tightened. That would leave the object stuck on delete.
+func finalizerPatch(base client.Object) client.Patch {
+	return client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})
 }
