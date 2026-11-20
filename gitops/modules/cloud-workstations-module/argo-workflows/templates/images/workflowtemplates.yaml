@@ -293,6 +293,8 @@ spec:
             value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.preflight.dockerArtifactPathName "tag" "") | quote }}
           - name: GNOME_BUILT
             value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.gnome.dockerArtifactPathName "tag" "") | quote }}
+          - name: AR_PREFIX
+            value: {{ printf "%s-docker.pkg.dev/%s/" (include "cws.cloudRegion" .) (include "cws.cloudProject" .) | quote }}
           - name: INSTALL_ANTIGRAVITY_AGENT
             value: '{{ "{{" }}workflow.parameters.installAntigravityAgent{{ "}}" }}'
         args:
@@ -332,8 +334,24 @@ spec:
                   ;;
               esac
             }
-            [ -n "$PREFLIGHT_IMAGE" ] && refcheck preflightImage "$PREFLIGHT_IMAGE"
-            [ -n "$GNOME_IMAGE" ] && refcheck gnomeImage "$GNOME_IMAGE"
+            # Quoted prefix matches literally; the trailing "/" stops a lookalike project id matching.
+            archeck() {
+              case "$2" in
+                "$AR_PREFIX"?*) ;;
+                *)
+                  echo "ERROR: $1 must be an image in this environment's Artifact Registry (${AR_PREFIX}...)" >&2
+                  exit 1
+                  ;;
+              esac
+            }
+            if [ -n "$PREFLIGHT_IMAGE" ]; then
+              refcheck preflightImage "$PREFLIGHT_IMAGE"
+              archeck preflightImage "$PREFLIGHT_IMAGE"
+            fi
+            if [ -n "$GNOME_IMAGE" ]; then
+              refcheck gnomeImage "$GNOME_IMAGE"
+              archeck gnomeImage "$GNOME_IMAGE"
+            fi
             any=false
             on "$BUILD_ENVIRONMENT" && any=true
             on "$BUILD_PREFLIGHT" && any=true

@@ -75,7 +75,7 @@ spec:
                   properties:
                     image:
                       type: string
-                      description: Container image URI to run on workstation startup.
+                      description: Container image URI to run on workstation startup. Must be in this environment's Artifact Registry (enforced by a ValidatingAdmissionPolicy).
                     command:
                       type: array
                       items:

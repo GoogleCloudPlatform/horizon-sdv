@@ -47,6 +47,8 @@ Start and stop are not fields. The `cws-user-start-workstation` and `cws-user-st
 
 `clusterRef` and `resourceID` cannot be changed after they are set. `replicaZones` is create-only in the Portal workflow.
 
+`container.image` must start with this environment's Artifact Registry, `<region>-docker.pkg.dev/<projectID>/`. A `ValidatingAdmissionPolicy` in this chart enforces it on create and update. An update that leaves an existing image unchanged is still allowed, so configurations created before the policy can be edited and deleted.
+
 ## Workstation
 
 | Horizon field | Writer |

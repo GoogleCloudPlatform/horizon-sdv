@@ -55,6 +55,8 @@ At least one `build...` field must be `true`.
 - Building GNOME without building preflight in the same run requires `preflightImage`.
 - Building Android Studio or ASfP without building GNOME in the same run requires `gnomeImage`.
 
+A set `preflightImage` or `gnomeImage` must start with this environment's Artifact Registry, `<region>-docker.pkg.dev/<projectID>/`. Any other address fails validation before a build starts, even when the run builds that base itself.
+
 ## Dry run
 
 `dryRun` `true` does not push, so a later image in the same run cannot pull what this run just built.
