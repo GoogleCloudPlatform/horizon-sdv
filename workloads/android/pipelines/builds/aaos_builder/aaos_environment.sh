@@ -617,8 +617,11 @@ fi
 #   - Android 16: pass TOP and LOG_DIR through sandboxPath in
 #     ui/build/soong.go.
 #   - Android 17: make LOG_DIR relative to the source root in
-#     ui/build/soong.go. Android 17 has no sandboxPath. soong_build
-#     rebases the relative path onto --top (/src inside nsjail).
+#     ui/build/soong.go, and the siso --log_dir arguments in
+#     ui/build/ninja.go. Android 17 has no sandboxPath. soong_build
+#     rebases the relative LOG_DIR onto --top (/src inside nsjail).
+#     siso resolves a relative --log_dir against that same cwd, so
+#     siso_crash is created under /src/out instead of read-only /abfs.
 #     Android 17 also raises pogreb MaxValueLength (for all builders).
 # Branch names (android-latest-release, main, custom) carry no version, so
 # nothing is applied for them; use POST_REPO_COMMAND to add the fix by hand.
@@ -692,10 +695,12 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
         POST_REPO_COMMAND_LIST+=("abfs_android16_release_fix")
     fi
     if [[ "${ABFS_SOONG_RELATIVE_LOG_DIR}" == "true" ]]; then
-        # One line, matching the Android 16 sed. soong_build joins a relative
-        # LOG_DIR with --top, which nsjail sets to /src.
+        # soong_build joins a relative LOG_DIR with --top (/src inside nsjail).
+        # siso's --log_dir is an argv, not an environment variable, so
+        # envForSandbox does not rewrite it. Pass that relative to the
+        # source root as well; nsjail's cwd is /src.
         POST_REPO_COMMAND_LIST+=(
-            "cd build/soong && sed -i 's|soongBuildEnv.Set(\"LOG_DIR\", config\\.LogsDir())|logsDir := config.LogsDir(); if rel, err := filepath.Rel(absPath(ctx, \".\"), logsDir); err == nil \\&\\& !strings.HasPrefix(rel, \"..\") { logsDir = rel }; soongBuildEnv.Set(\"LOG_DIR\", logsDir)|' ui/build/soong.go && grep -q 'logsDir := config.LogsDir()' ui/build/soong.go; cd -"
+            "cd build/soong && sed -i 's|soongBuildEnv.Set(\"LOG_DIR\", config\\.LogsDir())|logsDir := config.LogsDir(); if rel, err := filepath.Rel(absPath(ctx, \".\"), logsDir); err == nil \\&\\& !strings.HasPrefix(rel, \"..\") { logsDir = rel }; soongBuildEnv.Set(\"LOG_DIR\", logsDir)|' ui/build/soong.go && grep -q 'logsDir := config.LogsDir()' ui/build/soong.go && sed -i 's|\"--log_dir\", config\\.LogsDir()|\"--log_dir\", func() string { d := config.LogsDir(); if rel, err := filepath.Rel(absPath(ctx, \".\"), d); err == nil \\&\\& !strings.HasPrefix(rel, \"..\") { return rel }; return d }()|g' ui/build/ninja.go && grep -q 'func() string { d := config.LogsDir()' ui/build/ninja.go; cd -"
         )
     fi
 fi
