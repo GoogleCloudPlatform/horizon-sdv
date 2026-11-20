@@ -20,6 +20,10 @@
 # repo is shown the next time that row is opened. A predefined version shows
 # the same box read-only: its own branch, and the shared manifest url, file,
 # and fetch-ref-spec from uploader values.
+#
+# After a reseed the workflow stays Running until the uploaders have pushed
+# every project of the new row (scripts/track_seed.py). Only then is the row
+# marked synced, so a Succeeded workflow means the seed has finished.
 
 {{- $customBranch := "" }}
 {{- $activeName := "" }}
@@ -153,6 +157,18 @@ spec:
             value: {{ .Values.pusherSyncJobName | quote }}
           - name: SYNC_TIMEOUT_SECONDS
             value: {{ .Values.syncTimeoutSeconds | quote }}
+          - name: UPLOADER_CONTAINER
+            value: {{ .Values.uploaderContainerName | quote }}
+          - name: SEED_TIMEOUT_SECONDS
+            value: {{ .Values.seedTimeoutSeconds | quote }}
+          - name: SEED_POLL_SECONDS
+            value: {{ .Values.seedPollSeconds | quote }}
+          - name: SEED_STABLE_POLLS
+            value: {{ .Values.seedStablePolls | quote }}
+          - name: SEED_FAIL_LIMIT
+            value: {{ .Values.seedFailLimit | quote }}
+          - name: WORKFLOW_NAME
+            value: "{{ "{{workflow.name}}" }}"
         command: [bash, -euo, pipefail, -c]
         args:
           - |
@@ -196,12 +212,22 @@ spec:
             PY
               kubectl patch workflowtemplate "${WORKFLOW_TEMPLATE}" --type json --patch-file /tmp/wft-configuration.patch.json
             fi
-            if [[ "$(tr -d '[:space:]' < /tmp/uploader-restart)" != "true" ]]; then
-              echo "Selected row is already active; uploaders were not restarted"
+            # The seed tracker sets synced true on the active row once every
+            # project of that row has been pushed. It runs after a reseed, and
+            # also, without a restart, when the active row is selected again.
+            export SEED_ROW="$(tr -d '[:space:]' < /tmp/active-row)"
+            track_seed() {
+              python3 - << 'PY'
+{{ .Files.Get "scripts/track_seed.py" | nindent 12 }}
+            PY
+            }
+            if ! kubectl get statefulset "${UPLOADER_STATEFULSET}" -n "${ABFS_NAMESPACE}" >/dev/null 2>&1; then
+              echo "Updated ${HORIZON_NAMESPACE}/${UPLOADER_CONFIGMAP}; ${ABFS_NAMESPACE}/${UPLOADER_STATEFULSET} is absent, so uploaders were not restarted and the seed is not tracked"
               exit 0
             fi
-            if ! kubectl get statefulset "${UPLOADER_STATEFULSET}" -n "${ABFS_NAMESPACE}" >/dev/null 2>&1; then
-              echo "Updated ${HORIZON_NAMESPACE}/${UPLOADER_CONFIGMAP}; ${ABFS_NAMESPACE}/${UPLOADER_STATEFULSET} is absent, so uploaders were not restarted"
+            if [[ "$(tr -d '[:space:]' < /tmp/uploader-restart)" != "true" ]]; then
+              echo "Selected row is already active; uploaders were not restarted, checking its seed"
+              track_seed
               exit 0
             fi
 
@@ -209,6 +235,7 @@ spec:
             # deleted by the restart, so wait on that Job (a new one, by UID) and
             # then on the rollout, not on the pod.
             old_uid="$(kubectl get job "${SYNC_JOB}" -n "${ABFS_NAMESPACE}" -o jsonpath='{.metadata.uid}' 2>/dev/null || true)"
+            export SEED_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "Recreating ${UPLOADER_STATEFULSET}-0 so it publishes the new ABFS ref"
             kubectl delete pod "${UPLOADER_STATEFULSET}-0" -n "${ABFS_NAMESPACE}" --ignore-not-found --wait=false
             echo "Restarting ${UPLOADER_STATEFULSET} for all uploaders to pick up new ABFS ref"
@@ -241,4 +268,5 @@ spec:
             remaining=$(( deadline - $(date +%s) ))
             (( remaining > 0 )) || remaining=1
             kubectl rollout status "statefulset/${UPLOADER_STATEFULSET}" -n "${ABFS_NAMESPACE}" --timeout="${remaining}s"
-            echo "Uploaders restarted and seeding the active row"
+            echo "Uploaders restarted and seeding the active row; waiting for the seed to finish (timeout ${SEED_TIMEOUT_SECONDS}s)"
+            track_seed

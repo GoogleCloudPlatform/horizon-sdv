@@ -97,6 +97,9 @@ spec:
       horizon-sdv.io/module: {{ .Values.moduleName | quote }}
   template:
     metadata:
+      annotations:
+        # Python reads the script only when the pod starts, so a changed script must restart the pod.
+        checksum/overview-data: {{ .Files.Get "files/overview-data.py" | sha256sum }}
       labels:
         app.kubernetes.io/name: module-overview
         horizon-sdv.io/module: {{ .Values.moduleName | quote }}

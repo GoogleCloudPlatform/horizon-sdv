@@ -14,8 +14,10 @@
 
 # Uploader manifest table. Owned by abfs-data (this chart, horizon namespace),
 # so it remains when abfs-service is disabled. Key "table" is a YAML list of entries.
-# Exactly one is active at first enable, and that same row is synced.
-# A selection workflow will rewrite this data; the parent Application ignores /data so sync does not revert that write.
+# Exactly one is active at first enable. No row is synced then: synced means the
+# uploaders have finished seeding the row, and workflow abfs-uploader-config-select
+# sets it (it also writes key "seed-status" with the progress).
+# The selection workflow rewrites this data; the parent Application ignores /data so sync does not revert that write.
 
 apiVersion: v1
 kind: ConfigMap
@@ -42,5 +44,5 @@ data:
 {{- end }}
 {{- end }}
       active: {{ .active }}
-      synced: {{ .active }}
+      synced: false
 {{- end }}

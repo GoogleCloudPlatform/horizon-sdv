@@ -78,6 +78,15 @@ rules:
     resources: ["jobs"]
     resourceNames: [{{ .Values.pusherSyncJobName | quote }}]
     verbs: ["get"]
+  # The seed tracker reads the uploader logs to see when every project is pushed.
+  # Only the uploader pods, by name: the service account is shared with other workflows.
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    resourceNames:
+{{- range $i := until (int .Values.uploaderMaxCount) }}
+      - "{{ $.Values.uploaderStatefulSetName }}-{{ $i }}"
+{{- end }}
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

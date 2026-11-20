@@ -49,7 +49,7 @@ One-time setup requirements.
 
 - ABFS modules enabled from the Developer Portal in this order: `abfs-data` (license imported), `abfs-service-module`, `abfs-client-ubuntu`. The build pods run on the `abfs-build-node-pool-ubuntu` pool created by the client module and connect to `abfs-server.abfs.svc.cluster.local:50051`.
 - The ABFS builder image pushed to the project registry (`horizon-sdv/aaos-abfs-builder`): Argo `workloads-android → abfs-builder-runtime-image` with `NO_PUSH=false`, or Jenkins `Android Workflows/Environment/ABFS/Docker Image Template`. See [Docker Image Template](../environment/abfs/docker_image_template.md).
-- The requested `AAOS_REVISION` seeded into ABFS: the matching row must have been active in `abfs-data → abfs-uploader-config-select` long enough for the uploaders to finish. A build of an unseeded revision fails at `abfs mount`. The current implementation seeds a single branch/revision at a time; if the `AndroidLatest` row is seeded first, later seeds are faster because the sources of the new branch already reside on the ABFS server.
+- The requested `AAOS_REVISION` seeded into ABFS: the matching row must have been active in `abfs-data → abfs-uploader-config-select` until its seed has finished (that workflow Succeeded, or `Seed: Finished` on the `abfs-data` overview page). A build of an unseeded revision fails at `abfs mount`. The current implementation seeds a single branch/revision at a time; if the `AndroidLatest` row is seeded first, later seeds are faster because the sources of the new branch already reside on the ABFS server.
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
