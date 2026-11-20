@@ -594,9 +594,41 @@ fi
 #     ui/build/soong.go; without it soong_build panics the same way.
 # Branch names (android-latest-release, main, custom) carry no version, so
 # nothing is applied for them; use POST_REPO_COMMAND to add the fix by hand.
+#
+# ABFS, Android 16: the Soong analysis also stops with
+#   release_flag("RELEASE_ANOMALY_DETECTOR") had value undefined, which was
+#   not handled by the select statement
+# when the release flag has no declaration in build/release, and the build
+# needs prebuilts/build-tools/linux-x86/bin/ckati-wrap. Both are added for
+# android-16* when they are missing; files that exist are never changed.
+function abfs_android16_release_fix() {
+    local ckati_wrap="prebuilts/build-tools/linux-x86/bin/ckati-wrap"
+    local flag_dir="build/release/flag_declarations"
+    local flag_file="${flag_dir}/RELEASE_ANOMALY_DETECTOR.textproto"
+    if [ ! -e "${ckati_wrap}" ] && [ -d "$(dirname "${ckati_wrap}")" ]; then
+        printf '#!/bin/bash\nexec prebuilts/build-tools/linux-x86/bin/ckati "$@"\n' > "${ckati_wrap}" || return 1
+        chmod +x "${ckati_wrap}" || return 1
+        echo "ABFS: added ${ckati_wrap}"
+    fi
+    if [ ! -e "${flag_file}" ] && [ -d "${flag_dir}" ]; then
+        printf '%s\n' \
+            'name: "RELEASE_ANOMALY_DETECTOR"' \
+            'namespace: "android_UNKNOWN"' \
+            'description: "Enables anomaly detector in profiling module"' \
+            'value: {' \
+            '  bool_value: false' \
+            '}' \
+            'workflow: LAUNCH' \
+            'containers: "com.android.profiling"' > "${flag_file}" || return 1
+        echo "ABFS: added ${flag_file}"
+    fi
+    return 0
+}
+
 if [[ "${ABFS_BUILDER}" == "true" ]]; then
     ABFS_SOONG_CHERRY_PICK="false"
     ABFS_SOONG_SED="false"
+    ABFS_ANDROID16_RELEASE_FIX="false"
     case "${AAOS_REVISION}" in
         android-14*|android-15.0.0_r4)
             ;;
@@ -606,6 +638,7 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
             ;;
         android-16*)
             ABFS_SOONG_SED="true"
+            ABFS_ANDROID16_RELEASE_FIX="true"
             ;;
         *)
             echo "ABFS: AAOS_REVISION ${AAOS_REVISION} carries no Android version, no build/soong fix applied automatically; add it with POST_REPO_COMMAND if the build needs it"
@@ -620,6 +653,9 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
         POST_REPO_COMMAND_LIST+=(
             "cd build/soong && sed -i -e 's|Set(\"TOP\", os.Getenv(\"TOP\"))|Set(\"TOP\", config.sandboxPath(os.Getenv(\"TOP\"), os.Getenv(\"TOP\")))|' -e 's|Set(\"LOG_DIR\", config.LogsDir())|Set(\"LOG_DIR\", config.sandboxPath(os.Getenv(\"TOP\"), config.LogsDir()))|' ui/build/soong.go && grep -q 'sandboxPath(os.Getenv(\"TOP\")' ui/build/soong.go; cd -"
         )
+    fi
+    if [[ "${ABFS_ANDROID16_RELEASE_FIX}" == "true" ]]; then
+        POST_REPO_COMMAND_LIST+=("abfs_android16_release_fix")
     fi
 fi
 
