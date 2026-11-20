@@ -614,8 +614,11 @@ fi
 #     from the ninjago cache, soong_build still runs locally and panics with
 #     "open /abfs/out/soong/.temp/rawN: read-only file system" (seen on
 #     aosp_cf_arm64_auto and sdk_car_x86_64 at android-15.0.0_r36).
-#   - Android 16 and 17: pass TOP and LOG_DIR through sandboxPath in
-#     ui/build/soong.go; without it soong_build panics the same way.
+#   - Android 16: pass TOP and LOG_DIR through sandboxPath in
+#     ui/build/soong.go.
+#   - Android 17: make LOG_DIR relative to the source root in
+#     ui/build/soong.go. Android 17 has no sandboxPath. soong_build
+#     rebases the relative path onto --top (/src inside nsjail).
 #     Android 17 also raises pogreb MaxValueLength (for all builders).
 # Branch names (android-latest-release, main, custom) carry no version, so
 # nothing is applied for them; use POST_REPO_COMMAND to add the fix by hand.
@@ -656,8 +659,9 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
     ABFS_SOONG_CHERRY_PICK="false"
     ABFS_SOONG_SED="false"
     ABFS_ANDROID16_RELEASE_FIX="false"
+    ABFS_SOONG_RELATIVE_LOG_DIR="false"
     case "${AAOS_REVISION}" in
-        android-14*|android-15.0.0_r4|android-17*)
+        android-14*|android-15.0.0_r4)
             ;;
         android-15*)
             ABFS_SOONG_CHERRY_PICK="true"
@@ -666,6 +670,9 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
         android-16*)
             ABFS_SOONG_SED="true"
             ABFS_ANDROID16_RELEASE_FIX="true"
+            ;;
+        *android-17*)
+            ABFS_SOONG_RELATIVE_LOG_DIR="true"
             ;;
         *)
             echo "ABFS: AAOS_REVISION ${AAOS_REVISION} carries no Android version, no build/soong fix applied automatically; add it with POST_REPO_COMMAND if the build needs it"
@@ -683,6 +690,13 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
     fi
     if [[ "${ABFS_ANDROID16_RELEASE_FIX}" == "true" ]]; then
         POST_REPO_COMMAND_LIST+=("abfs_android16_release_fix")
+    fi
+    if [[ "${ABFS_SOONG_RELATIVE_LOG_DIR}" == "true" ]]; then
+        # One line, matching the Android 16 sed. soong_build joins a relative
+        # LOG_DIR with --top, which nsjail sets to /src.
+        POST_REPO_COMMAND_LIST+=(
+            "cd build/soong && sed -i 's|soongBuildEnv.Set(\"LOG_DIR\", config\\.LogsDir())|logsDir := config.LogsDir(); if rel, err := filepath.Rel(absPath(ctx, \".\"), logsDir); err == nil \\&\\& !strings.HasPrefix(rel, \"..\") { logsDir = rel }; soongBuildEnv.Set(\"LOG_DIR\", logsDir)|' ui/build/soong.go && grep -q 'logsDir := config.LogsDir()' ui/build/soong.go; cd -"
+        )
     fi
 fi
 
