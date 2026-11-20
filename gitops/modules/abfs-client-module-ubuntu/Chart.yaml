@@ -18,3 +18,7 @@ description: ABFS client module for Ubuntu
 version: 0.1.0
 type: application
 appVersion: "0.1.0"
+dependencies:
+  - name: abfs-casfs-installer
+    version: 0.1.0
+    repository: file://../abfs-common/casfs-installer

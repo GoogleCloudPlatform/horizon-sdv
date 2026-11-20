@@ -75,6 +75,8 @@ ABFS is split into three modules plus the Android workloads. Each module is an A
 
 `abfs-client-module-cos` (COS nodes with casfs shipped in the image) exists in the repository but is not registered in the catalog: it needs GKE ≥ 1.36 with COS 129 LTS carrying casfs 0.1.14 and was not tested.
 
+The casfs installer (DaemonSet and script) is implemented once, in the library chart `gitops/modules/abfs-common/casfs-installer`, and used by `abfs-service-module` and `abfs-client-ubuntu`. It installs the module on Ubuntu pools (prebuilt package or source build). `abfs-client-module-cos` has no installer, because COS ships casfs in the node image. See its [README](../../../gitops/modules/abfs-common/casfs-installer/README.md).
+
 Module READMEs: [abfs-data](../../../gitops/modules/abfs-data-module/README.md), [abfs-service-module](../../../gitops/modules/abfs-service-module/README.md), [abfs-client-ubuntu](../../../gitops/modules/abfs-client-module-ubuntu/README.md).
 
 ### How the modules interact <a name="interaction"></a>
@@ -283,7 +285,7 @@ ABFS versions are pinned in Git; a new release from Google means a change in:
 | Setting | File |
 |---------|------|
 | Server/uploader image tag | `gitops/modules/abfs-service-module/abfs/values.yaml` `image.tag` |
-| casfs source for the data pools | same file, `casfs.daemonset.sourceUrl` (`gs://cos-localmirror/distfiles/casfs-<version>.tar.gz`) |
+| casfs source for the data pools | same file, `casfs.daemonset.version` and `casfs.daemonset.sourceUrl` (tarball `<sourceUrl>/casfs-<version>.tar.gz`) |
 | casfs version / apt repository for the build pool | `gitops/modules/abfs-client-module-ubuntu/values.yaml` `casfs.daemonset.version`, `aptRepository`, `image.tag` |
 | Client package for Argo builds | `workloads/android/pipelines/builds/aaos_builder/helm/values-abfs.yaml` `abfs.version`, `abfs.casfsVersion`, `abfs.repository` |
 | Client package for Jenkins builds | **Seed Workloads** `ABFS_VERSION`, `ABFS_CASFS_VERSION`, `ABFS_REPOSITORY`; re-run the seed |
