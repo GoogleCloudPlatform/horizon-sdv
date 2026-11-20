@@ -657,13 +657,13 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
     ABFS_SOONG_SED="false"
     ABFS_ANDROID16_RELEASE_FIX="false"
     case "${AAOS_REVISION}" in
-        android-14*|android-15.0.0_r4)
+        android-14*|android-15.0.0_r4|android-17*)
             ;;
         android-15*)
             ABFS_SOONG_CHERRY_PICK="true"
             ABFS_SOONG_SED="true"
             ;;
-        android-16*|android-17*)
+        android-16*)
             ABFS_SOONG_SED="true"
             ABFS_ANDROID16_RELEASE_FIX="true"
             ;;
