@@ -172,6 +172,12 @@ variable "sdv_cluster_node_locations" {
   type        = list(string)
 }
 
+variable "sdv_build_node_locations" {
+  description = "Zones of the Android and ABFS build node pools. Empty: every zone of the region that offers the build machine type."
+  type        = list(string)
+  default     = []
+}
+
 variable "sdv_network_egress_router_name" {
   description = "Define the name of the egress router of the network"
   type        = string

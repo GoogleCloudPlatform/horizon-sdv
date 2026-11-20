@@ -91,6 +91,7 @@ Main entry point for terraform execution is `env/main.tf` file. This file contai
 - sdv_gcp_compute_sa_email (Main GCE Computer Service Account)
 - sdv_gcp_region (GCP Cloud Region)
 - sdv_gcp_zone (GCP Cloud Zone)
+- sdv_build_node_locations (optional; zones of the Android and ABFS build node pools. Empty = every zone of the region that offers the build machine type; all other node pools stay in sdv_gcp_zone)
 - sdv_gcp_backend_bucket (GCP Backend Bucket to store tfstate)
 - enable_arm64_dedicated_subnet (Create dedicated ARM64 VPC subnet/NAT in arm64_region; false = ARM64 uses primary sdv-subnet, jobs still supported)
 - arm64_region, arm64_zone, arm64_subnetwork (ARM64 Cuttlefish placement; independent of sdv_gcp_region/sdv_gcp_zone)

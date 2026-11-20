@@ -178,6 +178,7 @@ module "base" {
 
   sdv_build_node_pool_machine_type   = "c2d-highcpu-112"
   sdv_build_node_pool_max_node_count = 20
+  sdv_build_node_locations           = var.sdv_build_node_locations
 
   sdv_openbsw_build_node_pool_machine_type   = "c2d-highcpu-8"
   sdv_openbsw_build_node_pool_max_node_count = 20

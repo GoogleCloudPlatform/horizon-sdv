@@ -403,7 +403,7 @@ resource "google_container_node_pool" "sdv_build_node_pool" {
   location       = var.location
   cluster        = google_container_cluster.sdv_cluster.name
   node_count     = var.build_node_pool_node_count
-  node_locations = var.node_locations
+  node_locations = length(var.build_node_locations) > 0 ? var.build_node_locations : var.node_locations
   node_config {
     preemptible  = false
     machine_type = var.build_node_pool_machine_type

@@ -220,6 +220,12 @@ variable "cluster_node_locations" {
   type        = list(string)
 }
 
+variable "build_node_locations" {
+  description = "Zones of the build node pools, injected into MODULE_CONFIG for the ABFS client build pools. Empty: they use cluster_node_locations."
+  type        = list(string)
+  default     = []
+}
+
 variable "cluster_release_channel" {
   description = "GKE cluster release_channel injected into MODULE_CONFIG (drives node pool autoUpgrade)."
   type        = string

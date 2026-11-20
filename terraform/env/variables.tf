@@ -166,6 +166,12 @@ variable "sdv_gcp_zone" {
   type        = string
 }
 
+variable "sdv_build_node_locations" {
+  description = "Zones of the Android and ABFS build node pools. Empty (default): every zone of sdv_gcp_region that offers the build machine type, so a capacity shortage in one zone does not stop the builds. All other node pools stay in sdv_gcp_zone."
+  type        = list(string)
+  default     = []
+}
+
 variable "sdv_gcp_backend_bucket" {
   description = "GCP cloud bucket name that stores tfstate file"
   type        = string
