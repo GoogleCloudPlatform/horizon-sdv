@@ -17,7 +17,7 @@
 
 # syntax=docker/dockerfile:1
 
-ARG LINUX_DISTRIBUTION=alpine:3.19
+ARG LINUX_DISTRIBUTION=alpine:3.24
 
 FROM golang:1.27.2-alpine AS horizon-build
 WORKDIR /src

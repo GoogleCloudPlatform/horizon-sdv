@@ -63,7 +63,7 @@ RUN . /google/scripts/common.sh && \
 ###############################################################
 # Stage: asset-prep (Ensure correct permissions on ASfP assets)
 ###############################################################
-FROM alpine:3.19 AS asset-prep
+FROM alpine:3.24 AS asset-prep
 COPY assets/ /assets/
 RUN find /assets -type d -exec chmod 755 {} +
 

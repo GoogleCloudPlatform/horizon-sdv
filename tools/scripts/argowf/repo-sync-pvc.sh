@@ -168,7 +168,7 @@ spec:
   restartPolicy: Never
   containers:
     - name: repo-sync
-      image: alpine:3.20
+      image: alpine:3.24
       command: ["sleep", "3600"]
       volumeMounts:
         - name: repo
