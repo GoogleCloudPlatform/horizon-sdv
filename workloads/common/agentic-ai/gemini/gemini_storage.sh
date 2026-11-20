@@ -55,6 +55,7 @@ export POST_CLEANUP_STRING
 POST_CLEANUP_STRING="$(printf "%s\n" "${POST_STORAGE_COMMANDS[@]}")"
 export ARTIFACT_STORAGE_SOLUTION="${GEMINI_ARTIFACT_STORAGE_SOLUTION}"
 "${WORKSPACE}"/workloads/common/storage/storage.sh
+RESULT="$?"
 
 export STORAGE_LABELS="${STORAGE_LABELS}"
 
@@ -63,6 +64,7 @@ if [ -n "${STORAGE_LABELS}" ]; then
         GCS_BUCKET)
             export URL_PATH="${STORAGE_BUCKET_DESTINATION}/"
             export KEYVALUE_PAIRS="${STORAGE_LABELS}"
+            # Labels are best-effort and must not replace the upload result.
             "${WORKSPACE}"/workloads/common/storage/gcs_utilities.sh ADD_OBJECT_METADATA || true
             ;;
         *)
@@ -72,4 +74,4 @@ if [ -n "${STORAGE_LABELS}" ]; then
 else
     echo "STORAGE_LABELS empty, ignoring"
 fi
-exit "$?"
+exit "${RESULT}"
