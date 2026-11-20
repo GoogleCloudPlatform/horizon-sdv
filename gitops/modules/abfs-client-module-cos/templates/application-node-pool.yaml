@@ -30,6 +30,10 @@ metadata:
     horizon-sdv.io/module-manager-managed: "true"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
+    # Argo CD adds these two itself because the chart has a PostDelete hook.
+    # They are listed here so the parent Application does not show this one as OutOfSync.
+    - post-delete-finalizer.argocd.argoproj.io
+    - post-delete-finalizer.argocd.argoproj.io/cleanup
 spec:
   project: {{ .Values.argocd.project }}
   source:
@@ -58,6 +62,9 @@ spec:
           maxNodeCount: {{ .Values.nodePool.maxNodeCount }}
           workloadLabel: {{ .Values.nodePool.workloadLabel | quote }}
           workloadType: {{ .Values.nodePool.workloadType | quote }}
+        cleanup:
+          workflowsNamespace: {{ .Values.config.namespacePrefix | default "" }}workflows
+          cloudSdkImage: {{ required "cleanup.image (google-cloud-cli) must be set" .Values.cleanup.image | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.overviewNamespace }}

@@ -97,4 +97,10 @@ Then submit a build: Developer Portal → `workloads-android` → Workflow Templ
 
 ## After disable
 
-The DaemonSet, overview and the `ContainerNodePool` CR are pruned and KCC deletes the GKE pool. Running builds on the pool are killed. If the GKE pool survives (CR removed while KCC was reconciling), delete it with `gcloud container node-pools delete abfs-build-node-pool-ubuntu` before re-enabling, otherwise the CR reports `already exists`.
+The DaemonSet, overview and the `ContainerNodePool` CR are pruned, and Config Connector deletes the GKE pool with the CR. Running builds on the pool are killed. Two hook Jobs of the node-pool Application (namespace `workflows`) remove with `gcloud` a pool that Config Connector did not delete:
+
+- PostDelete `abfs-build-node-pool-ubuntu-orphan-postdelete`: deletes the GKE pool after the disable if it is still there. It never fails and stops waiting after 15 minutes.
+- PreSync `abfs-build-node-pool-ubuntu-orphan-presync`: on enable, deletes a pool that exists without a `ContainerNodePool`, so the sync creates a fresh one. A pool whose CR carries the cluster name in `clusterRef.external` is never touched.
+- Upgrade: a CR written by an earlier release has the full cluster path (`projects/.../clusters/<name>`) in `clusterRef.external`. Config Connector looked up a wrong pool through it (`UpdateFailed ... already exists`, GKE pool left behind on disable) and the field cannot be changed. On the first sync after the upgrade the PreSync Job deletes that CR and its pool once and the sync creates both again; running builds on the pool are killed.
+
+Both delete only a pool that carries the node label `workloadLabel: android-abfs-build`. A pool with the same name without that label is left alone and the enable stops with `does not carry workloadLabel`: rename or delete that pool by hand. When `gcloud` or `kubectl` fails, the PreSync Job stops with `ERROR: cannot read ...` and deletes nothing; check `kubectl logs -n workflows job/abfs-build-node-pool-ubuntu-orphan-presync`, fix the cause and sync `mod-abfs-client-ubuntu-node-pool` again.
