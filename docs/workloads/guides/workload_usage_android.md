@@ -149,7 +149,7 @@ No matter which device is being built, the steps are the same:
 - Enter the required target for `AAOS_LUNCH_TARGET` (determines what type of build will take place, and which images are created)
     - See the valid [Build Targets](#build-targets) options (in the _Other Build Topics_ section) for each device type/architecture/android version combination
 - Enter the required branch for `AAOS_REVISION` 
-    e.g. `horizon/android-16.0.0_r3`
+    e.g. `horizon/android-17.0.0_r1` 
 - Click `Build`
 
 <hr width="50%"></details>
@@ -656,7 +656,7 @@ Alternatively, a [Cuttlefish device](#devices-cuttlefish) can be launched and ac
 - Identify the current branch
     - `git branch --show-current`
 - Switch to another branch, if required
-    - e.g. `git checkout horizon/android-16.0.0_r3`
+    - e.g. `git checkout horizon/android-17.0.0_r1`
 - Open the desired file(s) 
     - e.g. `app/res/values/strings.xml`
 - Make the required change(s)

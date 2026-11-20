@@ -87,7 +87,7 @@ Instead of Section 4 (_Run the app in the Android Automotive OS emulator_) the f
 This next part of the lab builds upon that application but allows user to install the application, using `adb`, through a MTK Connect tunnel connected to the Cuttlefish Virtual Device running in Horizon SDV.
 
 - [Build a Cuttlefish Target](workload_usage_android.md#build-devices) if a build with the required artifacts is not already present
-    - e.g. `aosp_cf_x86_64_auto-bp3a-userdebug` for `x86` using `android-16.0.0_r3`
+    - e.g. `aosp_cf_x86_64_auto-cp2a-userdebug` for `x86` using `android-17.0.0_r1`
 - [Launch the Virtual Device](workload_usage_android.md#devices-cuttlefish) (using the build artifacts already created)
     - Ensure `CUTTLEFISH_INSTALL_WIFI` is enabled so that you will be able to play media files.
     - Set `NUM_INSTANCES` to 1
@@ -168,7 +168,7 @@ This change updates the Android boot animation.
     
 - Identify the current branch & switch if required
     - `git branch --show-current`
-    - e.g. `git checkout horizon/android-16.0.0_r3`
+    - e.g. `git checkout horizon/android-17.0.0_r1`
 
 - Create or modify the image files:
   - _CREATE_: Create the PNG files and decide on a sequence. If using a video, then use a video splitter tool to convert video to frames.
@@ -218,7 +218,7 @@ This change updates the main Launcher window to add a colour overlay which will 
     
 - Identify the current branch & switch if required
     - `git branch --show-current`
-    - e.g. `git checkout horizon/android-16.0.0_r3`
+    - e.g. `git checkout horizon/android-17.0.0_r1`
 
 - Edit `services/surfaceflinger/SurfaceFlinger.cpp` as follows:
 
@@ -291,8 +291,8 @@ Example: when updates to the HAL have been made: `m android.hardware.automotive.
     - e.g. `cd interfaces`
 - Identify the current branch
     - `git branch --show-current`
-- Switch to `horizon/android-16.0.0_r3` branch, if not already on it
-    - e.g. `git checkout horizon/android-16.0.0_r3`
+- Switch to `horizon/android-17.0.0_r1`, if not already on it
+    - e.g. `git checkout horizon/android-17.0.0_r1`
 
 - Modify the files as per following `git diff` (remove the new lines `+` markers):
   ```
@@ -349,7 +349,7 @@ Commit and push the change for review: [instructions here](workload_usage_androi
 <details><summary><b>Build the Change</b></summary>
 
 - Build the change using an [Explicit Build](workload_usage_android.md#gerrit-build-explicit) (a Triggered Build using the _Gerrit_ job will fail because the AIDL must be rebuilt). The build job should use the following parameters (as well as specifying the appropriate Gerrit change as per instructions in the link provided):
-    - `AAOS_LUNCH_TARGET`: `aosp_cf_x86_64_auto-bp3a-userdebug`
+    - `AAOS_LUNCH_TARGET`: `aosp_cf_x86_64_auto-cp2a-userdebug` for `android-17.0.0_r1`
     - `OVERRIDE_MAKE_COMMAND`: `m android.hardware.automotive.vehicle.property-update-api && m dist`
 
 - The build console log will show AIDL update.
@@ -359,7 +359,7 @@ Commit and push the change for review: [instructions here](workload_usage_androi
 <details><summary><b>Test the Change</b></summary>
 
 - [Build a Cuttlefish Target](workload_usage_android.md#build-devices) if a build with the required artifacts is not already present
-    - e.g. `aosp_cf_x86_64_auto-bp3a-userdebug` for `x86` using `android-16.0.0_r3`
+    - e.g. `aosp_cf_x86_64_auto-cp2a-userdebug` for `x86` using `android-17.0.0_r1`
 - [Launch the Virtual Device](workload_usage_android.md#devices-cuttlefish) (using the build artifacts already created)
     - Ensure `CUTTLEFISH_INSTALL_WIFI` is enabled so that you will be able to play media files.
     - Set `NUM_INSTANCES` to 1
