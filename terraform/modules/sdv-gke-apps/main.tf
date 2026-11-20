@@ -531,6 +531,7 @@ resource "kubectl_manifest" "argocd_application" {
               gcpComputeSaEmail: ${var.gcp_compute_sa_email}
               releaseChannel: ${var.cluster_release_channel}
               nodeLocations: ${jsonencode(var.cluster_node_locations)}
+              buildNodeLocations: ${jsonencode(var.build_node_locations)}
               abfsBuildNodePool:
                 version: ${var.abfs_build_node_pool_version}
               arm64:

@@ -36,6 +36,8 @@ config:
   gcpComputeSaEmail: ""
   releaseChannel: ""
   nodeLocations: []
+  # Zones of the build node pools (ABFS client modules). Empty: they use nodeLocations.
+  buildNodeLocations: []
   abfsBuildNodePool:
     version: ""
 

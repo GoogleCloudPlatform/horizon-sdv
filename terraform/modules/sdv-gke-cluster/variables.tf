@@ -151,6 +151,12 @@ variable "node_locations" {
   type        = list(string)
 }
 
+variable "build_node_locations" {
+  description = "Zones of the Android build node pool. Empty: the same zones as node_locations."
+  type        = list(string)
+  default     = []
+}
+
 variable "node_count" {
   description = "Define the number of node count"
   type        = number

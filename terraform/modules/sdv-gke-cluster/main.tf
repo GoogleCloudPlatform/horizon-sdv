@@ -403,7 +403,7 @@ resource "google_container_node_pool" "sdv_build_node_pool" {
   location       = var.location
   cluster        = google_container_cluster.sdv_cluster.name
   node_count     = var.build_node_pool_node_count
-  node_locations = var.node_locations
+  node_locations = length(var.build_node_locations) > 0 ? var.build_node_locations : var.node_locations
   node_config {
     preemptible  = false
     machine_type = var.build_node_pool_machine_type
@@ -436,9 +436,15 @@ resource "google_container_node_pool" "sdv_build_node_pool" {
     }
   }
 
+  # In one zone the limits are per zone, which is the whole pool. In several zones
+  # min/max would count per zone, so the total limits are used: the pool never has
+  # more nodes than before. ANY places a node in whichever zone has capacity.
   autoscaling {
-    min_node_count = var.build_node_pool_min_node_count
-    max_node_count = var.build_node_pool_max_node_count
+    min_node_count       = length(var.build_node_locations) > 1 ? null : var.build_node_pool_min_node_count
+    max_node_count       = length(var.build_node_locations) > 1 ? null : var.build_node_pool_max_node_count
+    total_min_node_count = length(var.build_node_locations) > 1 ? var.build_node_pool_min_node_count : null
+    total_max_node_count = length(var.build_node_locations) > 1 ? var.build_node_pool_max_node_count : null
+    location_policy      = length(var.build_node_locations) > 1 ? "ANY" : null
   }
 
 }

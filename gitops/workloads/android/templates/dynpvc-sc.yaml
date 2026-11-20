@@ -19,6 +19,15 @@
 # target.
 # pipeline-workspace-delete: single Delete reclaim class for aaos-builder shared monorepo PVC (any Android
 # lunch/revision); disk removed when PVC is deleted. aaos-cache keeps per-version reclaimable Retain classes.
+#
+# volumeBindingMode is WaitForFirstConsumer: the disk is created in the zone of
+# the node that runs the build pod. With Immediate the disk was created first,
+# in any zone, and the pod had to follow it, also into a zone without capacity
+# when the build node pools span several zones.
+# The field cannot be changed on an existing StorageClass, so Argo CD replaces
+# the classes (Replace=true,Force=true: delete and create). Existing volumes
+# and claims are not touched by that; a retained cache disk stays usable in
+# the zone it was created in.
 
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -27,9 +36,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
@@ -40,9 +50,10 @@ metadata:
   name: {{ .Values.config.namespacePrefix }}pipeline-workspace-delete
   annotations:
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Delete
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
@@ -54,9 +65,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
@@ -68,9 +80,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
@@ -82,9 +95,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
@@ -96,9 +110,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
@@ -110,9 +125,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
@@ -124,9 +140,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
@@ -138,9 +155,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
