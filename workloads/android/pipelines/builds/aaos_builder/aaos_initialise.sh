@@ -795,22 +795,33 @@ function abfs_cacheman_start() {
 # ABFS: initialise
 function abfs_initialise() {
     echo "abfs_initialise."
-    if [[ "${ABFS_CACHED_BUILD}" == "true" ]]; then
-        mkdir -p "${AAOS_CACHE_DIRECTORY}/cache"
-    fi
-    # shellcheck disable=SC2086
-    if ! abfs ${ABFS_CMD_FLAGS} init
-    then
-        echo -e "\033[1;31mERROR: failed on abfs init\033[0m"
-        exit 1
-    fi
-    # shellcheck disable=SC2086
-    abfs ${ABFS_CMD_FLAGS} ${ABFS_CLIENT_FLAGS} --remote-servers "${ABFS_SERVER}" --tunnel-ports 0 --manifest-server ${UPLOADER_MANIFEST_SERVER} config -w
-    if ! abfs_cacheman_start; then
-        echo -e "\033[1;31mERROR: cacheman did not become ready\033[0m"
+    if [[ "${ABFS_SHARED_CACHEMAN}" == "true" ]]; then
+        # The node's cacheman (DaemonSet abfs-cacheman) did init and config
+        # and owns the instance; this pod only checks that it answers.
+        echo "Using the shared cacheman of the node (${ABFS_SHARED_CACHEMAN_DIR})."
         # shellcheck disable=SC2086
-        abfs ${ABFS_CMD_FLAGS} cacheman tail -a || true
-        exit 1
+        if ! abfs ${ABFS_CMD_FLAGS} cacheman ping -t 5m; then
+            echo -e "\033[1;31mERROR: the shared cacheman of the node does not answer. Check DaemonSet abfs-cacheman (abfs-client-ubuntu module, cacheman.enabled).\033[0m"
+            exit 1
+        fi
+    else
+        if [[ "${ABFS_CACHED_BUILD}" == "true" ]]; then
+            mkdir -p "${AAOS_CACHE_DIRECTORY}/cache"
+        fi
+        # shellcheck disable=SC2086
+        if ! abfs ${ABFS_CMD_FLAGS} init
+        then
+            echo -e "\033[1;31mERROR: failed on abfs init\033[0m"
+            exit 1
+        fi
+        # shellcheck disable=SC2086
+        abfs ${ABFS_CMD_FLAGS} ${ABFS_CLIENT_FLAGS} --remote-servers "${ABFS_SERVER}" --tunnel-ports 0 --manifest-server ${UPLOADER_MANIFEST_SERVER} config -w
+        if ! abfs_cacheman_start; then
+            echo -e "\033[1;31mERROR: cacheman did not become ready\033[0m"
+            # shellcheck disable=SC2086
+            abfs ${ABFS_CMD_FLAGS} cacheman tail -a || true
+            exit 1
+        fi
     fi
 
     cd "${ORIG_WORKSPACE}" || cd "${HOME}" || exit 1
