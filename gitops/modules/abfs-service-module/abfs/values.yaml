@@ -152,12 +152,14 @@ casfs:
   daemonset:
     # -- casfs.daemonset.image -- loader base image; needs gcloud + chroot.
     image: "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim"
-    # -- casfs.daemonset.sourceUrl -- casfs kernel-module source tarball.
-    # REQUIRED when provider=daemonset; the chart calls fail without it.
-    # Required when provider is daemonset.
-    sourceUrl: "gs://cos-localmirror/distfiles/casfs-0.1.14.tar.gz"
+    # -- casfs.daemonset.version -- casfs version. The source tarball is
+    # <sourceUrl>/casfs-<version>.tar.gz, the same rule as in abfs-client-module-ubuntu.
+    version: "0.1.14"
+    # -- casfs.daemonset.sourceUrl -- directory that holds the casfs source tarball.
+    # Required when provider is daemonset; the render fails without it.
+    sourceUrl: "gs://cos-localmirror/distfiles"
     # -- casfs.daemonset.script -- override the loader script entirely
-    # (empty = the chart default in casfs-installer-configmap.yaml).
+    # (empty = the script of the shared chart abfs-common/casfs-installer).
     script: ""
     # -- casfs.daemonset.resources -- loader resources.
     resources:

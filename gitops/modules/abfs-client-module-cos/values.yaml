@@ -22,31 +22,6 @@ repo:
   revision: HEAD
 overviewServiceName: mod-abfs-client-module-cos-overview
 overviewNamespace: abfs-client-module-cos-overview
-# casfs ships in the COS node image (provider: image), so nothing is installed. The
-# DaemonSet from the shared chart gitops/modules/abfs-common/casfs-installer only runs
-# "modprobe casfs" on each build node; set daemonset.enabled to false to drop it.
-casfs:
-  provider: image
-  daemonset:
-    enabled: true
-    # Name of the DaemonSet and of its ConfigMap.
-    name: abfs-casfs-installer-client-cos
-    image: "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim"
-    script: ""
-    resources:
-      requests:
-        cpu: 50m
-        memory: 64Mi
-      limits:
-        memory: 128Mi
-    nodeSelector:
-      cloud.google.com/gke-nodepool: abfs-build-node-pool-cos
-      workloadLabel: android-abfs-build
-    tolerations:
-      - key: workloadType
-        operator: Equal
-        value: android-abfs-build
-        effect: NoSchedule
 # Defaults for KCC abfs-build-node-pool-cos (version / locations / SA from MODULE_CONFIG).
 # COS 129 LTS (casfs baked into the node image) requires GKE >= 1.36 on the cluster /
 # matching release channel. imageType COS_CONTAINERD reflects casfs.provider=image.

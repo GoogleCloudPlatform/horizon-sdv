@@ -15,26 +15,21 @@
 # limitations under the License.
 
 {{/*
-casfs installer shared by abfs-service-module, abfs-client-module-ubuntu and
-abfs-client-module-cos. The consuming chart includes
+casfs installer shared by abfs-service-module and abfs-client-module-ubuntu.
+The consuming chart includes
 "abfs-casfs-installer.configmap" and "abfs-casfs-installer.daemonset" with its
 root context; everything is driven by .Values.casfs of that chart (see README.md).
 */}}
 
 {{/*
-Mode of the installer for the consuming chart:
-  install  casfs.provider=daemonset: install casfs on the node (Ubuntu).
-  image    casfs.provider=image and casfs.daemonset.enabled=true: only load the
-           module the node image ships (COS).
-  ""       nothing is rendered.
+"true" when the consuming chart installs casfs on its nodes
+(casfs.provider=daemonset, Ubuntu). For any other provider nothing is rendered:
+a node image that ships casfs (COS) needs no installer.
 */}}
-{{- define "abfs-casfs-installer.mode" -}}
+{{- define "abfs-casfs-installer.enabled" -}}
 {{- $casfs := .Values.casfs | default dict -}}
-{{- $ds := $casfs.daemonset | default dict -}}
 {{- if eq ($casfs.provider | default "") "daemonset" -}}
-install
-{{- else if and (eq ($casfs.provider | default "") "image") $ds.enabled -}}
-image
+true
 {{- end -}}
 {{- end -}}
 
@@ -60,24 +55,26 @@ app.kubernetes.io/component: casfs-installer
 {{- end -}}
 
 {{/*
-Source tarball. casfs.daemonset.sourceUrl is either the tarball itself (*.tar.gz)
-or the directory that holds casfs-<casfs.daemonset.version>.tar.gz.
+Source tarball, the same rule for every module:
+<casfs.daemonset.sourceUrl>/casfs-<casfs.daemonset.version>.tar.gz
 */}}
 {{- define "abfs-casfs-installer.sourceUrl" -}}
 {{- $ds := .Values.casfs.daemonset -}}
-{{- if hasSuffix ".tar.gz" $ds.sourceUrl -}}
-{{- $ds.sourceUrl -}}
-{{- else -}}
-{{- printf "%s/casfs-%s.tar.gz" (trimSuffix "/" $ds.sourceUrl) (required "casfs.daemonset.version is required when casfs.daemonset.sourceUrl is a directory" $ds.version) -}}
-{{- end -}}
+{{- printf "%s/casfs-%s.tar.gz" (trimSuffix "/" $ds.sourceUrl) $ds.version -}}
 {{- end -}}
 
 {{/* Fails the render when the values of the consuming chart are incomplete. */}}
 {{- define "abfs-casfs-installer.validate" -}}
 {{- $ds := .Values.casfs.daemonset | default dict -}}
-{{- if eq (include "abfs-casfs-installer.mode" .) "install" -}}
+{{- if include "abfs-casfs-installer.enabled" . -}}
 {{- if not $ds.sourceUrl -}}
-{{- fail "casfs.provider=daemonset requires casfs.daemonset.sourceUrl (the casfs kernel-module source tarball)" -}}
+{{- fail "casfs.provider=daemonset requires casfs.daemonset.sourceUrl (the directory that holds the casfs source tarball)" -}}
+{{- end -}}
+{{- if hasSuffix ".tar.gz" $ds.sourceUrl -}}
+{{- fail "casfs.daemonset.sourceUrl is the directory of the tarball; set the version in casfs.daemonset.version" -}}
+{{- end -}}
+{{- if not $ds.version -}}
+{{- fail "casfs.provider=daemonset requires casfs.daemonset.version (the casfs version)" -}}
 {{- end -}}
 {{- if $ds.aptRepository -}}
 {{- if not $ds.aptProject -}}
@@ -85,9 +82,6 @@ or the directory that holds casfs-<casfs.daemonset.version>.tar.gz.
 {{- end -}}
 {{- if not $ds.aptLocation -}}
 {{- fail "casfs.daemonset.aptRepository requires casfs.daemonset.aptLocation (the Artifact Registry location)" -}}
-{{- end -}}
-{{- if not $ds.version -}}
-{{- fail "casfs.daemonset.aptRepository requires casfs.daemonset.version (the prebuilt casfs-kmod package version)" -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -103,10 +97,9 @@ as CASFS_* environment variables. Replaced as a whole by casfs.daemonset.script.
 {{ $ds.script }}
 {{- else -}}
 #!/usr/bin/env bash
-# Load the casfs kernel module on this node, then idle. Idempotent.
-#   CASFS_MODE=install  Ubuntu: prebuilt casfs-kmod package when CASFS_APT_REPOSITORY
-#                       is set, otherwise (or when it fails) a build from CASFS_SOURCE_URL.
-#   CASFS_MODE=image    COS: the node image ships casfs; only modprobe it.
+# Install and load the casfs kernel module on this Ubuntu node, then idle. Idempotent.
+# The prebuilt casfs-kmod package is tried when CASFS_APT_REPOSITORY is set;
+# otherwise, or when it does not load, casfs is built from CASFS_SOURCE_URL.
 set -euo pipefail
 log() { echo "[casfs-installer] $*"; }
 KVER="$(uname -r)"
@@ -114,15 +107,6 @@ if [ -d /sys/module/casfs ]; then
   log "casfs already loaded (kernel ${KVER}); nothing to do"
   exec sleep infinity
 fi
-
-load_from_image() {
-  log "loading casfs shipped in the node image (kernel ${KVER})"
-  chroot /host /usr/bin/env PATH=/usr/sbin:/usr/bin:/sbin:/bin modprobe casfs || true
-  if [ -d /sys/module/casfs ]; then
-    return 0
-  fi
-  return 1
-}
 
 install_from_apt() {
   local pkg artifacts
@@ -140,14 +124,11 @@ install_from_apt() {
       chroot /host /bin/bash -euo pipefail -c '
         export DEBIAN_FRONTEND=noninteractive
         KVER="$(uname -r)"
-        CMD="find /tmp/ -maxdepth 1 -type f -name \"pool*\" -exec apt-get install -y \"./{}\" \\;"
-        echo "Command: ${CMD}"
-        eval "${CMD}"
+        # The downloaded package files keep their repository path in the name (pool...).
+        find /tmp -maxdepth 1 -type f -name "pool*casfs-kmod*" -print -exec apt-get install -y {} +
         depmod -a "${KVER}"
         modprobe casfs && echo "Modprobe succeeded" || echo "Modprobe failed"
-        CMD="find /tmp/ -maxdepth 1 -type f -name \"pool*\" -exec rm -rf \"./{}\" \\;"
-        echo "Command: ${CMD}"
-        eval "${CMD}"
+        find /tmp -maxdepth 1 -type f -name "pool*casfs-kmod*" -delete
       '
     else
       echo "Apt ${pkg} not downloaded."
@@ -186,37 +167,21 @@ install_from_source() {
   return 1
 }
 
-case "${CASFS_MODE:-install}" in
-  image)
-    if load_from_image; then
-      log "casfs loaded from the node image on kernel ${KVER}"
-    else
-      log "ERROR: the node image has no loadable casfs module for kernel ${KVER}" >&2
-      exit 1
-    fi
-    ;;
-  install)
-    if [ -n "${CASFS_APT_REPOSITORY:-}" ] && install_from_apt; then
-      log "casfs loaded from the Artifact Registry package on kernel ${KVER}"
-    elif install_from_source; then
-      log "casfs loaded after source build on kernel ${KVER}"
-    else
-      log "ERROR: casfs did not load from the package or from source on kernel ${KVER}" >&2
-      exit 1
-    fi
-    ;;
-  *)
-    log "ERROR: unknown CASFS_MODE '${CASFS_MODE}'" >&2
-    exit 1
-    ;;
-esac
+if [ -n "${CASFS_APT_REPOSITORY:-}" ] && install_from_apt; then
+  log "casfs loaded from the Artifact Registry package on kernel ${KVER}"
+elif install_from_source; then
+  log "casfs loaded after source build on kernel ${KVER}"
+else
+  log "ERROR: casfs did not load from the package or from source on kernel ${KVER}" >&2
+  exit 1
+fi
 exec sleep infinity
 {{- end -}}
 {{- end -}}
 
 {{/* ConfigMap with the loader script. Arg: root context of the consuming chart. */}}
 {{- define "abfs-casfs-installer.configmap" -}}
-{{- if include "abfs-casfs-installer.mode" . }}
+{{- if include "abfs-casfs-installer.enabled" . }}
 {{- include "abfs-casfs-installer.validate" . }}
 apiVersion: v1
 kind: ConfigMap
@@ -236,8 +201,7 @@ casfs.daemonset.nodeSelector / tolerations (default: the chart's global
 nodeSelector / tolerations). Arg: root context of the consuming chart.
 */}}
 {{- define "abfs-casfs-installer.daemonset" -}}
-{{- $mode := include "abfs-casfs-installer.mode" . }}
-{{- if $mode }}
+{{- if include "abfs-casfs-installer.enabled" . }}
 {{- include "abfs-casfs-installer.validate" . }}
 {{- $ds := .Values.casfs.daemonset }}
 {{- $image := .Values.image | default dict }}
@@ -299,9 +263,6 @@ spec:
             privileged: true
           command: ["/bin/bash", "/scripts/install.sh"]
           env:
-            - name: CASFS_MODE
-              value: {{ $mode | quote }}
-            {{- if eq $mode "install" }}
             - name: CASFS_SOURCE_URL
               value: {{ include "abfs-casfs-installer.sourceUrl" . | quote }}
             {{- if $ds.aptRepository }}
@@ -313,7 +274,6 @@ spec:
               value: {{ $ds.aptLocation | quote }}
             - name: CASFS_APT_REPOSITORY
               value: {{ $ds.aptRepository | quote }}
-            {{- end }}
             {{- end }}
           volumeMounts:
             - name: script

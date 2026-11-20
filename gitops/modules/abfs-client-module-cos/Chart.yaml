@@ -18,7 +18,3 @@ description: ABFS client module for Container-Optimized OS (COS 129 LTS / casfs.
 version: 0.1.0
 type: application
 appVersion: "0.1.0"
-dependencies:
-  - name: abfs-casfs-installer
-    version: 0.1.0
-    repository: file://../abfs-common/casfs-installer

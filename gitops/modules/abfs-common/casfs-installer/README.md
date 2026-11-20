@@ -21,9 +21,15 @@ Application, namespace and node pool.
 
 | Consumer chart | DaemonSet / ConfigMap | Namespace | Mode |
 |----------------|-----------------------|-----------|------|
-| `abfs-service-module/abfs` | `abfs-casfs-installer` | `abfs` | `install`, source build (uploader pool, Ubuntu) |
-| `abfs-client-module-ubuntu` | `abfs-casfs-installer-client` | `module-manager` | `install`, prebuilt package then source build (build pool, Ubuntu) |
-| `abfs-client-module-cos` | `abfs-casfs-installer-client-cos` | `module-manager` | `image`, `modprobe` only (build pool, COS) |
+| `abfs-service-module/abfs` | `abfs-casfs-installer` | `abfs` | source build (uploader pool, Ubuntu) |
+| `abfs-client-module-ubuntu` | `abfs-casfs-installer-client` | `module-manager` | prebuilt package, then source build (build pool, Ubuntu) |
+
+`abfs-client-module-cos` does not use it: COS nodes ship casfs in the node image, so no installer
+runs there.
+
+Every DaemonSet selects its pods with the same two labels (`app.kubernetes.io/name: abfs`,
+`app.kubernetes.io/component: casfs-installer`). Use the chart once per namespace; two consumers
+in one namespace would select each other's pods.
 
 ## Use it in a chart
 
@@ -52,26 +58,27 @@ directory, no `Chart.lock`). For a local render run `helm dependency build <char
 
 | Value | Meaning |
 |-------|---------|
-| `casfs.provider` | `daemonset`: install casfs on the node (Ubuntu). `image`: the node image ships casfs (COS). Any other value renders nothing. |
-| `casfs.daemonset.enabled` | Only for `provider: image`: `true` renders the DaemonSet in `modprobe`-only mode, otherwise nothing is rendered. |
+| `casfs.provider` | `daemonset`: install casfs on the node (Ubuntu). Any other value, for example `image` (the node image ships casfs), renders nothing. |
 | `casfs.daemonset.name` | Name of the DaemonSet and ConfigMap. Default `abfs-casfs-installer`. |
-| `casfs.daemonset.image`, `imagePullPolicy`, `resources` | Loader container. The image needs `bash`, `chroot` and, for `provider: daemonset`, `gcloud`. Pull policy defaults to `image.pullPolicy`, then `IfNotPresent`. |
-| `casfs.daemonset.sourceUrl` | Source tarball (`*.tar.gz`), or the directory that holds `casfs-<version>.tar.gz`. Required for `provider: daemonset`. |
-| `casfs.daemonset.version` | casfs version. Required when `sourceUrl` is a directory or `aptRepository` is set. |
-| `casfs.daemonset.aptProject`, `aptLocation`, `aptRepository` | Artifact Registry apt repository with prebuilt `casfs-kmod-<kernel>_<version>` packages. When `aptRepository` is set the package is tried first; when it is empty casfs is always built from source. |
+| `casfs.daemonset.image`, `imagePullPolicy`, `resources` | Loader container. The image needs `bash`, `chroot` and `gcloud`. Pull policy defaults to `image.pullPolicy`, then `IfNotPresent`. |
+| `casfs.daemonset.sourceUrl` | Directory that holds the source tarball. Required. |
+| `casfs.daemonset.version` | casfs version. Required. The tarball is `<sourceUrl>/casfs-<version>.tar.gz` in every module. |
+| `casfs.daemonset.aptProject`, `aptLocation`, `aptRepository` | Artifact Registry apt repository with prebuilt `casfs-kmod-<kernel>_<version>` packages. When `aptRepository` is set the package is tried first; when it is empty casfs is always built from source. Only `abfs-client-module-ubuntu` sets it. |
 | `casfs.daemonset.script` | Replaces the loader script. |
 | `casfs.daemonset.nodeSelector`, `tolerations` | Where the DaemonSet runs. Default: the chart's `nodeSelector` / `tolerations`. |
 | `commonLabels`, `commonAnnotations`, `podLabels`, `podAnnotations`, `imagePullSecrets`, `priorityClassName` | Same meaning as in the ABFS charts. |
 
-## What differs per node image
+## What the DaemonSet does
 
-| | Ubuntu (`UBUNTU_CONTAINERD`) | COS (`COS_CONTAINERD`) |
-|---|---|---|
-| `casfs.provider` | `daemonset` | `image` |
-| Where casfs comes from | prebuilt apt package for the running kernel, or a build from source on the node | shipped and signed in the node image (COS 129 LTS, GKE ≥ 1.36) |
-| What the DaemonSet does | installs the package or builds the module, then `modprobe casfs` | `modprobe casfs` only |
-| Node needs | Secure Boot off, node service account with read access to the package repository and source bucket | nothing extra |
-| Fails when | neither the package nor the source build loads on the kernel | the image has no casfs module for the kernel |
+- Ubuntu nodes (`UBUNTU_CONTAINERD`, `casfs.provider: daemonset`): it installs the prebuilt apt
+  package for the running kernel when `aptRepository` is set, otherwise or when the package does
+  not load it builds casfs from source on the node, then runs `modprobe casfs`.
+- The node needs Secure Boot off and a node service account with read access to the package
+  repository and the source bucket.
+- The pod is privileged, uses the host PID and network namespaces and mounts the host root,
+  because it installs a package and inserts a kernel module on the node.
+- COS nodes (`COS_CONTAINERD`, `casfs.provider: image`): casfs is shipped and signed in the node
+  image (COS 129 LTS, GKE ≥ 1.36); nothing is rendered.
 
 The script is the same text in every module; the DaemonSet passes the settings as `CASFS_*`
 environment variables. The pod stays `Running` after casfs is loaded and exits with an error

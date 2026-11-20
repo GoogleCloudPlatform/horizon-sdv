@@ -64,15 +64,15 @@ Build pods select the pool with the `nodeSelector` / `tolerations` above (`value
 
 ### casfs installer
 
-The DaemonSet and its script are the shared library chart [`abfs-common/casfs-installer`](../abfs-common/casfs-installer/README.md), which `abfs-service-module` and `abfs-client-module-cos` use as well; this module only sets `casfs.*` in `values.yaml`.
+The DaemonSet and its script are the shared library chart [`abfs-common/casfs-installer`](../abfs-common/casfs-installer/README.md), which `abfs-service-module` uses as well; this module only sets `casfs.*` in `values.yaml`.
 
 `casfs.provider: daemonset`. The script, run privileged with the host filesystem mounted, first looks for the prebuilt package `casfs-kmod-<kernel>_<casfs.daemonset.version>` in Artifact Registry `abfs-binaries/us/abfs-apt-alpha-public` and installs it; if the package is missing or does not load, it downloads `casfs-<version>.tar.gz` from `casfs.daemonset.sourceUrl` (`gs://cos-localmirror/distfiles`) and builds the module for the running kernel with the node toolchain (`make ko KERNEL_RELEASE=$(uname -r)`), then `modprobe casfs`. The build pod waits up to 600 s for `/sys/module/casfs` (`abfs_wait_for_casfs` in `aaos_initialise.sh`) before installing the ABFS client.
 
-Versions to keep aligned on an ABFS release: `casfs.daemonset.version` and `image.tag` here (0.1.14), `casfs.daemonset.sourceUrl` in `abfs-service-module/abfs/values.yaml`, and the client package versions in the builder chart (`values-abfs.yaml`) and Jenkins seed.
+Versions to keep aligned on an ABFS release: `casfs.daemonset.version` and `image.tag` here (0.1.14), `casfs.daemonset.version` in `abfs-service-module/abfs/values.yaml`, and the client package versions in the builder chart (`values-abfs.yaml`) and Jenkins seed.
 
 ### COS variant
 
-`gitops/modules/abfs-client-module-cos` is the same module for Container-Optimized OS nodes that ship casfs in the image (`casfs.provider=image`; the shared installer DaemonSet only runs `modprobe casfs` there). It is not in the module catalog: it requires GKE ≥ 1.36 with COS 129 LTS carrying casfs 0.1.14 and has not been tested.
+`gitops/modules/abfs-client-module-cos` is the same module for Container-Optimized OS nodes that ship casfs in the image (`casfs.provider=image`, no DaemonSet). It is not in the module catalog: it requires GKE ≥ 1.36 with COS 129 LTS carrying casfs 0.1.14 and has not been tested.
 
 ## Validate after enable
 
