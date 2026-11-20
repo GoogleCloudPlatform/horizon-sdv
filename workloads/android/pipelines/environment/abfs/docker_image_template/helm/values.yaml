@@ -62,7 +62,7 @@ spec:
   packerVersion: "1.15.0"
   enableGeminiAiAssistant: "true"
   geminiCliVersion: "latest"
-  googleAdkVersion: "2.6.3"
+  antigravitySdkVersion: "0.1.16"
   # Non-local: GitOps overrides from config.workloads.android.url / .branch.
   pipelineRepoUrl: ""
   pipelineRepoRevision: ""
