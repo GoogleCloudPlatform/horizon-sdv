@@ -36,12 +36,13 @@ ARG ANTIGRAVITY_SDK_VERSION="0.1.16"
 
 # Install packages required for building AAOSP targets.
 # libsecret-1-0: Secret Service API (libsecret-1.so.0) for gemini-cli / credential helpers in-container.
+# git-lfs: Git Large File Storage, for repositories that keep large files as LFS objects.
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends apt-utils && \
     apt-get -y upgrade && \
     apt-get install -y --no-install-recommends \
     apt-transport-https ca-certificates \
-    git git-core gnupg flex bison build-essential zip unzip zlib1g-dev \
+    git git-core git-lfs gnupg flex bison build-essential zip unzip zlib1g-dev \
     libc6-dev libxml2-utils xsltproc unzip fontconfig gcc-multilib \
     gettext gettext-base g++-multilib libncurses5 libsecret-1-0 libssl-dev python3 python3-setuptools \
     python3-pip python3-requests python3-venv python3-virtualenv procps \
@@ -50,6 +51,10 @@ RUN apt-get update -y && \
     libcap2-bin psmisc lsof && \
     apt-get update -y && apt install -y npm nodejs && \
     rm -rf /var/lib/apt/lists/*
+
+# Enable the Git LFS filters for every user of the image.
+# GIT_LFS_SKIP_SMUDGE=1 in the environment skips the download of LFS objects.
+RUN git lfs install --system --skip-repo && git lfs version
 
 # The following installs gcloud sdk including gcloud storage required for uploading
 # artifacts to Google Cloud Storage. Remove if using alternative storage.
