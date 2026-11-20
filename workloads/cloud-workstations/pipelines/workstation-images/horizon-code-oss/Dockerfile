@@ -14,6 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+FROM golang:1.27.2-alpine AS horizon-cli
+WORKDIR /src
+COPY ./tools/horizon ./
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /horizon .
+
 FROM us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss:code-oss-1.104.3
 
 ARG ADDITIONAL_PACKAGES=""
@@ -24,6 +29,7 @@ ARG NODE_MAJOR=20
 ARG ANTIGRAVITY_CLI_VERSION=1.1.0
 ARG ANTIGRAVITY_CLI_TARBALL_URL=https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.0/agy_cli_linux_x64.tar.gz
 ARG ANTIGRAVITY_CLI_SHA256=7ee512440af5ed0c819065cd7cc14eec90699214df4be32280ac346f0100577e
+ARG INSTALL_HORIZON_CLI="true"
 
 ENV GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT}"
 # Shared MCP Gateway core + Gemini and Antigravity MCP agents.
@@ -105,3 +111,14 @@ RUN ANTIGRAVITY_CLI_VERSION="${ANTIGRAVITY_CLI_VERSION}" \
     /tmp/install-antigravity-cli.sh && \
     agy --version && \
     rm -f /tmp/install-antigravity-cli.sh
+
+# Horizon CLI on default PATH (built from tools/horizon; not portal /api/cli).
+COPY --from=horizon-cli /horizon /tmp/horizon-cli-bin
+COPY --chmod=755 ./common-utils/horizon-cli/install-horizon-cli.sh /tmp/install-horizon-cli.sh
+RUN if [ "${INSTALL_HORIZON_CLI}" = "true" ]; then \
+      HORIZON_CLI_BIN=/tmp/horizon-cli-bin \
+      INSTALL_HORIZON_CLI="${INSTALL_HORIZON_CLI}" \
+      /tmp/install-horizon-cli.sh && \
+      test -x /usr/local/bin/horizon; \
+    fi && \
+    rm -f /tmp/install-horizon-cli.sh /tmp/horizon-cli-bin
