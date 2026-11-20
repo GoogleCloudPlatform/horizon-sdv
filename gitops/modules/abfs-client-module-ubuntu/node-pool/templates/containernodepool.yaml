@@ -46,8 +46,16 @@ spec:
 {{ toYaml . | nindent 4 }}
   {{- end }}
   autoscaling:
+    {{- if gt (len (.Values.nodeLocations | default list)) 1 }}
+    # Several zones: the limits count for the whole pool, not per zone, and a
+    # node goes to whichever zone has capacity.
+    totalMinNodeCount: {{ .Values.nodePool.minNodeCount }}
+    totalMaxNodeCount: {{ .Values.nodePool.maxNodeCount }}
+    locationPolicy: ANY
+    {{- else }}
     minNodeCount: {{ .Values.nodePool.minNodeCount }}
     maxNodeCount: {{ .Values.nodePool.maxNodeCount }}
+    {{- end }}
   management:
     autoRepair: true
     # Explicit UNSPECIFIED => autoUpgrade false (CASFS version pin). Otherwise true (channel-enrolled safe).

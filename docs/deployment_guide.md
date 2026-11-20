@@ -287,7 +287,7 @@ git clone <REPOSITORY_URL>
     - `sdv_gcp_project_id`: GCP Project ID from [Section #1b - GCP Project Details](#section-1b---gcp-project-details).
     - `sdv_gcp_region`: GCP Region of your choice (default: `europe-west1`).
     - `sdv_gcp_zone`: GCP Zone of your choice (default: `europe-west1-d`).
-    - `sdv_build_node_locations` (optional): zones of the Android and ABFS build node pools. When it is left out, the build pools use every zone of the region that offers the build machine type, so a capacity shortage in one zone does not stop the builds. Set it to one zone to keep the builds in that zone. All other node pools stay in `sdv_gcp_zone`.
+    - `sdv_build_node_locations` (optional): zones of the Android and ABFS build node pools. When it is left out, the build pools stay in `sdv_gcp_zone`. List several zones that offer the build machine type so that a capacity shortage in one zone does not stop the builds; the node limit then counts for the whole pool, not per zone. All other node pools stay in `sdv_gcp_zone`.
     - `sdv_gcp_compute_sa_email`: GCP Compute Engine service account email from [Section #1b - GCP Project Details](#section-1b---gcp-project-details).
     - `sdv_gcp_backend_bucket`: GCP storage bucket name from [Section #1c - Create a Bucket in GCP](#section-1c---create-a-bucket-in-gcp).
   - Environment Metadata

@@ -25,8 +25,9 @@
 sdv_gcp_project_id       = "<REQUIRED>"
 sdv_gcp_region           = "europe-west1"
 sdv_gcp_zone             = "europe-west1-d"
-# Zones of the Android and ABFS build node pools. Leave it out to use every zone of the
-# region that offers the build machine type. Set it to one zone to keep the builds there.
+# Optional: zones of the Android and ABFS build node pools. Left out, they stay in sdv_gcp_zone.
+# List several zones that offer the build machine type so that a capacity shortage in one
+# zone does not stop the builds. The node limit of a pool then counts for the whole pool.
 # sdv_build_node_locations = ["europe-west1-b", "europe-west1-c", "europe-west1-d"]
 sdv_gcp_compute_sa_email = "<REQUIRED>"
 sdv_gcp_backend_bucket   = "<REQUIRED>"

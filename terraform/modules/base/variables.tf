@@ -173,7 +173,7 @@ variable "sdv_cluster_node_locations" {
 }
 
 variable "sdv_build_node_locations" {
-  description = "Zones of the Android and ABFS build node pools. Empty: every zone of the region that offers the build machine type."
+  description = "Zones of the Android and ABFS build node pools. Empty (default): the same zones as the other node pools (sdv_cluster_node_locations), so an existing cluster is not changed."
   type        = list(string)
   default     = []
 }

@@ -14,28 +14,6 @@
 
 data "google_project" "project" {}
 
-# Zones for the build node pools. When sdv_build_node_locations is empty, use every
-# zone of the region that offers the build machine type.
-data "google_compute_zones" "build" {
-  count   = length(var.sdv_build_node_locations) == 0 ? 1 : 0
-  project = var.sdv_project
-  region  = var.sdv_region
-  status  = "UP"
-}
-
-data "google_compute_machine_types" "build" {
-  for_each = length(var.sdv_build_node_locations) == 0 ? toset(data.google_compute_zones.build[0].names) : toset([])
-  project  = var.sdv_project
-  zone     = each.value
-  filter   = "name = \"${var.sdv_build_node_pool_machine_type}\""
-}
-
-locals {
-  build_node_locations = length(var.sdv_build_node_locations) > 0 ? var.sdv_build_node_locations : sort([
-    for zone, result in data.google_compute_machine_types.build : zone if length(result.machine_types) > 0
-  ])
-}
-
 module "sdv_apis" {
   source = "../sdv-apis"
 
@@ -304,7 +282,7 @@ module "sdv_gke_cluster" {
   build_node_pool_machine_type   = var.sdv_build_node_pool_machine_type
   build_node_pool_min_node_count = var.sdv_build_node_pool_min_node_count
   build_node_pool_max_node_count = var.sdv_build_node_pool_max_node_count
-  build_node_locations           = local.build_node_locations
+  build_node_locations           = var.sdv_build_node_locations
 
   maintenance_recurring_window_start_time = var.sdv_cluster_maintenance_recurring_window_start_time
   maintenance_recurring_window_end_time   = var.sdv_cluster_maintenance_recurring_window_end_time
@@ -352,7 +330,7 @@ module "sdv_gke_apps" {
   gcp_storage_location    = var.sdv_location
   gcp_compute_sa_email    = var.sdv_gcp_compute_sa_email
   cluster_node_locations  = var.sdv_cluster_node_locations
-  build_node_locations    = local.build_node_locations
+  build_node_locations    = var.sdv_build_node_locations
   cluster_release_channel = var.sdv_cluster_release_channel
   # CASFS-pinned GKE node version for abfs-client-module-ubuntu KCC ContainerNodePool
   abfs_build_node_pool_version = var.sdv_abfs_build_node_pool_version
