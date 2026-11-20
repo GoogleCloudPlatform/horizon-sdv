@@ -303,10 +303,11 @@ spec:
                   x-kubernetes-list-type: set
                   items:
                     type: string
-                    pattern: "^(user:|group:|serviceAccount:|domain:|principal://|principalSet://).+"
+                    pattern: "^(user|group|serviceAccount):.+"
                   description: |
                     API-owned: List of IAM member principals (e.g. user:alice@example.com)
                     granted workstations.admin on this config.
+                    Only user:, group: and serviceAccount: members are allowed.
                     Actuated via Workstations setIamPolicy.
                     At least one admin is required: the API server rejects an omitted or empty list.
                     The list is authoritative, so every unconditional roles/workstations.admin member

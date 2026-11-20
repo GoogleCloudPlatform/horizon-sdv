@@ -404,19 +404,33 @@ func crdPrinterColumns(t *testing.T, doc map[string]interface{}) []map[string]in
 	return out
 }
 
+// assertPrincipalPattern checks the member-type rule the workflow parsers also apply: a person, a group or a
+// service account. A bare email is only valid before the parser stores it as user:.
 func assertPrincipalPattern(t *testing.T, pattern string) {
 	t.Helper()
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, ok := range []string{"user:alice@example.com", "group:eng@example.com", "serviceAccount:sa@p.iam.gserviceaccount.com", "domain:example.com", "principal://iam.googleapis.com/a", "principalSet://iam.googleapis.com/b"} {
+	for _, ok := range []string{"user:alice@example.com", "group:eng@example.com", "serviceAccount:sa@p.iam.gserviceaccount.com"} {
 		if !re.MatchString(ok) {
 			t.Fatalf("pattern %s rejected %s", pattern, ok)
 		}
 	}
-	if re.MatchString("alice@example.com") || re.MatchString("user:") {
-		t.Fatalf("pattern %s accepted a bad principal", pattern)
+	for _, bad := range []string{
+		"domain:example.com",
+		"principal://iam.googleapis.com/a",
+		"principalSet://iam.googleapis.com/b",
+		"principalSet:b",
+		"principal:b",
+		"alice@example.com",
+		"user:",
+		"allUsers",
+		"deleted:user:alice@example.com",
+	} {
+		if re.MatchString(bad) {
+			t.Fatalf("pattern %s accepted %s", pattern, bad)
+		}
 	}
 }
 

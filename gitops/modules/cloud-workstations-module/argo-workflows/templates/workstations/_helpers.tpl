@@ -58,7 +58,7 @@ cws-admin-create-workstation:
     description: "Optional. Human-readable name. Empty means no display name."
   - name: users
     value: ""
-    description: "Optional. Comma-separated emails or IAM principals granted Workstation User. Bare emails become user:<email>. Empty means no users."
+    description: "Optional. Comma-separated emails, or user:, group: or serviceAccount: members, granted Workstation User. Bare emails become user:<email>. Empty means no users."
 cws-admin-delete-workstation:
   - name: horizonSubmittedFrom
     value: ""
@@ -94,7 +94,7 @@ cws-admin-add-workstation-users:
     description: "Required. Workstation to add users to."
   - name: users
     value: ""
-    description: "Required. Comma-separated emails or IAM principals to grant Workstation User. Bare emails become user:<email>."
+    description: "Required. Comma-separated emails, or user:, group: or serviceAccount: members, to grant Workstation User. Bare emails become user:<email>."
 cws-admin-remove-workstation-users:
   - name: horizonSubmittedFrom
     value: ""
@@ -103,13 +103,13 @@ cws-admin-remove-workstation-users:
     description: "Required. Workstation to remove users from."
   - name: users
     value: ""
-    description: "Required. Comma-separated emails or IAM principals to remove. Bare emails become user:<email>."
+    description: "Required. Comma-separated emails, or user:, group: or serviceAccount: members, to remove. Bare emails become user:<email>."
 cws-user-list-usable-workstations:
   - name: horizonSubmittedFrom
     value: ""
   - name: submittedBy
     value: ""
-    description: "Required. One email or IAM principal. Bare emails become user:<email>. Lists workstations that include it in spec.users. This is a filter, not access control."
+    description: "Required. One email, or one user:, group: or serviceAccount: member. Bare emails become user:<email>. Lists workstations that include it in spec.users. This is a filter, not access control."
 cws-user-get-workstation:
   - name: horizonSubmittedFrom
     value: ""
@@ -118,7 +118,7 @@ cws-user-get-workstation:
     description: "Required. Workstation to show."
   - name: submittedBy
     value: ""
-    description: "Required. One email or IAM principal. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
+    description: "Required. One email, or one user:, group: or serviceAccount: member. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
 cws-user-get-workstation-configuration:
   - name: horizonSubmittedFrom
     value: ""
@@ -127,7 +127,7 @@ cws-user-get-workstation-configuration:
     description: "Required. Workstation whose configuration to show."
   - name: submittedBy
     value: ""
-    description: "Required. One email or IAM principal. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
+    description: "Required. One email, or one user:, group: or serviceAccount: member. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
 cws-user-start-workstation:
   - name: horizonSubmittedFrom
     value: ""
@@ -136,7 +136,7 @@ cws-user-start-workstation:
     description: "Required. Workstation to start."
   - name: submittedBy
     value: ""
-    description: "Required. One email or IAM principal. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
+    description: "Required. One email, or one user:, group: or serviceAccount: member. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
 cws-user-stop-workstation:
   - name: horizonSubmittedFrom
     value: ""
@@ -145,7 +145,7 @@ cws-user-stop-workstation:
     description: "Required. Workstation to stop."
   - name: submittedBy
     value: ""
-    description: "Required. One email or IAM principal. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
+    description: "Required. One email, or one user:, group: or serviceAccount: member. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
 {{- end -}}
 
 {{/* arguments.parameters for one template. Call with (dict "root" $ "name" "<template name>"). */}}
@@ -181,17 +181,19 @@ resource_name() {
 }
 
 # principals_json VALUE: comma-separated members to a JSON array of principals.
-# user:, group: and serviceAccount: must be followed by an email (name@domain.tld).
-# A bare email becomes user:<email>. The same address is kept once, ignoring case.
+# Only a person, a group or a service account is allowed: user:, group: and serviceAccount: must be
+# followed by an email (name@domain.tld). A bare email becomes user:<email>. domain:, principal:// and
+# principalSet:// would grant a whole domain or principal set, so they are rejected.
+# The same address is kept once, ignoring case.
 principals_json() {
   jq -Rsc '
     def email: "[^@[:space:]:]+@[^@[:space:].]+(\\.[^@[:space:].]+)+";
     split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))
     | map(
         if test("^(user:|group:|serviceAccount:)" + email + "$") then .
-        elif test("^(domain:|principal://|principalSet://).+") then .
+        elif test("^(domain|principal|principalSet):") then error("\"" + . + "\" is not allowed: a member must be a person, a group or a service account")
         elif test("^" + email + "$") then "user:" + .
-        else error("\"" + . + "\" is not an email like name@domain.tld, or an IAM principal (user:, group:, serviceAccount:, domain:, principal://, principalSet://)")
+        else error("\"" + . + "\" is not an email like name@domain.tld, or user:, group: or serviceAccount: followed by an email")
         end)
     | unique_by(ascii_downcase)' <<<"$1"
 }
@@ -199,8 +201,8 @@ principals_json() {
 # single_principal PARAM VALUE: prints exactly one normalised principal, or fails.
 single_principal() {
   local list
-  list=$(principals_json "$2") || fail "$1 is not a valid email or IAM principal"
-  [[ "$(jq 'length' <<<"$list")" == 1 ]] || fail "$1 must be exactly one email or IAM principal"
+  list=$(principals_json "$2") || fail "$1 is not a valid email, or user:, group: or serviceAccount: member"
+  [[ "$(jq 'length' <<<"$list")" == 1 ]] || fail "$1 must be exactly one email, or one user:, group: or serviceAccount: member"
   jq -r '.[0]' <<<"$list"
 }
 

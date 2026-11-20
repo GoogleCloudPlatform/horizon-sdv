@@ -47,6 +47,8 @@ Start and stop are not fields. The `cws-user-start-workstation` and `cws-user-st
 
 `clusterRef` and `resourceID` cannot be changed after they are set. `replicaZones` is create-only in the Portal workflow.
 
+`admins` accepts only `user:`, `group:` and `serviceAccount:` members. The API server rejects `domain:`, `principal://` and `principalSet://`.
+
 ## Workstation
 
 | Horizon field | Writer |
@@ -56,5 +58,7 @@ Start and stop are not fields. The `cws-user-start-workstation` and `cws-user-st
 | `users` | Workstations API `setIamPolicy` for `roles/workstations.user`. An empty list removes every unconditional member of that role, including members granted outside Horizon. Other roles and conditional bindings stay. |
 
 `configRef` and `resourceID` cannot be changed after they are set.
+
+`users` accepts only `user:`, `group:` and `serviceAccount:` members. The API server rejects `domain:`, `principal://` and `principalSet://`.
 
 `status` on all three kinds is written by the controller. It includes `phase`, conditions, and, when Config Connector has reported them, the external name and observed state.
