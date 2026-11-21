@@ -52,11 +52,14 @@ COPY --from=build /usr/local/bin/uvicorn /usr/local/bin/uvicorn
 # Copy the startup script to working directory and set ownership
 COPY --chown=appuser:appuser startup.sh /app/gerrit-mcp-server/startup.sh
 
-# startup.sh overwrites gerrit_config.json with sed and the server writes server.log.
-# set permissions for the non-root user only for those files
+# startup.sh truncates gerrit_config.json and the server appends to server.log.
+# Own those two files by appuser and keep them owner-writable.
+# site-packages stays root-owned.
 RUN touch /usr/local/lib/python3.12/site-packages/server.log \
           /usr/local/lib/python3.12/site-packages/gerrit_mcp_server/gerrit_config.json && \
     chown appuser:appuser /usr/local/lib/python3.12/site-packages/server.log \
+          /usr/local/lib/python3.12/site-packages/gerrit_mcp_server/gerrit_config.json && \
+    chmod 644 /usr/local/lib/python3.12/site-packages/server.log \
           /usr/local/lib/python3.12/site-packages/gerrit_mcp_server/gerrit_config.json
 
 # Switch to the non-root user
