@@ -33,6 +33,12 @@ variable "container_image_no_cache" {
   default     = false
 }
 
+variable "container_image_pull_parent" {
+  description = "False reuses the local parent image. True pulls each FROM image again."
+  type        = bool
+  default     = false
+}
+
 variable "images" {
   description = <<-EOT
     Map of images to build. Key = image name in Artifact Registry.

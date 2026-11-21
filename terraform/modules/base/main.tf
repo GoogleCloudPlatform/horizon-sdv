@@ -205,7 +205,8 @@ module "sdv_container_images" {
   gcp_region      = var.sdv_region
   gcp_registry_id = var.sdv_artifact_registry_repository_id
 
-  container_image_no_cache = var.sdv_container_image_no_cache
+  container_image_no_cache    = var.sdv_container_image_no_cache
+  container_image_pull_parent = var.sdv_container_image_pull_parent
 
   images = {
     for name, image in local.images : name => {
