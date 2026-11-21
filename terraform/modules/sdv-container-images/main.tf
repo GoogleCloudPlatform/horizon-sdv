@@ -93,9 +93,6 @@ resource "docker_image" "sdv-container-images" {
 
     platform_sha = try(each.value.platform, null) != null ? each.value.platform : ""
 
-    # Changing this replaces every image. true rebuilds with no layer cache.
-    no_cache = var.container_image_no_cache ? "true" : "false"
-
     horizon_cli_sha = each.key == local.portal_image_key ? sha1(join("", [
       for f in sort(tolist(local.horizon_cli_files)) :
       filesha1("${local.horizon_cli_root}/${f}")

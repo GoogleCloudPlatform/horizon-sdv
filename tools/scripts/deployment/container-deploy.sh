@@ -45,10 +45,13 @@ fi
 
 echo "Starting deployment shell..."
 
+# docker run does not inherit the host environment. Forward the clean-build
+# setting so this wrapper and deploy.sh use the same variable.
 docker run --rm -it \
   --platform linux/amd64 \
   --hostname $CONTAINER_HOSTNAME \
   -u 0 \
+  -e TF_VAR_sdv_container_image_no_cache="${TF_VAR_sdv_container_image_no_cache:-false}" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$GCLOUD_CONFIG_VOLUME:/root/.config/gcloud" \
   -v "$LOCAL_TFVARS:/tmp/terraform.tfvars" \
