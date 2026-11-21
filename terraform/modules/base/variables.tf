@@ -483,3 +483,15 @@ variable "sdv_enable_kms_encryption" {
   default     = false
 }
 
+variable "sdv_container_image_no_cache" {
+  description = "False reuses finished image layers. True rebuilds every layer for one apply, including apk and apt upgrades."
+  type        = bool
+  default     = false
+}
+
+variable "sdv_container_image_pull_parent" {
+  description = "False reuses the local parent image. True pulls each FROM image again."
+  type        = bool
+  default     = false
+}
+

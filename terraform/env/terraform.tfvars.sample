@@ -281,6 +281,12 @@ sdv_dns_use_static_a_records = false
 # Set to true to enable application-layer secrets encryption with Cloud KMS
 sdv_enable_kms_encryption = false
 
+# Optional: clean container image build
+# false (default) reuses finished Docker layers, including apk upgrade / apt-get upgrade.
+# true reruns every layer so OS patches published after the last build are installed.
+#   TF_VAR_sdv_container_image_no_cache=true ./deploy.sh --apply
+sdv_container_image_no_cache = false
+
 # To set secret manually, uncomment required secret
 # s5  : Argo CD Admin
 # s6  : Jenkins Admin

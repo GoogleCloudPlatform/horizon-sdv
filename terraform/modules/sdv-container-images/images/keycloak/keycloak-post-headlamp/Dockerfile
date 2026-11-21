@@ -19,7 +19,11 @@ ADD --chown=node:node package.json ./
 ADD --chown=node:node keycloak.mjs ./
 ADD --chown=node:node configure.sh ./
 RUN chmod +x configure.sh
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-RUN mv ./kubectl /usr/local/bin && chmod +x /usr/local/bin/kubectl
+# Pin to the GKE 1.34 client already used by the Cloud Workstations workflow image.
+ARG KUBECTL_VERSION=v1.34.12
+RUN curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+    curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" | \
+      awk '{print $1"  /usr/local/bin/kubectl"}' | sha256sum -c - && \
+    chmod +x /usr/local/bin/kubectl
 USER node
 CMD ["/bin/bash", "-c", "/home/node/configure.sh"]

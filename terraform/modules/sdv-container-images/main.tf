@@ -22,7 +22,7 @@ locals {
   horizon_cli_files = toset([
     for f in fileset(local.horizon_cli_root, "**") : f
     if !endswith(f, "_test.go") && (
-    endswith(f, ".go") || endswith(f, ".mod") || endswith(f, ".sum") || endswith(f, ".json")
+      endswith(f, ".go") || endswith(f, ".mod") || endswith(f, ".sum") || endswith(f, ".json")
     )
   ])
   portal_image_key = "horizon-dev-portal"
@@ -62,7 +62,8 @@ resource "docker_image" "sdv-container-images" {
 
   name = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"
   build {
-    no_cache = true
+    no_cache    = var.container_image_no_cache
+    pull_parent = var.container_image_pull_parent
 
     context    = local.docker_context[each.key]
     tag        = ["${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"]

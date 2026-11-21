@@ -36,28 +36,28 @@ locals {
 
     "storage-gcs-module-app" = {
       directory      = "storage-gcs-module"
-      build_version  = "1.0.2"
-      deploy_version = "1.0.2"
+      build_version  = "1.0.3"
+      deploy_version = "1.0.3"
     }
     "cloud-workstations-module-app" = {
       directory      = "cloud-workstations-module"
-      build_version  = "0.2.1"
-      deploy_version = "0.2.1"
+      build_version  = "0.2.2"
+      deploy_version = "0.2.2"
     }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
-    }
-    "gerrit-post" = {
-      directory      = "gerrit"
       build_version  = "1.0.2"
       deploy_version = "1.0.2"
     }
+    "gerrit-post" = {
+      directory      = "gerrit"
+      build_version  = "1.0.3"
+      deploy_version = "1.0.3"
+    }
     "mtk-connect-post" = {
       directory      = "mtk-connect"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "mtk-connect-post-key" = {
       directory      = "mtk-connect"
@@ -66,8 +66,8 @@ locals {
     }
     "grafana-post" = {
       directory      = "grafana"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-mcp-gateway-registry" = {
       directory      = "keycloak"
@@ -91,18 +91,18 @@ locals {
     }
     "keycloak-post-argocd" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-headlamp" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-mtk-connect" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-grafana" = {
       directory      = "keycloak"
@@ -130,18 +130,18 @@ locals {
     }
     "module-manager-app" = {
       directory      = "module-manager"
-      build_version  = "0.3.7"
-      deploy_version = "0.3.7"
+      build_version  = "0.3.8"
+      deploy_version = "0.3.8"
     }
     "workflow-namespace-drain-app" = {
       directory      = "workflow-namespace-drain"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "horizon-api-app" = {
       directory      = "horizon-api"
-      build_version  = "1.1.1"
-      deploy_version = "1.1.1"
+      build_version  = "1.1.2"
+      deploy_version = "1.1.2"
     }
     "kcc-webhook-cert-monitor" = {
       directory      = "kcc-webhook-cert-monitor"
