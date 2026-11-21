@@ -180,6 +180,10 @@ Creates Google Artifact Registry repository for docker repository for Horizon SD
 ## Module - sdv-container-images
 Builds and pushes the required container images to Google Artifact Registry. Detects changes in container build files within `images/`, rebuilds and pushes images to Google Artifact Registry.
 
+`sdv_container_image_no_cache` defaults to `false`: Docker reuses unchanged layers. Set the environment variable `TF_VAR_sdv_container_image_no_cache=true` before the script to rerun every Dockerfile instruction for that apply, including `apk` and `apt` upgrades. Set it back to `false` before the next run to reuse the cache again.
+
+`sdv_container_image_pull_parent` defaults to `false`: Docker uses the parent image already on the build host, so a normal rebuild does not pull it again. A parent that is not present locally is still pulled once. Set the environment variable `TF_VAR_sdv_container_image_pull_parent=true` before the script for one apply when a floating base tag has moved and the copy on the build host would be older download of that tag. Set it back to `false` before the next run to keep the local parent.
+
 ## Module - sdv-dns-zone
 Creates and configures Google Cloud DNS Zone. Manages DNS records within the Cloud DNS Zone. Creates Google certificate manager certificate CNAME record required for DNS Authz.
 
@@ -272,6 +276,15 @@ The automated deployment scripts are located in `tools/scripts/deployment/`. The
 ### Execution methods
 There are two ways to run the deployment. Via Docker and Host Machine.
 
+Both variables default to `false`. To pull each `FROM` image again and skip the layer cache for that run, set both to `true` on the command:
+
+```shell
+TF_VAR_sdv_container_image_no_cache=true TF_VAR_sdv_container_image_pull_parent=true ./container-deploy.sh --apply
+TF_VAR_sdv_container_image_no_cache=true TF_VAR_sdv_container_image_pull_parent=true ./deploy.sh --apply
+```
+
+Set each one back to `false` before the next run if need to re-use docker layer cache and don't pull FROM image again.
+
 #### Docker
 This runs the deployment script within a containerized environment. You do not need to install Terraform, the Docker CLI, or the specific Gcloud CLI version on your local machine, only Docker is required.
 
@@ -313,13 +326,15 @@ Both scripts (Containerized and Host Machine) accept the same arguments, which a
 
 **Containerized**:
 ```shell
-./container-deploy.sh --apply
+TF_VAR_sdv_container_image_no_cache=true TF_VAR_sdv_container_image_pull_parent=true ./container-deploy.sh --apply
 ```
 
 **Host Machine**:
 ```shell
-./deploy.sh --apply
+TF_VAR_sdv_container_image_no_cache=true TF_VAR_sdv_container_image_pull_parent=true ./deploy.sh --apply
 ```
+
+Set both variables to `false` when the run should use the docker layer cache and not pull the parent image.
 
 ### Destroy (Teardown):
 Initializes Terraform and runs `terraform destroy -auto-approve`.

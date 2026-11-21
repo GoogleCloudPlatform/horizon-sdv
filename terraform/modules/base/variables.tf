@@ -489,3 +489,9 @@ variable "sdv_container_image_no_cache" {
   default     = false
 }
 
+variable "sdv_container_image_pull_parent" {
+  description = "False reuses the local parent image. True pulls each FROM image again."
+  type        = bool
+  default     = false
+}
+
