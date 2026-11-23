@@ -27,6 +27,18 @@ locals {
   ])
   portal_image_key = "horizon-dev-portal"
 
+  # Docs bundled into the portal image. local_file / terraform_data write doc-src/ at apply,
+  # so those paths must stay out of docker_context_files (fileset must match between plan and apply).
+  horizon_repo_root       = abspath("${path.module}/../../..")
+  horizon_docs_root       = abspath("${path.module}/../../../docs")
+  horizon_doc_files       = fileset(local.horizon_docs_root, "**/*.md")
+  horizon_doc_image_files = fileset("${local.horizon_docs_root}/images", "**")
+  horizon_docs_sha = sha1(join("", concat(
+    [filesha1("${local.horizon_repo_root}/release-notes.md")],
+    [for f in sort(tolist(local.horizon_doc_files)) : filesha1("${local.horizon_docs_root}/${f}")],
+    [for f in sort(tolist(local.horizon_doc_image_files)) : filesha1("${local.horizon_docs_root}/images/${f}")],
+  )))
+
   # The portal's cli/ is written during apply by local_file.horizon_cli_docker_src, so it must never be listed:
   # Terraform fails when fileset() returns a different result at apply than at plan.
   # Add any new top-level portal source directory here, or changes to it will not trigger a rebuild.
@@ -39,7 +51,7 @@ locals {
         for p in(name == local.portal_image_key ? local.portal_context_patterns : ["**"]) : fileset(local.docker_context[name], p)
       ]...) : f
       if try(img.context_path, null) == null ? true : !(
-        startswith(f, "node_modules/") || startswith(f, "dist/") || startswith(f, ".git/") || startswith(f, "cli/")
+        startswith(f, "node_modules/") || startswith(f, "dist/") || startswith(f, ".git/") || startswith(f, "cli/") || startswith(f, "doc-src/") || startswith(f, "public/bundled-docs/") || startswith(f, "public/docs-images/")
       )
     ])
   }
@@ -55,10 +67,57 @@ resource "local_file" "horizon_cli_docker_src" {
   filename = "${local.docker_context[local.portal_image_key]}/cli/${each.value}"
 }
 
+# Copy the repo docs into the portal Docker context. The legacy builder cannot see
+# files outside the context, and .dockerignore drops *.md unless they live under doc-src/.
+resource "local_file" "horizon_portal_doc" {
+  for_each = contains(keys(var.images), local.portal_image_key) ? {
+    for f in local.horizon_doc_files : f => f
+  } : {}
+
+  content  = file("${local.horizon_docs_root}/${each.value}")
+  filename = "${local.docker_context[local.portal_image_key]}/doc-src/docs/${each.value}"
+}
+
+resource "local_file" "horizon_portal_release_notes" {
+  count = contains(keys(var.images), local.portal_image_key) ? 1 : 0
+
+  content  = file("${local.horizon_repo_root}/release-notes.md")
+  filename = "${local.docker_context[local.portal_image_key]}/doc-src/release-notes.md"
+}
+
+# local_file corrupts binary images. Copy the image directory with the shell instead.
+resource "terraform_data" "horizon_portal_doc_images" {
+  count = contains(keys(var.images), local.portal_image_key) ? 1 : 0
+
+  triggers_replace = {
+    images_sha = sha1(join("", [
+      for f in sort(tolist(local.horizon_doc_image_files)) :
+      filesha1("${local.horizon_docs_root}/images/${f}")
+    ]))
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["bash", "-c"]
+    command     = <<-EOT
+      set -euo pipefail
+      src='${replace(local.horizon_docs_root, "\\", "/")}/images'
+      dest='${replace(local.docker_context[local.portal_image_key], "\\", "/")}/doc-src/images'
+      rm -rf "$dest"
+      mkdir -p "$dest"
+      cp -a "$src/." "$dest/"
+    EOT
+  }
+}
+
 resource "docker_image" "sdv-container-images" {
   for_each = var.images
 
-  depends_on = [local_file.horizon_cli_docker_src]
+  depends_on = [
+    local_file.horizon_cli_docker_src,
+    local_file.horizon_portal_doc,
+    local_file.horizon_portal_release_notes,
+    terraform_data.horizon_portal_doc_images,
+  ]
 
   name = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"
   build {
@@ -89,6 +148,8 @@ resource "docker_image" "sdv-container-images" {
       for f in sort(tolist(local.horizon_cli_files)) :
       filesha1("${local.horizon_cli_root}/${f}")
     ])) : ""
+
+    horizon_docs_sha = each.key == local.portal_image_key ? local.horizon_docs_sha : ""
   }
 }
 
