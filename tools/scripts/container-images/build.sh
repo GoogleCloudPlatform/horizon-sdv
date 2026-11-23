@@ -259,6 +259,11 @@ IMAGE_NAMES=()
 # Parsed with PyYAML so quotes and nesting match yamldecode (not a line-based grep).
 HORIZON_CORE_VERSION=""
 
+# Go patch from versions.yaml (go_version). Terraform passes the same value as the
+# GO_VERSION build-arg (local.go_version in locals.tf). 
+# Parsed with PyYAML, same as horizoncore version.
+GO_VERSION=""
+
 read_horizon_core_version() {
   if [[ ! -f "$VERSIONS_FILE" ]]; then
     log_err "versions.yaml not found at: ${VERSIONS_FILE}"
@@ -307,6 +312,37 @@ PY
   fi
 }
 
+# Read go_version from versions.yaml. Docker builds use this as --build-arg GO_VERSION.
+read_go_version() {
+  local py_out=""
+  if ! py_out="$(python3 - "$VERSIONS_FILE" 2>&1 <<'PY'
+import sys
+try:
+    import yaml
+except ImportError:
+    print("PyYAML is required to read versions.yaml", file=sys.stderr)
+    sys.exit(2)
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    data = yaml.safe_load(f)
+go_version = data.get("go_version") if isinstance(data, dict) else None
+if go_version is None or isinstance(go_version, (dict, list)):
+    print(f"{path}: missing or invalid go_version", file=sys.stderr)
+    sys.exit(1)
+print(str(go_version).strip(), end="")
+PY
+  )"; then
+    log_err "Could not read go_version from ${VERSIONS_FILE}."
+    [[ -n "$py_out" ]] && log_err "${py_out}"
+    exit 1
+  fi
+  GO_VERSION="$py_out"
+  if [[ -z "$GO_VERSION" ]]; then
+    log_err "go_version in ${VERSIONS_FILE} is empty."
+    exit 1
+  fi
+}
+
 parse_image_catalog() {
   if [[ ! -f "$LOCALS_FILE" ]]; then
     log_err "locals.tf not found at: ${LOCALS_FILE}"
@@ -316,6 +352,8 @@ parse_image_catalog() {
 
   read_horizon_core_version
 
+  # Go image patch for every image build. Mirrors the GO_VERSION merge in base/main.tf.
+  read_go_version
   # Pass 1: extract simple local variable assignments for resolving build_arg references
   # (e.g.  common_nginx_version = "1.28.1-alpine3.23")
   declare -A local_vars
@@ -517,6 +555,11 @@ build_image() {
   local version="${IMAGE_VERSIONS[$name]}"
   local build_args_raw="${IMAGE_BUILD_ARGS[$name]:-}"
   local registry_host="${GCP_REGION}-docker.pkg.dev"
+
+  # Pass the Go patch to every image. Dockerfiles that declare ARG GO_VERSION use it.
+  # Images that do not declare it ignore the arg.
+  [[ -n "$build_args_raw" ]] && build_args_raw+=","
+  build_args_raw+="GO_VERSION=${GO_VERSION}"
 
   # The portal embeds the horizon CLI; stamp it with the Horizon version, as Terraform does
   # (terraform/modules/base/main.tf passes HORIZON_CLI_VERSION = local.horizon_core_version).
