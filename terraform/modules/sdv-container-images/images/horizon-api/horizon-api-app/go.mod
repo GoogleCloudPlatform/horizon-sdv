@@ -20,7 +20,7 @@ toolchain go1.27.2
 
 require (
 	cloud.google.com/go/storage v1.62.0
-	github.com/coreos/go-oidc/v3 v3.17.0
+	github.com/acn-horizon-sdv/horizonauth v0.0.0-00010101000000-000000000000
 	google.golang.org/api v0.275.0
 	k8s.io/apimachinery v0.35.5
 	k8s.io/client-go v0.35.5
@@ -41,6 +41,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
+	github.com/coreos/go-oidc/v3 v3.17.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0 // indirect
@@ -118,3 +119,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/acn-horizon-sdv/horizonauth => ../../shared/horizonauth

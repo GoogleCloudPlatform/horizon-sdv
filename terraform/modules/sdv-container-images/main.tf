@@ -27,6 +27,15 @@ locals {
   ])
   portal_image_key = "horizon-dev-portal"
 
+  # Shared Go auth library. Each image below replaces it in go.mod with ../../shared/horizonauth,
+  # so it is copied into the image's build context as shared/horizonauth/.
+  horizonauth_root = abspath("${path.module}/images/shared/horizonauth")
+  horizonauth_files = sort([
+    for f in fileset(local.horizonauth_root, "**") : f
+    if !endswith(f, "_test.go") && (endswith(f, ".go") || endswith(f, ".mod") || endswith(f, ".sum"))
+  ])
+  horizonauth_image_keys = toset(["horizon-api-app", "module-manager-app"])
+
   # The portal's cli/ is written during apply by local_file.horizon_cli_docker_src, so it must never be listed:
   # Terraform fails when fileset() returns a different result at apply than at plan.
   # Add any new top-level portal source directory here, or changes to it will not trigger a rebuild.
@@ -38,11 +47,22 @@ locals {
       for f in setunion([
         for p in(name == local.portal_image_key ? local.portal_context_patterns : ["**"]) : fileset(local.docker_context[name], p)
       ]...) : f
-      if try(img.context_path, null) == null ? true : !(
+      # shared/ is written during apply by local_file.horizonauth_docker_src; hashed via horizonauth_files instead.
+      if !(contains(local.horizonauth_image_keys, name) && startswith(f, "shared/")) && (try(img.context_path, null) == null ? true : !(
         startswith(f, "node_modules/") || startswith(f, "dist/") || startswith(f, ".git/") || startswith(f, "cli/")
-      )
+      ))
     ])
   }
+}
+
+resource "local_file" "horizonauth_docker_src" {
+  for_each = {
+    for pair in setproduct(setintersection(local.horizonauth_image_keys, keys(var.images)), local.horizonauth_files) :
+    "${pair[0]}/${pair[1]}" => { image = pair[0], file = pair[1] }
+  }
+
+  content  = file("${local.horizonauth_root}/${each.value.file}")
+  filename = "${local.docker_context[each.value.image]}/shared/horizonauth/${each.value.file}"
 }
 
 # Copy Horizon CLI sources into the portal Docker context (legacy builder cannot use additional_contexts).
@@ -58,7 +78,7 @@ resource "local_file" "horizon_cli_docker_src" {
 resource "docker_image" "sdv-container-images" {
   for_each = var.images
 
-  depends_on = [local_file.horizon_cli_docker_src]
+  depends_on = [local_file.horizon_cli_docker_src, local_file.horizonauth_docker_src]
 
   name = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"
   build {
@@ -74,10 +94,10 @@ resource "docker_image" "sdv-container-images" {
   }
 
   triggers = {
-    dir_sha1 = sha1(join("", [
-      for f in local.docker_context_files[each.key] :
-      filesha1("${local.docker_context[each.key]}/${f}")
-    ]))
+    dir_sha1 = sha1(join("", concat(
+      [for f in local.docker_context_files[each.key] : filesha1("${local.docker_context[each.key]}/${f}")],
+      contains(local.horizonauth_image_keys, each.key) ? [for f in local.horizonauth_files : filesha1("${local.horizonauth_root}/${f}")] : [],
+    )))
 
     build_args_sha = sha1(jsonencode(each.value.build_args))
 

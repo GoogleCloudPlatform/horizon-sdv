@@ -14,7 +14,10 @@
 #
 ARG GO_VERSION
 FROM --platform=linux/amd64 golang:${GO_VERSION}-alpine AS builder
-WORKDIR /src
+# shared/ is staged into the build context (Terraform local_file or build.sh). The working
+# directory mirrors the repo layout so go.mod's replace ../../shared/horizonauth resolves.
+WORKDIR /src/horizon-api/horizon-api-app
+COPY shared/horizonauth/ /src/shared/horizonauth/
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
