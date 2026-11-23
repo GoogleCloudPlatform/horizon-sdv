@@ -50,6 +50,8 @@ When the run pushes images, the log ends with an `image@sha256:...` address for 
 
 At least one `build...` field must be `true`.
 
+A run ends as Failed when any step fails, including `validate`. The `fail-on-task-failure` step appears only after a failure and exists to fail the run.
+
 ## When a base image must be named
 
 - Building GNOME without building preflight in the same run requires `preflightImage`.
