@@ -188,7 +188,13 @@ if [[ -n "${HOOK_DIR}" ]]; then
 fi
 if [[ -n "${POST_HOOK}" && -f "${POST_HOOK}" ]]; then
   echo -e "${GREEN}Post-hook${NC}: ${POST_HOOK}"
-  bash "${POST_HOOK}" || true
+  # CVD/CTS post-hook uploads artifacts. A failed upload fails the review.
+  if ! bash "${POST_HOOK}"; then
+    echo -e "${RED}ERROR: post-hook failed: ${POST_HOOK}${NC}" >&2
+    if [[ "${GEMINI_EXIT_CODE}" -eq 0 ]]; then
+      GEMINI_EXIT_CODE=1
+    fi
+  fi
 fi
 
 # ---------------------------------------------------------------------------

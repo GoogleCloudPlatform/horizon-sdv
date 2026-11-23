@@ -76,8 +76,8 @@ if [ -n "${STORAGE_LABELS}" ]; then
         GCS_BUCKET)
             export URL_PATH="${STORAGE_BUCKET_DESTINATION}/"
             export KEYVALUE_PAIRS="${STORAGE_LABELS}"
+            # Labels are best-effort and must not replace the upload result.
             "${ORIG_WORKSPACE}"/workloads/common/storage/gcs_utilities.sh ADD_OBJECT_METADATA || true
-            RESULT="$?"
             ;;
         *)
             echo "Utility to add metadata using $ARTIFACT_STORAGE_SOLUTION not available"

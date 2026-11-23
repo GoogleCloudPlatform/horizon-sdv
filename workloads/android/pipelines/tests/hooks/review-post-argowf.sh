@@ -66,7 +66,7 @@ if [[ -n "${GEMINI_ARTIFACT_ROOT_NAME:-}" ]]; then
 
   # shellcheck disable=SC1091
   source "${REPO_ROOT}/workloads/common/agentic-ai/gemini/gemini_environment.sh"
-  "${REPO_ROOT}/workloads/common/agentic-ai/gemini/gemini_storage.sh" || true
+  "${REPO_ROOT}/workloads/common/agentic-ai/gemini/gemini_storage.sh"
   else
     echo "WARN: GEMINI_ARTIFACT_ROOT_NAME set but no GEMINI_STORAGE_BUCKET_DESTINATION or Jenkins job/build; skipping gemini_storage.sh" >&2
   fi
