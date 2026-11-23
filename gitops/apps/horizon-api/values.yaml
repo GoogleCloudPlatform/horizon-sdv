@@ -14,7 +14,7 @@
 #
 namespace: horizon-api
 # Full image ref; parent Application sets this from config.containerImages.horizonApi.
-image: "horizon-api-app:1.1.1"
+image: "horizon-api-app:1.2.0"
 
 moduleManagerNamespace: module-manager
 moduleManagerStateName: cluster
@@ -28,9 +28,15 @@ oidcIssuerUrl: ""
 
 workflowsNamespace: ""
 
-# Optional: restrict OIDC aud/azp (leave empty with skip true)
-oidcClientId: ""
-oidcSkipClientIdCheck: true
+# Keycloak client an access token must be meant for: tokens without it in aud are rejected.
+# Roles are read from resource_access.<client>.roles.
+oidcClientId: "horizon-api"
+
+# Horizon roles, lowest first. Each includes the roles before it; the first is implicit for
+# every signed-in user. A new role is a Keycloak client role, a group mapping and an entry here.
+roleOrder: "viewer,developer,admin"
+# Enforce endpoint minimum roles. Off: every signed-in user keeps today's access.
+roleChecks: false
 
 # Argo Events webhook POST target (required by the app).
 eventsWebhookUrl: ""

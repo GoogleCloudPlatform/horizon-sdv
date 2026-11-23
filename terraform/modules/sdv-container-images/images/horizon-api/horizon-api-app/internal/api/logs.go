@@ -27,11 +27,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/acn-horizon-sdv/horizon-api/internal/auth"
 	"github.com/acn-horizon-sdv/horizon-api/internal/workflow"
+	"github.com/acn-horizon-sdv/horizonauth"
 )
 
-func (s *Server) handleWorkflowLogs(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
+func (s *Server) handleWorkflowLogs(w http.ResponseWriter, r *http.Request, _ *horizonauth.Principal) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return

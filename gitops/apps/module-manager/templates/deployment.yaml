@@ -42,6 +42,8 @@ spec:
             - "--catalog-cr-name={{ .Values.catalogCRName }}"
             - "--target-revision={{ .Values.repo.revision }}"
             - "--gitops-root-app-name={{ .Values.gitopsRootAppName }}"
+            - "--role-order={{ .Values.roleOrder }}"
+            - "--role-checks={{ .Values.roleChecks }}"
           env:
             - name: REPO_URL
               value: "{{ .Values.repo.url }}"

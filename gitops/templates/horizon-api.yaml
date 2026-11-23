@@ -37,7 +37,7 @@ spec:
         workflowsNamespace: {{ .Values.config.namespacePrefix }}workflows
         argoWorkflowsNamespace: {{ .Values.config.namespacePrefix }}argo-workflows
         oidcIssuerUrl: "https://{{ .Values.config.domain }}/auth/realms/horizon"
-        oidcSkipClientIdCheck: true
+        roleChecks: {{ .Values.config.roleChecks | default false }}
         eventsWebhookUrl: "http://webhook-eventsource-svc.{{ .Values.config.namespacePrefix }}argo-events.svc.cluster.local:12000/events/workflow"
         gcsArtifactBucket: {{ .Values.config.projectID }}-argo-workflows
         gcsSigningServiceAccount: gke-{{ .Values.config.namespacePrefix }}argo-workflows-sa@{{ .Values.config.projectID }}.iam.gserviceaccount.com

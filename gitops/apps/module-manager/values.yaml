@@ -47,3 +47,8 @@ gitopsRootAppName: horizon-sdv
 # Singleton CR names (state and catalog in module-manager namespace).
 stateCRName: cluster
 catalogCRName: cluster
+
+# Horizon roles, lowest first (same as Horizon API roleOrder).
+roleOrder: "viewer,developer,admin"
+# Enforce endpoint minimum roles. Off: every signed-in user keeps today's access.
+roleChecks: false

@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"github.com/acn-horizon-sdv/horizonauth"
 	horizonv1alpha1 "github.com/acn-horizon-sdv/module-manager/api/v1alpha1"
 	"github.com/acn-horizon-sdv/module-manager/internal/api"
 	"github.com/acn-horizon-sdv/module-manager/internal/controller"
@@ -64,6 +65,8 @@ func main() {
 		repoURL            string
 		targetRevision     string
 		gitopsRootAppNames string
+		roleOrder          string
+		roleChecks         bool
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Address for metrics.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Address for health probes.")
@@ -77,6 +80,8 @@ func main() {
 	flag.StringVar(&targetRevision, "target-revision", "HEAD", "Git target revision (e.g. HEAD, main).")
 	flag.StringVar(&gitopsRootAppNames, "gitops-root-app-name", "",
 		"Comma-separated names of root Argo CD app-of-apps Applications (e.g. prefix+horizon-sdv). Falls back to GITOPS_ROOT_APP_NAME when empty.")
+	flag.StringVar(&roleOrder, "role-order", horizonauth.DefaultRoleOrder, "Horizon roles, lowest first; each includes the roles before it and the first is implicit for every signed-in user.")
+	flag.BoolVar(&roleChecks, "role-checks", false, "Enforce endpoint minimum roles; off keeps today's access for every signed-in user.")
 	flag.Parse()
 
 	crlog.SetLogger(zap.New(zap.UseDevMode(false)))
@@ -87,6 +92,11 @@ func main() {
 	if repoURL == "" {
 		log.Fatal("repo-url or REPO_URL must be set")
 	}
+	order, err := horizonauth.ParseRoleOrder(roleOrder)
+	if err != nil {
+		log.Fatalf("role-order: %v", err)
+	}
+	log.Printf("auth: roles %s; role checks %t", order, roleChecks)
 
 	moduleConfig := os.Getenv("MODULE_CONFIG")
 

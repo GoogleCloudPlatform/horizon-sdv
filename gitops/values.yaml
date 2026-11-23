@@ -15,6 +15,9 @@
 config:
   name: Horizon SDV
   enableNetworkPolicies: true
+  # Horizon API and Module Manager role checks. Off: every signed-in user keeps today's access.
+  # Horizon API always checks the token signature and audience, whatever this is set to.
+  roleChecks: false
   isSubEnvironment: false
   namespacePrefix: ""
   projectID: ""

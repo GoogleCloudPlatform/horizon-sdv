@@ -1030,7 +1030,7 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 		"info": map[string]interface{}{
 			"title":   "Horizon API",
 			"version": "0.3.5",
-			"description": "Invoke exposed WorkflowTemplates (and ClusterWorkflowTemplates when labeled exposed) for enabled modules. Authentication: Keycloak realm `horizon` access token (JWT) only. " +
+			"description": "Invoke exposed WorkflowTemplates (and ClusterWorkflowTemplates when labeled exposed) for enabled modules. Authentication: Keycloak realm `horizon` access token (JWT) only, with `horizon-api` in its `aud` claim. " +
 				"Clients: `horizon-api` (public — Authorization Code+PKCE and OAuth 2.0 device authorization grant for CLI), `horizon-api-ci` (confidential — client_credentials with client_id and client_secret from Keycloak Admin). " +
 				"Endpoints: `{issuer}/protocol/openid-connect/auth/device` (device), `{issuer}/protocol/openid-connect/token` (code + device token + client_credentials). " +
 				"Submit runs a template via `POST /v1/modules/{module}/workflowTemplates/{template}/submit` with body `{\"parameters\":{...}}` and optional header `X-Horizon-Submitted-From` (`api` default, `developer-portal`, `horizon-cli`); OpenAPI lists one such operation per catalog entry with named parameters. " +

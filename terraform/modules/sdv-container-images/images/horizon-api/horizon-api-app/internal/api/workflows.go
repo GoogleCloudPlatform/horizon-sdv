@@ -27,9 +27,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/acn-horizon-sdv/horizon-api/internal/auth"
 	"github.com/acn-horizon-sdv/horizon-api/internal/gcs"
 	"github.com/acn-horizon-sdv/horizon-api/internal/workflow"
+	"github.com/acn-horizon-sdv/horizonauth"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -122,7 +122,7 @@ func (s *Server) retentionPayload() map[string]interface{} {
 	}
 }
 
-func (s *Server) handleWorkflowsRunning(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
+func (s *Server) handleWorkflowsRunning(w http.ResponseWriter, r *http.Request, _ *horizonauth.Principal) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -145,7 +145,7 @@ func (s *Server) handleWorkflowsRunning(w http.ResponseWriter, r *http.Request, 
 	})
 }
 
-func (s *Server) handleWorkflowsHistory(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
+func (s *Server) handleWorkflowsHistory(w http.ResponseWriter, r *http.Request, _ *horizonauth.Principal) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -310,7 +310,7 @@ func (s *Server) listHistoryFiltered(ctx context.Context, wantLimit int64, hf *h
 	return items, "", truncated, scanned, nil
 }
 
-func (s *Server) handleWorkflowGet(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
+func (s *Server) handleWorkflowGet(w http.ResponseWriter, r *http.Request, _ *horizonauth.Principal) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -340,7 +340,7 @@ func (s *Server) handleWorkflowGet(w http.ResponseWriter, r *http.Request, _ *au
 	_ = json.NewEncoder(w).Encode(d)
 }
 
-func (s *Server) handleWorkflowDownloadArtifact(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
+func (s *Server) handleWorkflowDownloadArtifact(w http.ResponseWriter, r *http.Request, _ *horizonauth.Principal) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -473,7 +473,7 @@ func (s *Server) handleWorkflowDownloadArtifact(w http.ResponseWriter, r *http.R
 	_ = json.NewEncoder(w).Encode(jsonResp)
 }
 
-func (s *Server) handleWorkflowDelete(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
+func (s *Server) handleWorkflowDelete(w http.ResponseWriter, r *http.Request, _ *horizonauth.Principal) {
 	if r.Method != http.MethodDelete {
 		http.NotFound(w, r)
 		return
@@ -529,7 +529,7 @@ func (s *Server) handleWorkflowDelete(w http.ResponseWriter, r *http.Request, _ 
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }
 
-func (s *Server) handleWorkflowAbort(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
+func (s *Server) handleWorkflowAbort(w http.ResponseWriter, r *http.Request, _ *horizonauth.Principal) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
