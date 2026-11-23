@@ -188,7 +188,7 @@ export function LandingPage() {
       title: 'Argo Workflows',
       description: 'Open source container-native workflow engine',
       action: 'Open',
-      href: '/workflows/workflows/argo-workflows',
+      href: '/workflows/workflows/',
     },
 ];
 
