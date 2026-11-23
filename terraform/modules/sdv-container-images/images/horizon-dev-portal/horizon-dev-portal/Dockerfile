@@ -15,7 +15,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # CLI sources are staged into ./cli (terraform local_file, or copy tools/horizon/*.{go,mod,sum}).
-FROM golang:1.27.4-alpine AS cli
+ARG GO_VERSION
+FROM golang:${GO_VERSION}-alpine AS cli
 WORKDIR /src
 COPY cli/ ./
 ARG HORIZON_CLI_VERSION=dev
@@ -31,7 +32,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM golang:1.27.4-alpine AS backend
+FROM golang:${GO_VERSION}-alpine AS backend
 WORKDIR /src
 COPY proxy/go.mod proxy/go.sum* ./
 RUN go mod download
