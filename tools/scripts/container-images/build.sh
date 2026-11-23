@@ -259,7 +259,7 @@ IMAGE_NAMES=()
 # Parsed with PyYAML so quotes and nesting match yamldecode (not a line-based grep).
 HORIZON_CORE_VERSION=""
 
-# Go patch from versions.yaml (go_version). Terraform passes the same value as the
+# Go patch from versions.yaml (tools.go_version). Terraform passes the same value as the
 # GO_VERSION build-arg (local.go_version in locals.tf). 
 # Parsed with PyYAML, same as horizoncore version.
 GO_VERSION=""
@@ -312,7 +312,7 @@ PY
   fi
 }
 
-# Read go_version from versions.yaml. Docker builds use this as --build-arg GO_VERSION.
+# Read tools.go_version from versions.yaml. Docker builds use this as --build-arg GO_VERSION.
 read_go_version() {
   local py_out=""
   if ! py_out="$(python3 - "$VERSIONS_FILE" 2>&1 <<'PY'
@@ -325,20 +325,24 @@ except ImportError:
 path = sys.argv[1]
 with open(path, encoding="utf-8") as f:
     data = yaml.safe_load(f)
-go_version = data.get("go_version") if isinstance(data, dict) else None
+tools = data.get("tools") if isinstance(data, dict) else None
+if not isinstance(tools, dict):
+    print(f"{path}: missing or invalid 'tools' mapping", file=sys.stderr)
+    sys.exit(1)
+go_version = tools.get("go_version")
 if go_version is None or isinstance(go_version, (dict, list)):
-    print(f"{path}: missing or invalid go_version", file=sys.stderr)
+    print(f"{path}: missing or invalid tools.go_version", file=sys.stderr)
     sys.exit(1)
 print(str(go_version).strip(), end="")
 PY
   )"; then
-    log_err "Could not read go_version from ${VERSIONS_FILE}."
+    log_err "Could not read tools.go_version from ${VERSIONS_FILE}."
     [[ -n "$py_out" ]] && log_err "${py_out}"
     exit 1
   fi
   GO_VERSION="$py_out"
   if [[ -z "$GO_VERSION" ]]; then
-    log_err "go_version in ${VERSIONS_FILE} is empty."
+    log_err "tools.go_version in ${VERSIONS_FILE} is empty."
     exit 1
   fi
 }

@@ -72,7 +72,7 @@ pipeline {
               catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                 sh '''
                   cd "${WORKSPACE}"
-                  GO_VERSION=$(awk '/^go_version:/ { gsub(/"/, "", $2); print $2; exit }' versions.yaml)
+                  GO_VERSION=$(awk '/^[[:space:]]*go_version:/ { gsub(/"/, "", $2); print $2; exit }' versions.yaml)
                   buildctl build \
                     --frontend=dockerfile.v0 \
                     --local=dockerfile=workloads/sample/pipelines/environment/docker_image_template \
