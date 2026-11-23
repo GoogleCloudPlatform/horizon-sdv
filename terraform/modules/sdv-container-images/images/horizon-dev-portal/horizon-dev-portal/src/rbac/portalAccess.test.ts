@@ -149,12 +149,7 @@ describe('buildPortalAccess', () => {
     expect(access.roleLabel).toBe('Developer');
     expect(access.email).toBe(EMAIL);
     expect(access.summary).toContain('Keycloak group: developers');
-    expect(access.sections.map((section) => section.title)).toEqual([
-      'PLATFORM',
-      'WORKFLOWS',
-      'WORKLOADS-ANDROID: ADMIN-ONLY TEMPLATES',
-      'REMOTIVE-TOPOLOGY: ADMIN-ONLY TEMPLATES',
-    ]);
+    expect(access.sections.map((section) => section.title)).toEqual(['PLATFORM', 'WORKFLOWS']);
     expect(access.applications.find((app) => app.id === 'grafana')?.audience).toBe('admin');
     expect(access.applications.find((app) => app.id === 'argo-workflows')?.audience).toBe(
       'developer'

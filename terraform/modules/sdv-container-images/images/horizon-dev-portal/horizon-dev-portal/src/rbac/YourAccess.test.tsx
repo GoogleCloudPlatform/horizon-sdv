@@ -55,4 +55,25 @@ describe('YourAccessButton', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('heading', { name: 'Your access' })).not.toBeInTheDocument();
   });
+
+  it.each(['light', 'dark'] as const)(
+    'draws an outlined translucent-white chip on the %s app bar',
+    async (mode) => {
+      const user = userEvent.setup();
+      accessBox.current = portalAccess('admin');
+      renderThemed(<YourAccessButton />, { mode });
+
+      const button = screen.getByRole('button', { name: 'Your role is Admin. Open your access' });
+      expect(button).toHaveClass('MuiButton-outlined');
+      const style = getComputedStyle(button);
+      expect(style.color).toBe('rgb(255, 255, 255)');
+      expect(style.borderColor).toBe('rgba(255, 255, 255, 0.6)');
+      expect(style.backgroundColor).toBe('rgba(255, 255, 255, 0.14)');
+
+      await user.click(button);
+      const paper = document.querySelector('.MuiPopover-paper');
+      expect(paper).not.toBeNull();
+      expect(getComputedStyle(paper as Element).backgroundImage).toBe('none');
+    }
+  );
 });

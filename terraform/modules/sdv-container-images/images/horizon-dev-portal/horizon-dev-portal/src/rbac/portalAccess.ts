@@ -243,31 +243,6 @@ export function identityFromToken(token: string | undefined): PortalIdentity {
   }
 }
 
-function templateSections(rules: AdminOnlyTemplate[]): PortalSection[] {
-  const order: string[] = [];
-  const byModule = new Map<string, AdminOnlyTemplate[]>();
-  for (const rule of rules) {
-    const list = byModule.get(rule.module);
-    if (list) {
-      list.push(rule);
-    } else {
-      byModule.set(rule.module, [rule]);
-      order.push(rule.module);
-    }
-  }
-  return order.map((moduleName) => ({
-    id: `templates.${moduleName}`,
-    title: `${moduleName.toUpperCase()}: ADMIN-ONLY TEMPLATES`,
-    functions: (byModule.get(moduleName) ?? []).map((rule) => ({
-      id: `template.${moduleName}.${rule.pattern}`,
-      label: rule.label,
-      grants: { viewer: false, developer: false, admin: true },
-      tooltip: rule.denial,
-      requiredRole: 'admin' as const,
-    })),
-  }));
-}
-
 function summaryFor(resolved: {
   role: PortalRole;
   keycloakGroup: string;
@@ -368,7 +343,7 @@ export function buildPortalAccess(
     summary: summaryFor(resolved),
     moreAccess: MORE_ACCESS,
     roles: PORTAL_ROLES,
-    sections: [platform, workflows, ...templateSections(ADMIN_ONLY_TEMPLATES)],
+    sections: [platform, workflows],
     applications: APPLICATIONS,
     adminOnlyTemplates: ADMIN_ONLY_TEMPLATES,
   };

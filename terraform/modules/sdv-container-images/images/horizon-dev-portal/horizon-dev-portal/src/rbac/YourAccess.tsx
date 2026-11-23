@@ -17,7 +17,7 @@ import type { ReactNode } from 'react';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import CheckIcon from '@mui/icons-material/Check';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import PersonIcon from '@mui/icons-material/Person';
 import { Box, Button, Chip, Popover, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { usePortalAccess } from './AccessProvider';
@@ -35,24 +35,39 @@ export function YourAccessButton() {
     <>
       <Button
         size="small"
+        variant="outlined"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Your role is ${access.roleLabel}. Open your access`}
         onClick={(event) => setAnchor(event.currentTarget)}
-        startIcon={<PersonOutlineIcon />}
+        startIcon={<PersonIcon />}
         endIcon={<ArrowDropDownIcon />}
         sx={{
           mr: { xs: 0.5, sm: 1.5 },
-          color: 'primary.main',
-          bgcolor: 'common.white',
+          // The AppBar text is white in light and dark mode, so the chip is built from
+          // translucent white instead of a palette fill that only suits one of them.
+          color: 'common.white',
+          borderColor: (theme) => alpha(theme.palette.common.white, 0.6),
+          bgcolor: (theme) => alpha(theme.palette.common.white, 0.14),
           borderRadius: 999,
           textTransform: 'none',
-          fontWeight: 600,
+          fontWeight: 500,
           px: { xs: 1, sm: 1.25 },
           flexShrink: 0,
           minWidth: 0,
           '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inline-flex' } },
-          '&:hover': { bgcolor: 'grey.100' },
+          '&:hover': {
+            borderColor: 'common.white',
+            bgcolor: (theme) => alpha(theme.palette.common.white, 0.24),
+          },
+          '&.Mui-focusVisible, &[aria-expanded="true"]': {
+            borderColor: 'common.white',
+            bgcolor: (theme) => alpha(theme.palette.common.white, 0.24),
+          },
+          '&.Mui-focusVisible': {
+            outline: (theme) => `2px solid ${alpha(theme.palette.common.white, 0.9)}`,
+            outlineOffset: 2,
+          },
         }}
       >
         {access.roleLabel}
@@ -73,6 +88,9 @@ export function YourAccessButton() {
               maxHeight: 'calc(100dvh - 24px)',
               overflow: 'auto',
               borderRadius: 2,
+              // Dark mode tints elevated paper. Keep it flat so the sticky label cells
+              // in the matrix, which use background.paper, match the surface.
+              backgroundImage: 'none',
             },
           },
         }}
@@ -131,7 +149,6 @@ function YourAccessPanel() {
             position: 'sticky',
             left: 0,
             zIndex: 1,
-            bgcolor: 'background.paper',
           }}
         >
           Function
@@ -140,9 +157,9 @@ function YourAccessPanel() {
           <AccessCell key={role.id} current={role.id === access.role} header>
             <Typography
               variant="caption"
+              color="text.secondary"
               sx={{
                 fontWeight: 600,
-                fontSize: '0.68rem',
                 lineHeight: 1.1,
                 textAlign: 'center',
                 px: 0.25,

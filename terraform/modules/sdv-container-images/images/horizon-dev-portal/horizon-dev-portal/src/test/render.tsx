@@ -13,18 +13,26 @@
 // limitations under the License.
 //
 import { ThemeProvider } from '@mui/material/styles';
+import type { PaletteMode } from '@mui/material/styles';
 import { render, type RenderOptions } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter, type MemoryRouterProps } from 'react-router-dom';
 import { getTheme } from '../theme';
 
 // eslint-disable-next-line react-refresh/only-export-components -- test helper, not a hot-reload module
-function ThemeWrapper({ children }: { children: ReactNode }) {
-  return <ThemeProvider theme={getTheme('light')}>{children}</ThemeProvider>;
+function ThemeWrapper({ children, mode }: { children: ReactNode; mode: PaletteMode }) {
+  return <ThemeProvider theme={getTheme(mode)}>{children}</ThemeProvider>;
 }
 
-export function renderThemed(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
-  return render(ui, { ...options, wrapper: ThemeWrapper });
+export function renderThemed(
+  ui: ReactElement,
+  options?: Omit<RenderOptions, 'wrapper'> & { mode?: PaletteMode }
+) {
+  const { mode = 'light', ...renderOptions } = options ?? {};
+  return render(ui, {
+    ...renderOptions,
+    wrapper: ({ children }) => <ThemeWrapper mode={mode}>{children}</ThemeWrapper>,
+  });
 }
 
 export function renderRouted(
