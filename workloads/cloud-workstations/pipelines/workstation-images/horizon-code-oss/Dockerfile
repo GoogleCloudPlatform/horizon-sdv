@@ -17,7 +17,14 @@
 FROM golang:1.27.2-alpine AS horizon-cli
 WORKDIR /src
 COPY ./tools/horizon ./
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /horizon .
+# Same source as the Developer Portal image tag: versions.yaml components.horizoncore.
+COPY versions.yaml /tmp/versions.yaml
+RUN ver="$(awk '/^[[:space:]]*horizoncore:/ { gsub(/["[:space:]]/, "", $2); print $2; exit }' /tmp/versions.yaml)" && \
+    test -n "${ver}" && \
+    built="$(date -u +%Y-%m-%dT%H:%M:%SZ)" && \
+    CGO_ENABLED=0 go build -trimpath \
+      -ldflags="-s -w -X github.com/horizon-sdv/horizon/internal.version=${ver} -X github.com/horizon-sdv/horizon/internal.buildDate=${built}" \
+      -o /horizon .
 
 FROM us-central1-docker.pkg.dev/cloud-workstations-images/predefined/code-oss:code-oss-1.104.3
 

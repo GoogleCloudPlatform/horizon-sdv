@@ -428,10 +428,12 @@ spec:
             tar -C "/src/${IMAGE_DIR}" -chf - . | tar -C /out -xf -
             tar -C "/src/${UTILS_DIR}" -chf - . | tar -C /out/common-utils -xf -
             tar -C /src/tools/horizon -chf - . | tar -C /out/tools/horizon -xf -
+            cp /src/versions.yaml /out/versions.yaml
             test -d /out/common-utils
             test ! -L /out/common-utils/antigravity/README.md
             test -f /out/tools/horizon/go.mod
-            echo "staged ${IMAGE_DIR} with common-utils and tools/horizon"
+            test -f /out/versions.yaml
+            echo "staged ${IMAGE_DIR} with common-utils, tools/horizon, and versions.yaml"
 
     - name: summarize-digests
       outputs:
