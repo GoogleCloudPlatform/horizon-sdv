@@ -29,6 +29,7 @@ locals {
   # tools.nginx.tag from the same file feeds common_nginx_version above.
   versions             = yamldecode(file("${path.module}/../../../versions.yaml"))
   horizon_core_version = local.versions.components.horizoncore
+  go_version           = local.versions.go_version
 
   images = {
     # build_version: version of container images to be built and pushed to Artifact Registry.
