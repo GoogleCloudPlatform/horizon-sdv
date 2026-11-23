@@ -29,6 +29,9 @@ func NewAuthorizer(order RoleOrder, roleChecks bool) *Authorizer {
 
 // Role returns the caller's rank. It is computed whether or not role checks are on.
 func (a *Authorizer) Role(p *Principal) string {
+	if p == nil {
+		return ""
+	}
 	return a.order.Highest(p.ClientRoles)
 }
 
@@ -36,7 +39,7 @@ func (a *Authorizer) Role(p *Principal) string {
 // forbidden response to send. reason describes the action for the caller; empty uses a default.
 // A required role that is not in the order denies everyone, so a typo cannot open an endpoint.
 func (a *Authorizer) Check(p *Principal, required, reason string) *Forbidden {
-	if !a.roleChecks {
+	if !a.roleChecks && p != nil {
 		return nil
 	}
 	current := a.Role(p)

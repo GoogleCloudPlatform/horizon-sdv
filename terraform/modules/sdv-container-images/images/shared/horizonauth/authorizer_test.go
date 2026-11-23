@@ -64,6 +64,22 @@ func TestCheckWithRoleChecksOn(t *testing.T) {
 	}
 }
 
+func TestCheckDeniesNilPrincipal(t *testing.T) {
+	for _, roleChecks := range []bool{false, true} {
+		a := NewAuthorizer(mustOrder(t, DefaultRoleOrder), roleChecks)
+		if got := a.Role(nil); got != "" {
+			t.Errorf("Role(nil) = %q with role checks %t, want no rank", got, roleChecks)
+		}
+		f := a.Check(nil, "viewer", "")
+		if f == nil {
+			t.Fatalf("nil principal allowed with role checks %t", roleChecks)
+		}
+		if f.RequiredRole != "viewer" || f.CurrentRole != "" {
+			t.Errorf("Check(nil) = %+v with role checks %t", f, roleChecks)
+		}
+	}
+}
+
 func TestForbiddenResponse(t *testing.T) {
 	a := NewAuthorizer(mustOrder(t, DefaultRoleOrder), true)
 	f := a.Check(developer, "admin", "Disabling a module deletes its cloud resources.")

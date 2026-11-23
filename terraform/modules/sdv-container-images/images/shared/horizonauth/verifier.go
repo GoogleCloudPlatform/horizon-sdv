@@ -36,8 +36,9 @@ type Principal struct {
 }
 
 // HasClientRole reports whether the caller holds a client role, ranked or not (e.g. impersonate).
+// A nil p holds no role.
 func (p *Principal) HasClientRole(name string) bool {
-	return slices.Contains(p.ClientRoles, name)
+	return p != nil && slices.Contains(p.ClientRoles, name)
 }
 
 // Verifier checks Keycloak access tokens locally against the realm's signing keys.

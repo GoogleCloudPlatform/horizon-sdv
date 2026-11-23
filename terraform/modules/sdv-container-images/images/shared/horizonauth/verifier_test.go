@@ -126,4 +126,8 @@ func TestHasClientRole(t *testing.T) {
 	if !p.HasClientRole("impersonate") || p.HasClientRole("admin") {
 		t.Errorf("HasClientRole wrong for %v", p.ClientRoles)
 	}
+	var none *Principal
+	if none.HasClientRole("impersonate") {
+		t.Error("nil principal holds a client role")
+	}
 }
