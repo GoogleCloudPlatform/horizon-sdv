@@ -31,6 +31,11 @@
 # templates. Terraform exposes it to GitOps as config.nginx.tag (locals.tf common_nginx_version).
 # Other image tags stay in terraform/modules/base/locals.tf.
 
+# Go patch used as the Docker build-arg GO_VERSION.
+# Readers: Terraform (terraform/modules/base), tools/scripts/container-images/build.sh,
+# and workloads/sample/pipelines/environment/docker_image_template/Jenkinsfile.
+go_version: "1.27.4"
+
 components:
   # The Horizon platform release itself (not a generic "core" key — unique for grepping).
   # restrictions:
