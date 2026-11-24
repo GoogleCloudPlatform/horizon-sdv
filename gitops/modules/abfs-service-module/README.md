@@ -90,7 +90,7 @@ gitops/modules/abfs-service-module/
 |-------------------|-------|-----------|---------|
 | `mod-abfs-service-module-node-pool` (wave -1) | `node-pool/` | `abfs` | KCC `ContainerNodePool` `abfs-data-server-node-pool` and `abfs-data-uploader-node-pool`; PreSync/PostSync Job `abfs-license-metadata-inject` keeping GCE metadata `abfs-license` equal to the Secret; status ConfigMap `abfs-license-metadata-status` |
 | `mod-abfs-service-module-data-plane` | `abfs/` | `abfs` | PreSync `abfs-license-validate`; KCC `IAMPolicyMember`s for the license SA; Deployment `abfs-server` + Service (`:50051`, internal LB by default); StatefulSet `abfs-gerrit-uploader` (3); Job `abfs-pusher-config`; DaemonSet `abfs-casfs-installer`; PDBs, VPAs (`Off`), NetworkPolicy, Helm test |
-| `mod-abfs-service-module-argo-workflows` | `argo-workflows/` | `workflows`, `argo-events` | WorkflowTemplate `abfs-smoke-test` (exposed in the portal) and its webhook Sensor |
+| `mod-abfs-service-module-argo-workflows` | `argo-workflows/` | `workflows`, `argo-events` | WorkflowTemplate `abfs-smoke-test` (development tool, not exposed in the portal; run it from Argo Workflows) and its webhook Sensor |
 
 ### Module ownership
 

@@ -133,7 +133,7 @@ Before you attempt to enable the ABFS modules, ensure `workloads-common` and `wo
    kubectl get application -n argocd | grep abfs-client-ubuntu
    kubectl get containernodepool abfs-build-node-pool-ubuntu -n abfs-client-module-ubuntu-overview
    ```
-5. **Check the ABFS workflows are visible**: `abfs-license-import`, `abfs-license-clear`, `abfs-uploader-config-select`, `abfs-spanner-backup-schedule` on the `abfs-data` page, `abfs-smoke-test` on `abfs-service-module`, `aaos-builder-abfs` and `abfs-builder-runtime-image` on `workloads-android`.
+5. **Check the ABFS workflows are visible**: `abfs-license-import`, `abfs-license-clear`, `abfs-uploader-config-select`, `abfs-spanner-backup-schedule` on the `abfs-data` page, `aaos-builder-abfs` and `abfs-builder-runtime-image` on `workloads-android`.
 
 Seeding starts as soon as the uploaders are Ready, for the row that is active in the uploader table (default `Android15_r36`, see [Seed Spanner](#seed)). Seeding time depends on what was seeded before (see [Seed Spanner](#seed)); builds for that revision work only after seeding completed.
 
