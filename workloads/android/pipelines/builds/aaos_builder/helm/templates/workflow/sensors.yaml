@@ -20,7 +20,7 @@ aiReviewRuntime is appended after that list (index 11 + len of the ABFS list; 11
 */}}
 {{- $abfsParams := list }}
 {{- if eq (include "aaos-builder.isAbfs" .) "true" }}
-{{- $abfsParams = list "abfsServer" "abfsCachedBuild" "abfsVersion" "abfsCasfsVersion" "abfsRepository" "uploaderManifestServer" "gerritTopic" "overrideMakeCommand" "abfsCleanCache" "abfsCachemanTimeout" "postRepoCommand" "aaosParallelBuildJobs" }}
+{{- $abfsParams = list "abfsServer" "abfsCachedBuild" "abfsVersion" "abfsCasfsVersion" "abfsRepository" "uploaderManifestServer" "gerritTopic" "overrideMakeCommand" "abfsCleanCache" "abfsCachemanTimeout" "postRepoCommand" "aaosParallelBuildJobs" "aaosCacheStorageSize" }}
 {{- end }}
 apiVersion: argoproj.io/v1alpha1
 kind: Sensor
@@ -136,6 +136,10 @@ spec:
             - src:
                 dependencyName: webhook-dep
                 dataKey: body.{{ $p }}
+{{- if eq $p "aaosCacheStorageSize" }}
+                # Callers that do not send the size yet get the chart default.
+                value: {{ $.Values.spec.aaosCacheStorageSize | default "1000Gi" | quote }}
+{{- end }}
               dest: spec.arguments.parameters.{{ add 11 $i }}.value
 {{- end }}
             - src:
