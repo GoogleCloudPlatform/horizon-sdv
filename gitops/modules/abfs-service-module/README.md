@@ -90,7 +90,7 @@ gitops/modules/abfs-service-module/
 |-------------------|-------|-----------|---------|
 | `mod-abfs-service-module-node-pool` (wave -1) | `node-pool/` | `abfs` | KCC `ContainerNodePool` `abfs-data-server-node-pool` and `abfs-data-uploader-node-pool`; PreSync/PostSync Job `abfs-license-metadata-inject` keeping GCE metadata `abfs-license` equal to the Secret; status ConfigMap `abfs-license-metadata-status` |
 | `mod-abfs-service-module-data-plane` | `abfs/` | `abfs` | PreSync `abfs-license-validate`; KCC `IAMPolicyMember`s for the license SA; Deployment `abfs-server` + Service (`:50051`, internal LB by default); StatefulSet `abfs-gerrit-uploader` (3); Job `abfs-pusher-config`; DaemonSet `abfs-casfs-installer`; PDBs, VPAs (`Off`), NetworkPolicy, Helm test |
-| `mod-abfs-service-module-argo-workflows` | `argo-workflows/` | `workflows`, `argo-events` | WorkflowTemplate `abfs-smoke-test` (exposed in the portal) and its webhook Sensor |
+| `mod-abfs-service-module-argo-workflows` | `argo-workflows/` | `workflows`, `argo-events` | WorkflowTemplate `abfs-smoke-test` (development tool, not exposed in the portal; run it from Argo Workflows) and its webhook Sensor |
 
 ### Module ownership
 
@@ -118,8 +118,8 @@ The service module configures the connection to Spanner and GCS but does not cre
 
 | Pool | Machine type | Autoscaling | Taint / label | Workload |
 | :--- | :--- | :--- | :--- | :--- |
-| `abfs-data-server-node-pool` | `n2-highmem-64` (64 vCPU / 512 GiB) | 0–2 | `workloadType=android-abfs-data-server`, `workloadLabel=android-abfs-data` | `abfs-server` (requests 32 CPU / 256 Gi) |
-| `abfs-data-uploader-node-pool` | `n2-standard-32` (32 vCPU / 128 GiB) | 0–5 | `workloadType=android-abfs-data-uploader`, `workloadLabel=android-abfs-data` | `abfs-gerrit-uploader-{0,1,2}` (24 CPU / 96 Gi each, one pod per node), `abfs-pusher-config`, casfs installer |
+| `abfs-data-server-node-pool` | `n2-highmem-64` (64 vCPU / 512 GiB) | 0–2 | `workloadType=android-abfs-data-server`, `workloadLabel=android-abfs-data` | `abfs-server` (requests 8 CPU / 128 Gi) |
+| `abfs-data-uploader-node-pool` | `n2-standard-32` (32 vCPU / 128 GiB) | 0–5 | `workloadType=android-abfs-data-uploader`, `workloadLabel=android-abfs-data` | `abfs-gerrit-uploader-{0,1,2}` (24 CPU / 112 Gi each, one pod per node), `abfs-pusher-config`, casfs installer |
 
 Both pools: 100 GB boot disk, `UBUNTU_CONTAINERD`, Secure Boot off, node SA = license SA, `autoUpgrade` on unless the cluster release channel is `UNSPECIFIED` (then `version` pins apply). Two pools rather than one shared data pool so server and uploaders scale and are sized independently.
 
@@ -136,7 +136,9 @@ The license reaches the ABFS processes as GCE instance attribute `abfs-license` 
 
 ### Sizing notes
 
-Each uploader has a 1 Ti `premium-rwo` PVC (`uploader.dataDisk`). Existing StatefulSet PVCs do not resize in place; shrinking means deleting PVC and pod. `deletePvcWhenDisabled: true` maps to `persistentVolumeClaimRetentionPolicy.whenDeleted=Delete`, so disabling the module removes the staging disks; set it to `false` to keep them across disable/enable. One uploader per node is deliberate: disk throughput limits are per instance.
+Each uploader has a 1 Ti `premium-rwo` PVC (`uploader.dataDisk`). Existing StatefulSet PVCs do not resize in place; shrinking means deleting PVC and pod. `deletePvcWhenDisabled: true` (default) maps to `persistentVolumeClaimRetentionPolicy.whenDeleted=Delete`, so disabling the module removes the staging disks and nothing keeps billing; the next enable seeds again, about an hour per release. Set `uploader.dataDisk.deletePvcWhenDisabled: false` in the module `values.yaml` to keep them: the next enable reuses the disks and is ready in minutes, but three 1 Ti SSD disks are billed while the module is disabled, the uploader pool has to come back in the same zone, and the PVCs must be deleted by hand when ABFS is retired (`kubectl delete pvc -n abfs -l app.kubernetes.io/component=uploader`). Scaling the StatefulSet to 0 always keeps the disks. One uploader per node is deliberate: disk throughput limits are per instance.
+
+The requests come from measured use on a running installation (four days, builds and reseeds): the server used at most 2.2 cores and 56 GiB; an uploader uses 24–26 cores in the first hour of a first seed and about 3 afterwards, and holds about 92 GiB of memory once seeded. `GOMAXPROCS` is set from the CPU request, so lowering a CPU request also lowers what the process can use.
 
 Rejected alternatives: `n2-standard-16` for uploaders (~58 GiB allocatable, OOM at 32 Gi), `c2d-highcpu-112` / `n2-highcpu-32` (memory profile, no Hyperdisk), a single shared data pool (server and uploaders compete).
 
@@ -185,7 +187,24 @@ The portal overview page (`mod-abfs-service-module-overview`) shows the same: li
 
 ### After disable
 
-Pods, Jobs, DaemonSet, NetworkPolicies and both `ContainerNodePool` CRs are pruned; uploader PVCs are deleted (`deletePvcWhenDisabled`). Config Connector deletes the GKE pools with the CRs. PostDelete Job `abfs-data-pools-orphan-postdelete` (namespace `workflows`) deletes with `gcloud` a server or uploader pool that is still there afterwards. It skips a pool whose CR still exists or that it cannot read, never fails, and stops waiting after 20 minutes (a delete that takes longer finishes in the background). Spanner, GCS, the license Secret and the uploader table remain (owned by `abfs-data`). If a pool is still there at the next enable, the PreSync licence Job removes it before the create.
+Pods, Jobs, DaemonSet, NetworkPolicies and both `ContainerNodePool` CRs are pruned; uploader PVCs are deleted (`deletePvcWhenDisabled: true`, the default; with `false` they stay and keep billing). Config Connector deletes the GKE pools with the CRs. PostDelete Job `abfs-data-pools-orphan-postdelete` (namespace `workflows`) deletes with `gcloud` a server or uploader pool that is still there afterwards. It skips a pool whose CR still exists or that it cannot read, never fails, and stops waiting after 20 minutes (a delete that takes longer finishes in the background). Spanner, GCS, the license Secret and the uploader table remain (owned by `abfs-data`). If a pool is still there at the next enable, the PreSync licence Job removes it before the create.
+
+### Existing clusters: remove the failed Config Connector objects
+
+Up to Horizon 5.0.0 the API services, firewall rules and private DNS zones of this module were rendered without a project, so Config Connector looked for project `abfs` and never created them. They are now off by default (`kcc.services`, `kcc.firewall`, `kcc.dns`). The data plane Application does not prune, so on a cluster that ran an earlier version the old objects stay in namespace `abfs`, not Ready. Nothing exists in Google Cloud for them. Remove them once after the upgrade:
+
+```bash
+# expect 15 Services, 2 ComputeFirewalls, 2 DNSManagedZones, 4 DNSRecordSets, none Ready
+kubectl get services.serviceusage.cnrm.cloud.google.com,computefirewalls,dnsmanagedzones,dnsrecordsets -n abfs
+
+# abandon first, so Config Connector does not call the API of project "abfs" on delete
+for k in services.serviceusage.cnrm.cloud.google.com computefirewalls dnsrecordsets dnsmanagedzones; do
+  kubectl annotate "$k" --all -n abfs cnrm.cloud.google.com/deletion-policy=abandon --overwrite
+  kubectl delete "$k" --all -n abfs
+done
+```
+
+No other Horizon module creates these kinds in namespace `abfs`. After the delete, `mod-abfs-service-module-data-plane` no longer lists them as extra resources.
 
 ---
 

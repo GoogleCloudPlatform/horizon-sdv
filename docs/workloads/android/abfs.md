@@ -133,7 +133,7 @@ Before you attempt to enable the ABFS modules, ensure `workloads-common` and `wo
    kubectl get application -n argocd | grep abfs-client-ubuntu
    kubectl get containernodepool abfs-build-node-pool-ubuntu -n abfs-client-module-ubuntu-overview
    ```
-5. **Check the ABFS workflows are visible**: `abfs-license-import`, `abfs-license-clear`, `abfs-uploader-config-select`, `abfs-spanner-backup-schedule` on the `abfs-data` page, `abfs-smoke-test` on `abfs-service-module`, `aaos-builder-abfs` and `abfs-builder-runtime-image` on `workloads-android`.
+5. **Check the ABFS workflows are visible**: `abfs-license-import`, `abfs-license-clear`, `abfs-uploader-config-select`, `abfs-spanner-backup-schedule` on the `abfs-data` page, `aaos-builder-abfs` and `abfs-builder-runtime-image` on `workloads-android`.
 
 Seeding starts as soon as the uploaders are Ready, for the row that is active in the uploader table (default `Android15_r36`, see [Seed Spanner](#seed)). Seeding time depends on what was seeded before (see [Seed Spanner](#seed)); builds for that revision work only after seeding completed.
 
@@ -278,7 +278,7 @@ Disable in reverse order: `abfs-client-ubuntu` → `abfs-service-module` → `ab
 What remains after each disable:
 
 - **abfs-client-ubuntu**: nothing in the cluster; the GKE node pool is deleted by KCC.
-- **abfs-service-module**: pods, Jobs and the two data node pools are removed; uploader PVCs are deleted (`uploader.dataDisk.deletePvcWhenDisabled: true`). Spanner/GCS content is untouched.
+- **abfs-service-module**: pods, Jobs and the two data node pools are removed; uploader PVCs are deleted (`uploader.dataDisk.deletePvcWhenDisabled: true`, the default), so the next enable seeds again (about an hour per release). With `false` in the module values the three 1 Ti SSD disks stay and keep billing, and the next enable reuses them. Spanner/GCS content is untouched.
 - **abfs-data**: Secret, workflows, uploader table and the KCC CRs are pruned. The Spanner instance and database and the GCS bucket are **abandoned** in GCP (data kept, still billed); delete them with `gcloud` when ABFS is retired for good. The license service account is soft-deleted (recoverable ~30 days, see [Import the ABFS license](#license)).
 
 Config Connector (KCC) deletes a GKE node pool together with its `ContainerNodePool`. In earlier releases the ABFS `ContainerNodePool` objects carried the full cluster path (`projects/.../clusters/<name>`) in `clusterRef.external`. KCC then looked up a wrong pool: some minutes after create the object reported `UpdateFailed ... already exists` although the pool worked, and on disable KCC removed the object but left the GKE pool. The objects now carry the cluster name only. Hook Jobs (namespace `workflows`) handle the upgrade and remove a pool that is still left behind:

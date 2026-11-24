@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Development tool: not exposed in the Developer Portal or Horizon API catalog
+# (no horizon-sdv.io/expose label). Run it from the Argo Workflows UI.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -19,7 +21,6 @@ metadata:
   namespace: {{ .Values.workflowNamespace }}
   labels:
     app.kubernetes.io/name: smoke-test
-    horizon-sdv.io/expose: "true"
     horizon-sdv.io/module: abfs-service-module
   annotations:
     argocd.argoproj.io/sync-wave: "7"

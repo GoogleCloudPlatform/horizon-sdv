@@ -65,6 +65,13 @@ vpa:
   enabled: true
   updateMode: "Off"
 
+# Uploader data disks (3 x 1 Ti SSD) on module disable. true deletes them, so
+# nothing keeps billing; the next enable seeds again (about an hour). false
+# keeps them for a fast re-enable; delete the PVCs by hand when ABFS is retired.
+uploader:
+  dataDisk:
+    deletePvcWhenDisabled: true
+
 # the ABFS UI is not functional yet (it should show statistics for
 # already executed builds). Hide the ABFS Data Plane portal tile and do not
 # render abfs-ui until that is fixed. Set both back to true to restore them.
