@@ -46,7 +46,7 @@ Enable order: `abfs-data` → license → `abfs-service-module` → **abfs-clien
 | Resource | Where | Purpose |
 |----------|-------|---------|
 | Child Application `mod-abfs-client-ubuntu-node-pool` (chart `node-pool/`) | `argocd` | KCC `ContainerNodePool` **`abfs-build-node-pool-ubuntu`** |
-| DaemonSet `abfs-casfs-installer-client` + ConfigMap (`install_casfs_client.sh`) | `module-manager` (destination namespace of the parent module Application) | Loads `casfs` on each node of the pool |
+| DaemonSet `abfs-casfs-installer-client` + ConfigMap (`install.sh`) | `module-manager` (destination namespace of the parent module Application) | Loads `casfs` on each node of the pool |
 | Overview Deployment/Service | `abfs-client-module-ubuntu-overview` | Portal overview page |
 
 ### Node pool
@@ -64,9 +64,11 @@ Build pods select the pool with the `nodeSelector` / `tolerations` above (`value
 
 ### casfs installer
 
+The DaemonSet and its script are the shared library chart [`abfs-common/casfs-installer`](../abfs-common/casfs-installer/README.md), which `abfs-service-module` uses as well; this module only sets `casfs.*` in `values.yaml`.
+
 `casfs.provider: daemonset`. The script, run privileged with the host filesystem mounted, first looks for the prebuilt package `casfs-kmod-<kernel>_<casfs.daemonset.version>` in Artifact Registry `abfs-binaries/us/abfs-apt-alpha-public` and installs it; if the package is missing or does not load, it downloads `casfs-<version>.tar.gz` from `casfs.daemonset.sourceUrl` (`gs://cos-localmirror/distfiles`) and builds the module for the running kernel with the node toolchain (`make ko KERNEL_RELEASE=$(uname -r)`), then `modprobe casfs`. The build pod waits up to 600 s for `/sys/module/casfs` (`abfs_wait_for_casfs` in `aaos_initialise.sh`) before installing the ABFS client.
 
-Versions to keep aligned on an ABFS release: `casfs.daemonset.version` and `image.tag` here (0.1.14), `casfs.daemonset.sourceUrl` in `abfs-service-module/abfs/values.yaml`, and the client package versions in the builder chart (`values-abfs.yaml`) and Jenkins seed.
+Versions to keep aligned on an ABFS release: `casfs.daemonset.version` and `image.tag` here (0.1.14), `casfs.daemonset.version` in `abfs-service-module/abfs/values.yaml`, and the client package versions in the builder chart (`values-abfs.yaml`) and Jenkins seed.
 
 ### COS variant
 

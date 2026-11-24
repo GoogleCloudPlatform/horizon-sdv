@@ -196,7 +196,7 @@ Pods, Jobs, DaemonSet, NetworkPolicies and both `ContainerNodePool` CRs are prun
 - `server.service.internalLoadBalancer: true` adds an internal LB in front of `abfs-server` for clients outside the cluster (for example the standalone VM guide in `experimental/kcc-google-abfs/docs`); in-cluster builds use `abfs-server.abfs.svc.cluster.local:50051`.
 - `ui.enabled: false`: the ABFS UI stays off until functional; `dataPlane.expose: false`.
 - `otel.enabled`: metrics to the GKE managed OpenTelemetry collector.
-- `casfs.daemonset.sourceUrl`: casfs source tarball built on every node of the pools; update together with `image.tag` on an ABFS release.
+- `casfs.daemonset.version` and `casfs.daemonset.sourceUrl`: casfs version and the directory of its source tarball (`<sourceUrl>/casfs-<version>.tar.gz`), built on every node of the pools; update the version together with `image.tag` on an ABFS release. The DaemonSet and its script come from the shared library chart [`abfs-common/casfs-installer`](../abfs-common/casfs-installer/README.md).
 
 ---
 
