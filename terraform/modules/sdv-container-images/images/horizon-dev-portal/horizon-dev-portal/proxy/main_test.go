@@ -17,13 +17,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -35,47 +28,13 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/acn-horizon-sdv/horizonauth"
+	"github.com/acn-horizon-sdv/horizonauth/authtest"
 	"github.com/coreos/go-oidc/v3/oidc"
 )
-
-func TestParseJWTExpiry(t *testing.T) {
-	exp := time.Unix(1_700_000_000, 0)
-	tok := makeUnsignedJWT(t, map[string]any{"exp": exp.Unix()})
-	got, ok := parseJWTExpiry(tok)
-	if !ok || !got.Equal(exp) {
-		t.Fatalf("parseJWTExpiry() = %v, %v; want %v, true", got, ok, exp)
-	}
-
-	padded := paddedUnsignedJWT(t, map[string]any{"exp": exp.Unix()})
-	got, ok = parseJWTExpiry(padded)
-	if !ok || !got.Equal(exp) {
-		t.Fatalf("padded parseJWTExpiry() = %v, %v; want %v, true", got, ok, exp)
-	}
-
-	parts := strings.Split(tok, ".")
-	got, ok = parseJWTExpiry(parts[0] + "." + parts[1])
-	if !ok || !got.Equal(exp) {
-		t.Fatalf("two-segment parseJWTExpiry() = %v, %v", got, ok)
-	}
-
-	for _, raw := range []string{
-		"",
-		"not-a-jwt",
-		"a.@@@.c",
-		makeUnsignedJWT(t, map[string]any{"exp": 0}),
-		makeUnsignedJWT(t, map[string]any{"exp": "soon"}),
-		makeUnsignedJWT(t, map[string]any{"sub": "no-exp"}),
-		"h." + base64.RawURLEncoding.EncodeToString([]byte("[]")) + ".s",
-	} {
-		if _, ok := parseJWTExpiry(raw); ok {
-			t.Fatalf("parseJWTExpiry(%q) ok, want failure", raw)
-		}
-	}
-}
 
 func TestEnvAndMustEnv(t *testing.T) {
 	const key = "HORIZON_PROXY_TEST_ENV"
@@ -206,22 +165,22 @@ func TestHTMLEscapeAttr(t *testing.T) {
 
 func TestServeConfigJS(t *testing.T) {
 	rec := httptest.NewRecorder()
-	serveConfigJS(rec, "https://portal.example", "/dev", "/auth/token", "portal", "  ci-client  ", " 4.2.0 ")
+	serveConfigJS(rec, "https://portal.example", "/dev", "/auth/token", "portal", " 4.2.0 ")
 	if rec.Header().Get("Content-Type") != "application/javascript; charset=utf-8" {
 		t.Fatalf("content-type %q", rec.Header().Get("Content-Type"))
 	}
 	if rec.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("cache-control %q", rec.Header().Get("Cache-Control"))
 	}
-	want := `window.APP_CONFIG = window.APP_CONFIG || {"baseUrl":"https://portal.example","horizonApiOAuthClientId":"ci-client","horizonVersion":"4.2.0","keycloakClientId":"portal","keycloakUrl":"/auth/token","publicPath":"/dev"};` + "\n"
+	want := `window.APP_CONFIG = window.APP_CONFIG || {"baseUrl":"https://portal.example","horizonVersion":"4.2.0","keycloakClientId":"portal","keycloakUrl":"/auth/token","publicPath":"/dev"};` + "\n"
 	if rec.Body.String() != want {
 		t.Fatalf("body %s", rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
-	serveConfigJS(rec, "", "", "/token", "portal", "  ", "  ")
-	if strings.Contains(rec.Body.String(), "horizonApiOAuthClientId") {
-		t.Fatalf("blank client id should be omitted: %s", rec.Body.String())
+	serveConfigJS(rec, "", "", "/token", "portal", "  ")
+	if strings.Contains(rec.Body.String(), "horizonVersion") {
+		t.Fatalf("blank version should be omitted: %s", rec.Body.String())
 	}
 }
 
@@ -293,8 +252,8 @@ func TestNewMMProxy(t *testing.T) {
 		t.Fatal("upstream called without a bearer token")
 	}
 
-	issuer := newTestOIDC(t)
-	h := newMMProxy(upURL, issuer.verifier)
+	iss := authtest.NewIssuer(t)
+	h := newMMProxy(upURL, realmVerifier(t, iss.URL()))
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/mm/modules?team=a", nil)
 	req.Header.Set("Authorization", "Bearer not-a-token")
@@ -309,7 +268,8 @@ func TestNewMMProxy(t *testing.T) {
 		t.Fatal("upstream called for a rejected token")
 	}
 
-	raw := issuer.sign(t, time.Hour)
+	// /api/mm checks only the signature: a token for another client of the realm is accepted.
+	raw := iss.Token(t, iss.Claims(map[string]any{"azp": "grafana", "aud": "grafana"}))
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/mm/modules?team=a", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
@@ -336,194 +296,16 @@ func TestNewMMProxy(t *testing.T) {
 	}
 }
 
-func TestRetryCI401Transport(t *testing.T) {
-	t.Run("passes through non-401", func(t *testing.T) {
-		rt := &seqRT{codes: []int{http.StatusOK}, bodies: []string{"ok"}}
-		tr := &retryCI401Transport{rt: rt, ci: newCITokenSource("http://127.0.0.1:1", "id", "sec")}
-		req := httptest.NewRequest(http.MethodGet, "http://upstream/v", nil)
-		resp, err := tr.RoundTrip(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK || rt.n != 1 {
-			t.Fatalf("status %d trips %d", resp.StatusCode, rt.n)
-		}
-	})
-
-	t.Run("retries get after 401", func(t *testing.T) {
-		ts, log := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-			writeTokenJSON(w, fmt.Sprintf("t%d", n), 3600, "", 0)
-		})
-		ci := newCITokenSource(ts.URL, "id", "sec")
-		ci.token = "stale"
-		ci.expiresAt = time.Now().Add(time.Hour)
-		rt := &seqRT{codes: []int{http.StatusUnauthorized, http.StatusOK}, bodies: []string{"old", "new"}}
-		tr := &retryCI401Transport{rt: rt, ci: ci}
-		req := httptest.NewRequest(http.MethodGet, "http://upstream/v", nil)
-		req.Header.Set("Authorization", "Bearer stale")
-		resp, err := tr.RoundTrip(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode != http.StatusOK || string(body) != "new" {
-			t.Fatalf("status %d body %s", resp.StatusCode, body)
-		}
-		if len(rt.auths) != 2 || rt.auths[0] != "Bearer stale" || rt.auths[1] != "Bearer t1" {
-			t.Fatalf("auths %#v", rt.auths)
-		}
-		if grants := log.grants(); len(grants) != 1 || grants[0] != "client_credentials" {
-			t.Fatalf("grants %#v", grants)
-		}
-	})
-
-	t.Run("returns final 401", func(t *testing.T) {
-		ts, _ := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-			writeTokenJSON(w, "fresh", 3600, "", 0)
-		})
-		ci := newCITokenSource(ts.URL, "id", "sec")
-		rt := &seqRT{codes: []int{http.StatusUnauthorized, http.StatusUnauthorized}, bodies: []string{"a", "b"}}
-		tr := &retryCI401Transport{rt: rt, ci: ci}
-		req := httptest.NewRequest(http.MethodHead, "http://upstream/v", nil)
-		resp, err := tr.RoundTrip(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode != http.StatusUnauthorized || string(body) != "b" || rt.n != 2 {
-			t.Fatalf("status %d body %s trips %d", resp.StatusCode, body, rt.n)
-		}
-	})
-
-	t.Run("does not retry post without getbody", func(t *testing.T) {
-		rt := &seqRT{codes: []int{http.StatusUnauthorized}, bodies: []string{"once"}}
-		tr := &retryCI401Transport{rt: rt, ci: newCITokenSource("http://127.0.0.1:1", "id", "sec")}
-		req := httptest.NewRequest(http.MethodPost, "http://upstream/v", io.NopCloser(strings.NewReader("z")))
-		req.GetBody = nil
-		resp, err := tr.RoundTrip(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusUnauthorized || rt.n != 1 {
-			t.Fatalf("status %d trips %d", resp.StatusCode, rt.n)
-		}
-	})
-
-	t.Run("retries post with getbody", func(t *testing.T) {
-		ts, _ := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-			writeTokenJSON(w, "replayed", 3600, "", 0)
-		})
-		ci := newCITokenSource(ts.URL, "id", "sec")
-		rt := &readBodyRT{codes: []int{http.StatusUnauthorized, http.StatusCreated}}
-		tr := &retryCI401Transport{rt: rt, ci: ci}
-		payload := []byte("payload")
-		req := httptest.NewRequest(http.MethodPost, "http://upstream/v", bytes.NewReader(payload))
-		req.GetBody = func() (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewReader(payload)), nil
-		}
-		resp, err := tr.RoundTrip(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusCreated {
-			t.Fatalf("status %d", resp.StatusCode)
-		}
-		if len(rt.bodies) != 2 || rt.bodies[0] != "payload" || rt.bodies[1] != "payload" {
-			t.Fatalf("bodies %#v", rt.bodies)
-		}
-		if rt.auths[1] != "Bearer replayed" {
-			t.Fatalf("retry auth %q", rt.auths[1])
-		}
-	})
-
-	t.Run("getbody error", func(t *testing.T) {
-		ts, _ := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-			writeTokenJSON(w, "tok", 3600, "", 0)
-		})
-		ci := newCITokenSource(ts.URL, "id", "sec")
-		rt := &seqRT{codes: []int{http.StatusUnauthorized}}
-		tr := &retryCI401Transport{rt: rt, ci: ci}
-		req := httptest.NewRequest(http.MethodPut, "http://upstream/v", strings.NewReader("x"))
-		req.GetBody = func() (io.ReadCloser, error) { return nil, errors.New("nope") }
-		resp, err := tr.RoundTrip(req)
-		if err == nil || !strings.Contains(err.Error(), "nope") {
-			t.Fatalf("err %v resp %v", err, resp)
-		}
-	})
-
-	t.Run("token refresh error", func(t *testing.T) {
-		rt := &seqRT{codes: []int{http.StatusUnauthorized}}
-		tr := &retryCI401Transport{rt: rt, ci: newCITokenSource("http://127.0.0.1:1", "id", "sec")}
-		req := httptest.NewRequest(http.MethodGet, "http://upstream/v", nil)
-		resp, err := tr.RoundTrip(req)
-		if err == nil || resp != nil {
-			t.Fatalf("err %v resp %v", err, resp)
-		}
-	})
-
-	t.Run("transport error", func(t *testing.T) {
-		tr := &retryCI401Transport{rt: errRT{errors.New("dial")}, ci: newCITokenSource("http://127.0.0.1:1", "id", "sec")}
-		req := httptest.NewRequest(http.MethodGet, "http://upstream/v", nil)
-		resp, err := tr.RoundTrip(req)
-		if err == nil || !strings.Contains(err.Error(), "dial") || resp != nil {
-			t.Fatalf("err %v resp %v", err, resp)
-		}
-	})
-
-	t.Run("nil response", func(t *testing.T) {
-		tr := &retryCI401Transport{rt: errRT{}, ci: newCITokenSource("http://127.0.0.1:1", "id", "sec")}
-		req := httptest.NewRequest(http.MethodGet, "http://upstream/v", nil)
-		resp, err := tr.RoundTrip(req)
-		if err != nil || resp != nil {
-			t.Fatalf("err %v resp %v", err, resp)
-		}
-	})
-
-	t.Run("nil transport uses default", func(t *testing.T) {
-		up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNoContent)
-		}))
-		defer up.Close()
-		tr := &retryCI401Transport{ci: newCITokenSource("http://127.0.0.1:1", "id", "sec")}
-		req, err := http.NewRequest(http.MethodPost, up.URL+"/x", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		resp, err := tr.RoundTrip(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusNoContent {
-			t.Fatalf("status %d", resp.StatusCode)
-		}
-	})
-}
-
 func TestNewHorizonProxy(t *testing.T) {
-	var calls []string
-	var auths []string
-	var retryHits int
+	var calls, auths []string
 	var upstreamMu sync.Mutex
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		upstreamMu.Lock()
-		calls = append(calls, r.URL.RequestURI()+"#"+string(body))
+		calls = append(calls, r.Method+" "+r.URL.RequestURI()+"#"+string(body))
 		auths = append(auths, r.Header.Get("Authorization"))
-		retry := false
-		if r.URL.Path == "/retry" {
-			retryHits++
-			if retryHits == 1 {
-				retry = true
-			}
-		}
 		upstreamMu.Unlock()
-		if retry {
+		if r.URL.Path == "/denied" {
 			http.Error(w, "denied", http.StatusUnauthorized)
 			return
 		}
@@ -534,148 +316,96 @@ func TestNewHorizonProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	upstream := func() ([]string, []string) {
+		upstreamMu.Lock()
+		defer upstreamMu.Unlock()
+		return append([]string(nil), calls...), append([]string(nil), auths...)
+	}
 
-	ts, log := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-		if call.id != "ci-id" || call.secret != "ci-sec" {
-			http.Error(w, "bad client", http.StatusUnauthorized)
-			return
-		}
-		writeTokenJSON(w, fmt.Sprintf("ci-%d", n), 3600, "", 0)
-	})
-	ci := newCITokenSource(ts.URL, "ci-id", "ci-sec")
-	issuer := newTestOIDC(t)
-	h := newHorizonProxy(upURL, ci, issuer.verifier)
-	raw := issuer.sign(t, time.Hour)
-
-	for _, header := range []string{"", "Basic abc", "Bearer not-a-token"} {
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/horizon/v1/catalog?q=1", nil)
+	iss := authtest.NewIssuer(t)
+	h := newHorizonProxy(upURL, horizonVerifier(t, iss.URL()))
+	serve := func(method, path, header, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		if header != "" {
 			req.Header.Set("Authorization", header)
 		}
+		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("missing or invalid bearer %q: status %d", header, rec.Code)
+		return rec
+	}
+
+	rejected := map[string]string{
+		"no header":                   "",
+		"basic credentials":           "Basic abc",
+		"not a JWT":                   "Bearer not-a-token",
+		"token for another client":    "Bearer " + iss.Token(t, iss.Claims(map[string]any{"azp": "grafana", "aud": []string{"grafana", "account"}})),
+		"ID token":                    "Bearer " + iss.Token(t, iss.Claims(map[string]any{"typ": "ID"})),
+		"expired token":               "Bearer " + iss.Token(t, iss.Claims(map[string]any{"exp": time.Now().Add(-time.Minute).Unix()})),
+		"token signed by another key": "Bearer " + authtest.Sign(t, authtest.NewKey(t), iss.Claims(nil)),
+	}
+	for name, header := range rejected {
+		if rec := serve(http.MethodGet, "/api/horizon/v1/catalog", header, ""); rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s: status %d, want 401", name, rec.Code)
 		}
 	}
-	upstreamMu.Lock()
-	callsNow := len(calls)
-	upstreamMu.Unlock()
-	if callsNow != 0 {
-		t.Fatalf("upstream called for rejected requests: %d", callsNow)
+	if got, _ := upstream(); len(got) != 0 {
+		t.Fatalf("upstream called for rejected requests: %v", got)
 	}
 
+	raw := iss.Token(t, iss.Claims(map[string]any{"resource_access": authtest.Roles("developer")}))
+	if rec := serve(http.MethodGet, "/api/horizon/v1/catalog?q=1", "Bearer "+raw, ""); rec.Code != http.StatusOK || rec.Body.String() != "upstream:" {
+		t.Fatalf("GET status %d body %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodPost, "/api/horizon/v1/modules/m/workflowTemplates/t/submit", "Bearer "+raw, `{"parameters":{}}`); rec.Code != http.StatusOK {
+		t.Fatalf("POST status %d body %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodDelete, "/api/horizon", "Bearer "+raw, ""); rec.Code != http.StatusOK {
+		t.Fatalf("DELETE status %d body %s", rec.Code, rec.Body.String())
+	}
+	gotCalls, gotAuths := upstream()
+	wantCalls := []string{
+		"GET /v1/catalog?q=1#",
+		`POST /v1/modules/m/workflowTemplates/t/submit#{"parameters":{}}`,
+		"DELETE /#",
+	}
+	if strings.Join(gotCalls, "\n") != strings.Join(wantCalls, "\n") {
+		t.Fatalf("forwarded %q, want %q", gotCalls, wantCalls)
+	}
+	for i, a := range gotAuths {
+		if a != "Bearer "+raw {
+			t.Fatalf("call %d forwarded Authorization %q, want the caller's token", i, a)
+		}
+	}
+
+	// A 401 from Horizon API reaches the browser unchanged, so the portal refreshes the user's token.
+	if rec := serve(http.MethodGet, "/api/horizon/denied", "Bearer "+raw, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("upstream 401 became %d", rec.Code)
+	}
+	if got, _ := upstream(); len(got) != len(wantCalls)+1 {
+		t.Fatalf("upstream 401 was retried: %d calls", len(got))
+	}
+
+	if rec := serve(http.MethodPost, "/api/horizon/v1/modules/m/workflowTemplates/t/submit", "Bearer "+raw, strings.Repeat("a", maxHorizonBody+1)); rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized POST status %d, want 413", rec.Code)
+	}
+
+	dead := newHorizonProxy(&url.URL{Scheme: "http", Host: "127.0.0.1:1"}, horizonVerifier(t, iss.URL()))
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/horizon/v1/catalog?q=1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/horizon/v1/catalog", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "upstream:" {
-		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-	}
-	upstreamMu.Lock()
-	gotCalls := append([]string(nil), calls...)
-	gotAuths := append([]string(nil), auths...)
-	upstreamMu.Unlock()
-	if len(gotAuths) != 1 || gotAuths[0] != "Bearer ci-1" {
-		t.Fatalf("auth %#v", gotAuths)
-	}
-	if gotCalls[0] != "/v1/catalog?q=1#" {
-		t.Fatalf("forwarded %q", gotCalls[0])
-	}
-
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/api/horizon/v1/jobs", strings.NewReader("hello"))
-	req.Header.Set("Authorization", "Bearer "+raw)
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "upstream:hello" {
-		t.Fatalf("post status %d body %s", rec.Code, rec.Body.String())
-	}
-	upstreamMu.Lock()
-	gotCalls = append([]string(nil), calls...)
-	upstreamMu.Unlock()
-	if !strings.HasSuffix(gotCalls[len(gotCalls)-1], "#hello") {
-		t.Fatalf("post forwarded %q", gotCalls[len(gotCalls)-1])
-	}
-
-	upstreamMu.Lock()
-	before := len(calls)
-	upstreamMu.Unlock()
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/api/horizon/retry", nil)
-	req.Header.Set("Authorization", "Bearer "+raw)
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("retry status %d body %s", rec.Code, rec.Body.String())
-	}
-	upstreamMu.Lock()
-	gotCalls = append([]string(nil), calls...)
-	gotAuths = append([]string(nil), auths...)
-	upstreamMu.Unlock()
-	if len(gotCalls)-before != 2 {
-		t.Fatalf("retry calls %d", len(gotCalls)-before)
-	}
-	if gotAuths[len(gotAuths)-2] == gotAuths[len(gotAuths)-1] {
-		t.Fatalf("expected a refreshed token, auths %#v", gotAuths[len(gotAuths)-2:])
-	}
-	if grants := log.grants(); len(grants) < 2 {
-		t.Fatalf("grants %#v", grants)
-	}
-
-	dead := newCITokenSource("http://127.0.0.1:1", "id", "sec")
-	rec = httptest.NewRecorder()
-	silent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("upstream called after token failure")
-	}))
-	defer silent.Close()
-	silentURL, err := url.Parse(silent.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	deadReq := httptest.NewRequest(http.MethodGet, "/api/horizon/x", nil)
-	deadReq.Header.Set("Authorization", "Bearer "+raw)
-	newHorizonProxy(silentURL, dead, issuer.verifier).ServeHTTP(rec, deadReq)
+	dead.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadGateway {
-		t.Fatalf("token failure status %d", rec.Code)
-	}
-
-	rec = httptest.NewRecorder()
-	big := bytes.Repeat([]byte("a"), (4<<20)+1)
-	req = httptest.NewRequest(http.MethodPost, "/api/horizon/v1/jobs", bytes.NewReader(big))
-	req.Header.Set("Authorization", "Bearer "+raw)
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("large body status %d", rec.Code)
-	}
-
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPatch, "/api/horizon/v1/jobs", nil)
-	req.Body = boomReadCloser{}
-	req.Header.Set("Authorization", "Bearer "+raw)
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "read body") {
-		t.Fatalf("read error status %d body %s", rec.Code, rec.Body.String())
-	}
-
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodDelete, "/api/horizon", strings.NewReader("gone"))
-	req.Header.Set("Authorization", "Bearer "+raw)
-	h.ServeHTTP(rec, req)
-	upstreamMu.Lock()
-	lastCall := calls[len(calls)-1]
-	upstreamMu.Unlock()
-	if rec.Code != http.StatusOK || lastCall != "/#gone" {
-		t.Fatalf("delete status %d forwarded %q", rec.Code, lastCall)
+		t.Fatalf("unreachable upstream status %d, want 502", rec.Code)
 	}
 }
 
 func TestNewHorizonProxyDocsPaths(t *testing.T) {
-	var gotAuth string
+	var auths []string
 	var gotMu sync.Mutex
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMu.Lock()
-		gotAuth = r.Header.Get("Authorization")
+		auths = append(auths, r.Header.Get("Authorization"))
 		gotMu.Unlock()
-		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("docs"))
 	}))
 	defer up.Close()
@@ -683,276 +413,28 @@ func TestNewHorizonProxyDocsPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts, _ := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-		writeTokenJSON(w, fmt.Sprintf("ci-%d", n), 3600, "", 0)
-	})
-	ci := newCITokenSource(ts.URL, "ci-id", "ci-sec")
-	issuer := newTestOIDC(t)
-	h := newHorizonProxy(upURL, ci, issuer.verifier)
+	h := newHorizonProxy(upURL, horizonVerifier(t, authtest.NewIssuer(t).URL()))
 
 	for _, path := range []string{"/api/horizon/swagger", "/api/horizon/openapi.json", "/api/horizon/swagger/"} {
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
-		if rec.Code != http.StatusOK {
-			t.Fatalf("%s: status %d", path, rec.Code)
+		for _, header := range []string{"", "Bearer unchecked"} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			if header != "" {
+				req.Header.Set("Authorization", header)
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s with %q: status %d", path, header, rec.Code)
+			}
 		}
 	}
 	gotMu.Lock()
-	auth := gotAuth
-	gotMu.Unlock()
-	if auth != "Bearer ci-1" {
-		t.Fatalf("docs forwarded with CI token %q", auth)
+	defer gotMu.Unlock()
+	for _, a := range auths {
+		if a != "" {
+			t.Fatalf("docs request forwarded Authorization %q", a)
+		}
 	}
-}
-
-func TestCITokenSource(t *testing.T) {
-	t.Run("cache hit", func(t *testing.T) {
-		c := newCITokenSource("http://127.0.0.1:1", "id", "sec")
-		c.token = "cached"
-		c.expiresAt = time.Now().Add(ciTokenRefreshLead + 5*time.Second)
-		got, err := c.get(context.Background())
-		if err != nil || got != "cached" {
-			t.Fatalf("got %q err %v", got, err)
-		}
-	})
-
-	t.Run("client credentials", func(t *testing.T) {
-		ts, log := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-			if call.id != "id" || call.secret != "sec" {
-				http.Error(w, "bad client", http.StatusBadRequest)
-				return
-			}
-			if call.grant == "refresh_token" && call.refresh != "refresh-1" {
-				http.Error(w, "bad refresh", http.StatusBadRequest)
-				return
-			}
-			if call.grant != "client_credentials" && call.grant != "refresh_token" {
-				http.Error(w, "bad grant", http.StatusBadRequest)
-				return
-			}
-			writeTokenJSON(w, "access-1", 3600, "refresh-1", 600)
-		})
-		c := newCITokenSource(ts.URL, "id", "sec")
-		got, err := c.get(context.Background())
-		if err != nil || got != "access-1" {
-			t.Fatalf("got %q err %v", got, err)
-		}
-		if c.refreshTok != "refresh-1" || c.refreshExp.IsZero() {
-			t.Fatalf("refresh %q exp zero %v", c.refreshTok, c.refreshExp.IsZero())
-		}
-		if grants := log.grants(); len(grants) != 1 {
-			t.Fatalf("grants %#v", grants)
-		}
-
-		c.expiresAt = time.Now().Add(ciTokenRefreshLead - time.Second)
-		got, err = c.get(context.Background())
-		if err != nil || got != "access-1" {
-			t.Fatalf("second get %q err %v", got, err)
-		}
-		if grants := log.grants(); len(grants) != 2 || grants[1] != "refresh_token" {
-			t.Fatalf("grants %#v", grants)
-		}
-	})
-
-	t.Run("refresh failure falls back", func(t *testing.T) {
-		ts, log := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-			if call.grant == "refresh_token" {
-				http.Error(w, "expired refresh", http.StatusBadRequest)
-				return
-			}
-			writeTokenJSON(w, "from-cc", 3600, "", 0)
-		})
-		c := newCITokenSource(ts.URL, "id", "sec")
-		c.refreshTok = "old-refresh"
-		c.refreshExp = time.Time{}
-		c.expiresAt = time.Now()
-		got, err := c.get(context.Background())
-		if err != nil || got != "from-cc" {
-			t.Fatalf("got %q err %v", got, err)
-		}
-		if c.refreshTok != "" || !c.refreshExp.IsZero() {
-			t.Fatalf("refresh not cleared: %q", c.refreshTok)
-		}
-		grants := log.grants()
-		if len(grants) != 2 || grants[0] != "refresh_token" || grants[1] != "client_credentials" {
-			t.Fatalf("grants %#v", grants)
-		}
-	})
-
-	t.Run("refresh keeps previous token when not rotated", func(t *testing.T) {
-		ts, _ := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-			writeTokenJSON(w, "access-2", 3600, "", 0)
-		})
-		c := newCITokenSource(ts.URL, "id", "sec")
-		c.refreshTok = "keep-me"
-		c.refreshExp = time.Now().Add(time.Hour)
-		got, err := c.get(context.Background())
-		if err != nil || got != "access-2" {
-			t.Fatalf("got %q err %v", got, err)
-		}
-		if c.refreshTok != "keep-me" {
-			t.Fatalf("refresh %q", c.refreshTok)
-		}
-	})
-
-	t.Run("near refresh expiry uses client credentials and clears refresh", func(t *testing.T) {
-		ts, log := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-			writeTokenJSON(w, "cc", 10, "", 0)
-		})
-		c := newCITokenSource(ts.URL, "id", "sec")
-		c.refreshTok = "soon"
-		c.refreshExp = time.Now().Add(ciRefreshMinRemaining - time.Second)
-		if c.refreshAllowedLocked() {
-			t.Fatal("refresh should be inside the minimum remaining window")
-		}
-		got, err := c.get(context.Background())
-		if err != nil || got != "cc" || c.refreshTok != "" {
-			t.Fatalf("got %q refresh %q err %v", got, c.refreshTok, err)
-		}
-		if grants := log.grants(); len(grants) != 1 || grants[0] != "client_credentials" {
-			t.Fatalf("grants %#v", grants)
-		}
-	})
-
-	t.Run("both grants fail", func(t *testing.T) {
-		ts, _ := newTokenServer(t, func(w http.ResponseWriter, call tokenCall, n int) {
-			http.Error(w, "nope", http.StatusUnauthorized)
-		})
-		c := newCITokenSource(ts.URL, "id", "sec")
-		c.refreshTok = "r"
-		_, err := c.get(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "token 401") {
-			t.Fatalf("err %v", err)
-		}
-		if c.refreshTok != "" {
-			t.Fatalf("refresh %q", c.refreshTok)
-		}
-	})
-
-	t.Run("invalidate clears access only", func(t *testing.T) {
-		c := newCITokenSource("http://example", "id", "sec")
-		c.token = "a"
-		c.expiresAt = time.Now().Add(time.Hour)
-		c.refreshTok = "r"
-		c.refreshExp = time.Now().Add(time.Hour)
-		c.invalidate()
-		if c.token != "" || !c.expiresAt.IsZero() || c.refreshTok != "r" {
-			t.Fatalf("token %q exp zero %v refresh %q", c.token, c.expiresAt.IsZero(), c.refreshTok)
-		}
-	})
-
-	t.Run("apply token response deadlines", func(t *testing.T) {
-		c := newCITokenSource("http://example", "id", "sec")
-		c.refreshTok = "previous"
-		c.applyTokenResponse(&tokenEndpointJSON{AccessToken: "a", ExpiresIn: 0}, true)
-		if d := time.Until(c.expiresAt); d < 4*time.Minute || d > 5*time.Minute+time.Second {
-			t.Fatalf("default lifetime %s", d)
-		}
-		if c.refreshTok != "" {
-			t.Fatalf("refresh cleared, got %q", c.refreshTok)
-		}
-
-		jwtExp := time.Now().Add(30 * time.Second).Unix()
-		c.applyTokenResponse(&tokenEndpointJSON{
-			AccessToken:      makeUnsignedJWT(t, map[string]any{"exp": jwtExp}),
-			ExpiresIn:        7200,
-			RefreshToken:     "rot",
-			RefreshExpiresIn: 0,
-		}, true)
-		want := time.Unix(jwtExp, 0)
-		if c.expiresAt.Sub(want).Abs() > time.Second {
-			t.Fatalf("jwt cap expiresAt %s want %s", c.expiresAt, want)
-		}
-		if c.refreshTok != "rot" || !c.refreshExp.IsZero() {
-			t.Fatalf("refresh %q zero %v", c.refreshTok, c.refreshExp.IsZero())
-		}
-
-		later := time.Now().Add(24 * time.Hour).Unix()
-		c.applyTokenResponse(&tokenEndpointJSON{
-			AccessToken:      makeUnsignedJWT(t, map[string]any{"exp": later}),
-			ExpiresIn:        10,
-			RefreshToken:     "rot2",
-			RefreshExpiresIn: 120,
-		}, false)
-		if d := time.Until(c.expiresAt); d < 7*time.Second || d > 13*time.Second {
-			t.Fatalf("expires_in wins when jwt exp is later: %s", d)
-		}
-		if c.refreshExp.IsZero() || time.Until(c.refreshExp) < time.Minute {
-			t.Fatalf("refresh exp %s", c.refreshExp)
-		}
-
-		c.refreshTok = "stay"
-		c.applyTokenResponse(&tokenEndpointJSON{AccessToken: "b", ExpiresIn: 30}, false)
-		if c.refreshTok != "stay" {
-			t.Fatalf("refresh %q", c.refreshTok)
-		}
-	})
-
-	t.Run("refresh allowed", func(t *testing.T) {
-		c := newCITokenSource("http://example", "id", "sec")
-		if c.refreshAllowedLocked() {
-			t.Fatal("empty refresh token")
-		}
-		c.refreshTok = "r"
-		c.refreshExp = time.Time{}
-		if !c.refreshAllowedLocked() {
-			t.Fatal("missing refresh expiry should still allow refresh")
-		}
-		c.refreshExp = time.Now().Add(ciRefreshMinRemaining + 5*time.Second)
-		if !c.refreshAllowedLocked() {
-			t.Fatal("refresh outside the minimum window")
-		}
-		c.refreshExp = time.Now().Add(ciRefreshMinRemaining - time.Second)
-		if c.refreshAllowedLocked() {
-			t.Fatal("refresh inside the minimum window")
-		}
-	})
-
-	t.Run("post token form errors", func(t *testing.T) {
-		c := newCITokenSource("http://127.0.0.1:1", "id", "sec")
-		if err := c.postTokenForm(context.Background(), url.Values{}, true); err == nil {
-			t.Fatal("expected dial error")
-		}
-
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch r.URL.Query().Get("mode") {
-			case "status":
-				http.Error(w, "  denied  ", http.StatusForbidden)
-			case "json":
-				_, _ = w.Write([]byte("{"))
-			case "empty":
-				_, _ = w.Write([]byte(`{"expires_in":30}`))
-			default:
-				_, _ = w.Write([]byte(`{"access_token":"ok","expires_in":30}`))
-			}
-		}))
-		defer ts.Close()
-		c.tokenURL = ts.URL + "?mode=status"
-		err := c.postTokenForm(context.Background(), url.Values{}, true)
-		if err == nil || !strings.Contains(err.Error(), "token 403: denied") {
-			t.Fatalf("status err %v", err)
-		}
-		c.tokenURL = ts.URL + "?mode=json"
-		if err := c.postTokenForm(context.Background(), url.Values{}, true); err == nil {
-			t.Fatal("expected json error")
-		}
-		c.tokenURL = ts.URL + "?mode=empty"
-		if err := c.postTokenForm(context.Background(), url.Values{}, true); err == nil || !strings.Contains(err.Error(), "no access_token") {
-			t.Fatalf("empty token err %v", err)
-		}
-
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		c.tokenURL = ts.URL
-		if err := c.postTokenForm(ctx, url.Values{}, true); err == nil {
-			t.Fatal("expected canceled context")
-		}
-
-		c.tokenURL = "http://[::1]:namedport"
-		if err := c.postTokenForm(context.Background(), url.Values{}, true); err == nil {
-			t.Fatal("expected request construction error")
-		}
-	})
 }
 
 func TestSpaHandler(t *testing.T) {
@@ -1050,9 +532,9 @@ func (w *headerWriter) Write(p []byte) (int, error) {
 }
 
 func TestOIDCBearerVerifier(t *testing.T) {
-	issuer := newTestOIDC(t)
-	v := oidcBearerVerifier{inner: issuer.verifier}
-	raw := issuer.sign(t, time.Hour)
+	iss := authtest.NewIssuer(t)
+	v := oidcBearerVerifier{inner: realmVerifier(t, iss.URL())}
+	raw := iss.Token(t, iss.Claims(nil))
 	if err := v.Verify(context.Background(), raw); err != nil {
 		t.Fatal(err)
 	}
@@ -1067,7 +549,7 @@ func TestProxyMainSmoke(t *testing.T) {
 		return
 	}
 
-	issuer := newTestOIDC(t)
+	iss := authtest.NewIssuer(t)
 	var mmPath string
 	var mmMu sync.Mutex
 	mm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1094,15 +576,13 @@ func TestProxyMainSmoke(t *testing.T) {
 	var logs safeBuf
 	cmd := exec.Command(os.Args[0], "-test.run=^TestProxyMainSmoke$")
 	cmd.Env = envWith(map[string]string{
-		"HORIZON_PROXY_TEST_RUN_MAIN":  "1",
-		"LISTEN_ADDR":                  "127.0.0.1:0",
-		"OIDC_ISSUER_URL":              issuer.issuer,
-		"MODULE_MANAGER_BASE_URL":      mm.URL,
-		"HORIZON_API_BASE_URL":         ha.URL,
-		"HORIZON_API_CI_CLIENT_ID":     "ci-client",
-		"HORIZON_API_CI_CLIENT_SECRET": "ci-secret",
-		"PUBLIC_BASE_URL":              "https://portal.example",
-		"PUBLIC_PATH":                  "dev",
+		"HORIZON_PROXY_TEST_RUN_MAIN": "1",
+		"LISTEN_ADDR":                 "127.0.0.1:0",
+		"OIDC_ISSUER_URL":             iss.URL(),
+		"MODULE_MANAGER_BASE_URL":     mm.URL,
+		"HORIZON_API_BASE_URL":        ha.URL,
+		"PUBLIC_BASE_URL":             "https://portal.example",
+		"PUBLIC_PATH":                 "dev",
 	})
 	cmd.Stdout = &logs
 	cmd.Stderr = &logs
@@ -1132,7 +612,7 @@ func TestProxyMainSmoke(t *testing.T) {
 	cfgBody, _ := io.ReadAll(cfgResp.Body)
 	cfgResp.Body.Close()
 	wantCfg := httptest.NewRecorder()
-	serveConfigJS(wantCfg, "https://portal.example", normalizePublicPath("dev"), "/auth/realms/horizon/protocol/openid-connect/token", "horizon-dev-portal", "ci-client", "")
+	serveConfigJS(wantCfg, "https://portal.example", normalizePublicPath("dev"), "/auth/realms/horizon/protocol/openid-connect/token", "horizon-dev-portal", "")
 	if cfgResp.StatusCode != http.StatusOK || !bytes.Equal(cfgBody, wantCfg.Body.Bytes()) {
 		t.Fatalf("config.js %d\n got %s\nwant %s", cfgResp.StatusCode, cfgBody, wantCfg.Body.Bytes())
 	}
@@ -1159,7 +639,7 @@ func TestProxyMainSmoke(t *testing.T) {
 		t.Fatalf("mm without token %d", mmResp.StatusCode)
 	}
 
-	raw := issuer.sign(t, time.Hour)
+	raw := iss.Token(t, iss.Claims(nil))
 	mmReq, err := http.NewRequest(http.MethodGet, base+"/api/mm/status", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -1178,271 +658,56 @@ func TestProxyMainSmoke(t *testing.T) {
 		t.Fatalf("mm status %d body %s path %s", mmResp.StatusCode, mmBody, gotMMPath)
 	}
 
-	before := issuer.tokenHits.Load()
-	haReq, err := http.NewRequest(http.MethodGet, base+"/api/horizon/v1/ping", nil)
-	if err != nil {
-		t.Fatal(err)
+	getHorizon := func(token string) (int, string) {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, base+"/api/horizon/v1/ping", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
 	}
-	haReq.Header.Set("Authorization", "Bearer "+raw)
-	haResp, err := client.Do(haReq)
-	if err != nil {
-		t.Fatal(err)
+	// main defaults the required audience to horizon-api.
+	other := iss.Token(t, iss.Claims(map[string]any{"azp": "grafana", "aud": "grafana"}))
+	if code, _ := getHorizon(other); code != http.StatusUnauthorized {
+		t.Fatalf("horizon with a token for another client: %d", code)
 	}
-	haBody, _ := io.ReadAll(haResp.Body)
-	haResp.Body.Close()
-	if haResp.StatusCode != http.StatusOK || string(haBody) != "ha-ok" {
-		t.Fatalf("horizon %d %s\n%s", haResp.StatusCode, haBody, logs.String())
+	if code, b := getHorizon(raw); code != http.StatusOK || b != "ha-ok" {
+		t.Fatalf("horizon %d %s\n%s", code, b, logs.String())
 	}
 	haMu.Lock()
 	gotHAAuth := haAuth
 	haMu.Unlock()
-	if gotHAAuth != "Bearer smoke-access" {
-		t.Fatalf("horizon auth %q", gotHAAuth)
-	}
-	if issuer.tokenHits.Load() <= before {
-		t.Fatal("main did not call the derived token endpoint")
+	if gotHAAuth != "Bearer "+raw {
+		t.Fatalf("horizon got Authorization %q, want the caller's token", gotHAAuth)
 	}
 }
 
-type testOIDC struct {
-	issuer    string
-	verifier  *oidc.IDTokenVerifier
-	key       *rsa.PrivateKey
-	tokenHits *atomic.Int32
-}
-
-func newTestOIDC(t *testing.T) *testOIDC {
+// realmVerifier is the signature-only check main uses for /api/mm and /api/cli.
+func realmVerifier(t *testing.T, issuer string) *oidc.IDTokenVerifier {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	provider, err := oidc.NewProvider(context.Background(), issuer)
 	if err != nil {
 		t.Fatal(err)
 	}
-	o := &testOIDC{key: key, tokenHits: &atomic.Int32{}}
-	mux := http.NewServeMux()
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
-	o.issuer = srv.URL
-	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"issuer":                                o.issuer,
-			"authorization_endpoint":                o.issuer + "/auth",
-			"token_endpoint":                        o.issuer + "/protocol/openid-connect/token",
-			"jwks_uri":                              o.issuer + "/keys",
-			"response_types_supported":              []string{"id_token", "code"},
-			"subject_types_supported":               []string{"public"},
-			"id_token_signing_alg_values_supported": []string{"RS256"},
-		})
-	})
-	mux.HandleFunc("GET /keys", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if o.key.E != 65537 {
-			http.Error(w, "unexpected exponent", http.StatusInternalServerError)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"keys": []map[string]string{{
-				"kty": "RSA",
-				"kid": "test-key",
-				"alg": "RS256",
-				"use": "sig",
-				"n":   base64.RawURLEncoding.EncodeToString(o.key.N.Bytes()),
-				"e":   base64.RawURLEncoding.EncodeToString([]byte{1, 0, 1}),
-			}},
-		})
-	})
-	mux.HandleFunc("POST /protocol/openid-connect/token", func(w http.ResponseWriter, r *http.Request) {
-		o.tokenHits.Add(1)
-		writeTokenJSON(w, "smoke-access", 3600, "", 0)
-	})
-	provider, err := oidc.NewProvider(context.Background(), o.issuer)
+	return provider.Verifier(&oidc.Config{SkipClientIDCheck: true})
+}
+
+// horizonVerifier is the check main uses for /api/horizon.
+func horizonVerifier(t *testing.T, issuer string) *horizonauth.Verifier {
+	t.Helper()
+	v, err := horizonauth.NewVerifier(context.Background(), issuer, "horizon-api")
 	if err != nil {
 		t.Fatal(err)
 	}
-	o.verifier = provider.Verifier(&oidc.Config{SkipClientIDCheck: true})
-	return o
+	return v
 }
-
-func (o *testOIDC) sign(t *testing.T, ttl time.Duration) string {
-	t.Helper()
-	now := time.Now()
-	claims := map[string]any{
-		"iss": o.issuer,
-		"sub": "user-1",
-		"aud": "horizon-dev-portal",
-		"iat": now.Add(-time.Minute).Unix(),
-		"exp": now.Add(ttl).Unix(),
-	}
-	hdr := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","kid":"test-key","typ":"JWT"}`))
-	pb, err := json.Marshal(claims)
-	if err != nil {
-		t.Fatal(err)
-	}
-	payload := base64.RawURLEncoding.EncodeToString(pb)
-	signingInput := hdr + "." + payload
-	sum := sha256.Sum256([]byte(signingInput))
-	sig, err := rsa.SignPKCS1v15(rand.Reader, o.key, crypto.SHA256, sum[:])
-	if err != nil {
-		t.Fatal(err)
-	}
-	return signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
-}
-
-func makeUnsignedJWT(t *testing.T, claims map[string]any) string {
-	t.Helper()
-	hdr := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
-	pb, err := json.Marshal(claims)
-	if err != nil {
-		t.Fatal(err)
-	}
-	payload := base64.RawURLEncoding.EncodeToString(pb)
-	return hdr + "." + payload + ".sig"
-}
-
-func paddedUnsignedJWT(t *testing.T, claims map[string]any) string {
-	t.Helper()
-	pad := 0
-	var enc string
-	for pad < 6 {
-		extra, err := json.Marshal(map[string]any{"exp": claims["exp"], "pad": strings.Repeat("x", pad)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		enc = base64.URLEncoding.EncodeToString(extra)
-		if strings.Contains(enc, "=") {
-			if _, err := base64.RawURLEncoding.DecodeString(enc); err == nil {
-				t.Fatal("padded payload unexpectedly decoded as raw base64url")
-			}
-			break
-		}
-		pad++
-	}
-	if !strings.Contains(enc, "=") {
-		t.Fatal("could not build a padded payload")
-	}
-	hdr := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`))
-	return hdr + "." + enc + ".sig"
-}
-
-type tokenCall struct {
-	grant   string
-	refresh string
-	id      string
-	secret  string
-}
-
-type tokenLog struct {
-	mu    sync.Mutex
-	calls []tokenCall
-}
-
-func (l *tokenLog) add(c tokenCall) int {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.calls = append(l.calls, c)
-	return len(l.calls)
-}
-
-func (l *tokenLog) grants() []string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	out := make([]string, len(l.calls))
-	for i, c := range l.calls {
-		out[i] = c.grant
-	}
-	return out
-}
-
-func newTokenServer(t *testing.T, fn func(w http.ResponseWriter, call tokenCall, n int)) (*httptest.Server, *tokenLog) {
-	t.Helper()
-	log := &tokenLog{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		call := tokenCall{
-			grant:   r.Form.Get("grant_type"),
-			refresh: r.Form.Get("refresh_token"),
-			id:      r.Form.Get("client_id"),
-			secret:  r.Form.Get("client_secret"),
-		}
-		n := log.add(call)
-		fn(w, call, n)
-	}))
-	t.Cleanup(srv.Close)
-	return srv, log
-}
-
-func writeTokenJSON(w http.ResponseWriter, access string, expires int, refresh string, refreshExp int) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"access_token":       access,
-		"expires_in":         expires,
-		"refresh_token":      refresh,
-		"refresh_expires_in": refreshExp,
-	})
-}
-
-type seqRT struct {
-	codes  []int
-	bodies []string
-	auths  []string
-	n      int
-}
-
-func (s *seqRT) RoundTrip(req *http.Request) (*http.Response, error) {
-	s.auths = append(s.auths, req.Header.Get("Authorization"))
-	code := s.codes[s.n]
-	body := ""
-	if s.n < len(s.bodies) {
-		body = s.bodies[s.n]
-	}
-	s.n++
-	return &http.Response{
-		StatusCode: code,
-		Body:       io.NopCloser(strings.NewReader(body)),
-		Header:     make(http.Header),
-		Request:    req,
-	}, nil
-}
-
-type readBodyRT struct {
-	codes  []int
-	bodies []string
-	auths  []string
-}
-
-func (s *readBodyRT) RoundTrip(req *http.Request) (*http.Response, error) {
-	s.auths = append(s.auths, req.Header.Get("Authorization"))
-	var b []byte
-	if req.Body != nil {
-		var err error
-		b, err = io.ReadAll(req.Body)
-		if err != nil {
-			return nil, err
-		}
-	}
-	s.bodies = append(s.bodies, string(b))
-	code := s.codes[len(s.bodies)-1]
-	return &http.Response{
-		StatusCode: code,
-		Body:       io.NopCloser(strings.NewReader("ok")),
-		Header:     make(http.Header),
-		Request:    req,
-	}, nil
-}
-
-type errRT struct{ err error }
-
-func (e errRT) RoundTrip(*http.Request) (*http.Response, error) {
-	return nil, e.err
-}
-
-type boomReadCloser struct{}
-
-func (boomReadCloser) Read([]byte) (int, error) { return 0, errors.New("boom") }
-func (boomReadCloser) Close() error             { return nil }
 
 type safeBuf struct {
 	mu sync.Mutex

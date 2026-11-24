@@ -55,7 +55,10 @@ func NewIssuer(t testing.TB) *Issuer {
 			{Key: &i.key.PublicKey, KeyID: "k1", Algorithm: "RS256", Use: "sig"},
 		}})
 	})
-	i.srv = httptest.NewServer(mux)
+	// Assign srv before the server starts: the handlers read it, and a first request from
+	// another process (a binary under test) has nothing else that orders it after this write.
+	i.srv = httptest.NewUnstartedServer(mux)
+	i.srv.Start()
 	t.Cleanup(i.srv.Close)
 	return i
 }

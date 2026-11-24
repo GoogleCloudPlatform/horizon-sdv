@@ -21,7 +21,6 @@ metadata:
 data:
   LISTEN_ADDR: ":8080"
   OIDC_ISSUER_URL: {{ .Values.config.oidcIssuerUrl | quote }}
-  KEYCLOAK_TOKEN_URL: {{ .Values.config.keycloakTokenUrl | quote }}
   MODULE_MANAGER_BASE_URL: {{ .Values.config.moduleManagerBaseUrl | quote }}
   HORIZON_API_BASE_URL: {{ .Values.config.horizonApiBaseUrl | quote }}
   PUBLIC_BASE_URL: {{ .Values.config.publicBaseUrl | quote }}
@@ -30,5 +29,5 @@ data:
   PUBLIC_PATH: {{ .Values.config.publicPath | quote }}
   KEYCLOAK_TOKEN_PATH: {{ .Values.config.keycloakTokenPath | quote }}
   KEYCLOAK_CLIENT_ID: {{ .Values.config.keycloakClientId | quote }}
-  HORIZON_API_CI_CLIENT_ID: {{ .Values.config.horizonApiCiClientId | quote }}
+  HORIZON_API_CLIENT_ID: {{ .Values.config.horizonApiClientId | quote }}
   CLI_DIST_DIR: "/cli-dist"

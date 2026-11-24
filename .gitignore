@@ -61,10 +61,6 @@ tools/horizon/horizon
 # Staged CLI sources copied into the portal Docker context (terraform local_file).
 terraform/modules/sdv-container-images/images/horizon-dev-portal/horizon-dev-portal/cli/
 
-# Staged shared Go auth library copied into Docker contexts (terraform local_file, build.sh).
-terraform/modules/sdv-container-images/images/horizon-api/horizon-api-app/shared/
-terraform/modules/sdv-container-images/images/module-manager/module-manager-app/shared/
-
 # Local CLI binaries for Windows
 tools/horizon/horizon.exe
 

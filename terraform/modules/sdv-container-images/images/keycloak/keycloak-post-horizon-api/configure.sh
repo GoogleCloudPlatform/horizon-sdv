@@ -21,24 +21,6 @@ SERVICEACCOUNT=/var/run/secrets/kubernetes.io/serviceaccount
 TOKEN=$(cat "${SERVICEACCOUNT}/token")
 CACERT=${SERVICEACCOUNT}/ca.crt
 
-# Wait until the namespace exists (Argo sync can run this Job before the child Application creates it).
-wait_for_namespace() {
-  local ns=$1
-  local deadline=$(( $(date +%s) + 300 ))
-  while true; do
-    code=$(curl --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
-      -o /dev/null -w '%{http_code}' -sS "${APISERVER}/api/v1/namespaces/${ns}" || true)
-    if [[ "${code}" == "200" ]]; then
-      return 0
-    fi
-    if [[ "$(date +%s)" -ge "${deadline}" ]]; then
-      echo "timeout waiting for namespace ${ns} (last HTTP ${code})" >&2
-      exit 1
-    fi
-    sleep 2
-  done
-}
-
 npm install
 node keycloak.mjs
 
@@ -72,30 +54,10 @@ printf '%s' "${SECRET_JSON}" | curl -fsS -o /dev/null -w 'POST jenkins-horizon-a
   -X POST "${APISERVER}/api/v1/namespaces/${JENKINS_NS}/secrets" \
   --data-binary @-
 
-# Developer Portal proxy uses the same Keycloak confidential client (client_credentials).
+# The Developer Portal proxy forwards the user's own token and needs no client secret.
+# Delete the copy of this secret that earlier versions of this job wrote into its namespace.
 DEVPORTAL_NS="${NAMESPACE_PREFIX}horizon-dev-portal"
 SECRET_NAME="${NAMESPACE_PREFIX}horizon-dev-portal-secrets"
-wait_for_namespace "${DEVPORTAL_NS}"
-SECRET_JSON_DEVPORTAL=$(
-  jq -n \
-    --arg ns "$DEVPORTAL_NS" \
-    --arg name "$SECRET_NAME" \
-    --arg secret "$SECRET" \
-    '{
-      apiVersion: "v1",
-      kind: "Secret",
-      metadata: {name: $name, namespace: $ns},
-      type: "Opaque",
-      stringData: {"HORIZON_API_CI_CLIENT_SECRET": $secret}
-    }'
-)
-
 curl -sS -o /dev/null -w "DELETE ${SECRET_NAME}: %{http_code}\n" \
   --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
   -X DELETE "${APISERVER}/api/v1/namespaces/${DEVPORTAL_NS}/secrets/${SECRET_NAME}" || true
-
-printf '%s' "${SECRET_JSON_DEVPORTAL}" | curl -fsS -o /dev/null -w "POST ${SECRET_NAME}: %{http_code}\n" \
-  --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
-  -H 'Accept: application/json' -H 'Content-Type: application/json' \
-  -X POST "${APISERVER}/api/v1/namespaces/${DEVPORTAL_NS}/secrets" \
-  --data-binary @-

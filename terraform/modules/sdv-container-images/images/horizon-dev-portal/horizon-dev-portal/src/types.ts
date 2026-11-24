@@ -21,8 +21,6 @@ export interface AppConfig {
   publicPath?: string;
   keycloakUrl?: string;
   keycloakClientId?: string;
-  /** Keycloak OAuth client id used for client-credentials calls to Horizon API via this app's proxy (not the SPA login client). */
-  horizonApiOAuthClientId?: string;
   /** Horizon platform version from versions.yaml (components.horizoncore), served by the proxy from HORIZON_VERSION. */
   horizonVersion?: string;
   /** Optional default from config.js when localStorage has no `theme` key */
