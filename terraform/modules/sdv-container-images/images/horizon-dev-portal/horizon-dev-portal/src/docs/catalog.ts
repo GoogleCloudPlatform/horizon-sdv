@@ -13,16 +13,16 @@
 // limitations under the License.
 //
 
-/** Left-pane category chip. Order of PORTAL_GUIDES is the importance order. */
+/** Left-pane category chip (colour: theme.palette.docs.chip). Order of PORTAL_GUIDES is the importance order. */
 export const DOC_CATEGORIES = {
-  deploy: { label: 'DEPLOY', color: '#1a73e8' },
-  portal: { label: 'PORTAL', color: '#1967d2' },
-  release: { label: 'RELEASE', color: '#c2185b' },
-  operate: { label: 'OPERATE', color: '#188038' },
-  workloads: { label: 'WORKLOADS', color: '#1a73e8' },
-  architecture: { label: 'ARCHITECTURE', color: '#8430ce' },
-  governance: { label: 'GOVERNANCE', color: '#5f6368' },
-  ai: { label: 'AI', color: '#007b83' },
+  deploy: { label: 'DEPLOY' },
+  portal: { label: 'PORTAL' },
+  release: { label: 'RELEASE' },
+  operate: { label: 'OPERATE' },
+  workloads: { label: 'WORKLOADS' },
+  architecture: { label: 'ARCHITECTURE' },
+  governance: { label: 'GOVERNANCE' },
+  ai: { label: 'AI' },
 } as const;
 
 export type DocCategoryId = keyof typeof DOC_CATEGORIES;
@@ -111,6 +111,12 @@ const PIPELINE_GUIDE = 'docs/workloads/guides/pipeline_guide.md';
 const RELEASE_NOTES = 'release-notes.md';
 const MCP_SETUP = 'docs/guides/mcp_setup.md';
 const MODULE_ARCHITECTURE = 'docs/architecture/04_module-architecture.md';
+const PORTAL_USER_GUIDE = 'docs/architecture/02_horizon-portal.md';
+const HORIZON_CLI = 'docs/architecture/03_horizon-cli.md';
+const ARCHITECTURE_REFERENCES = new Set([
+  'docs/architecture/01_overview.md',
+  'docs/architecture/06_interfaces.md',
+]);
 
 export function guideForPath(repoPath: string): PortalGuide | undefined {
   return PORTAL_GUIDES.find((guide) => guide.path === repoPath);
@@ -138,7 +144,10 @@ export function sectionForPath(repoPath: string): PortalGuide | undefined {
   if (repoPath.startsWith('docs/guides/') && repoPath !== MCP_SETUP) {
     return guideForPath(UPGRADE_GUIDES);
   }
-  if (repoPath.startsWith('docs/architecture/')) {
+  if (repoPath === HORIZON_CLI) {
+    return guideForPath(PORTAL_USER_GUIDE);
+  }
+  if (ARCHITECTURE_REFERENCES.has(repoPath)) {
     return guideForPath(MODULE_ARCHITECTURE);
   }
   return undefined;

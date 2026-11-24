@@ -65,26 +65,28 @@ type cliHandler struct {
 	distDir string
 }
 
+// requireBearer rejects requests without a valid user access token. A nil verifier allows all requests.
+func requireBearer(v bearerVerifier, next http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if v != nil {
+			raw, err := bearerToken(r)
+			if err != nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if err := v.Verify(r.Context(), raw); err != nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		next(w, r)
+	})
+}
+
 func registerCLIRoutes(mux *http.ServeMux, distDir string, v bearerVerifier) {
 	h := &cliHandler{distDir: distDir}
-	wrap := func(next http.HandlerFunc) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if v != nil {
-				raw, err := bearerToken(r)
-				if err != nil {
-					http.Error(w, "unauthorized", http.StatusUnauthorized)
-					return
-				}
-				if err := v.Verify(r.Context(), raw); err != nil {
-					http.Error(w, "unauthorized", http.StatusUnauthorized)
-					return
-				}
-			}
-			next(w, r)
-		})
-	}
-	mux.Handle("GET /api/cli/v1/manifest", wrap(h.serveManifest))
-	mux.Handle("GET /api/cli/v1/download/{os}/{arch}", wrap(h.serveDownload))
+	mux.Handle("GET /api/cli/v1/manifest", requireBearer(v, h.serveManifest))
+	mux.Handle("GET /api/cli/v1/download/{os}/{arch}", requireBearer(v, h.serveDownload))
 }
 
 func (h *cliHandler) loadManifest() (*cliManifest, error) {

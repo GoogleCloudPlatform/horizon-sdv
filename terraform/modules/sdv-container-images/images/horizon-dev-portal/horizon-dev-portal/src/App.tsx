@@ -69,7 +69,9 @@ import { ToolsPage } from './pages/ToolsPage.tsx';
 import HorizonCliTab from './pages/tools/HorizonCliTab.tsx';
 import HorizonApiTab from './pages/tools/HorizonApiTab.tsx';
 
-const DocumentationPage = lazy(() => import('./pages/DocumentationPage.tsx'));
+const DocumentationPage = lazy(() =>
+  import('./pages/DocumentationPage.tsx').then((m) => ({ default: m.DocumentationPage }))
+);
 
 const drawerWidth = 260;
 
