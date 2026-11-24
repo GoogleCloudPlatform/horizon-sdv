@@ -71,7 +71,7 @@ Versions to keep aligned on an ABFS release: `casfs.daemonset.version` and `imag
 
 ### Shared cacheman
 
-`cacheman.enabled: true` by default (the target setup): the module deploys DaemonSet `abfs-cacheman` in `module-manager`, one `abfs cacheman run` per node of the pool, started on the host side (host network and PID namespace, privileged, no service account token). It waits for `casfs`, sets the node's `net.core.somaxconn` (`cacheman.somaxconn`), runs `abfs init` and `abfs config -w` against `cacheman.server`, and keeps the instance directory and the cache in `cacheman.hostDir` (`/var/lib/abfs`) on the node disk. The directory belongs to `root:<cacheman.buildGroupId>` with mode `2770`: only root and the build pods' group (1000) can reach the cacheman socket or write into the cache.
+`cacheman.enabled: true` by default (the target setup): the module deploys DaemonSet `abfs-cacheman` in `module-manager`, one `abfs cacheman run` per node of the pool, started on the host side (host network and PID namespace, no service account token). A root init container waits for `casfs`, sets the node's `net.core.somaxconn` (`cacheman.somaxconn`) and hands `cacheman.hostDir` (`/var/lib/abfs`, on the node disk) to the build user. cacheman itself runs as that user (`cacheman.buildUserId`/`buildGroupId`, 1000 like the builder image), runs `abfs init` and `abfs config -w` against `cacheman.server`, and keeps the instance directory and the cache there. abfs creates its config, sockets and cache files with fixed modes, so the build pods can use them only because cacheman runs as their user; the directory has mode `0770`, so other users on the node cannot reach the socket or the cache.
 
 The builder chart has the matching switch `spec.abfs.sharedCacheman.enabled: true` (`values-abfs.yaml`); keep both the same. The build pods mount the same node directory, skip `abfs init` / `config` / `cacheman run`, and only do `abfs mount` and `abfs setup`. The one-pod-per-node rule is removed and the pod requests are reduced, so about 10 build pods share a node and its cacheman. With both switches off, every build pod starts its own `abfs cacheman` and one build pod runs per node.
 
@@ -79,7 +79,7 @@ The builder chart has the matching switch `spec.abfs.sharedCacheman.enabled: tru
 |-------|---------|---------|
 | `cacheman.enabled` | `true` | Deploy the shared cacheman DaemonSet |
 | `cacheman.hostDir` | `/var/lib/abfs` | Node directory shared with the build pods; same value as `spec.abfs.sharedCacheman.hostDir` |
-| `cacheman.buildGroupId` | `1000` | Group of the build pods (builder image user); owner group of `hostDir` |
+| `cacheman.buildUserId`, `cacheman.buildGroupId` | `1000`, `1000` | User and group of the build pods (builder image user); cacheman runs as them and they own `hostDir` |
 | `cacheman.server`, `cacheman.clientFlags` | as the builder chart | ABFS server and TLS/auth flags |
 | `cacheman.manifestServer` | `android.googlesource.com` | Manifest host written by `abfs config -w`, which now runs once per node instead of in every build pod |
 | `cacheman.somaxconn` | `8192` | Listen backlog of the node |

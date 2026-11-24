@@ -60,8 +60,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      # cacheman runs as root on the host side and needs no Kubernetes API:
-      # no service account token, so root in this pod cannot use it.
+      # cacheman needs no Kubernetes API: no service account token.
       automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -86,17 +85,19 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      containers:
-        - name: cacheman
+      # The node directory belongs to the build user: abfs creates its config,
+      # sockets and cache files with fixed modes (0600, 0755) whatever the
+      # umask, so build pods (user builder) can use them only when cacheman
+      # runs as that same user, as the per-pod cacheman did. Only the
+      # preparation below needs root.
+      initContainers:
+        - name: prepare
           {{- if .Values.image.digest }}
           image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
           {{- else }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # Privileged: cacheman mounts the casfs cache and the backlog is a
-          # node sysctl. Root; the build pods (another user) reach it through
-          # the shared directory below, open to their group only.
           securityContext:
             privileged: true
             runAsUser: 0
@@ -105,49 +106,49 @@ spec:
             - |
               set -euo pipefail
               DIR={{ .Values.cacheman.hostDir | quote }}
+              echo "waiting for the casfs kernel module (casfs installer DaemonSet)"
+              until [ -d /sys/module/casfs ]; do sleep 5; done
+              # ninja of every build on the node asks cacheman for cache hits
+              # over its unix socket; the default backlog is too small.
+              echo {{ .Values.cacheman.somaxconn | int }} > /proc/sys/net/core/somaxconn ||                 echo "WARNING: could not raise net.core.somaxconn"
+              echo "net.core.somaxconn=$(cat /proc/sys/net/core/somaxconn)"
+              mkdir -p "${DIR}/instances" "${DIR}/cache" "${DIR}/home"
+              # Also takes over files left by an earlier cacheman that ran as root.
+              chown -R "{{ .Values.cacheman.buildUserId | int }}:{{ .Values.cacheman.buildGroupId | int }}" "${DIR}"
+              chmod 0770 "${DIR}" "${DIR}/instances" "${DIR}/cache" "${DIR}/home"
+          volumeMounts:
+            - name: abfs-shared
+              mountPath: {{ .Values.cacheman.hostDir | quote }}
+      containers:
+        - name: cacheman
+          {{- if .Values.image.digest }}
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          {{- else }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Privileged for the Bidirectional mount propagation below; runs as
+          # the build user, so it has no capabilities (same as the per-pod
+          # cacheman of the builder image).
+          securityContext:
+            privileged: true
+            runAsUser: {{ .Values.cacheman.buildUserId | int }}
+            runAsGroup: {{ .Values.cacheman.buildGroupId | int }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              DIR={{ .Values.cacheman.hostDir | quote }}
               SRV={{ .Values.cacheman.server | quote }}
               FLAGS="--abfs-base-dir ${DIR}/instances --cache-dir ${DIR}/cache"
               CLIENT={{ .Values.cacheman.clientFlags | quote }}
-
-              echo "waiting for the casfs kernel module (casfs installer DaemonSet)"
-              until [ -d /sys/module/casfs ]; do sleep 5; done
-
-              # ninja of every build on the node asks cacheman for cache hits
-              # over its unix socket; the default backlog is too small.
-              echo {{ .Values.cacheman.somaxconn | int }} > /proc/sys/net/core/somaxconn || \
-                echo "WARNING: could not raise net.core.somaxconn"
-              echo "net.core.somaxconn=$(cat /proc/sys/net/core/somaxconn)"
-
-              # Build pods run as another user (group BUILD_GID): instance
-              # directory, socket and cache belong to root:BUILD_GID with mode
-              # 2770, so only root and the build group can use them; setgid
-              # keeps BUILD_GID on new files.
-              BUILD_GID={{ .Values.cacheman.buildGroupId | int }}
-              umask 007
-              mkdir -p "${DIR}/instances" "${DIR}/cache" "${HOME}"
-              chown "0:${BUILD_GID}" "${DIR}" "${DIR}/instances" "${DIR}/cache"
-              chmod 2770 "${DIR}" "${DIR}/instances" "${DIR}/cache"
-
               # shellcheck disable=SC2086
               abfs ${FLAGS} init
               # shellcheck disable=SC2086
-              abfs ${FLAGS} ${CLIENT} --remote-servers "${SRV}" --tunnel-ports 0 \
-                --manifest-server {{ .Values.cacheman.manifestServer | quote }} config -w
-              echo "starting cacheman for the node (server ${SRV})"
+              abfs ${FLAGS} ${CLIENT} --remote-servers "${SRV}" --tunnel-ports 0                 --manifest-server {{ .Values.cacheman.manifestServer | quote }} config -w
+              echo "starting cacheman for the node (server ${SRV}) as uid $(id -u)"
               # shellcheck disable=SC2086
-              abfs ${FLAGS} ${CLIENT} cacheman run &
-              CACHEMAN=$!
-              trap 'kill -TERM "${CACHEMAN}" 2>/dev/null; wait "${CACHEMAN}"' TERM INT
-              # abfs creates its unix sockets with mode 0755 whatever the
-              # umask, and a client needs write access to connect: give the
-              # build group write access, also when cacheman recreates them.
-              while kill -0 "${CACHEMAN}" 2>/dev/null; do
-                for s in "${DIR}/cache/socket" "${DIR}/cache/http.socket"; do
-                  if [ -S "${s}" ]; then chmod g+w "${s}"; fi
-                done
-                sleep 5
-              done &
-              wait "${CACHEMAN}"
+              exec abfs ${FLAGS} ${CLIENT} cacheman run
           env:
             - name: HOME
               value: "{{ .Values.cacheman.hostDir }}/home"

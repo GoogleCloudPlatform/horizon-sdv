@@ -110,9 +110,11 @@ cacheman:
   # Node directory shared with the build pods: instances/ (config and the
   # cacheman socket), cache/ (the local ABFS cache, on the node boot disk).
   hostDir: /var/lib/abfs
-  # Group of the build pods (the builder image user is uid/gid 1000). Only root
-  # and this group can use hostDir (mode 2770), so another user on the node
-  # cannot reach the cacheman socket or write into the shared cache.
+  # User and group of the build pods (the builder image user is uid/gid 1000).
+  # cacheman runs as this user and hostDir belongs to it (mode 0770), so only
+  # the build pods and root can reach the cacheman socket or write into the
+  # shared cache.
+  buildUserId: 1000
   buildGroupId: 1000
   # ABFS server and client flags, as spec.abfs.server / spec.abfs.clientFlags
   # in the builder chart.
