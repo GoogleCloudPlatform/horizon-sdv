@@ -266,6 +266,10 @@ spec:
             {{- end }}
           env:
             {{- include "abfs.gomaxprocsEnv" . | nindent 12 }}
+            {{- with .Values.uploader.goMemLimit }}
+            - name: GOMEMLIMIT
+              value: {{ . | quote }}
+            {{- end }}
             - name: RUN_MODE
               value: "uploader"
             - name: NEEDS_GIT

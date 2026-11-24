@@ -224,14 +224,16 @@ server:
   enabled: true
   # -- server.replicas -- the ABFS server is a singleton; keep 1.
   replicas: 1
-  # Sized for one pod per n2-highmem-64 node, with headroom for kubelet and CASFS.
+  # Sized from measured use: over four days with builds and reseeds the server
+  # used at most 2.2 cores and 56 GiB (VPA upper bound 87 Gi). The request is
+  # about twice that. GOMAXPROCS follows the CPU request.
   # Memory limit = request; no CPU limit (CPU limits cause throttling).
   resources:
     requests:
-      cpu: "32"
-      memory: 256Gi
+      cpu: "8"
+      memory: 128Gi
     limits:
-      memory: 256Gi
+      memory: 128Gi
   service:
     # -- server.service.internalLoadBalancer -- internal L4 LB for out-of-cluster
     # clients (Cloud Workstations / CI). In-cluster uploaders use the Service DNS
@@ -300,15 +302,25 @@ uploader:
       operator: Equal
       value: android-abfs-data-uploader
       effect: NoSchedule
-  # Sized to fit the dedicated n2-standard-32 uploader pool (32 vCPU / 128 GiB)
-  # while leaving headroom for kubelet and CASFS. No CPU limit avoids throttling.
+  # Sized to fit the dedicated n2-standard-32 uploader pool (32 vCPU, about
+  # 116 GiB allocatable), one uploader per node. No CPU limit avoids throttling.
+  # CPU: a first seed uses 24-26 cores for about an hour, later about 3; keep
+  # the request, GOMAXPROCS follows it. Memory: a seeded uploader holds about
+  # 92 GiB, which was too close to the former 96 Gi limit.
   # Data PVC is 1 Ti (was 4 Ti).
   resources:
     requests:
       cpu: "24"
-      memory: 96Gi
+      memory: 112Gi
     limits:
-      memory: 96Gi
+      memory: 112Gi
+  # -- uploader.goMemLimit -- GOMEMLIMIT for the uploader (Go soft memory
+  # limit). Without it the Go runtime grows the heap until the kernel kills the
+  # pod at limits.memory, which can happen during a first seed. Keep it about
+  # 12 GiB under limits.memory: the git processes the uploader starts are not
+  # counted by GOMEMLIMIT but are counted by the container limit.
+  # Empty string = not set.
+  goMemLimit: 100GiB
   dataDisk:
     # -- uploader.dataDisk.size -- per-pod data PVC size (1 Ti each).
     size: 1024Gi
@@ -323,6 +335,10 @@ uploader:
     # Argo prune of the STS also removes the per-pod data PVCs (and underlying
     # disks). Kubernetes default is Retain, which left 1 Ti disks after disable.
     # Staging only — durable ABFS content lives in Spanner/GCS via the server.
+    # false keeps the disks: the next enable reuses them and is ready in minutes
+    # instead of seeding for about an hour, but three 1 Ti SSD disks keep billing
+    # while the module is disabled. Set it in the module values
+    # (uploader.dataDisk.deletePvcWhenDisabled), which are passed to this chart.
     deletePvcWhenDisabled: true
     # -- uploader.dataDisk.deletePvcWhenScaled -- also delete PVCs when
     # uploader.count decreases (whenScaled=Delete). Default Retain keeps data if
