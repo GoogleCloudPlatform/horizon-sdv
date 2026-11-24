@@ -3,4 +3,7 @@ node_modules
 .vite
 package-lock.json
 public/config.js
+public/bundled-docs
+public/docs-images
+doc-src
 proxy
