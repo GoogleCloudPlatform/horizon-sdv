@@ -606,7 +606,9 @@ function abfs_android16_release_fix() {
     local flag_dir="build/release/flag_declarations"
     local flag_file="${flag_dir}/RELEASE_ANOMALY_DETECTOR.textproto"
     if [ ! -e "${ckati_wrap}" ] && [ -d "$(dirname "${ckati_wrap}")" ]; then
-        printf '#!/bin/bash\nexec prebuilts/build-tools/linux-x86/bin/ckati "$@"\n' > "${ckati_wrap}" || return 1
+        # ckati is resolved next to the wrapper, so the wrapper also works when a
+        # build step runs it from a directory other than the repo root.
+        printf '#!/bin/bash\nexec "$(dirname "$0")/ckati" "$@"\n' > "${ckati_wrap}" || return 1
         chmod +x "${ckati_wrap}" || return 1
         echo "ABFS: added ${ckati_wrap}"
     fi
