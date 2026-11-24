@@ -40,6 +40,22 @@ kcc:
   # config.region or config.storageLocation for user-managed replication).
   secretManager:
     enabled: false
+  # The three groups below are off. Up to Horizon 5.0.0 they were rendered
+  # without a project, so Config Connector used the namespace name as the
+  # project and none of them was ever created; ABFS runs without them.
+  # -- kcc.services.enabled -- render kcc/01-services.yaml: enables 15 Google
+  # Cloud APIs in the project.
+  services:
+    enabled: false
+  # -- kcc.firewall.enabled -- render kcc/30-network-firewall.yaml: two ingress
+  # rules on the VPC (ABFS server 50051, uploaders 8086) from config.subnetCidr.
+  firewall:
+    enabled: false
+  # -- kcc.dns.enabled -- render kcc/31-dns.yaml: private DNS zones for
+  # googleapis.com and pkg.dev on the VPC. They change name resolution for
+  # every workload in the VPC, not only for ABFS.
+  dns:
+    enabled: false
 
 # Image digest takes precedence over the tag. An empty tag uses Chart.appVersion.
 image:

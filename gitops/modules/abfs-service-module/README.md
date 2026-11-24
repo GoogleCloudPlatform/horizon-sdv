@@ -187,6 +187,23 @@ The portal overview page (`mod-abfs-service-module-overview`) shows the same: li
 
 Pods, Jobs, DaemonSet, NetworkPolicies and both `ContainerNodePool` CRs are pruned and KCC deletes the GKE pools; uploader PVCs are deleted (`deletePvcWhenDisabled: true`, the default; with `false` they stay and keep billing). Spanner, GCS, the license Secret and the uploader table remain (owned by `abfs-data`). Check the GKE pools are really gone; an orphan pool makes the next enable report `already exists` until the PreSync hook or `gcloud container node-pools delete` removes it.
 
+### Existing clusters: remove the failed Config Connector objects
+
+Up to Horizon 5.0.0 the API services, firewall rules and private DNS zones of this module were rendered without a project, so Config Connector looked for project `abfs` and never created them. They are now off by default (`kcc.services`, `kcc.firewall`, `kcc.dns`). The data plane Application does not prune, so on a cluster that ran an earlier version the old objects stay in namespace `abfs`, not Ready. Nothing exists in Google Cloud for them. Remove them once after the upgrade:
+
+```bash
+# expect 15 Services, 2 ComputeFirewalls, 2 DNSManagedZones, 4 DNSRecordSets, none Ready
+kubectl get services.serviceusage.cnrm.cloud.google.com,computefirewalls,dnsmanagedzones,dnsrecordsets -n abfs
+
+# abandon first, so Config Connector does not call the API of project "abfs" on delete
+for k in services.serviceusage.cnrm.cloud.google.com computefirewalls dnsrecordsets dnsmanagedzones; do
+  kubectl annotate "$k" --all -n abfs cnrm.cloud.google.com/deletion-policy=abandon --overwrite
+  kubectl delete "$k" --all -n abfs
+done
+```
+
+No other Horizon module creates these kinds in namespace `abfs`. After the delete, `mod-abfs-service-module-data-plane` no longer lists them as extra resources.
+
 ---
 
 ## Chart configuration

@@ -1,5 +1,7 @@
 # Copyright 2026 Google LLC
 #
+# Modifications Copyright (c) 2026 Accenture, All Rights Reserved.
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,19 +17,24 @@
 # Firewall rules on the EXISTING VPC. The VPC, subnets, Cloud Router and NAT are
 # NOT created here (you provide them) — KCC only adds firewall rules. networkRef
 # uses an external link to the pre-existing network; this solution does not create
-# the VPC and does not assume a Shared VPC host project (resources target the
-# project set on the namespace, infra/00-namespace.yaml).
+# the VPC and does not assume a Shared VPC host project. Every resource names its
+# project in the cnrm.cloud.google.com/project-id annotation: the namespace has
+# no project annotation, and without one Config Connector uses the namespace
+# name ("abfs") as the project.
 #
 # GKE NOTE: for Service type=LoadBalancer (the internal gRPC LB in the chart), GKE
 # auto-creates the necessary load-balancer + health-check firewall rules. The rule
 # below lets ABFS clients (in-cluster nodes / CI) reach the ABFS server LB on 50051.
 # Adjust source ranges to your client subnets.
+{{- if .Values.kcc.firewall.enabled }}
 ---
 apiVersion: compute.cnrm.cloud.google.com/v1beta1
 kind: ComputeFirewall
 metadata:
   name: abfs-server-allow-ingress
   namespace: {{ .Values.namespace }}
+  annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
 spec:
   description: "Allow ingress from ABFS clients/uploaders to the ABFS server (gRPC 50051)"
   direction: INGRESS
@@ -47,6 +54,8 @@ kind: ComputeFirewall
 metadata:
   name: abfs-uploader-allow-ingress
   namespace: {{ .Values.namespace }}
+  annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.gcpProjectId | quote }}
 spec:
   description: "Allow ingress to the ABFS uploaders (8086) from within the ABFS subnet"
   direction: INGRESS
@@ -59,3 +68,4 @@ spec:
     - protocol: tcp
       ports:
         - "8086"
+{{- end }}
