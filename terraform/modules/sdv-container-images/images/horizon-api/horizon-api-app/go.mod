@@ -16,7 +16,7 @@ module github.com/acn-horizon-sdv/horizon-api
 
 go 1.27.0
 
-toolchain go1.27.4
+toolchain go1.27.2
 
 require (
 	cloud.google.com/go/storage v1.62.0
