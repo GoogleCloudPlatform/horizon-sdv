@@ -28,7 +28,7 @@ The platform-level picture and procedures are in [docs/workloads/android/abfs.md
 | **STATUS** | horizon-verified |
 | **OWNER** | Accenture |
 | **CONTACT** | module: [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com), ABFS technology: [horizon-sdv@google.com](mailto:horizon-sdv@google.com) |
-| **CHART VERSION** | 0.1.0 |
+| **CHART VERSION** | 0.1.1 |
 | **CONTAINS_COMMERCIAL** | no |
 
 ## Catalog

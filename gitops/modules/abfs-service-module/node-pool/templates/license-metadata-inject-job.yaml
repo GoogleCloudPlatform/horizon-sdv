@@ -75,6 +75,9 @@ spec:
               value: {{ .Values.namespace | quote }}
             - name: NODE_POOL_NAMES
               value: {{ printf "%s %s" .Values.serverNodePool.name .Values.uploaderNodePool.name | quote }}
+            # workloadLabel each pool must carry before it is deleted, in the order of NODE_POOL_NAMES.
+            - name: NODE_POOL_LABELS
+              value: {{ printf "%s %s" (required "serverNodePool.workloadLabel" .Values.serverNodePool.workloadLabel) (required "uploaderNodePool.workloadLabel" .Values.uploaderNodePool.workloadLabel) | quote }}
             - name: HORIZON_NS
               value: {{ .Values.license.secretNamespace | quote }}
             - name: LICENSE_SECRET_NAME
@@ -93,6 +96,7 @@ spec:
                 echo "Installing kubectl (gcloud components)..."
                 gcloud components install kubectl --quiet
               fi
+              command -v kubectl >/dev/null 2>&1 || { echo "ERROR: kubectl is not available — nothing changed, nothing deleted" >&2; exit 1; }
 
               die() { echo "ERROR: $*" >&2; exit 1; }
               G=(--cluster="${CLUSTER_NAME}" --location="${LOCATION}" --project="${PROJECT_ID}")
@@ -107,7 +111,7 @@ spec:
                   echo present
                   return 0
                 fi
-                if grep -qiE 'code=404|NOT_FOUND|not found|No node pool named' <<<"${err}"; then
+                if grep -qE 'code=404|NOT_FOUND|No node pool named' <<<"${err}"; then
                   echo absent
                   return 0
                 fi
@@ -122,6 +126,25 @@ spec:
                 python3 -c "import json,sys; m=(json.load(sys.stdin).get('config') or {}).get('metadata') or {}; print(m.get('${METADATA_KEY}',''))" <<<"${json}"
               }
 
+              # 0 only for the Kubernetes NotFound of this ContainerNodePool (kubectl output in $1).
+              # Forbidden, a missing namespace ('namespaces "x" not found') and every other error return 1.
+              cr_not_found() {
+                grep -qxF "Error from server (NotFound): containernodepools.container.cnrm.cloud.google.com \"${NODE_POOL_NAME}\" not found" <<<"$1"
+              }
+
+              # workloadLabel the pool must carry before it is deleted (NODE_POOL_LABELS, same order as
+              # NODE_POOL_NAMES). 0 when the GKE pool carries it; 1 when not or when it cannot be read.
+              pool_is_ours() {
+                local names labels want="" label i
+                read -r -a names <<<"${NODE_POOL_NAMES}"
+                read -r -a labels <<<"${NODE_POOL_LABELS}"
+                for i in "${!names[@]}"; do
+                  if [[ "${names[$i]}" == "${NODE_POOL_NAME}" ]]; then want="${labels[$i]:-}"; fi
+                done
+                label="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(config.labels.workloadLabel)' 2>/dev/null)" || return 1
+                [[ -n "${want}" && "${label}" == "${want}" ]]
+              }
+
               # ContainerNodePool CR: present | absent. Any kubectl error other than NotFound fails.
               cr_state() {
                 local err
@@ -129,7 +152,7 @@ spec:
                   echo present
                   return 0
                 fi
-                if grep -qi 'not found' <<<"${err}"; then
+                if cr_not_found "${err}"; then
                   echo absent
                   return 0
                 fi
@@ -144,7 +167,7 @@ spec:
                   return 0
                 fi
                 desired=""
-                if grep -qi 'not found' /tmp/secret.err; then
+                if grep -qxF "Error from server (NotFound): secrets \"${LICENSE_SECRET_NAME}\" not found" /tmp/secret.err; then
                   echo "Secret ${HORIZON_NS}/${LICENSE_SECRET_NAME} does not exist — no licence."
                   return 0
                 fi
@@ -153,6 +176,11 @@ spec:
 
               delete_cr_and_gcp_pool() {
                 local state
+                state="$(gke_pool_state)" || return 1
+                if [[ "${state}" == "present" ]] && ! pool_is_ours; then
+                  echo "ERROR: GKE node pool ${NODE_POOL_NAME} does not carry the workloadLabel of this module (or its labels could not be read) — nothing deleted; remove or rename it by hand." >&2
+                  return 1
+                fi
                 echo "Deleting ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME} (if present)..."
                 kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
                   --ignore-not-found=true --wait=true --timeout=45m || true
@@ -277,6 +305,9 @@ spec:
               value: {{ .Values.location | quote }}
             - name: NODE_POOL_NAMES
               value: {{ printf "%s %s" .Values.serverNodePool.name .Values.uploaderNodePool.name | quote }}
+            # workloadLabel each pool must carry before it is deleted, in the order of NODE_POOL_NAMES.
+            - name: NODE_POOL_LABELS
+              value: {{ printf "%s %s" (required "serverNodePool.workloadLabel" .Values.serverNodePool.workloadLabel) (required "uploaderNodePool.workloadLabel" .Values.uploaderNodePool.workloadLabel) | quote }}
             - name: HORIZON_NS
               value: {{ .Values.license.secretNamespace | quote }}
             - name: LICENSE_SECRET_NAME
@@ -303,6 +334,7 @@ spec:
                 echo "Installing kubectl (gcloud components)..."
                 gcloud components install kubectl --quiet
               fi
+              command -v kubectl >/dev/null 2>&1 || { echo "ERROR: kubectl is not available — nothing changed, nothing deleted" >&2; exit 1; }
 
               write_status() {
                 local status="$1"
@@ -337,7 +369,7 @@ spec:
                   echo present
                   return 0
                 fi
-                if grep -qiE 'code=404|NOT_FOUND|not found|No node pool named' <<<"${err}"; then
+                if grep -qE 'code=404|NOT_FOUND|No node pool named' <<<"${err}"; then
                   echo absent
                   return 0
                 fi
@@ -352,6 +384,25 @@ spec:
                 python3 -c "import json,sys; m=(json.load(sys.stdin).get('config') or {}).get('metadata') or {}; print(m.get('${METADATA_KEY}',''))" <<<"${json}"
               }
 
+              # 0 only for the Kubernetes NotFound of this ContainerNodePool (kubectl output in $1).
+              # Forbidden, a missing namespace ('namespaces "x" not found') and every other error return 1.
+              cr_not_found() {
+                grep -qxF "Error from server (NotFound): containernodepools.container.cnrm.cloud.google.com \"${NODE_POOL_NAME}\" not found" <<<"$1"
+              }
+
+              # workloadLabel the pool must carry before it is deleted (NODE_POOL_LABELS, same order as
+              # NODE_POOL_NAMES). 0 when the GKE pool carries it; 1 when not or when it cannot be read.
+              pool_is_ours() {
+                local names labels want="" label i
+                read -r -a names <<<"${NODE_POOL_NAMES}"
+                read -r -a labels <<<"${NODE_POOL_LABELS}"
+                for i in "${!names[@]}"; do
+                  if [[ "${names[$i]}" == "${NODE_POOL_NAME}" ]]; then want="${labels[$i]:-}"; fi
+                done
+                label="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(config.labels.workloadLabel)' 2>/dev/null)" || return 1
+                [[ -n "${want}" && "${label}" == "${want}" ]]
+              }
+
               # ContainerNodePool CR: present | absent. Any kubectl error other than NotFound fails.
               cr_state() {
                 local err
@@ -359,7 +410,7 @@ spec:
                   echo present
                   return 0
                 fi
-                if grep -qi 'not found' <<<"${err}"; then
+                if cr_not_found "${err}"; then
                   echo absent
                   return 0
                 fi
@@ -374,7 +425,7 @@ spec:
                   return 0
                 fi
                 desired=""
-                if grep -qi 'not found' /tmp/secret.err; then
+                if grep -qxF "Error from server (NotFound): secrets \"${LICENSE_SECRET_NAME}\" not found" /tmp/secret.err; then
                   echo "Secret ${HORIZON_NS}/${LICENSE_SECRET_NAME} does not exist — no licence."
                   return 0
                 fi
@@ -403,7 +454,7 @@ spec:
               cr_metadata() {
                 local json
                 if ! json="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" -o json 2>/tmp/cr.err)"; then
-                  if grep -qi 'not found' /tmp/cr.err; then
+                  if cr_not_found "$(cat /tmp/cr.err)"; then
                     echo ""
                     return 0
                   fi
@@ -415,6 +466,11 @@ spec:
 
               delete_cr_and_gcp_pool() {
                 local state
+                state="$(gke_pool_state)" || return 1
+                if [[ "${state}" == "present" ]] && ! pool_is_ours; then
+                  echo "ERROR: GKE node pool ${NODE_POOL_NAME} does not carry the workloadLabel of this module (or its labels could not be read) — nothing deleted; remove or rename it by hand." >&2
+                  return 1
+                fi
                 kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
                   --ignore-not-found=true --wait=true --timeout=45m || true
                 state="$(gke_pool_state)" || return 1

@@ -30,7 +30,7 @@ The service module is the ABFS **runtime data plane**: the dedicated server and 
 | **STATUS** | horizon-verified |
 | **OWNER** | Accenture |
 | **CONTACT** | module: [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com), ABFS technology: [horizon-sdv@google.com](mailto:horizon-sdv@google.com) |
-| **CHART VERSION** | 0.2.0 |
+| **CHART VERSION** | 0.2.1 |
 | **CONTAINS_COMMERCIAL** | no |
 
 ---

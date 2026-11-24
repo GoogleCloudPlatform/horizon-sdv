@@ -30,6 +30,8 @@
 #                well before the Job deadline.
 # Safety rules of both hooks:
 #   - only NOT_FOUND from gcloud means "the pool does not exist"; any other error is an error;
+#   - only a Kubernetes NotFound of this ContainerNodePool means "the CR does not exist"; Forbidden, a
+#     missing namespace, a missing kubectl or any other kubectl error never leads to a delete;
 #   - a pool is deleted only when it carries this module's workloadLabel, so a pool of the same name
 #     that this module did not create is never removed;
 #   - PostDelete skips the delete while the ContainerNodePool still exists.
@@ -132,9 +134,16 @@ spec:
               pool_state() {
                 local err
                 if err="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(name)' 2>&1 >/dev/null)"; then echo present; return 0; fi
-                if grep -qiE 'code=404|NOT_FOUND|not found|No node pool named' <<<"${err}"; then echo absent; return 0; fi
+                if grep -qE 'code=404|NOT_FOUND|No node pool named' <<<"${err}"; then echo absent; return 0; fi
                 echo "ERROR: cannot read GKE node pool ${NODE_POOL_NAME}: ${err}" >&2
                 return 1
+              }
+
+              # 0 only when the kubectl output is the Kubernetes NotFound of this ContainerNodePool.
+              # Forbidden, a missing namespace ('namespaces "x" not found'), 'command not found' and
+              # every other error return 1.
+              cr_not_found() {
+                grep -qxF "Error from server (NotFound): containernodepools.container.cnrm.cloud.google.com \"${NODE_POOL_NAME}\" not found" <<<"$1"
               }
 
               # 0 when the pool carries this module's workloadLabel, 1 when not or when it cannot be read.
@@ -158,7 +167,12 @@ spec:
                 return 1
               }
 
-              if ! command -v kubectl >/dev/null 2>&1; then gcloud components install kubectl --quiet || true; fi
+              if ! command -v kubectl >/dev/null 2>&1; then gcloud components install kubectl --quiet; fi
+              if ! command -v kubectl >/dev/null 2>&1; then
+                if [[ "${PHASE}" == "PreSync" ]]; then echo "ERROR: kubectl is not available; nothing is deleted." >&2; exit 1; fi
+                echo "WARNING: kubectl is not available; nothing is deleted. The next enable removes an orphan (PreSync)." >&2
+                exit 0
+              fi
 
               if [[ "${PHASE}" == "PreSync" ]]; then
                 if out="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" -o name 2>&1)"; then
@@ -183,7 +197,7 @@ spec:
                     echo "ERROR: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} could not be deleted; the GKE pool is not deleted." >&2
                     exit 1
                   fi
-                elif ! grep -q -i 'not found' <<<"${out}"; then
+                elif ! cr_not_found "${out}"; then
                   echo "ERROR: cannot read ContainerNodePool ${CR_NS}/${NODE_POOL_NAME}: ${out}" >&2
                   exit 1
                 fi
@@ -204,11 +218,9 @@ spec:
               if out="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" -o name 2>&1)"; then
                 echo "WARNING: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} still exists — the pool is managed, not deleted." >&2
                 exit 0
-              elif grep -q -i 'forbidden' <<<"${out}"; then
-                # The hook Role lives in ${CR_NS}. It is only gone when that namespace was deleted with the
-                # module, and the ContainerNodePool goes with the namespace.
-                echo "PostDelete: ${CR_NS} is no longer readable (the namespace was removed with the module)."
-              elif ! grep -q -i 'not found' <<<"${out}"; then
+              elif ! cr_not_found "${out}"; then
+                # Includes Forbidden (e.g. the hook Role is gone) and a missing namespace: the CR may still
+                # exist, so nothing is deleted.
                 echo "WARNING: cannot read ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} (${out}) — pool not deleted; the next enable removes an orphan (PreSync)." >&2
                 exit 0
               fi

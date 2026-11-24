@@ -15,6 +15,6 @@
 apiVersion: v2
 name: abfs-service-module-node-pool
 description: KCC ContainerNodePools for the dedicated ABFS server and uploader data-plane nodes
-version: 0.1.0
+version: 0.1.1
 type: application
-appVersion: "0.1.0"
+appVersion: "0.1.1"
