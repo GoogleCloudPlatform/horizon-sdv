@@ -38,7 +38,7 @@ The module runs on the main environment only. It is not deployed on a sub-enviro
 |----------|-----------|---------|
 | Namespace `openbsw` | — | Module-owned namespace. Annotated with `horizon-sdv.io/node-pool` |
 | ConfigMap `openbsw-workflow-scheduling` | `openbsw` | Node selector and tolerations for OpenBSW workflow pods |
-| Child Application `mod-openbsw-module-argo-workflows` | `workflows` | Syncs the `argo-workflows` chart: WorkflowTemplates `openbsw-bsw-builder` and `openbsw-builder-image` (in `workflows`) and their webhook Sensors (in `argo-events`) |
+| Child Application `mod-openbsw-module-argo-workflows` | `workflows` | Syncs the `argo-workflows` chart: WorkflowTemplates `openbsw-bsw-builder`, `openbsw-builder-image`, `openbsw-posix-test`, `openbsw-dev-instance` and `openbsw-delete-mtkc-testbench` (in `workflows`) and their webhook Sensors (in `argo-events`) |
 | NetworkPolicies `default-deny-all`, `allow-dns` | `openbsw` | Baseline perimeter when `config.enableNetworkPolicies` is true |
 | ServiceAccount `openbsw-can-kernel` | `openbsw` | Identity for the CAN DaemonSet. No Role or binding |
 | DaemonSet `openbsw-can-kernel` | `openbsw` | Loads `can`, `can-raw`, and `vcan` on the OpenBSW node pool |
@@ -48,14 +48,17 @@ Module Manager injects `moduleName`, `config`, `repo.url`, and `repo.revision` w
 
 ## Workflows
 
-The `argo-workflows/` chart ports the two OpenBSW Jenkins jobs. Both WorkflowTemplates carry `horizon-sdv.io/expose: "true"` and `horizon-sdv.io/module: openbsw-module`, so they appear in the Developer Portal and Horizon CLI. Each has a Sensor on EventSource `webhook`, event `workflow-dispatch`, matching `body.workflowTemplateName`.
+The `argo-workflows/` chart ports the OpenBSW Jenkins jobs. Every WorkflowTemplate carries `horizon-sdv.io/expose: "true"` and `horizon-sdv.io/module: openbsw-module`, so they appear in the Developer Portal and Horizon CLI. Each has a Sensor on EventSource `webhook`, event `workflow-dispatch`, matching `body.workflowTemplateName`.
 
 | WorkflowTemplate | Sensor | Jenkins job | Notes |
 |------------------|--------|-------------|-------|
 | `openbsw-bsw-builder` | `webhook-openbsw-bsw-builder` | OpenBSW Workflows/Builds/BSW Builder | Build, AI review on failure, GCS storage, optional retention |
 | `openbsw-builder-image` | `webhook-openbsw-builder-image` | OpenBSW Workflows/Environment/Docker Image Template | Calls ClusterWorkflowTemplate `common-docker-image-build` (workloads-common) |
+| `openbsw-posix-test` | `webhook-openbsw-posix-test` | OpenBSW Workflows/Tests/POSIX | Downloads POSIX artifacts from GCS and exposes the hosts through MTK Connect for `posixKeepAliveTime` minutes |
+| `openbsw-dev-instance` | `webhook-openbsw-dev-instance` | OpenBSW Workflows/Environment/Development Instance | Keeps a builder pod for `instanceMaxUptime` hours, optionally on MTK Connect |
+| `openbsw-delete-mtkc-testbench` | `webhook-openbsw-delete-mtkc-testbench` | OpenBSW Workflows/Environment/Delete MTK Connect Testbench | Deletes one offline testbench by name. Runs one at a time |
 
-Parameters use the Jenkins names in camelCase with the same defaults. They are defined once, in order, under `bswBuilder.parameters` and `builderImage.parameters` in `argo-workflows/values.yaml`. The WorkflowTemplate arguments and the Sensor mappings are both generated from those lists. Job details are in the [BSW Builder](../../../workloads/openbsw/pipelines/builds/bsw_builder/README.md) and [Docker Image Template](../../../workloads/openbsw/pipelines/environment/docker_image_template/README.md) READMEs.
+Parameters use the Jenkins names in camelCase with the same defaults. They are defined once, in order, under `<template>.parameters` (`bswBuilder`, `builderImage`, `posixTest`, `devInstance`, `deleteMtkcTestbench`) in `argo-workflows/values.yaml`. The WorkflowTemplate arguments and the Sensor mappings are both generated from those lists. Job details are in the [BSW Builder](../../../workloads/openbsw/pipelines/builds/bsw_builder/README.md), [Docker Image Template](../../../workloads/openbsw/pipelines/environment/docker_image_template/README.md), [POSIX](../../../workloads/openbsw/pipelines/tests/posix/README.md), [Development Instance](../../../workloads/openbsw/pipelines/environment/dev_instance/README.md) and [Delete MTK Connect Testbench](../../../workloads/openbsw/pipelines/environment/delete_mtkc_testbench/README.md) READMEs.
 
 `openbsw-bsw-builder` runs these steps:
 
@@ -70,11 +73,38 @@ Parameters use the Jenkins names in camelCase with the same defaults. They are d
 
 Workflow pods run as `workflow-executor-elevated` (Artifact Registry push, GCS upload, Vertex AI) while `useElevatedWorkflowIam` is `true`, otherwise as `serviceAccountName`. They read the `horizon-workflow-cloud-env` ConfigMap, as in the AAOS builder.
 
+`openbsw-posix-test` runs these steps:
+
+1. `prepare-pipeline-git-creds` (when `config.scm.authMethod` is `app` or `userpass`).
+2. `test`: one privileged builder pod, with the host `/lib/modules` mounted read-only for the CAN tools. It checks `openbswDownloadUrl`, runs `bsw_download_artifact.sh`, starts MTK Connect with `numHostInstances` devices, keeps them up for `posixKeepAliveTime` minutes, then stops MTK Connect. An empty or unlisted URL fails the run; Jenkins skipped the download instead.
+
+`openbsw-dev-instance` runs `prepare-pipeline-git-creds`, then `instance`: one builder pod that stays up for `instanceMaxUptime` hours. The log prints the `kubectl exec` command to open a shell in it. With `mtkConnectEnable` set to `true` it also starts MTK Connect. If MTK Connect fails to start, the pod is still kept and the workflow ends Failed, as Jenkins `catchError` did. Its resource request is sized so that each instance gets a node to itself, which replaces the Jenkins pod anti-affinity.
+
+`openbsw-delete-mtkc-testbench` runs `prepare-pipeline-git-creds`, then `delete`: `mtk_connect.sh --delete` for `mtkConnectTestbench`, which deletes the testbench only when it is offline. A mutex (`deleteMtkcTestbench.concurrencyMutexName`) runs one deletion at a time, like Jenkins `blockOn`.
+
+### MTK Connect
+
+The three new templates call the same `workloads/common/mtk-connect/mtk_connect.sh` as Jenkins, fetched from the module's `repo.url` / `repo.revision`.
+
+| Setting | Value |
+|---------|-------|
+| API key | Secret `mtkConnect.secretName` (default `workflow-mtk-connect-apikey`, keys `username` and `password`) in `workflows`. Missing key fails the step before any API call |
+| Domain | `HORIZON_DOMAIN` from `horizon-workflow-cloud-env` |
+| Testbench | `OpenBSW/Tests/POSIX-<workflow>` and `OpenBSW/Environment/Development_Instance-<workflow>` |
+| Owner | `submittedBy`, which Horizon API fills with the signed-in user. Empty fails unless `mtkConnectPublic` is `true` (owner `everyone`) |
+| Devices | `numHostInstances`, 1 to `mtkConnect.maxDevices` (default 8), named `mtkConnect.devicePrefix` (`BSW`) |
+
+Start, keep-alive and stop run in one pod, because the MTK Connect agent runs in the background of that pod. The pod traps SIGTERM (workflow stop or terminate) and runs `--stop` within `mtkConnect.stopGracePeriodSeconds`. If the workflow still does not end Succeeded, the `exit-handler` mints fresh git credentials and runs `mtk-cleanup`, which deletes the same testbench once it is offline, after `mtkConnect.cleanupDelaySeconds`.
+
+Testbench names, owners and device counts are checked against a strict character set before `mtk_connect.sh` writes them to its env file. The API key reaches the script only through the environment (`sudo --preserve-env`), never on a command line. `openbsw-delete-mtkc-testbench` only accepts names that contain `mtkConnect.testbenchMustContain` (`OpenBSW`).
+
+`openbswDownloadUrl` must start with one of `posixTest.downloadUrlAllowPrefixes`. The default is the module bucket `gs://<project>-openbsw/`.
+
 ## Scheduling
 
 WorkflowTemplates stay in the platform `workflows` namespace, which Horizon API and the Argo controller watch. Their pods schedule onto the existing Terraform pool `sdv-openbsw-build-node-pool` (`workloadLabel: openbsw`, taint `workloadType=openbsw:NoSchedule`). This module does not create that pool and does not change its labels or taint.
 
-Each WorkflowTemplate in `argo-workflows/` sets:
+Each WorkflowTemplate in `argo-workflows/` that runs the builder image sets the block below. `openbsw-delete-mtkc-testbench` only calls the MTK Connect API, so it does not set it and runs a small Node image on the default pool:
 
 ```yaml
 spec:
@@ -177,13 +207,22 @@ Workflow checks:
 
 ```bash
 kubectl -n workflows get workflowtemplates -l horizon-sdv.io/module=openbsw-module
-# expect: openbsw-bsw-builder, openbsw-builder-image
+# expect: openbsw-bsw-builder, openbsw-builder-image, openbsw-posix-test, openbsw-dev-instance,
+#         openbsw-delete-mtkc-testbench
 
-kubectl -n argo-events get sensors webhook-openbsw-bsw-builder webhook-openbsw-builder-image
-# expect: both listed
+kubectl -n argo-events get sensors webhook-openbsw-bsw-builder webhook-openbsw-builder-image \
+  webhook-openbsw-posix-test webhook-openbsw-dev-instance webhook-openbsw-delete-mtkc-testbench
+# expect: all five listed
+
+kubectl -n workflows get secret workflow-mtk-connect-apikey
+# expect: listed. The POSIX, dev instance and delete templates need it
 
 horizon workflow submit --module openbsw-module --template openbsw-bsw-builder
 # expect: a workflow named openbsw-bsw-builder-*. The first run also builds the argowf-latest image
+
+horizon workflow submit --module openbsw-module --template openbsw-posix-test \
+  --params-json '{"openbswDownloadUrl":"gs://<project>-openbsw/OpenBSW/Builds/BSW_Builder/<run>"}'
+# expect: testbench OpenBSW/Tests/POSIX-openbsw-posix-test-* in MTK Connect, removed after the keep-alive
 ```
 
 ## After disable
@@ -208,12 +247,12 @@ kubectl get ns openbsw openbsw-overview
 python3 gitops/modules/openbsw-module/tests/smoke_test.py
 ```
 
-The smoke test lints both charts, renders them with `helm template`, checks the `openbsw-module` ModuleCatalog fields, and checks that the child Application is rendered with `prune: true` and the Argo CD resources finalizer. It is not part of CI.
+The smoke test lints both charts, renders them with `helm template`, checks the `openbsw-module` ModuleCatalog fields, and checks that the child Application is rendered with `prune: true` and the Argo CD resources finalizer. For the MTK Connect templates it checks the single session pod (start, stop, SIGTERM trap, API key from the Secret and kept off the command line), the `exit-handler` order and conditions, and that the delete template is unprivileged, uses the mutex and deletes offline testbenches only. It is not part of CI.
 
 If the `argo` CLI is installed, the smoke test also covers the workflows, with `git.authMethod` set to `app` and to empty:
 
-- `argo lint --offline` on both WorkflowTemplates and the ClusterWorkflowTemplates they call (`common-docker-image-build`, `prepare-pipeline-git-creds`).
-- A client-side `argo submit --dry-run --from workflowtemplate/<name>` for both templates. It talks to a local fake Kubernetes API that serves the rendered templates, so it needs no cluster and does not touch your kube context.
+- `argo lint --offline` on all five WorkflowTemplates and the ClusterWorkflowTemplates they call (`common-docker-image-build`, `prepare-pipeline-git-creds`).
+- A client-side `argo submit --dry-run --from workflowtemplate/<name>` for each template. It talks to a local fake Kubernetes API that serves the rendered templates, so it needs no cluster and does not touch your kube context.
 - A simulated webhook event per Sensor. Each Sensor must fire on its own `workflowTemplateName` and on no other (including `<name>-extra` and `x<name>`). The Workflow it would create is then dry-run submitted, and body fields must land in the matching parameters.
 
 Without the `argo` CLI those checks print `SKIPPED`.

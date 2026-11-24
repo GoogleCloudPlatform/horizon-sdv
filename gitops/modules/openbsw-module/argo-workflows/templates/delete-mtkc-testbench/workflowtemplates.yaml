@@ -1,0 +1,65 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Description:
+# Argo WorkflowTemplate that deletes an offline OpenBSW MTK Connect testbench
+# (Jenkins: OpenBSW/Environment/Delete MTK Connect Testbench).
+# It only calls the MTK Connect API, so it has no templateDefaults: the pod runs on the default pool
+# with a small Node image instead of scaling up the OpenBSW pool for the builder image.
+# Argo Events: Sensor webhook-<workflowTemplateName> (sensors.yaml).
+{{- $creds := eq (include "openbsw.useUmbrellaCreds" .) "true" }}
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ .Values.deleteMtkcTestbench.workflowTemplateName | quote }}
+  namespace: {{ .Values.workflowNamespace | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.deleteMtkcTestbench.workflowTemplateName | quote }}
+    horizon-sdv.io/expose: "true"
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  entrypoint: main
+{{- include "openbsw.workflowSpecCommon" . | nindent 2 }}
+{{- if .Values.deleteMtkcTestbench.concurrencyMutexName }}
+  # One delete at a time (Jenkins blockOn 'OpenBSW*.*Delete.*MTK.*').
+  synchronization:
+    mutex:
+      name: {{ .Values.deleteMtkcTestbench.concurrencyMutexName | quote }}
+{{- end }}
+  workflowMetadata:
+    annotations:
+      workflows.argoproj.io/title: 'OpenBSW Delete MTK Connect Testbench'
+      workflows.argoproj.io/description: '{{ "{{" }}workflow.parameters.mtkConnectTestbench{{ "}}" }}'
+  arguments:
+    parameters:
+{{- include "openbsw.workflowParameters" .Values.deleteMtkcTestbench.parameters | nindent 6 }}
+  templates:
+    - name: main
+      dag:
+        tasks:
+{{- if $creds }}
+{{- include "openbsw.prepareGitCredsTask" (dict "root" .) | nindent 10 }}
+{{- end }}
+          - name: delete
+            template: delete
+{{- if $creds }}
+            depends: prepare-pipeline-git-creds.Succeeded
+{{- end }}
+{{- include "openbsw.mtk.deleteTemplate" (dict
+  "root" .
+  "name" "delete"
+  "testbench" (printf "%sworkflow.parameters.mtkConnectTestbench%s" "{{" "}}")
+  "delaySeconds" 0) | nindent 4 }}
