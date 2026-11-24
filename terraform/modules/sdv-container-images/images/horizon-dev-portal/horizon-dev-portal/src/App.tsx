@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import {
   Box,
   Divider,
@@ -39,6 +39,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import BusinessIcon from '@mui/icons-material/Business';
 import BuildIcon from '@mui/icons-material/Build';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
 import {
   BrowserRouter,
   Routes,
@@ -67,6 +68,8 @@ import * as React from 'react';
 import { ToolsPage } from './pages/ToolsPage.tsx';
 import HorizonCliTab from './pages/tools/HorizonCliTab.tsx';
 import HorizonApiTab from './pages/tools/HorizonApiTab.tsx';
+
+const DocumentationPage = lazy(() => import('./pages/DocumentationPage.tsx'));
 
 const drawerWidth = 260;
 
@@ -200,6 +203,20 @@ function ShellLayout() {
             <AdminPanelSettingsIcon />
           </ListItemIcon>
           <ListItemText primary="Administration" />
+        </ListItemButton>
+        <ListItemButton
+          component={Link}
+          to="/documentation"
+          selected={
+            location.pathname === '/documentation' ||
+            location.pathname.startsWith('/documentation/')
+          }
+          onClick={() => isMobile && setMobileOpen(false)}
+        >
+          <ListItemIcon>
+            <MenuBookIcon />
+          </ListItemIcon>
+          <ListItemText primary="Documentation" />
         </ListItemButton>
         {readyMods.map((name) => (
           <ListItemButton
@@ -379,6 +396,23 @@ export default function App() {
               <Route index element={<Navigate to="modules" replace />} />
               <Route path="modules" element={<ModulesTab />} />
               <Route path="settings" element={<SettingsTab />} />
+            </Route>
+            <Route path="/documentation">
+              <Route index element={<Navigate to="docs/deployment_guide.md" replace />} />
+              <Route
+                path="*"
+                element={
+                  <Suspense
+                    fallback={
+                      <Box display="flex" justifyContent="center" py={6}>
+                        <CircularProgress />
+                      </Box>
+                    }
+                  >
+                    <DocumentationPage />
+                  </Suspense>
+                }
+              />
             </Route>
             <Route path="/module/:name" element={<ModulePage />} />
           </Route>

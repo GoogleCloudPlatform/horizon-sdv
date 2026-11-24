@@ -30,6 +30,8 @@ WORKDIR /app
 COPY package.json package-lock.json* .npmrc* ./
 RUN npm ci
 COPY . .
+# bundle-docs.mjs copies horizon-sdv/docs and release-notes.md into the SPA.
+# The image context has no repo checkout; Terraform stages that tree at doc-src/.
 RUN npm run build
 
 FROM golang:${GO_VERSION}-alpine AS backend

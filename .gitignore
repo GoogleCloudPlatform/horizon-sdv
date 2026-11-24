@@ -61,6 +61,11 @@ tools/horizon/horizon
 # Staged CLI sources copied into the portal Docker context (terraform local_file).
 terraform/modules/sdv-container-images/images/horizon-dev-portal/horizon-dev-portal/cli/
 
+# Docs staged into the portal image (terraform) and the copies the SPA serves.
+terraform/modules/sdv-container-images/images/horizon-dev-portal/horizon-dev-portal/doc-src/
+terraform/modules/sdv-container-images/images/horizon-dev-portal/horizon-dev-portal/public/bundled-docs/
+terraform/modules/sdv-container-images/images/horizon-dev-portal/horizon-dev-portal/public/docs-images/
+
 # Local CLI binaries for Windows
 tools/horizon/horizon.exe
 
