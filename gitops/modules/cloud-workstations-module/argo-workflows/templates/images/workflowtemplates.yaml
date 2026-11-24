@@ -254,6 +254,15 @@ spec:
           - name: summarize-digests
             template: summarize-digests
             depends: "(build-environment.Succeeded || build-environment.Skipped || build-environment.Omitted) && (build-preflight.Succeeded || build-preflight.Skipped || build-preflight.Omitted) && (build-gnome.Succeeded || build-gnome.Skipped || build-gnome.Omitted) && (build-code-oss.Succeeded || build-code-oss.Skipped || build-code-oss.Omitted) && (build-android-studio.Succeeded || build-android-studio.Skipped || build-android-studio.Omitted) && (build-asfp.Succeeded || build-asfp.Skipped || build-asfp.Omitted)"
+{{- $guarded := list "validate" "build-environment" "stage-gnome" "build-preflight" "build-gnome" "stage-code-oss" "build-code-oss" "build-android-studio" "build-asfp" }}
+{{- if eq (include "cws.pipelineGitCredsEnabled" . | trim) "true" }}
+{{- $guarded = prepend $guarded "prepare-pipeline-git-creds" }}
+{{- end }}
+          # summarize-digests accepts Omitted for every build, so it still succeeds after a failed task and
+          # the run would end as Succeeded. This task runs only after a failure and fails the run.
+          - name: fail-on-task-failure
+            template: fail-run
+            depends: "{{ range $i, $t := $guarded }}{{ if $i }} || {{ end }}{{ $t }}.Failed || {{ $t }}.Errored{{ end }}"
 
     - name: validate
       outputs:
@@ -293,6 +302,8 @@ spec:
             value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.preflight.dockerArtifactPathName "tag" "") | quote }}
           - name: GNOME_BUILT
             value: {{ include "cws.imageRef" (dict "root" . "path" .Values.images.gnome.dockerArtifactPathName "tag" "") | quote }}
+          - name: AR_PREFIX
+            value: {{ printf "%s-docker.pkg.dev/%s/" (include "cws.cloudRegion" .) (include "cws.cloudProject" .) | quote }}
           - name: INSTALL_ANTIGRAVITY_AGENT
             value: '{{ "{{" }}workflow.parameters.installAntigravityAgent{{ "}}" }}'
         args:
@@ -332,8 +343,24 @@ spec:
                   ;;
               esac
             }
-            [ -n "$PREFLIGHT_IMAGE" ] && refcheck preflightImage "$PREFLIGHT_IMAGE"
-            [ -n "$GNOME_IMAGE" ] && refcheck gnomeImage "$GNOME_IMAGE"
+            # Quoted prefix matches literally; the trailing "/" stops a lookalike project id matching.
+            archeck() {
+              case "$2" in
+                "$AR_PREFIX"?*) ;;
+                *)
+                  echo "ERROR: $1 must be an image in this environment's Artifact Registry (${AR_PREFIX}...)" >&2
+                  exit 1
+                  ;;
+              esac
+            }
+            if [ -n "$PREFLIGHT_IMAGE" ]; then
+              refcheck preflightImage "$PREFLIGHT_IMAGE"
+              archeck preflightImage "$PREFLIGHT_IMAGE"
+            fi
+            if [ -n "$GNOME_IMAGE" ]; then
+              refcheck gnomeImage "$GNOME_IMAGE"
+              archeck gnomeImage "$GNOME_IMAGE"
+            fi
             any=false
             on "$BUILD_ENVIRONMENT" && any=true
             on "$BUILD_PREFLIGHT" && any=true
@@ -392,6 +419,16 @@ spec:
             fi
             echo "preflightUri=$(cat /tmp/preflight-uri)"
             echo "gnomeUri=$(cat /tmp/gnome-uri)"
+
+    - name: fail-run
+      container:
+        image: alpine:3.20
+        command: [sh, -eu, -c]
+        {{- include "cws.nonRootSecurityContext" . | nindent 8 }}
+        args:
+          - |
+            echo "ERROR: a step of this run failed; see the failed step in the workflow" >&2
+            exit 1
 
     - name: stage-image-context
       # /out is the output artifact. nobody cannot mkdir it on /. Mount a writable volume.
