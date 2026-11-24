@@ -1,0 +1,66 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- $prefix := .Values.config.namespacePrefix }}
+{{- $ns := printf "%smtk-connect" $prefix }}
+{{- $domain := required "config.domain is required" .Values.config.domain }}
+apiVersion: mtkconnect.horizon-sdv.io/v1alpha1
+kind: MTKConnectInstance
+metadata:
+  name: default
+  namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    # The CRD is installed by the operator Application; do not fail the dry run before it exists.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  domain: {{ $domain | quote }}
+  serviceAccountUser: mtk-connect-admin
+  keycloak:
+    url: {{ printf "http://%skeycloak-keycloakx-http.%skeycloak.svc.cluster.local:8080/auth" $prefix $prefix | quote }}
+    realm: horizon
+    adminUser: admin
+    adminSecretRef:
+      namespace: {{ printf "%skeycloak" $prefix | quote }}
+      name: keycloak-initial-creds
+      key: password
+    samlClientId: mtk-connect
+  server:
+    # No /mtk-connect prefix: the gateway strips it (URLRewrite) before the request reaches the router.
+    url: {{ printf "http://mtk-connect-router.%s.svc.cluster.local:8081" $ns | quote }}
+    deployment: mtk-connect
+    podSelector: app.kubernetes.io/name=mtk-connect
+    container: authenticator
+    keycloakSecret: mtk-connect-keycloak
+    apiKeySecret: mtk-connect-apikey
+  keyRotation:
+    interval: {{ .Values.keyRotation.interval | quote }}
+    keyLifetime: {{ .Values.keyRotation.keyLifetime | quote }}
+    overlap: {{ .Values.keyRotation.overlap | quote }}
+  credentialDistribution:
+    {{- range .Values.credentialDistribution }}
+    - namespace: {{ printf "%s%s" $prefix .namespaceSuffix | quote }}
+      secretName: {{ .secretName | quote }}
+      {{- if .jenkinsCredential }}
+      jenkinsCredential: true
+      {{- end }}
+      {{- with .labels }}
+      labels:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}

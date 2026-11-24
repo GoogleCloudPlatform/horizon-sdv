@@ -1,0 +1,58 @@
+{
+  "scenario": "host-only-all",
+  "env": {
+    "MTK_CONNECT_DEVICE_PREFIX": "AAOS",
+    "MTK_CONNECT_DEVICE_NAME_LIST": "",
+    "MTK_CONNECT_HOST_LIST": "10.0.0.1,10.0.0.2",
+    "MTK_CONNECT_HOST_PORT_LIST": "6520,6521",
+    "MTK_CONNECT_HOST_ONLY": "true",
+    "MTK_CONNECT_DEVICES": "1",
+    "MTK_CONNECT_TERMINAL_USER": "builder",
+    "MTK_CONNECT_TUNNEL_LIST": "someip:30490",
+    "MTK_CONNECT_LAUNCH_APPLICATION_NAME": "run.sh"
+  },
+  "devices": [
+    {
+      "index": 1,
+      "name": "AAOS 1",
+      "interface": {
+        "fs": {
+          "types": [
+            {
+              "name": "HOST",
+              "driver": "native",
+              "root": "/root"
+            }
+          ]
+        },
+        "terminal": {
+          "types": [
+            {
+              "name": "HOST",
+              "driver": "spawn",
+              "command": "bash",
+              "args": [
+                "-c",
+                "cd /home/builder; su builder -c \"eval ${MTK_CONNECT_LAUNCH_APPLICATION_NAME}\"",
+                ""
+              ]
+            }
+          ]
+        },
+        "tunnel": {
+          "types": [
+            {
+              "name": "someip",
+              "driver": "tcp",
+              "host": "10.0.0.1",
+              "port": 30490,
+              "caller": {
+                "port": 30490
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

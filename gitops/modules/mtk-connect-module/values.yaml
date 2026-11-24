@@ -24,12 +24,68 @@ repo:
 # overviewNamespace is overridden by Module Manager with the catalog value (<prefix>mtk-connect-overview).
 overviewServiceName: mod-mtk-connect-overview
 overviewNamespace: mtk-connect-overview
-# Module Manager replaces this entire map with MODULE_CONFIG, which includes nginx.
-# These values exist so `helm template` can render the chart on its own.
+# Module Manager replaces this entire map with MODULE_CONFIG (namespacePrefix, domain, isSubEnvironment,
+# enableNetworkPolicies, probeSourceCIDRs, nginx, modules, ...); it does not merge.
+# The values here only let `helm template` render the chart on its own.
 config:
   namespacePrefix: ""
   nginx:
     image: nginx
     tag: 1.31.2-alpine3.23
+  domain: ""
+  isSubEnvironment: false
+  enableNetworkPolicies: true
+  probeSourceCIDRs: []
+  # Module-specific MODULE_CONFIG (docs/architecture/06_interfaces.md); containerImage is a full image ref.
+  modules:
+    mtk-connect:
+      containerImage: ""
 
 softFeaturesEnabled: {}
+
+# API key rotation (Go durations): rotate every interval; each key lives keyLifetime; a superseded key
+# stays valid for overlap before it is deleted. keyLifetime must be longer than interval.
+keyRotation:
+  interval: 24h
+  keyLifetime: 720h
+  overlap: 48h
+
+# Kubernetes API server address for the controller's egress policy (GKE private control plane,
+# master_ipv4_cidr_block in terraform/modules/sdv-gke-cluster/main.tf).
+kubeApiServerCIDRs:
+  - 10.0.0.0/28
+
+# Namespaces (appended to config.namespacePrefix) where MTKConnectTestbench resources are watched, and the
+# limits the admission policy enforces on them. Kept outside `config` because MODULE_CONFIG replaces the
+# whole `config` map.
+testbenchNamespaceSuffixes:
+  - workflows
+  - jenkins
+testbenchPolicy:
+  allowPublicAccess: true
+  # Highest device index per testbench, and the range tunnel ports must be in.
+  maxDevices: 8
+  tunnelPortMin: 1024
+  tunnelPortMax: 65535
+  allowedPermissions:
+    - book
+  allowedSubmittedFrom:
+    - api
+    - developer-portal
+    - horizon-cli
+    - custom
+# Portal path reported in status.url; {id} is replaced by the agent id. Empty uses the portal root /mtk-connect/.
+testbenchURLPath: ""
+
+# Secrets that receive the service-account credentials, in addition to mtk-connect-apikey.
+# namespaceSuffix is appended to config.namespacePrefix.
+credentialDistribution:
+  - namespaceSuffix: jenkins
+    secretName: jenkins-mtk-connect-apikey
+    jenkinsCredential: true
+  - namespaceSuffix: workflows
+    secretName: workflow-mtk-connect-apikey
+    labels:
+      horizon-sdv.io/credentials-purpose: mtk-connect-argowf
+    annotations:
+      horizon-sdv.io/description: MTK Connect API key for Argo workflows (CVD/CTS); same credentials as jenkins-mtk-connect-apikey

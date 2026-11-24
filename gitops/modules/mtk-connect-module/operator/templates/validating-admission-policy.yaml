@@ -1,0 +1,125 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- $prefix := .Values.config.namespacePrefix }}
+{{- $policy := .Values.testbenchPolicy }}
+# Per-environment limits on MTKConnectTestbench. The CRD is shared by all environments, so the policy and its
+# binding carry the environment prefix and only match this environment's testbench namespaces. They apply on
+# CREATE only: the spec is immutable, and a later change of a limit must never block removing a finalizer.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}mtk-connect-testbench
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["mtkconnect.horizon-sdv.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE"]
+        resources: ["mtkconnecttestbenches"]
+  validations:
+    - expression: >-
+        has(object.metadata.labels) &&
+        'horizon-sdv.io/submitted-from' in object.metadata.labels &&
+        object.metadata.labels['horizon-sdv.io/submitted-from'] in [{{ range $i, $s := $policy.allowedSubmittedFrom }}{{ if $i }}, {{ end }}{{ $s | quote }}{{ end }}]
+      message: >-
+        label horizon-sdv.io/submitted-from must be one of: {{ join ", " $policy.allowedSubmittedFrom }}
+    - expression: >-
+        !has(object.spec.access) || !has(object.spec.access.permission) ||
+        object.spec.access.permission in [{{ range $i, $p := $policy.allowedPermissions }}{{ if $i }}, {{ end }}{{ $p | quote }}{{ end }}]
+      message: >-
+        spec.access.permission must be one of: {{ join ", " $policy.allowedPermissions }}
+{{- if not $policy.allowPublicAccess }}
+    - expression: >-
+        !has(object.spec.access) || !has(object.spec.access.public) || !object.spec.access.public
+      message: >-
+        spec.access.public is not allowed in this environment; list the users instead
+{{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}mtk-connect-testbench
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  policyName: {{ $prefix }}mtk-connect-testbench
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+{{- range .Values.testbenchNamespaceSuffixes }}
+            - {{ printf "%s%s" $prefix . | quote }}
+{{- end }}
+---
+# Per-environment limits on MTKConnectDevice. The policy also runs on UPDATE, but only when the spec changed
+# and the resource is not being deleted, so a lowered limit never blocks finalizer removal.
+{{- $maxDevices := $policy.maxDevices | default 8 }}
+{{- $portMin := $policy.tunnelPortMin | default 1024 }}
+{{- $portMax := $policy.tunnelPortMax | default 65535 }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}mtk-connect-device
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["mtkconnect.horizon-sdv.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["mtkconnectdevices"]
+  matchConditions:
+    - name: spec-changed
+      expression: >-
+        !has(object.metadata.deletionTimestamp) &&
+        (request.operation == 'CREATE' || object.spec != oldObject.spec)
+  validations:
+    - expression: "object.spec.index <= {{ int $maxDevices }}"
+      message: "spec.index must be at most {{ int $maxDevices }} in this environment"
+    - expression: >-
+        !has(object.spec.tunnels) ||
+        object.spec.tunnels.all(t, t.port >= {{ int $portMin }} && t.port <= {{ int $portMax }})
+      message: "tunnel ports must be between {{ int $portMin }} and {{ int $portMax }} in this environment"
+    - expression: >-
+        !has(object.spec.adb) || !has(object.spec.adb.tunnelCallerPort) ||
+        (object.spec.adb.tunnelCallerPort >= {{ int $portMin }} && object.spec.adb.tunnelCallerPort <= {{ int $portMax }})
+      message: "adb.tunnelCallerPort must be between {{ int $portMin }} and {{ int $portMax }} in this environment"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}mtk-connect-device
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  policyName: {{ $prefix }}mtk-connect-device
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+{{- range .Values.testbenchNamespaceSuffixes }}
+            - {{ printf "%s%s" $prefix . | quote }}
+{{- end }}

@@ -1,0 +1,146 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if include "mtk-connect-operator.installCRDs" . | eq "true" }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mtkconnecttestbenches.mtkconnect.horizon-sdv.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+    # CRDs are cluster-wide and shared by every environment: never prune or delete them from Git.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  group: mtkconnect.horizon-sdv.io
+  scope: Namespaced
+  names:
+    plural: mtkconnecttestbenches
+    singular: mtkconnecttestbench
+    kind: MTKConnectTestbench
+    shortNames:
+      - mtkctb
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Registration
+          type: string
+          jsonPath: .status.registration
+        - name: URL
+          type: string
+          jsonPath: .status.url
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: >-
+            MTKConnectTestbench is the MTK Connect agent record of one testbench. The controller creates the agent,
+            grants access, reports status.url, and deletes the agent when the resource is deleted. Devices are not
+            part of this resource. The spec cannot be changed after creation: delete the resource and create a new one.
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              description: Immutable.
+              x-kubernetes-validations:
+                - rule: self == oldSelf
+                  message: spec is immutable; delete the testbench and create a new one
+              required:
+                - access
+              properties:
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 63
+                  description: Name shown in MTK Connect. Defaults to the resource name.
+                access:
+                  type: object
+                  description: Who may book the testbench.
+                  x-kubernetes-validations:
+                    - rule: self.public || size(self.users) > 0
+                      message: set access.public to true or list at least one user
+                  properties:
+                    public:
+                      type: boolean
+                      default: false
+                      description: Give the MTK Connect "everyone" group access.
+                    users:
+                      type: array
+                      maxItems: 25
+                      default: []
+                      description: >-
+                        User names (e-mail addresses) that get access. A user that has never logged in is created
+                        in MTK Connect.
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 254
+                    permission:
+                      type: string
+                      default: book
+                      minLength: 1
+                      maxLength: 32
+                      description: MTK Connect permission granted to the users and group.
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+              properties:
+                phase:
+                  type: string
+                  description: Pending, AgentProvisioned, AwaitingAgent, Ready, Offline, Deleting or Failed.
+                observedGeneration:
+                  type: integer
+                  format: int64
+                agentId:
+                  type: string
+                  description: Identifier of the MTK Connect agent.
+                registration:
+                  type: string
+                  description: Registration name an agent must use to attach to this testbench.
+                registrationTokenSecret:
+                  type: string
+                  description: Namespace and name of the Secret that holds the registration token, under the key status.registration. The token itself is never shown here.
+                url:
+                  type: string
+                  description: Portal page of the testbench.
+                accessGranted:
+                  type: boolean
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+{{- end }}
