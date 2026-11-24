@@ -13,7 +13,8 @@
 # limitations under the License.
 
 FROM --platform=linux/amd64 alpine:3.24
-ARG KUBECTL_VERSION=v1.34.12
+# Release from tools.kubectl.version in versions.yaml, passed as build-arg KUBECTL_VERSION.
+ARG KUBECTL_VERSION
 RUN apk upgrade --no-cache && \
     apk add --no-cache bash && \
     apk add --no-cache --virtual .build-deps curl && \

@@ -213,7 +213,10 @@ module "sdv_container_images" {
       directory = image.directory
       version   = image.build_version
       build_args = merge(
-        { GO_VERSION = local.go_version },
+        {
+          GO_VERSION      = local.go_version
+          KUBECTL_VERSION = local.kubectl_version
+        },
         try(image.build_args, {}),
         name == "horizon-dev-portal" ? { HORIZON_CLI_VERSION = local.horizon_core_version } : {}
       )

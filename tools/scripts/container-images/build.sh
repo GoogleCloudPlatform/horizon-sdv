@@ -264,6 +264,10 @@ HORIZON_CORE_VERSION=""
 # Parsed with PyYAML, same as horizoncore version.
 GO_VERSION=""
 
+# kubectl release from versions.yaml (tools.kubectl.version). Terraform passes the same value
+# as the KUBECTL_VERSION build-arg (local.kubectl_version in locals.tf).
+KUBECTL_VERSION=""
+
 read_horizon_core_version() {
   if [[ ! -f "$VERSIONS_FILE" ]]; then
     log_err "versions.yaml not found at: ${VERSIONS_FILE}"
@@ -351,6 +355,45 @@ PY
   fi
 }
 
+# Read tools.kubectl.version from versions.yaml. Docker builds use this as --build-arg KUBECTL_VERSION.
+read_kubectl_version() {
+  local py_out=""
+  if ! py_out="$(python3 - "$VERSIONS_FILE" 2>&1 <<'PY'
+import sys
+try:
+    import yaml
+except ImportError:
+    print("PyYAML is required to read versions.yaml", file=sys.stderr)
+    sys.exit(2)
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    data = yaml.safe_load(f)
+tools = data.get("tools") if isinstance(data, dict) else None
+if not isinstance(tools, dict):
+    print(f"{path}: missing or invalid 'tools' mapping", file=sys.stderr)
+    sys.exit(1)
+kubectl = tools.get("kubectl")
+if not isinstance(kubectl, dict):
+    print(f"{path}: missing or invalid tools.kubectl", file=sys.stderr)
+    sys.exit(1)
+kubectl_version = kubectl.get("version")
+if kubectl_version is None or isinstance(kubectl_version, (dict, list)):
+    print(f"{path}: missing or invalid tools.kubectl.version", file=sys.stderr)
+    sys.exit(1)
+print(str(kubectl_version).strip(), end="")
+PY
+  )"; then
+    log_err "Could not read tools.kubectl.version from ${VERSIONS_FILE}."
+    [[ -n "$py_out" ]] && log_err "${py_out}"
+    exit 1
+  fi
+  KUBECTL_VERSION="$py_out"
+  if [[ -z "$KUBECTL_VERSION" ]]; then
+    log_err "tools.kubectl.version in ${VERSIONS_FILE} is empty."
+    exit 1
+  fi
+}
+
 parse_image_catalog() {
   if [[ ! -f "$LOCALS_FILE" ]]; then
     log_err "locals.tf not found at: ${LOCALS_FILE}"
@@ -360,8 +403,10 @@ parse_image_catalog() {
 
   read_horizon_core_version
 
-  # Go image patch for every image build. Mirrors the GO_VERSION merge in base/main.tf.
+  # Go image patch and kubectl release for every image build. Mirrors the build-arg
+  # merge in base/main.tf.
   read_go_version
+  read_kubectl_version
   # Pass 1: extract simple local variable assignments for resolving build_arg references
   # (e.g.  common_nginx_version = "1.28.1-alpine3.23")
   declare -A local_vars
@@ -564,10 +609,11 @@ build_image() {
   local build_args_raw="${IMAGE_BUILD_ARGS[$name]:-}"
   local registry_host="${GCP_REGION}-docker.pkg.dev"
 
-  # Pass the Go patch to every image. Dockerfiles that declare ARG GO_VERSION use it.
-  # Images that do not declare it ignore the arg.
+  # Pass the Go patch and kubectl release to every image. Dockerfiles that declare
+  # ARG GO_VERSION or ARG KUBECTL_VERSION use them. Images that do not declare an
+  # arg ignore it.
   [[ -n "$build_args_raw" ]] && build_args_raw+=","
-  build_args_raw+="GO_VERSION=${GO_VERSION}"
+  build_args_raw+="GO_VERSION=${GO_VERSION},KUBECTL_VERSION=${KUBECTL_VERSION}"
 
   # The portal embeds the horizon CLI; stamp it with the Horizon version, as Terraform does
   # (terraform/modules/base/main.tf passes HORIZON_CLI_VERSION = local.horizon_core_version).

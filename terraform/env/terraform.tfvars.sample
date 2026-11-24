@@ -291,6 +291,12 @@ sdv_enable_kms_encryption = false
 #   TF_VAR_sdv_container_image_no_cache=true ./deploy.sh --apply
 sdv_container_image_no_cache = false
 
+# Optional: pull parent images during a container image build
+# false (default) reuses the local parent image.
+# true pulls each FROM image again.
+#   TF_VAR_sdv_container_image_pull_parent=true ./deploy.sh --apply
+sdv_container_image_pull_parent = false
+
 # To set secret manually, uncomment required secret
 # s5  : Argo CD Admin
 # s6  : Jenkins Admin
