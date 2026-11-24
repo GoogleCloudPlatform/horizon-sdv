@@ -46,7 +46,7 @@ spec:
         gcpComputeSaEmail: {{ .Values.config.gcpComputeSaEmail | quote }}
         releaseChannel: {{ .Values.config.releaseChannel | default "" | quote }}
         nodeLocations:
-{{ .Values.config.nodeLocations | default list | toYaml | nindent 10 }}
+{{ .Values.config.buildNodeLocations | default .Values.config.nodeLocations | default list | toYaml | nindent 10 }}
         nodePool:
           name: {{ .Values.nodePool.name | quote }}
           version: {{ $abfsPool.version | default "" | quote }}

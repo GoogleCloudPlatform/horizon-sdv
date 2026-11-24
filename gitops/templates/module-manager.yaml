@@ -54,6 +54,8 @@ spec:
           releaseChannel: {{ .Values.config.releaseChannel | default "" | quote }}
           nodeLocations:
             {{- .Values.config.nodeLocations | default list | toYaml | nindent 12 }}
+          buildNodeLocations:
+            {{- .Values.config.buildNodeLocations | default list | toYaml | nindent 12 }}
           {{- $abfsPool := default dict .Values.config.abfsBuildNodePool }}
           abfsBuildNodePool:
             version: {{ $abfsPool.version | default "" | quote }}
