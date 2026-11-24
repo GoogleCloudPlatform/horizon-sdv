@@ -99,4 +99,37 @@ casfs:
     # -- casfs.daemonset.tolerations -- loader tolerations
     # (empty = the global tolerations).
     tolerations: []
+
+# Shared cacheman: one `abfs cacheman run` per node of the build pool (DaemonSet
+# abfs-cacheman), used by every build pod on that node. This is the target
+# setup and is on by default, together with spec.abfs.sharedCacheman.enabled in
+# the builder chart (values-abfs.yaml); the values below must match that chart.
+# Off: each build pod starts its own cacheman, one build pod per node.
+cacheman:
+  enabled: true
+  # Node directory shared with the build pods: instances/ (config and the
+  # cacheman socket), cache/ (the local ABFS cache, on the node boot disk).
+  hostDir: /var/lib/abfs
+  # Group of the build pods (the builder image user is uid/gid 1000). Only root
+  # and this group can use hostDir (mode 2770), so another user on the node
+  # cannot reach the cacheman socket or write into the shared cache.
+  buildGroupId: 1000
+  # ABFS server and client flags, as spec.abfs.server / spec.abfs.clientFlags
+  # in the builder chart.
+  server: abfs-server.abfs.svc.cluster.local:50051
+  clientFlags: "--disable-tls=true --auth-type none"
+  # `abfs config -w` now runs once per node here instead of in every build pod,
+  # and it needs the manifest host. Same value as
+  # spec.abfs.uploaderManifestServer in the builder chart.
+  manifestServer: android.googlesource.com
+  # Listen backlog of the node (net.core.somaxconn), the value the builds need.
+  somaxconn: 8192
+  # Run cacheman in the node's network namespace.
+  hostNetwork: true
+  resources:
+    requests:
+      cpu: "4"
+      memory: 16Gi
+    limits:
+      memory: 32Gi
 config: {}

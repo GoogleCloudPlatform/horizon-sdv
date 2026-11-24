@@ -99,6 +99,13 @@ envFrom:
   value: '{{ "{{" }}workflow.parameters.abfsCleanCache{{ "}}" }}'
 - name: ABFS_CACHEMAN_TIMEOUT
   value: '{{ "{{" }}workflow.parameters.abfsCachemanTimeout{{ "}}" }}'
+{{- if eq (include "aaos-builder.abfsSharedCacheman" .) "true" }}
+# Use the cacheman of the node; see spec.abfs.sharedCacheman in values-abfs.yaml.
+- name: ABFS_SHARED_CACHEMAN
+  value: "true"
+- name: ABFS_SHARED_CACHEMAN_DIR
+  value: {{ .Values.spec.abfs.sharedCacheman.hostDir | quote }}
+{{- end }}
 - name: POST_REPO_COMMAND
   value: '{{ "{{" }}workflow.parameters.postRepoCommand{{ "}}" }}'
 - name: AAOS_PARALLEL_BUILD_JOBS

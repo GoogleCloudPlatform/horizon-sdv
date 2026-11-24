@@ -1,0 +1,164 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if .Values.cacheman.enabled }}
+{{- if not .Values.cacheman.hostDir }}
+{{- fail "cacheman.enabled=true requires cacheman.hostDir (node directory shared with the build pods)" }}
+{{- end }}
+{{- if not .Values.cacheman.server }}
+{{- fail "cacheman.enabled=true requires cacheman.server (ABFS server host:port)" }}
+{{- end }}
+# Shared cacheman: one `abfs cacheman run` per node of the build pool. Build
+# pods on the node do not start their own cacheman; they mount the same node
+# directory (instance directory with the cacheman socket, and the cache) and
+# run only `abfs mount` / `abfs setup` (builder chart, spec.abfs.sharedCacheman).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: abfs-cacheman
+  labels:
+    {{- include "abfs.labels" . | nindent 4 }}
+    app.kubernetes.io/name: abfs
+    app.kubernetes.io/component: cacheman
+    horizon-sdv.io/module: {{ .Values.moduleName | default "abfs-client-module-ubuntu" | quote }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: abfs
+      app.kubernetes.io/component: cacheman
+  updateStrategy:
+    # A restart of cacheman breaks the builds running on the node, so a change
+    # of this DaemonSet reaches a node only when its pod is deleted by hand or
+    # the node is replaced.
+    type: OnDelete
+  template:
+    metadata:
+      labels:
+        {{- include "abfs.labels" . | nindent 8 }}
+        app.kubernetes.io/name: abfs
+        app.kubernetes.io/component: cacheman
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      # cacheman runs as root on the host side and needs no Kubernetes API:
+      # no service account token, so root in this pod cannot use it.
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Host side: cacheman listens in the node's network namespace, so the
+      # listen backlog set below is the node's net.core.somaxconn.
+      hostPID: true
+      hostNetwork: {{ .Values.cacheman.hostNetwork }}
+      {{- if .Values.cacheman.hostNetwork }}
+      # Keep cluster DNS: the ABFS server is addressed by its Service name.
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: cacheman
+          {{- if .Values.image.digest }}
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          {{- else }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Privileged: cacheman mounts the casfs cache and the backlog is a
+          # node sysctl. Root; the build pods (another user) reach it through
+          # the shared directory below, open to their group only.
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              DIR={{ .Values.cacheman.hostDir | quote }}
+              SRV={{ .Values.cacheman.server | quote }}
+              FLAGS="--abfs-base-dir ${DIR}/instances --cache-dir ${DIR}/cache"
+              CLIENT={{ .Values.cacheman.clientFlags | quote }}
+
+              echo "waiting for the casfs kernel module (casfs installer DaemonSet)"
+              until [ -d /sys/module/casfs ]; do sleep 5; done
+
+              # ninja of every build on the node asks cacheman for cache hits
+              # over its unix socket; the default backlog is too small.
+              echo {{ .Values.cacheman.somaxconn | int }} > /proc/sys/net/core/somaxconn || \
+                echo "WARNING: could not raise net.core.somaxconn"
+              echo "net.core.somaxconn=$(cat /proc/sys/net/core/somaxconn)"
+
+              # Build pods run as another user (group BUILD_GID): instance
+              # directory, socket and cache belong to root:BUILD_GID with mode
+              # 2770, so only root and the build group can use them; setgid
+              # keeps BUILD_GID on new files.
+              BUILD_GID={{ .Values.cacheman.buildGroupId | int }}
+              umask 007
+              mkdir -p "${DIR}/instances" "${DIR}/cache" "${HOME}"
+              chown "0:${BUILD_GID}" "${DIR}" "${DIR}/instances" "${DIR}/cache"
+              chmod 2770 "${DIR}" "${DIR}/instances" "${DIR}/cache"
+
+              # shellcheck disable=SC2086
+              abfs ${FLAGS} init
+              # shellcheck disable=SC2086
+              abfs ${FLAGS} ${CLIENT} --remote-servers "${SRV}" --tunnel-ports 0 \
+                --manifest-server {{ .Values.cacheman.manifestServer | quote }} config -w
+              echo "starting cacheman for the node (server ${SRV})"
+              # shellcheck disable=SC2086
+              exec abfs ${FLAGS} ${CLIENT} cacheman run
+          env:
+            - name: HOME
+              value: "{{ .Values.cacheman.hostDir }}/home"
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - abfs --abfs-base-dir "{{ .Values.cacheman.hostDir }}/instances" --cache-dir "{{ .Values.cacheman.hostDir }}/cache" cacheman ping -t 10s
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 15
+          volumeMounts:
+            - name: abfs-shared
+              mountPath: {{ .Values.cacheman.hostDir | quote }}
+              # Mounts made by cacheman under this directory must reach the
+              # node and, through it, the build pods.
+              mountPropagation: Bidirectional
+          resources:
+            {{- toYaml .Values.cacheman.resources | nindent 12 }}
+      volumes:
+        - name: abfs-shared
+          hostPath:
+            path: {{ .Values.cacheman.hostDir | quote }}
+            type: DirectoryOrCreate
+{{- end }}

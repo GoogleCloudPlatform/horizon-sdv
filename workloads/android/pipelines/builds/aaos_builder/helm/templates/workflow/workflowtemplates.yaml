@@ -230,5 +230,12 @@ spec:
       # emptyDir when not using local repo; shared pipeline-workspace mounts at /horizon on WT steps only (not on gemini-review).
       emptyDir: {}
 {{- end }}
+{{- if eq (include "aaos-builder.abfsSharedCacheman" .) "true" }}
+    # Node directory of the shared cacheman (DaemonSet abfs-cacheman of abfs-client-module-ubuntu).
+    - name: abfs-shared
+      hostPath:
+        path: {{ .Values.spec.abfs.sharedCacheman.hostDir | quote }}
+        type: DirectoryOrCreate
+{{- end }}
   templates:
 {{- include "aaos-builder.templates" . | nindent 2 }}

@@ -44,6 +44,14 @@ mount (_abfs-build.tpl) instead of the init, build, gemini-review and storage st
 {{- end -}}
 
 {{/*
+True when the ABFS build pods use the cacheman of the node (spec.abfs.sharedCacheman.enabled)
+instead of starting their own.
+*/}}
+{{- define "aaos-builder.abfsSharedCacheman" -}}
+{{- if and (eq (include "aaos-builder.isAbfs" .) "true") (((.Values.spec.abfs).sharedCacheman).enabled) }}true{{- end -}}
+{{- end -}}
+
+{{/*
 StorageClass for the AAOS cache PVC, quoted. spec.aaosCacheStorageClassName when set (ABFS uses one dedicated
 class); otherwise one class per Android version, with an -rpi suffix for RPi lunch targets.
 */}}
