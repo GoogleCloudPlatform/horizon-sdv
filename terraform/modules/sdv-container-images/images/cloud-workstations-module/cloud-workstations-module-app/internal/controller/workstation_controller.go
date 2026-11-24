@@ -19,11 +19,14 @@ import (
 	"fmt"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -35,6 +38,9 @@ import (
 
 const (
 	WorkstationFinalizer = "workstations.horizon-sdv.io/workstation-finalizer"
+
+	reasonConfigDeleting = "ConfigDeleting"
+	reasonConfigNotFound = "ConfigNotFound"
 )
 
 var (
@@ -48,6 +54,8 @@ var (
 // WorkstationReconciler reconciles a Workstation object.
 type WorkstationReconciler struct {
 	client.Client
+	APIReader      client.Reader
+	Recorder       events.EventRecorder
 	Scheme         *runtime.Scheme
 	WS             wsapi.API
 	ResyncInterval time.Duration
@@ -58,6 +66,7 @@ type WorkstationReconciler struct {
 // +kubebuilder:rbac:groups=workstations.horizon-sdv.io,resources=workstations/finalizers,verbs=update
 // +kubebuilder:rbac:groups=workstations.cnrm.cloud.google.com,resources=workstations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=workstations.cnrm.cloud.google.com,resources=workstations/status,verbs=get
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
 func (r *WorkstationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("workstation", req.NamespacedName)
@@ -73,6 +82,21 @@ func (r *WorkstationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.reconcileDelete(ctx, &ws)
 	}
 
+	// Runs before the finalizer is added: a Workstation left waiting on a deleting config would
+	// block that config's delete. Until the KCC Workstation exists the config is read live, because
+	// a cached read can miss a delete that started a moment ago.
+	provisioned, err := r.kccWorkstationExists(ctx, &ws)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	parentConfig, unusable, err := r.resolveParentConfig(ctx, &ws, !provisioned)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if unusable != "" && !provisioned {
+		return ctrl.Result{}, r.removeUnprovisioned(ctx, &ws, unusable)
+	}
+
 	// Ensure finalizer
 	if !controllerutil.ContainsFinalizer(&ws, WorkstationFinalizer) {
 		base := ws.DeepCopy()
@@ -84,26 +108,63 @@ func (r *WorkstationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Reconcile KCC object
-	return r.reconcileCreateOrUpdate(ctx, &ws)
+	return r.reconcileCreateOrUpdate(ctx, &ws, parentConfig)
 }
 
-func (r *WorkstationReconciler) reconcileCreateOrUpdate(ctx context.Context, ws *wsv1alpha1.Workstation) (ctrl.Result, error) {
+func (r *WorkstationReconciler) kccWorkstationExists(ctx context.Context, ws *wsv1alpha1.Workstation) (bool, error) {
+	kccObj := &unstructured.Unstructured{}
+	kccObj.SetGroupVersionKind(kccWorkstationGVK)
+	err := r.Get(ctx, client.ObjectKeyFromObject(ws), kccObj)
+	if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// resolveParentConfig returns the parent config, or nil when it does not exist, and the reason it
+// cannot take a new workstation (reasonConfigDeleting, reasonConfigNotFound), or "" when it can.
+// live reads through APIReader; a nil APIReader falls back to the cached Client.
+func (r *WorkstationReconciler) resolveParentConfig(ctx context.Context, ws *wsv1alpha1.Workstation, live bool) (*wsv1alpha1.WorkstationConfig, string, error) {
+	var reader client.Reader = r.Client
+	if live && r.APIReader != nil {
+		reader = r.APIReader
+	}
+	cfg := &wsv1alpha1.WorkstationConfig{}
+	err := reader.Get(ctx, client.ObjectKey{Namespace: ws.Namespace, Name: ws.Spec.ConfigRef.Name}, cfg)
+	switch {
+	case apierrors.IsNotFound(err):
+		return nil, reasonConfigNotFound, nil
+	case err != nil:
+		return nil, "", err
+	case !cfg.DeletionTimestamp.IsZero():
+		return cfg, reasonConfigDeleting, nil
+	}
+	return cfg, "", nil
+}
+
+// removeUnprovisioned deletes a Workstation that has no KCC Workstation yet, so it cannot block its
+// config's delete. With our finalizer it then goes through reconcileDelete.
+func (r *WorkstationReconciler) removeUnprovisioned(ctx context.Context, ws *wsv1alpha1.Workstation, reason string) error {
+	state := "is being deleted"
+	if reason == reasonConfigNotFound {
+		state = "does not exist"
+	}
+	log.FromContext(ctx).Info("removing Workstation before provisioning: parent WorkstationConfig "+state, "config", ws.Spec.ConfigRef.Name)
+	if r.Recorder != nil {
+		r.Recorder.Eventf(ws, nil, corev1.EventTypeWarning, reason, "Delete",
+			"WorkstationConfig %q %s; Workstation removed before provisioning", ws.Spec.ConfigRef.Name, state)
+	}
+	// The UID precondition keeps a Workstation recreated under the same name since this read.
+	uid := ws.UID
+	return client.IgnoreNotFound(r.Delete(ctx, ws, client.Preconditions{UID: &uid}))
+}
+
+func (r *WorkstationReconciler) reconcileCreateOrUpdate(ctx context.Context, ws *wsv1alpha1.Workstation, parentConfig *wsv1alpha1.WorkstationConfig) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// Resolve parent WorkstationConfig
-	parentConfig := &wsv1alpha1.WorkstationConfig{}
-	configKey := client.ObjectKey{Namespace: ws.Namespace, Name: ws.Spec.ConfigRef.Name}
-	if err := r.Get(ctx, configKey, parentConfig); err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Info("parent WorkstationConfig not found, waiting", "config", ws.Spec.ConfigRef.Name)
-			ws.Status.Phase = "Pending"
-			_ = r.Status().Update(ctx, ws)
-			return kccWait(), nil
-		}
-		return ctrl.Result{}, err
-	}
-	if !parentConfig.DeletionTimestamp.IsZero() {
-		logger.Info("parent WorkstationConfig is deleting, waiting", "config", ws.Spec.ConfigRef.Name)
+	// Only reached for a provisioned workstation whose config is gone, which config delete ordering prevents.
+	if parentConfig == nil {
+		logger.Info("parent WorkstationConfig not found, waiting", "config", ws.Spec.ConfigRef.Name)
 		ws.Status.Phase = "Pending"
 		_ = r.Status().Update(ctx, ws)
 		return kccWait(), nil

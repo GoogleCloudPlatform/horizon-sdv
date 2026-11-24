@@ -260,15 +260,23 @@ print_status() {
     ((.status.conditions // [])[] | "condition \(.type)=\(.status) reason=\(.reason // "-") message=\(.message // "-")")'
 }
 
-# wait_ready RESOURCE NAME TIMEOUT
+# wait_ready RESOURCE NAME TIMEOUT [CONFIG]
+# CONFIG is the parent config of a Workstation. The controller deletes a Workstation whose config is
+# being deleted or does not exist, so a disappearing Workstation is explained from that config.
 wait_ready() {
-  local resource=$1 name=$2 timeout=$3 deadline last="" line json state
+  local resource=$1 name=$2 timeout=$3 config=${4:-} deadline last="" line json state cfg
   deadline=$(( $(date +%s) + 10#$timeout ))
   echo "Waiting up to ${timeout}s for $name to become Ready"
   while :; do
     if ! json=$(cr_json "$resource" "$name"); then
       echo "Read failed, retrying"
     elif [[ -z "$json" ]]; then
+      [[ -n "$config" ]] || fail "$name no longer exists"
+      if cfg=$(cr_json "$(resource_for workstationconfig)" "$config") && [[ -z "$cfg" ]]; then
+        fail "workstation '$name' was removed: config '$config' does not exist"
+      elif [[ -n "$cfg" && -n "$(jq -r '.metadata.deletionTimestamp // empty' <<<"$cfg")" ]]; then
+        fail "workstation '$name' was removed: config '$config' is being deleted"
+      fi
       fail "$name no longer exists"
     else
       line=$(progress_line <<<"$json")

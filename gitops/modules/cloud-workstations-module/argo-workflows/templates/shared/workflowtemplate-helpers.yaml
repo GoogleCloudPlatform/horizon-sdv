@@ -21,6 +21,7 @@
 #           timeoutSeconds (default readyTimeoutSeconds)
 #   Forces metadata.namespace, runs a server-side dry run, then creates the object. Never overwrites:
 #   an existing name fails with AlreadyExists. Waits until Ready=True for the current generation.
+#   A Workstation the controller removes because its config is being deleted or missing fails with that reason.
 #
 # patch-and-wait-ready
 #   inputs: kind (workstationconfig or workstation), name, patch (JSON merge patch touching only spec),
@@ -84,7 +85,9 @@ spec:
             kubectl create --dry-run=server -o name -f - <<<"$manifest"
             echo "Creating $kind $name"
             kubectl create -o name -f - <<<"$manifest"
-            wait_ready "$resource" "$name" "$TIMEOUT_SECONDS"
+            config=""
+            [[ "$kind" == Workstation ]] && config=$(jq -r '.spec.configRef.name // ""' <<<"$manifest")
+            wait_ready "$resource" "$name" "$TIMEOUT_SECONDS" "$config"
 
     - name: patch-and-wait-ready
       inputs:

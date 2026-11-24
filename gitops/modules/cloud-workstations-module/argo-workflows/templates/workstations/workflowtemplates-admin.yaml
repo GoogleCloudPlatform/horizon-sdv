@@ -76,8 +76,8 @@ spec:
 
             # configRef is immutable, so a wrong config means deleting and recreating the workstation.
             cfg=$(require_cfg "$config")
-            # The controller leaves a Workstation Pending for as long as its config is deleting, and
-            # that Workstation then blocks the config delete. Fail before the Workstation is created.
+            # The controller would delete a Workstation created on a deleting config. Fail here first
+            # with the clearer message.
             deleting=$(jq -r '.metadata.deletionTimestamp // ""' <<<"$cfg")
             [[ -z "$deleting" ]] || fail "workstation config '$config' is being deleted; choose a config that is not being deleted"
             echo "Parent config $config: $(progress_line <<<"$cfg")"
