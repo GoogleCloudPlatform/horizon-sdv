@@ -99,6 +99,11 @@ AAOS_GERRIT_RPI_MANIFEST_URL=${AAOS_GERRIT_RPI_MANIFEST_URL:-https://raw.githubu
 ABFS_BUILDER=${ABFS_BUILDER:-false}
 ABFS_CACHED_BUILD=${ABFS_CACHED_BUILD:-false}
 ABFS_CACHEMAN_DIRECTORY=${ABFS_CACHEMAN_DIRECTORY:-}
+# Shared cacheman: use the cacheman that runs on the node (DaemonSet
+# abfs-cacheman of abfs-client-module-ubuntu) instead of starting one in the
+# build pod. Its instance directory and cache are under this node directory.
+ABFS_SHARED_CACHEMAN=${ABFS_SHARED_CACHEMAN:-false}
+ABFS_SHARED_CACHEMAN_DIR=${ABFS_SHARED_CACHEMAN_DIR:-/var/lib/abfs}
 ABFS_MOUNT_POINT="abfs"
 # ABFS server endpoint for 'abfs config -w'. Build pods run in the jenkins
 # namespace, where the short Service name abfs-server does not resolve, so
@@ -180,6 +185,11 @@ if [ -d "${AAOS_CACHE_DIRECTORY}" ]; then
     sudo chmod g+s /"${AAOS_CACHE_DIRECTORY}"
 
     if [[ "${ABFS_BUILDER}" == "true" ]]; then
+        if [[ "${ABFS_SHARED_CACHEMAN}" == "true" ]]; then
+            # The cache belongs to the node's cacheman and to the other builds
+            # on the node: never on the PVC, never cleaned from a build.
+            ABFS_CACHED_BUILD="false"
+        fi
         if [[ "${ABFS_CACHED_BUILD}" == "true" ]]; then
             ABFS_CMD_FLAGS="--cache-dir ${AAOS_CACHE_DIRECTORY}/cache"
             mkdir -p "${AAOS_CACHE_DIRECTORY}/cache"
@@ -244,6 +254,11 @@ if [ -d "${AAOS_CACHE_DIRECTORY}" ]; then
     esac
 else
     AAOS_CACHE_DIRECTORY="${HOME}"
+fi
+
+if [[ "${ABFS_BUILDER}" == "true" ]] && [[ "${ABFS_SHARED_CACHEMAN}" == "true" ]]; then
+    ABFS_CACHED_BUILD="false"
+    ABFS_CMD_FLAGS="--abfs-base-dir ${ABFS_SHARED_CACHEMAN_DIR}/instances --cache-dir ${ABFS_SHARED_CACHEMAN_DIR}/cache"
 fi
 
 EMPTY_DIR="${AAOS_CACHE_DIRECTORY}"/empty_dir
@@ -697,6 +712,7 @@ case "$0" in
             AAOS_MANIFEST_NAME=${AAOS_MANIFEST_NAME}
             AAOS_CLEAN=${AAOS_CLEAN}
             ABFS_CACHED_BUILD=${ABFS_CACHED_BUILD}
+            ABFS_SHARED_CACHEMAN=${ABFS_SHARED_CACHEMAN}
             ABFS_CMD_FLAGS=${ABFS_CMD_FLAGS}
             ABFS_SERVER=${ABFS_SERVER}
             ABFS_CLIENT_FLAGS=${ABFS_CLIENT_FLAGS}
