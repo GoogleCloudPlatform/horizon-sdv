@@ -86,6 +86,8 @@ pipeline {
                 sh '''
                   cd "${WORKSPACE}/workloads/cloud-workstations/pipelines/workstation-images/horizon-code-oss/";
                   cp -r "${WORKSPACE}/workloads/cloud-workstations/pipelines/workstation-images/common-utils/" ./common-utils/;
+                  mkdir -p ./tools && cp -r "${WORKSPACE}/tools/horizon" ./tools/horizon
+                  cp "${WORKSPACE}/versions.yaml" ./versions.yaml
                   buildctl build \
                    --frontend=dockerfile.v0 \
                    --local=dockerfile=. \
