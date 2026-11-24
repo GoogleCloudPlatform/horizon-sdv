@@ -312,6 +312,13 @@ uploader:
       memory: 112Gi
     limits:
       memory: 112Gi
+  # -- uploader.goMemLimit -- GOMEMLIMIT for the uploader (Go soft memory
+  # limit). Without it the Go runtime grows the heap until the kernel kills the
+  # pod at limits.memory, which can happen during a first seed. Keep it about
+  # 12 GiB under limits.memory: the git processes the uploader starts are not
+  # counted by GOMEMLIMIT but are counted by the container limit.
+  # Empty string = not set.
+  goMemLimit: 100GiB
   dataDisk:
     # -- uploader.dataDisk.size -- per-pod data PVC size (1 Ti each).
     size: 1024Gi
