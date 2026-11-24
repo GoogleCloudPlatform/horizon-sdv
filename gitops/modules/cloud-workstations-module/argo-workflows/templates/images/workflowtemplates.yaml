@@ -265,7 +265,7 @@ spec:
             valueFrom:
               path: /tmp/gnome-uri
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         command: [sh, -eu, -c]
         {{- include "cws.nonRootSecurityContext" . | nindent 8 }}
         env:
@@ -409,7 +409,7 @@ spec:
           - name: context
             path: /out
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         command: [sh, -eu, -c]
         {{- include "cws.nonRootSecurityContext" . | nindent 8 }}
         volumeMounts:

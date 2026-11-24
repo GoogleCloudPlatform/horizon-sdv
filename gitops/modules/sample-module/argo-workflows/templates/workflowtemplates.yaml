@@ -117,7 +117,7 @@ spec:
 {{- end }}
     - name: log-parameters
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         # Parameters are passed as env vars and read as "$VAR" — never interpolated
         # into the script, so free-text values cannot break out into command execution.
         env:
@@ -180,7 +180,7 @@ spec:
 {{- end }}
     - name: echo-and-artifact
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -202,7 +202,7 @@ spec:
             path: /tmp/smoke-test.tgz
     - name: verify-gcs
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         env:
           # Parameter via env var, not interpolated into the script.
           - name: LARGE_UPLOAD_SIZE_MIB
@@ -262,7 +262,7 @@ spec:
             dependencies: [echo-and-artifact]
     - name: log-parameters
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         # Parameters via env vars, never interpolated into the script.
         env:
           - name: RELEASE_CHANNEL
@@ -285,7 +285,7 @@ spec:
             echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: echo-and-artifact
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -303,7 +303,7 @@ spec:
             path: /tmp/result.txt
     - name: verify-gcs
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
