@@ -84,11 +84,12 @@ spec:
     # Shared cacheman: build pods use the cacheman that the abfs-client-ubuntu
     # module runs on the node (DaemonSet abfs-cacheman, cacheman.enabled in that
     # module) instead of starting their own. Several build pods then share one
-    # node, as many as the requests below allow. Off: one build pod per node
-    # with its own cacheman. With it on, the local ABFS cache is on the node,
-    # so cachedBuild, cleanCache and cachemanTimeout have no effect.
+    # node, as many as the requests below allow. On by default (target setup).
+    # Off: one build pod per node with its own cacheman. With it on, the local
+    # ABFS cache is on the node, so cachedBuild, cleanCache and cachemanTimeout
+    # have no effect.
     sharedCacheman:
-      enabled: false
+      enabled: true
       # Same directory as cacheman.hostDir in abfs-client-module-ubuntu.
       hostDir: /var/lib/abfs
       # Build pod sizing in shared mode: about 10 pods on a c2d-highcpu-112

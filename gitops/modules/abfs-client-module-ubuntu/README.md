@@ -69,20 +69,20 @@ Build pods select the pool with the `nodeSelector` / `tolerations` above (`value
 
 Versions to keep aligned on an ABFS release: `casfs.daemonset.version` and `image.tag` here (0.1.14), `casfs.daemonset.sourceUrl` in `abfs-service-module/abfs/values.yaml`, and the client package versions in the builder chart (`values-abfs.yaml`) and Jenkins seed.
 
-### Shared cacheman (optional)
+### Shared cacheman
 
-`cacheman.enabled: false` by default: every build pod starts its own `abfs cacheman` and one build pod runs per node.
+`cacheman.enabled: true` by default (the target setup): the module deploys DaemonSet `abfs-cacheman` in `module-manager`, one `abfs cacheman run` per node of the pool, started on the host side (host network and PID namespace, privileged, no service account token). It waits for `casfs`, sets the node's `net.core.somaxconn` (`cacheman.somaxconn`), runs `abfs init` and `abfs config -w` against `cacheman.server`, and keeps the instance directory and the cache in `cacheman.hostDir` (`/var/lib/abfs`) on the node disk. The directory belongs to `root:<cacheman.buildGroupId>` with mode `2770`: only root and the build pods' group (1000) can reach the cacheman socket or write into the cache.
 
-With `cacheman.enabled: true` the module deploys DaemonSet `abfs-cacheman` in `module-manager`: one `abfs cacheman run` per node of the pool, started on the host side (host network and PID namespace, privileged). It waits for `casfs`, sets the node's `net.core.somaxconn` (`cacheman.somaxconn`), runs `abfs init` and `abfs config -w` against `cacheman.server`, and keeps the instance directory and the cache in `cacheman.hostDir` (`/var/lib/abfs`) on the node disk.
-
-The build pods must be switched at the same time with `spec.abfs.sharedCacheman.enabled: true` in the builder chart (`values-abfs.yaml`). They then mount the same node directory, skip `abfs init` / `config` / `cacheman run`, and only do `abfs mount` and `abfs setup`. The one-pod-per-node rule is removed and the pod requests are reduced, so about 10 build pods share a node and its cacheman.
+The builder chart has the matching switch `spec.abfs.sharedCacheman.enabled: true` (`values-abfs.yaml`); keep both the same. The build pods mount the same node directory, skip `abfs init` / `config` / `cacheman run`, and only do `abfs mount` and `abfs setup`. The one-pod-per-node rule is removed and the pod requests are reduced, so about 10 build pods share a node and its cacheman. With both switches off, every build pod starts its own `abfs cacheman` and one build pod runs per node.
 
 | Value | Default | Meaning |
 |-------|---------|---------|
-| `cacheman.enabled` | `false` | Deploy the shared cacheman DaemonSet |
+| `cacheman.enabled` | `true` | Deploy the shared cacheman DaemonSet |
 | `cacheman.hostDir` | `/var/lib/abfs` | Node directory shared with the build pods; same value as `spec.abfs.sharedCacheman.hostDir` |
-| `cacheman.server`, `cacheman.clientFlags`, `cacheman.manifestServer` | as the builder chart | ABFS server, TLS/auth flags and manifest host |
-| `cacheman.somaxconn` | `65535` | Listen backlog of the node |
+| `cacheman.buildGroupId` | `1000` | Group of the build pods (builder image user); owner group of `hostDir` |
+| `cacheman.server`, `cacheman.clientFlags` | as the builder chart | ABFS server and TLS/auth flags |
+| `cacheman.manifestServer` | `android.googlesource.com` | Manifest host written by `abfs config -w`, which now runs once per node instead of in every build pod |
+| `cacheman.somaxconn` | `8192` | Listen backlog of the node |
 
 The DaemonSet uses `updateStrategy: OnDelete`: a restart of cacheman breaks the builds running on that node, so a changed DaemonSet reaches a node when its pod is deleted by hand or the node is replaced. The Jenkins `AAOS Builder ABFS` job does not use the shared cacheman.
 

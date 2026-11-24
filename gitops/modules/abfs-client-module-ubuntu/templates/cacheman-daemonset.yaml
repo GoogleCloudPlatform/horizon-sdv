@@ -31,6 +31,7 @@ metadata:
     {{- include "abfs.labels" . | nindent 4 }}
     app.kubernetes.io/name: abfs
     app.kubernetes.io/component: cacheman
+    horizon-sdv.io/module: {{ .Values.moduleName | default "abfs-client-module-ubuntu" | quote }}
   {{- with .Values.commonAnnotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -59,6 +60,9 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      # cacheman runs as root on the host side and needs no Kubernetes API:
+      # no service account token, so root in this pod cannot use it.
+      automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -91,8 +95,8 @@ spec:
           {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           # Privileged: cacheman mounts the casfs cache and the backlog is a
-          # node sysctl. Root, so the build pods (another user) are served
-          # through the world-writable shared directory below.
+          # node sysctl. Root; the build pods (another user) reach it through
+          # the shared directory below, open to their group only.
           securityContext:
             privileged: true
             runAsUser: 0
@@ -114,11 +118,15 @@ spec:
                 echo "WARNING: could not raise net.core.somaxconn"
               echo "net.core.somaxconn=$(cat /proc/sys/net/core/somaxconn)"
 
-              # Build pods run as another user: instance directory, socket and
-              # cache must be usable by everyone on the node.
-              umask 000
+              # Build pods run as another user (group BUILD_GID): instance
+              # directory, socket and cache belong to root:BUILD_GID with mode
+              # 2770, so only root and the build group can use them; setgid
+              # keeps BUILD_GID on new files.
+              BUILD_GID={{ .Values.cacheman.buildGroupId | int }}
+              umask 007
               mkdir -p "${DIR}/instances" "${DIR}/cache" "${HOME}"
-              chmod 0777 "${DIR}" "${DIR}/instances" "${DIR}/cache"
+              chown "0:${BUILD_GID}" "${DIR}" "${DIR}/instances" "${DIR}/cache"
+              chmod 2770 "${DIR}" "${DIR}/instances" "${DIR}/cache"
 
               # shellcheck disable=SC2086
               abfs ${FLAGS} init
