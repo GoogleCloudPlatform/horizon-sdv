@@ -110,15 +110,30 @@ spec:
               until [ -d /sys/module/casfs ]; do sleep 5; done
               # ninja of every build on the node asks cacheman for cache hits
               # over its unix socket; the default backlog is too small.
-              echo {{ .Values.cacheman.somaxconn | int }} > /proc/sys/net/core/somaxconn ||                 echo "WARNING: could not raise net.core.somaxconn"
+              echo {{ .Values.cacheman.somaxconn | int }} > /proc/sys/net/core/somaxconn || \
+                echo "WARNING: could not raise net.core.somaxconn"
               echo "net.core.somaxconn=$(cat /proc/sys/net/core/somaxconn)"
               mkdir -p "${DIR}/instances" "${DIR}/cache" "${DIR}/home"
               # Also takes over files left by an earlier cacheman that ran as root.
-              chown -R "{{ .Values.cacheman.buildUserId | int }}:{{ .Values.cacheman.buildGroupId | int }}" "${DIR}"
+              chown -R "${BUILD_UID}:${BUILD_GID}" "${DIR}"
               chmod 0770 "${DIR}" "${DIR}/instances" "${DIR}/cache" "${DIR}/home"
+              # abfs looks its user up by uid; the image has no build user, so
+              # cacheman gets passwd/group files that add it.
+              grep -v "^[^:]*:[^:]*:${BUILD_UID}:" /etc/passwd > /identity/passwd
+              echo "builder:x:${BUILD_UID}:${BUILD_GID}::${DIR}/home:/bin/bash" >> /identity/passwd
+              grep -v "^[^:]*:[^:]*:${BUILD_GID}:" /etc/group > /identity/group
+              echo "builder:x:${BUILD_GID}:" >> /identity/group
+              chmod 0644 /identity/passwd /identity/group
+          env:
+            - name: BUILD_UID
+              value: {{ .Values.cacheman.buildUserId | int | quote }}
+            - name: BUILD_GID
+              value: {{ .Values.cacheman.buildGroupId | int | quote }}
           volumeMounts:
             - name: abfs-shared
               mountPath: {{ .Values.cacheman.hostDir | quote }}
+            - name: identity
+              mountPath: /identity
       containers:
         - name: cacheman
           {{- if .Values.image.digest }}
@@ -145,7 +160,8 @@ spec:
               # shellcheck disable=SC2086
               abfs ${FLAGS} init
               # shellcheck disable=SC2086
-              abfs ${FLAGS} ${CLIENT} --remote-servers "${SRV}" --tunnel-ports 0                 --manifest-server {{ .Values.cacheman.manifestServer | quote }} config -w
+              abfs ${FLAGS} ${CLIENT} --remote-servers "${SRV}" --tunnel-ports 0 \
+                --manifest-server {{ .Values.cacheman.manifestServer | quote }} config -w
               echo "starting cacheman for the node (server ${SRV}) as uid $(id -u)"
               # shellcheck disable=SC2086
               exec abfs ${FLAGS} ${CLIENT} cacheman run
@@ -167,9 +183,20 @@ spec:
               # Mounts made by cacheman under this directory must reach the
               # node and, through it, the build pods.
               mountPropagation: Bidirectional
+            - name: identity
+              mountPath: /etc/passwd
+              subPath: passwd
+              readOnly: true
+            - name: identity
+              mountPath: /etc/group
+              subPath: group
+              readOnly: true
           resources:
             {{- toYaml .Values.cacheman.resources | nindent 12 }}
       volumes:
+        - name: identity
+          emptyDir:
+            sizeLimit: 1Mi
         - name: abfs-shared
           hostPath:
             path: {{ .Values.cacheman.hostDir | quote }}
