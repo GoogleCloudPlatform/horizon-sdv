@@ -164,7 +164,7 @@ spec:
         description: "Optional label string for GCS uploads (see workloads/common/storage/storage.sh)."
       - name: submittedBy
         value: ""
-        description: "Jenkins BUILD_USER_ID equivalent for private MTK testbenches. Portal sets preferred_username; Sensor maps horizonSubmittedBy."
+        description: "Jenkins BUILD_USER_ID equivalent for private MTK testbenches. Horizon API sets it to the caller's Keycloak username."
       - name: aiReviewRuntime
         value: {{ $root.Values.spec.aiReviewRuntime | default "agy" | quote }}
         enum:

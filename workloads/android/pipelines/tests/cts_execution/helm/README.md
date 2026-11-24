@@ -35,14 +35,14 @@ Shared with CVD Launcher:
 | **`numInstances`** | Cuttlefish instances (= **`SHARD_COUNT`** on guest). |
 | **`mtkConnectEnable`** | When `true`, MTK before CTS (needs workflows MTK secret). |
 | **`mtkConnectPublic`** | Default **`true`** — MTK testbench user **`everyone`**. Jenkins defaults private unless **`MTK_CONNECT_PUBLIC`** is checked. |
-| **`submittedBy`** | Same as **`cvd-launcher`**: Portal **`authService.getUsername()`** → **`X-Horizon-Submitted-By`**; API → **`horizonSubmittedBy`** / pod **`BUILD_USER_ID`**. Empty → **`jenkins`**. |
+| **`submittedBy`** | Same as **`cvd-launcher`**: Horizon API sets it to the caller's Keycloak username from the access token → pod **`BUILD_USER_ID`**. Empty → **`jenkins`**. |
 | **`enableGeminiAiAssistant`**, **`geminiAnalyseOnSuccess`** | Gemini DAG (failure / optional success review). |
 
 Deploy-time only (Helm **`spec.*`**, not submit UI): `pipelineRepoUrl`, `cloudProject`, `androidTestsWorkflowArtifactFolder`, Gemini model/resources — see **`values.yaml`**.
 
 ## Submitter identity (Portal / webhook)
 
-Same model as **`cvd-launcher`**: Portal / Horizon API set **`horizon-sdv.io/submitted-by`** and **`submittedBy`** on the Workflow; Developer Portal lists **Triggered from** + **Submitted by** for all users with access. See **`cvd-launcher` chart README** (Submitter identity, MTK debug logs). Jenkins CTS jobs are not Argo workflows and do not appear in that list.
+Same model as **`cvd-launcher`**: Horizon API sets **`horizon-sdv.io/submitted-by`** (token subject, the owner) and **`submittedBy`** (username) on the Workflow from the caller's token; Developer Portal lists **Triggered from** + **Submitted by** for all users with access. See **`cvd-launcher` chart README** (Submitter identity, MTK debug logs). Jenkins CTS jobs are not Argo workflows and do not appear in that list.
 
 ## Behaviour notes
 
@@ -97,6 +97,6 @@ argo submit --from workflowtemplate/cts-execution-on-gce -n <prefix>workflows \
   -p enableGeminiAiAssistant=false
 ```
 
-**Webhook:** Sensor **`webhook-cts-execution-on-gce`** — maps **`body.horizonSubmittedBy`** → annotation and **`submittedBy`** (same as CVD launcher).
+**Webhook:** Sensor **`webhook-cts-execution-on-gce`** — maps **`body.horizonSubmittedBy`** → annotation and **`body.submittedBy`** → **`submittedBy`** (same as CVD launcher).
 
 **Further reading:** [tests/README.md](../README.md), [GCP helpers](../../common/gcp/README.md), Jenkins parameters in [cts_execution.md](../../../../docs/workloads/android/tests/cts_execution.md).

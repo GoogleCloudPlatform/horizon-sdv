@@ -38,7 +38,7 @@ The Portal does not have a Cloud Workstations API. It lists these workflows from
 
 This module is experimental. Any signed-in Horizon user can run any Cloud Workstations workflow, including the admin ones that create, delete, and change who can use a workstation.
 
-The Portal does not offer separate admin and user permissions. It lists every workflow and shows every other input as a text box. It does not ask for an email on the user workflows. It hides `submittedBy` and sends the signed-in username (`preferred_username`, otherwise `name`, otherwise `sub`). Those workflows only show or start workstations that list that value. The Portal form cannot change it. Horizon API still accepts a different `submittedBy` when the request is not sent by that form.
+The Portal does not offer separate admin and user permissions. It lists every workflow and shows every other input as a text box. It does not ask for an email on the user workflows. It hides `submittedBy`. Horizon API sets it to the caller's username (`preferred_username`) from the verified access token and ignores a value sent by the client, so those workflows only show or start workstations that list the caller. The one exception is a service account with the `horizon-api` client role `impersonate`, which may name the user.
 
 Access on the workstation in Google Cloud is still applied. People listed as users get workstation user access. People listed as admins on a configuration get workstation admin access. Do not treat the Portal as a way to keep those actions limited to a role.
 

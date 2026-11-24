@@ -51,7 +51,7 @@ webhookWorkflowParameters:
   - name: storageLabels
     bodyKey: storageLabels
   - name: submittedBy
-    bodyKey: horizonSubmittedBy
+    bodyKey: submittedBy
 
 spec:
   cloudProject: ""

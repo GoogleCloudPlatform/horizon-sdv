@@ -222,24 +222,14 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request, p *horizon
 			}
 		}
 	}
-	horizonSubmittedBy := workflow.ParseSubmittedByHeader(r)
-	if req.Parameters != nil {
-		if v := strings.TrimSpace(req.Parameters[workflow.SubmitParamSubmittedBy]); v != "" {
-			horizonSubmittedBy = v
-		}
-	}
-	if horizonSubmittedBy == "" {
-		horizonSubmittedBy = strings.TrimSpace(p.Subject)
-	}
+	owner, submittedBy := callerIdentity(r, p, req.Parameters)
 	body := map[string]interface{}{
 		"workflowTemplateName":            ent.TemplateName,
 		"workflowTemplateNamespace":       ent.Namespace,
 		"horizonModule":                   module,
-		workflow.WebhookFieldSubmittedBy:  horizonSubmittedBy,
+		workflow.WebhookFieldSubmittedBy:  owner,
+		workflow.SubmitParamSubmittedBy:   submittedBy,
 		workflow.SubmitParamSubmittedFrom: submittedFrom,
-	}
-	if horizonSubmittedBy != "" {
-		body[workflow.SubmitParamSubmittedBy] = horizonSubmittedBy
 	}
 	if req.Parameters != nil {
 		for k, v := range req.Parameters {
@@ -282,6 +272,33 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request, p *horizon
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "dispatched"})
 }
 
+// roleImpersonate is the horizon-api client role that lets a service account name the user a
+// run is for.
+const roleImpersonate = "impersonate"
+
+// callerIdentity returns who a submitted workflow belongs to, taken from the verified token.
+// owner is the token subject. submittedBy is the caller's username, or the subject when the
+// token has none. Only a caller with the impersonate role may name another user, in the
+// submittedBy parameter or the X-Horizon-Submitted-By header; the owner is still that caller.
+// From any other caller both are ignored. None of this depends on the role-check setting.
+func callerIdentity(r *http.Request, p *horizonauth.Principal, params map[string]string) (owner, submittedBy string) {
+	owner = p.Subject
+	submittedBy = strings.TrimSpace(p.Username)
+	if submittedBy == "" {
+		submittedBy = owner
+	}
+	if !p.HasClientRole(roleImpersonate) {
+		return owner, submittedBy
+	}
+	if v := strings.TrimSpace(params[workflow.SubmitParamSubmittedBy]); v != "" {
+		return owner, v
+	}
+	if v := workflow.ParseSubmittedByHeader(r); v != "" {
+		return owner, v
+	}
+	return owner, submittedBy
+}
+
 func enumContains(values []string, got string) bool {
 	for _, v := range values {
 		if v == got {
@@ -305,7 +322,7 @@ func validateParams(ent catalog.Entry, got map[string]string) error {
 		if p.Default != "" {
 			continue
 		}
-		// Resolved from X-Horizon-Submitted-From / X-Horizon-Submitted-By unless body override is non-empty.
+		// Horizon API fills these in: submitted-from from the header or body, submittedBy from the caller's token.
 		if p.Name == workflow.SubmitParamSubmittedFrom || p.Name == workflow.SubmitParamSubmittedBy {
 			continue
 		}

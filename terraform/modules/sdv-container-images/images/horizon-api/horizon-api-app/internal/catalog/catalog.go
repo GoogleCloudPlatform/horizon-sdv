@@ -307,6 +307,14 @@ func submitRequestBodySchema(e Entry) map[string]interface{} {
 				prop["description"] = strings.TrimSpace(suffix)
 			}
 		}
+		if p.Name == workflow.SubmitParamSubmittedBy {
+			suffix := "Optional: Horizon API sets this to the caller's username from the access token. A value sent by the client is ignored unless the caller holds the horizon-api client role impersonate."
+			if d, _ := prop["description"].(string); d != "" {
+				prop["description"] = strings.TrimSpace(d) + " " + suffix
+			} else {
+				prop["description"] = suffix
+			}
+		}
 		paramProps[p.Name] = prop
 		if p.Default == "" && p.Name != workflow.SubmitParamSubmittedFrom && p.Name != workflow.SubmitParamSubmittedBy {
 			paramRequired = append(paramRequired, p.Name)
@@ -473,7 +481,11 @@ func workflowOpenAPIComponentSchemas() map[string]interface{} {
 				"workflowTemplate": map[string]interface{}{"type": "string"},
 				"startedBy": map[string]interface{}{
 					"type":        "string",
-					"description": "Horizon portal subject (annotation horizon-sdv.io/submitted-by) or Argo creator label when present.",
+					"description": "Name to display for who started the run: the `submittedBy` workflow parameter when the template has one (the caller's username), else the owner, else the Argo creator label when present.",
+				},
+				"owner": map[string]interface{}{
+					"type":        "string",
+					"description": "Token subject (`sub`) of the caller who submitted the run through Horizon API (annotation horizon-sdv.io/submitted-by). Runs submitted before Horizon API set it from the token have a client-supplied value here, which is not a trusted owner.",
 				},
 				"submittedFrom": map[string]interface{}{
 					"type":        "string",
@@ -1034,6 +1046,7 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 				"Clients: `horizon-api` (public — Authorization Code+PKCE and OAuth 2.0 device authorization grant for CLI), `horizon-api-ci` (confidential — client_credentials with client_id and client_secret from Keycloak Admin). " +
 				"Endpoints: `{issuer}/protocol/openid-connect/auth/device` (device), `{issuer}/protocol/openid-connect/token` (code + device token + client_credentials). " +
 				"Submit runs a template via `POST /v1/modules/{module}/workflowTemplates/{template}/submit` with body `{\"parameters\":{...}}` and optional header `X-Horizon-Submitted-From` (`api` default, `developer-portal`, `horizon-cli`); OpenAPI lists one such operation per catalog entry with named parameters. " +
+				"The submitter comes from the access token: the `submittedBy` parameter is the caller's `preferred_username` and the workflow `owner` is the token subject. A `submittedBy` parameter or `X-Horizon-Submitted-By` header sent by the client is ignored, unless the caller holds the `horizon-api` client role `impersonate`; the owner is still that caller. " +
 				"Workflow lifecycle: `GET /v1/workflows/running`, `GET /v1/workflows/history`, `GET /v1/workflows/{workflowName}`, `DELETE /v1/workflows/{workflowName}` (terminal only), `GET /v1/workflows/{workflowName}/log`, `POST /v1/workflows/{workflowName}/abort`, `GET /v1/workflows/{workflowName}/downloadArtifact/{artifactName}` (JSON signed URL by default; `inline` streams bytes for browsers). " +
 				"History and terminal status may include `archivedLogs` with `gs://` URIs derived from Workflow status artifacts. " +
 				"Live logs: `GET /v1/workflows/{workflowName}/log` without `podName` for a combined NDJSON stream (Argo workflow log or multiplexed pods); optional `podName` for a single pod. " +

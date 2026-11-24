@@ -53,7 +53,8 @@ type PodLogTarget struct {
 	TemplateName string
 }
 
-// WorkflowSummary is a compact workflow row for list endpoints.
+// WorkflowSummary is a compact workflow row for list endpoints. Owner is the token subject of the
+// caller who submitted the workflow (empty when none was recorded); StartedBy is a name to display.
 type WorkflowSummary struct {
 	Name             string            `json:"name"`
 	Namespace        string            `json:"namespace"`
@@ -63,6 +64,7 @@ type WorkflowSummary struct {
 	FinishedAt       string            `json:"finishedAt,omitempty"`
 	WorkflowTemplate string            `json:"workflowTemplate,omitempty"`
 	StartedBy        string            `json:"startedBy,omitempty"`
+	Owner            string            `json:"owner,omitempty"`
 	SubmittedFrom    string            `json:"submittedFrom,omitempty"`
 	Message          string            `json:"message,omitempty"`
 	ArchivedLogs     *ArchivedLogLinks `json:"archivedLogs,omitempty"`

@@ -42,6 +42,8 @@ The Horizon API is served at `https://<your-horizon-domain>/horizon-api`. Every 
 
 Submissions record where they came from in the `horizon-sdv.io/submitted-from` label on the workflow. Set it with the `X-Horizon-Submitted-From` header: `api` (the default), `developer-portal`, `horizon-cli`, or `custom` together with your integration ID in `X-Horizon-Submitted-From-Detail`. A `horizonSubmittedFrom` parameter in the body overrides the header. The **Workflows visibility** setting in the portal filters runs by this label.
 
+The submitter comes from the caller's verified access token, never from the request. Horizon API sets the `submittedBy` parameter to the token's `preferred_username`, and records the token subject (`sub`) as the workflow owner in the `horizon-sdv.io/submitted-by` annotation. A `submittedBy` parameter or `X-Horizon-Submitted-By` header sent by the client is ignored. The exception is a service account with the `horizon-api` client role `impersonate`: it may name a user in either of them, so a pipeline can attribute a run to a person, and the owner stays the service account. The running, history and detail responses return the owner as `owner`, and `startedBy` as the name to display.
+
 ## Module Manager endpoints
 
 Module Manager is internal to the cluster. The Developer Portal reaches it through its proxy under `/developer-portal/api/mm/`, forwarding the signed-in user's token.

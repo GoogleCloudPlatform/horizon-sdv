@@ -161,10 +161,6 @@ spec:
               dest: spec.arguments.parameters.17.value
             - src:
                 dependencyName: webhook-dep
-                dataKey: body.horizonSubmittedBy
-              dest: spec.arguments.parameters.17.value
-            - src:
-                dependencyName: webhook-dep
                 dataKey: body.aiReviewRuntime
                 value: {{ $root.Values.spec.aiReviewRuntime | default "agy" | quote }}
               dest: spec.arguments.parameters.18.value

@@ -142,8 +142,8 @@ locals {
     }
     "horizon-api-app" = {
       directory      = "horizon-api"
-      build_version  = "1.2.0"
-      deploy_version = "1.2.0"
+      build_version  = "1.3.0"
+      deploy_version = "1.3.0"
     }
     "kcc-webhook-cert-monitor" = {
       directory      = "kcc-webhook-cert-monitor"

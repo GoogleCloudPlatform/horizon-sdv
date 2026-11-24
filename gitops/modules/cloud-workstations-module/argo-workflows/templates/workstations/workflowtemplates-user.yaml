@@ -14,8 +14,8 @@
 
 # User-family workstation WorkflowTemplates (Horizon catalog: exposed). Sensors: sensors.yaml.
 # submittedBy is matched against Workstation.spec.users, the same data the controller reconciles to GCP IAM.
-# Horizon API does not verify that the caller is that user, so this filters results and is not an
-# authorization boundary. The Portal fills submittedBy from the signed-in username and hides the field.
+# Horizon API sets submittedBy to the caller's username from the verified access token and ignores a
+# client-supplied value (except from a service account with the impersonate role). The Portal hides the field.
 # Start and stop steps are in workstations/_helpers.tpl (cws-ws.powerTemplates).
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate

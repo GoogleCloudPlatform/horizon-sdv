@@ -29,6 +29,49 @@ func TestSummaryWorkflowTemplateRef(t *testing.T) {
 	}
 }
 
+func TestSummaryOwnerAndStartedBy(t *testing.T) {
+	const subject = "c7eae7a2-0420-4942-9a83-492a87401631"
+	workflow := func(annotation, submittedBy string, labels map[string]string) *unstructured.Unstructured {
+		u := &unstructured.Unstructured{Object: map[string]interface{}{}}
+		if annotation != "" {
+			u.SetAnnotations(map[string]string{LabelSubmittedBy: annotation})
+		}
+		u.SetLabels(labels)
+		params := []interface{}{map[string]interface{}{"name": "topology", "value": "t1"}}
+		if submittedBy != "" {
+			params = append(params, map[string]interface{}{"name": SubmitParamSubmittedBy, "value": submittedBy})
+		}
+		_ = unstructured.SetNestedSlice(u.Object, params, "spec", "arguments", "parameters")
+		return u
+	}
+	creator := map[string]string{"workflows.argoproj.io/creator-preferred-username": "argo-ui-user"}
+
+	tests := []struct {
+		name          string
+		u             *unstructured.Unstructured
+		wantOwner     string
+		wantStartedBy string
+	}{
+		{"template with submittedBy: name from the parameter", workflow(subject, "dev-alice", nil), subject, "dev-alice"},
+		{"template without submittedBy: the owner is all there is", workflow(subject, "", nil), subject, subject},
+		{"impersonated run: owner stays the service account", workflow("sa-subject", "bob", nil), "sa-subject", "bob"},
+		{"owner wins over Argo creator labels", workflow(subject, "", creator), subject, subject},
+		{"not submitted through Horizon API: no owner", workflow("", "", creator), "", "argo-ui-user"},
+		{"nothing recorded", workflow("", "", nil), "", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := Summary(tc.u, "workflows", "")
+			if s.Owner != tc.wantOwner {
+				t.Errorf("owner = %q, want %q", s.Owner, tc.wantOwner)
+			}
+			if s.StartedBy != tc.wantStartedBy {
+				t.Errorf("startedBy = %q, want %q", s.StartedBy, tc.wantStartedBy)
+			}
+		})
+	}
+}
+
 func TestSummaryClusterWorkflowTemplateRef(t *testing.T) {
 	u := &unstructured.Unstructured{Object: map[string]interface{}{}}
 	_ = unstructured.SetNestedField(u.Object, "my-cwft", "spec", "clusterWorkflowTemplateRef", "name")

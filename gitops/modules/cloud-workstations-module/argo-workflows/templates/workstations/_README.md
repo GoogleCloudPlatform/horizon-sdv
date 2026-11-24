@@ -96,7 +96,7 @@ Each person must be a real Google account, group, or service account. An address
 
 ## User workflows
 
-The Portal does not ask who you are. It hides `submittedBy` and sends your signed-in username (`preferred_username`, otherwise `name`, otherwise `sub`). These workflows only show or start workstations whose user list contains that value. You cannot type a different person in the Portal form.
+The Portal does not ask who you are, and hides `submittedBy`. Horizon API sets it to your username (`preferred_username`) from your verified access token, whether you use the Portal, the CLI or the API directly. These workflows only show or start workstations whose user list contains that value. You cannot name a different person.
 
 The username has to match the user stored on the workstation. A bare email on the workstation is stored as `user:email`. If your sign-in name is that email, it matches.
 

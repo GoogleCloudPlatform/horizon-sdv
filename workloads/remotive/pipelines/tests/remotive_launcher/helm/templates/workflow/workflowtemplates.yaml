@@ -88,7 +88,7 @@ spec:
         description: "Optional label string for GCS uploads (see workloads/common/storage/storage.sh)."
       - name: submittedBy
         value: ""
-        description: "Submitting user for private MTK testbenches (Portal sets preferred_username)."
+        description: "Submitting user for private MTK testbenches. Horizon API sets it to the caller's Keycloak username."
   templates:
     - name: main
       dag:
