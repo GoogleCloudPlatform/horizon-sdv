@@ -36,13 +36,17 @@ spec:
         resources: ["workstationconfigs"]
   validations:
     - expression: >-
-        !has(object.spec) || !has(object.spec.container) || !has(object.spec.container.image) ||
-        object.spec.container.image.startsWith('{{ $prefix }}') ||
-        (oldObject != null && has(oldObject.spec) && has(oldObject.spec.container) &&
-        has(oldObject.spec.container.image) &&
-        oldObject.spec.container.image == object.spec.container.image)
+        has(object.spec) && (
+        (has(object.spec.container) && has(object.spec.container.image) &&
+        object.spec.container.image.startsWith('{{ $prefix }}')) ||
+        (oldObject != null && has(oldObject.spec) &&
+        ((has(oldObject.spec.container) && has(oldObject.spec.container.image))
+        ? (has(object.spec.container) && has(object.spec.container.image) &&
+        object.spec.container.image == oldObject.spec.container.image)
+        : (!has(object.spec.container) || !has(object.spec.container.image))))
+        )
       message: >-
-        spec.container.image must be an image in this environment's Artifact Registry ({{ $prefix }}...)
+        spec.container.image must be set to an image in this environment's Artifact Registry ({{ $prefix }}...)
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
