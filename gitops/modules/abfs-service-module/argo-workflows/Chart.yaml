@@ -16,5 +16,5 @@
 apiVersion: v2
 name: abfs-service-module-argo-workflows
 description: Smoke-test WorkflowTemplates and Sensors for module abfs (not Horizon-exposed, Argo Workflows only; deployed after Argo Workflows CRDs are available)
-version: 0.1.0
+version: 0.1.1
 type: application
