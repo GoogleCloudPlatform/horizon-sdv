@@ -38,8 +38,8 @@ locals {
     }
     "cloud-workstations-module-app" = {
       directory      = "cloud-workstations-module"
-      build_version  = "0.2.1"
-      deploy_version = "0.2.1"
+      build_version  = "0.2.2"
+      deploy_version = "0.2.2"
     }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"
