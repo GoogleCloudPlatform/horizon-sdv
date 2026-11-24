@@ -72,11 +72,13 @@ pipeline {
               catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                 sh '''
                   cd "${WORKSPACE}"
+                  GO_VERSION=$(awk '/^[[:space:]]*go:[[:space:]]*$/ { in_go=1; next } in_go && /^[[:space:]]*version:/ { gsub(/"/, "", $2); print $2; exit }' versions.yaml)
                   buildctl build \
                     --frontend=dockerfile.v0 \
                     --local=dockerfile=workloads/sample/pipelines/environment/docker_image_template \
                     --local=context=. \
                     --opt build-arg:LINUX_DISTRIBUTION=${LINUX_DISTRIBUTION} \
+                    --opt build-arg:GO_VERSION=${GO_VERSION} \
                     --opt platform=linux/amd64 \
                     --registry-auth-tlscontext host=${REGISTRY},insecure=true \
                     --output=type=image,name=${DESTINATION}:${IMAGE_TAG},push=${PUSH}

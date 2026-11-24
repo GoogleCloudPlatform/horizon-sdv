@@ -27,8 +27,10 @@ locals {
   # Horizon platform version(s) from the repo-root versions.yaml. components.horizoncore is also the
   # Developer Portal image tag (build_version / deploy_version of "horizon-dev-portal" below).
   # tools.nginx.tag from the same file feeds common_nginx_version above.
+  # tools.go.version is the Go image patch passed as build-arg GO_VERSION.
   versions             = yamldecode(file("${path.module}/../../../versions.yaml"))
   horizon_core_version = local.versions.components.horizoncore
+  go_version           = local.versions.tools.go.version
 
   images = {
     # build_version: version of container images to be built and pushed to Artifact Registry.

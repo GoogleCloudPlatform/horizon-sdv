@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-FROM --platform=linux/amd64 golang:1.27.2-alpine AS builder
+ARG GO_VERSION
+FROM --platform=linux/amd64 golang:${GO_VERSION}-alpine AS builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
