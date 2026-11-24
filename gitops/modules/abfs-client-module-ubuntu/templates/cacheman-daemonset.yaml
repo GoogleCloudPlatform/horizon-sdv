@@ -135,7 +135,19 @@ spec:
                 --manifest-server {{ .Values.cacheman.manifestServer | quote }} config -w
               echo "starting cacheman for the node (server ${SRV})"
               # shellcheck disable=SC2086
-              exec abfs ${FLAGS} ${CLIENT} cacheman run
+              abfs ${FLAGS} ${CLIENT} cacheman run &
+              CACHEMAN=$!
+              trap 'kill -TERM "${CACHEMAN}" 2>/dev/null; wait "${CACHEMAN}"' TERM INT
+              # abfs creates its unix sockets with mode 0755 whatever the
+              # umask, and a client needs write access to connect: give the
+              # build group write access, also when cacheman recreates them.
+              while kill -0 "${CACHEMAN}" 2>/dev/null; do
+                for s in "${DIR}/cache/socket" "${DIR}/cache/http.socket"; do
+                  if [ -S "${s}" ]; then chmod g+w "${s}"; fi
+                done
+                sleep 5
+              done &
+              wait "${CACHEMAN}"
           env:
             - name: HOME
               value: "{{ .Values.cacheman.hostDir }}/home"
