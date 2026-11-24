@@ -709,7 +709,7 @@ spec:
             depends: log-parameters
     - name: log-parameters
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         command: [sh, -c]
         args:
           - |
@@ -719,7 +719,7 @@ spec:
             echo "Initialization started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: setup-resources
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         command: [sh, -c]
         args:
           - |
@@ -767,7 +767,7 @@ spec:
             depends: log-parameters
     - name: log-parameters
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         command: [sh, -c]
         args:
           - |
@@ -778,7 +778,7 @@ spec:
             echo "Execution started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: run-workload
       container:
-        image: alpine:3.24
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         command: [sh, -c]
         args:
           - |
