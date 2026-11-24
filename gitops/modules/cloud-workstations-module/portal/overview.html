@@ -263,7 +263,7 @@ limitations under the License. -->
               Module Manager will reject disabling <code>workloads-common</code> while <code>cloud-workstations</code> is active.
             </li>
             <li>
-              Before any other workflow, run <code>cws-image-build</code> once per environment with <code>buildEnvironmentImage=true</code>, <code>imageTag=latest</code>, and every other image off. Until then, the other workflows stay Pending.
+              Enable builds the workflow image when it is missing. If that build fails, run <code>cws-image-build</code> with <code>buildEnvironmentImage=true</code>, <code>imageTag=latest</code>, and every other image off. Until the image exists, the other workflows stay Pending.
             </li>
           </ul>
         </article>

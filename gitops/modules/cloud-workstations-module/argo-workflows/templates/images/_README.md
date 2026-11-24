@@ -24,7 +24,7 @@ You may see `horizonSubmittedFrom`. Leave it blank. The Portal already records t
 
 Images are built in this order. An image that is turned off is skipped.
 
-1. **Environment** (`buildEnvironmentImage`). The image every other Cloud Workstations workflow runs on. It is not a workstation image. Build it once per environment before running any other workflow, on its own, with `imageTag` `latest` and every other `build...` field `false`. Until it exists, those workflows stay Pending with `ImagePullBackOff`. Leave this `false` unless you are building or updating it.
+1. **Environment** (`buildEnvironmentImage`). The image every other Cloud Workstations workflow runs on. It is not a workstation image. Enable submits this build when the image is missing. Run it by hand, on its own, with `imageTag` `latest` and every other `build...` field `false`, if the enable-time build fails or to update the image. Until it exists, those workflows stay Pending with `ImagePullBackOff`. Leave this `false` unless you are building or updating it.
 2. **Preflight** (`buildPreflight`). The base image.
 3. **GNOME** (`buildGnome`). Built on preflight.
 4. **Code OSS** (`buildCodeOss`). Built on its own, not on GNOME.

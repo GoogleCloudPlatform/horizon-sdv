@@ -25,3 +25,11 @@ config:
   # Full image ref; Module Manager MODULE_CONFIG merges config.containerImages.cloudWorkstationsModule at enable time.
   containerImages:
     cloudWorkstationsModule: ""
+
+# Namespace of the cws-image-build WorkflowTemplate (argo-workflows chart).
+workflowNamespace: workflows
+
+# Environment step image built on enable. Same path and tag as argo-workflows images.environment.
+environmentImage:
+  path: horizon-sdv/cloud-ws-workloads/cws-workflow
+  tag: latest

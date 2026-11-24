@@ -32,6 +32,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	wsv1alpha1 "cloud-workstations-module/api/v1alpha1"
+	"cloud-workstations-module/internal/artifactregistry"
 	"cloud-workstations-module/internal/controller"
 	"cloud-workstations-module/internal/wsapi"
 )
@@ -50,6 +51,15 @@ func main() {
 	hostServiceAccount := os.Getenv("HOST_SERVICE_ACCOUNT")
 	if hostServiceAccount == "" {
 		panic("HOST_SERVICE_ACCOUNT is required")
+	}
+
+	environmentImage := os.Getenv("ENVIRONMENT_IMAGE")
+	if _, err := artifactregistry.ParseRef(environmentImage); err != nil {
+		panic(fmt.Errorf("ENVIRONMENT_IMAGE: %w", err))
+	}
+	workflowNamespace := os.Getenv("WORKFLOW_NAMESPACE")
+	if workflowNamespace == "" {
+		panic("WORKFLOW_NAMESPACE is required")
 	}
 
 	scheme := runtime.NewScheme()
@@ -129,6 +139,16 @@ func main() {
 		ResyncInterval: resync,
 	}).SetupWithManager(mgr); err != nil {
 		panic(fmt.Errorf("unable to create Workstation controller: %w", err))
+	}
+
+	if err := mgr.Add(controller.NewEnvironmentImageBootstrap(
+		mgr.GetClient(),
+		mgr.GetAPIReader(),
+		artifactregistry.NewChecker(),
+		environmentImage,
+		workflowNamespace,
+	)); err != nil {
+		panic(fmt.Errorf("unable to add environment image bootstrap: %w", err))
 	}
 
 	ctrl.Log.Info("starting Cloud Workstations Module controller manager", "namespace", managerNS)

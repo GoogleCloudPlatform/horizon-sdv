@@ -22,9 +22,9 @@ The module runs on the main environment only. It is not deployed on a sub-enviro
 
 1. Enable **workloads-common** first. Cloud Workstations needs it for image builds. Module Manager will not let you disable workloads-common while this module is on.
 2. Enable **cloud-workstations** from the Developer Portal on the main environment.
-3. Build the workflow image once per environment. Run `cws-image-build` with `buildEnvironmentImage` `true`, `imageTag` `latest`, `dryRun` `false`, and every other `build...` field `false`.
+3. The workflow image is built on enable when it is missing. The module controller submits one `cws-image-build` run for `cws-workflow:latest` and does not wait for it. Enable succeeds even if that build is slow or fails. An admission policy limits the controller to creating Workflows from `cws-image-build`, with no inline templates and no ServiceAccount override. If the image is still missing after the build finishes, run `cws-image-build` with `buildEnvironmentImage` `true`, `imageTag` `latest`, `dryRun` `false`, and every other `build...` field `false`.
 
-No other Cloud Workstations workflow runs until step 3 is done. A run that stays Pending with `ImagePullBackOff` means the image is missing: abort it, build the image, and submit again. The image stays in Artifact Registry when the module is disabled, so you do not build it again on re-enable. Run the same build to update it.
+Other Cloud Workstations workflows wait for the image. A run that stays Pending with `ImagePullBackOff` means the image is missing. Check the `cws-environment-image-bootstrap-` run in the `workflows` namespace. If it failed, run the manual build in step 3. The enable-time build is retried when the module controller restarts, but not otherwise. The image stays in Artifact Registry when the module is disabled, so re-enable does not build it again. Run the same build to update it.
 
 Enabling the module creates one Cloud Workstations cluster for Horizon. You do not create or delete that cluster from a Portal workflow.
 
