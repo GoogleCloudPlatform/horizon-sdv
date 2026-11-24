@@ -133,11 +133,6 @@ spec:
       - name: aaosParallelBuildJobs
         value: {{ .Values.spec.parallelBuildJobs | quote }}
         description: "Parallel build jobs (-j). Default: 16. Empty lets the build system decide. If the ABFS cacheman socket gets overloaded during the build, the value may be too high."
-      # Positional like the ABFS parameters above: keep it last in this list
-      # and in $abfsParams of sensors.yaml.
-      - name: aaosCacheStorageSize
-        value: {{ .Values.spec.aaosCacheStorageSize | default "1000Gi" | quote }}
-        description: "Size of the cache PVC for this build (Kubernetes quantity, e.g. 250Gi). The cache holds only the build output. The PVC binds an existing free cache disk of at least this size before a new disk is created."
 {{- end }}
       # Appended after the positional ABFS parameters so sensors.yaml can map it to index 11+len(abfs).
       - name: aiReviewRuntime
@@ -202,12 +197,9 @@ spec:
         storageClassName: {{ include "aaos-builder.cacheStorageClassName" . }}
         resources:
           requests:
-{{- if $abfs }}
-            # Submit-time size (parameter aaosCacheStorageSize, default from values).
-            storage: '{{ "{{" }}workflow.parameters.aaosCacheStorageSize{{ "}}" }}'
-{{- else }}
+            # A fixed chart value: Argo checks this quantity before it substitutes
+            # workflow parameters, so it cannot be a submit parameter.
             storage: {{ .Values.spec.aaosCacheStorageSize | default "1000Gi" | quote }}
-{{- end }}
 {{- if and .Values.sharedPipelineWorkspace (not (or .Values.localRepoHostPath .Values.localRepoPvcName)) }}
     - metadata:
         name: pipeline-workspace
