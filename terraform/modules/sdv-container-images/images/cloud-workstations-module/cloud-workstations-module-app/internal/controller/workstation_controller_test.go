@@ -21,6 +21,7 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -349,6 +350,12 @@ func guardWorkstation(config string, finalizers ...string) *wsv1alpha1.Workstati
 	}
 }
 
+// guardAged sets how long ago the Workstation was created, which decides whether a missing config is still within the grace period.
+func guardAged(ws *wsv1alpha1.Workstation, age time.Duration) *wsv1alpha1.Workstation {
+	ws.CreationTimestamp = metav1.NewTime(time.Now().Add(-age))
+	return ws
+}
+
 func guardKCCWorkstation(config string) *unstructured.Unstructured {
 	kccObj := &unstructured.Unstructured{}
 	kccObj.SetGroupVersionKind(kccWorkstationGVK)
@@ -416,8 +423,9 @@ func guardExpectNoEvent(t *testing.T, rec *events.FakeRecorder) {
 	}
 }
 
+// A deleting config is removed at once, with no grace period, even for a Workstation created a moment ago.
 func TestWorkstationGuard_ConfigDeletingRemovesNewWorkstation(t *testing.T) {
-	c := guardClient(guardConfig("parent-config", true), guardWorkstation("parent-config"))
+	c := guardClient(guardConfig("parent-config", true), guardAged(guardWorkstation("parent-config"), 0))
 	rec := events.NewFakeRecorder(5)
 	r := &WorkstationReconciler{Client: c, Recorder: rec, Scheme: c.Scheme()}
 
@@ -503,8 +511,9 @@ func TestWorkstationGuard_StaleCacheStillSeesDelete(t *testing.T) {
 	guardExpectEvent(t, rec, reasonConfigDeleting)
 }
 
+// Once the grace period has passed, a Workstation whose config still does not exist is removed.
 func TestWorkstationGuard_ConfigNotFoundRemovesWorkstation(t *testing.T) {
-	c := guardClient(guardWorkstation("missing-config"))
+	c := guardClient(guardAged(guardWorkstation("missing-config"), 2*defaultConfigNotFoundGrace))
 	rec := events.NewFakeRecorder(5)
 	r := &WorkstationReconciler{Client: c, APIReader: c, Recorder: rec, Scheme: c.Scheme()}
 
@@ -512,6 +521,85 @@ func TestWorkstationGuard_ConfigNotFoundRemovesWorkstation(t *testing.T) {
 
 	if !guardWorkstationGone(t, c) {
 		t.Fatalf("expected the Workstation to be deleted when its config does not exist")
+	}
+	guardExpectEvent(t, rec, reasonConfigNotFound)
+}
+
+// A Workstation applied just before its config waits instead of being removed, and holds no finalizer.
+func TestWorkstationGuard_ConfigNotFoundWithinGraceWaits(t *testing.T) {
+	c := guardClient(guardAged(guardWorkstation("missing-config"), 5*time.Second))
+	rec := events.NewFakeRecorder(5)
+	r := &WorkstationReconciler{Client: c, APIReader: c, Recorder: rec, Scheme: c.Scheme()}
+
+	res := guardReconcile(t, r)
+
+	if res.RequeueAfter <= 0 || res.RequeueAfter > kccWaitInterval {
+		t.Fatalf("expected a requeue within %s, got %+v", kccWaitInterval, res)
+	}
+	updated := &wsv1alpha1.Workstation{}
+	if err := c.Get(context.Background(), guardWsKey, updated); err != nil {
+		t.Fatalf("expected the Workstation to be kept within the grace period: %v", err)
+	}
+	if len(updated.Finalizers) != 0 {
+		t.Fatalf("expected no finalizer while the config is missing, got %v", updated.Finalizers)
+	}
+	if updated.Status.Phase != "Pending" {
+		t.Fatalf("expected phase Pending, got %q", updated.Status.Phase)
+	}
+	if cond := meta.FindStatusCondition(updated.Status.Conditions, ConditionReady); cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != "WaitingForConfig" {
+		t.Fatalf("expected Ready=False reason WaitingForConfig, got %+v", cond)
+	}
+	guardExpectNoEvent(t, rec)
+	if guardKCCExists(t, c) {
+		t.Fatalf("expected no Config Connector Workstation while the config is missing")
+	}
+}
+
+// The requeue never overshoots the end of the grace period.
+func TestWorkstationGuard_ConfigNotFoundRequeueStopsAtGraceEnd(t *testing.T) {
+	c := guardClient(guardAged(guardWorkstation("missing-config"), defaultConfigNotFoundGrace-2*time.Second))
+	r := &WorkstationReconciler{Client: c, APIReader: c, Scheme: c.Scheme()}
+
+	res := guardReconcile(t, r)
+
+	if res.RequeueAfter <= 0 || res.RequeueAfter > 2*time.Second {
+		t.Fatalf("expected a requeue of at most 2s, got %+v", res)
+	}
+}
+
+// The config is created while the Workstation waits: it is then provisioned as usual.
+func TestWorkstationGuard_ConfigAppearsDuringGrace(t *testing.T) {
+	c := guardClient(guardAged(guardWorkstation("late-config"), 5*time.Second))
+	rec := events.NewFakeRecorder(5)
+	r := &WorkstationReconciler{Client: c, APIReader: c, Recorder: rec, Scheme: c.Scheme()}
+
+	guardReconcile(t, r)
+	if err := c.Create(context.Background(), guardConfig("late-config", false)); err != nil {
+		t.Fatalf("create config: %v", err)
+	}
+	if res := guardReconcile(t, r); !res.Requeue {
+		t.Fatalf("expected requeue after adding the finalizer, got %+v", res)
+	}
+
+	updated := &wsv1alpha1.Workstation{}
+	if err := c.Get(context.Background(), guardWsKey, updated); err != nil {
+		t.Fatalf("expected the Workstation to be kept once its config exists: %v", err)
+	}
+	if len(updated.Finalizers) != 1 || updated.Finalizers[0] != WorkstationFinalizer {
+		t.Fatalf("expected finalizer %q, got %v", WorkstationFinalizer, updated.Finalizers)
+	}
+	guardExpectNoEvent(t, rec)
+}
+
+func TestWorkstationGuard_ConfigNotFoundGraceIsConfigurable(t *testing.T) {
+	c := guardClient(guardAged(guardWorkstation("missing-config"), 5*time.Second))
+	rec := events.NewFakeRecorder(5)
+	r := &WorkstationReconciler{Client: c, APIReader: c, Recorder: rec, Scheme: c.Scheme(), ConfigNotFoundGrace: time.Second}
+
+	guardReconcile(t, r)
+
+	if !guardWorkstationGone(t, c) {
+		t.Fatalf("expected the Workstation to be deleted once the configured grace has passed")
 	}
 	guardExpectEvent(t, rec, reasonConfigNotFound)
 }

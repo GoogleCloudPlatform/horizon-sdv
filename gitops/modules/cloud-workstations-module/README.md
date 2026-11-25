@@ -64,7 +64,7 @@ Parameter lists are next to the workflows: [configurations](argo-workflows/templ
 - A **workstation** is one machine created from a configuration. It has its own list of users.
 - **Start** and **stop** are separate workflows. They are not settings on the workstation.
 
-**Pending** means the change is not finished yet. A common case is that the parent is still being created: a workstation waits on its configuration, and a configuration waits on the module cluster. The module retries that wait on its own. Pending by itself does not mean it is stuck. A new workstation whose configuration is being deleted or does not exist is removed instead, and the create workflow fails with that reason.
+**Pending** means the change is not finished yet. A common case is that the parent is still being created: a workstation waits on its configuration, and a configuration waits on the module cluster. The module retries that wait on its own. Pending by itself does not mean it is stuck. A new workstation whose configuration is being deleted is removed instead, and the create workflow fails with that reason. One whose configuration does not exist is given about a minute for the configuration to appear, then removed.
 
 ## Rules that are easy to miss
 

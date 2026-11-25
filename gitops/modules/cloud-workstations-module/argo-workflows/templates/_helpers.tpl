@@ -290,6 +290,11 @@ wait_ready() {
         print_status <<<"$json"
         fail "$name failed; see the conditions above"
       fi
+      # The controller removes a Workstation whose config is deleting or gone, so check the config on every poll.
+      if [[ -n "$config" ]] && cfg=$(cr_json "$(resource_for workstationconfig)" "$config"); then
+        [[ -n "$cfg" ]] || fail "workstation '$name' cannot become Ready: config '$config' does not exist"
+        [[ -z "$(jq -r '.metadata.deletionTimestamp // empty' <<<"$cfg")" ]] || fail "workstation '$name' cannot become Ready: config '$config' is being deleted"
+      fi
     fi
     if (( $(date +%s) >= deadline )); then
       [[ -n "${json:-}" ]] && print_status <<<"$json"

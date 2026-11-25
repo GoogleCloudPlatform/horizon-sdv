@@ -41,6 +41,10 @@ const (
 
 	reasonConfigDeleting = "ConfigDeleting"
 	reasonConfigNotFound = "ConfigNotFound"
+
+	// A Workstation applied just before its config (for example with kubectl) gets this long for the
+	// config to appear before it is removed.
+	defaultConfigNotFoundGrace = time.Minute
 )
 
 var (
@@ -59,6 +63,8 @@ type WorkstationReconciler struct {
 	Scheme         *runtime.Scheme
 	WS             wsapi.API
 	ResyncInterval time.Duration
+	// ConfigNotFoundGrace is how long a new Workstation waits for a missing config. Zero means the default.
+	ConfigNotFoundGrace time.Duration
 }
 
 // +kubebuilder:rbac:groups=workstations.horizon-sdv.io,resources=workstations,verbs=get;list;watch;create;update;patch;delete
@@ -94,6 +100,11 @@ func (r *WorkstationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 	if unusable != "" && !provisioned {
+		if unusable == reasonConfigNotFound {
+			if remaining := r.configNotFoundGrace() - time.Since(ws.CreationTimestamp.Time); remaining > 0 {
+				return r.waitForConfig(ctx, &ws, remaining)
+			}
+		}
 		return ctrl.Result{}, r.removeUnprovisioned(ctx, &ws, unusable)
 	}
 
@@ -140,6 +151,28 @@ func (r *WorkstationReconciler) resolveParentConfig(ctx context.Context, ws *wsv
 		return cfg, reasonConfigDeleting, nil
 	}
 	return cfg, "", nil
+}
+
+func (r *WorkstationReconciler) configNotFoundGrace() time.Duration {
+	if r.ConfigNotFoundGrace > 0 {
+		return r.ConfigNotFoundGrace
+	}
+	return defaultConfigNotFoundGrace
+}
+
+// waitForConfig holds a new Workstation while its config does not exist yet. No finalizer is added,
+// so nothing is blocked, and the Workstation is removed once the grace period has passed.
+func (r *WorkstationReconciler) waitForConfig(ctx context.Context, ws *wsv1alpha1.Workstation, remaining time.Duration) (ctrl.Result, error) {
+	name := ws.Spec.ConfigRef.Name
+	log.FromContext(ctx).Info("parent WorkstationConfig not found, waiting for it", "config", name, "remaining", remaining.Round(time.Second))
+	desired := *ws.Status.DeepCopy()
+	desired.Phase = "Pending"
+	markWaiting(ws.Generation, &desired.Conditions, ws.Status.Conditions, "WaitingForConfig",
+		fmt.Sprintf("WorkstationConfig %q does not exist yet", name))
+	if err := updateWorkstationStatus(ctx, r, ws, desired); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: min(kccWaitInterval, remaining)}, nil
 }
 
 // removeUnprovisioned deletes a Workstation that has no KCC Workstation yet, so it cannot block its

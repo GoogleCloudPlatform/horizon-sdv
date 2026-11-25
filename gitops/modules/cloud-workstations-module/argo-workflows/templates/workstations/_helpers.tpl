@@ -220,6 +220,37 @@ require_cfg() {
   echo "$json"
 }
 
+# wait_config_ready CONFIG TIMEOUT
+# Returns once the config is Ready. A config that does not exist, is being deleted or has Failed fails
+# at once, since none of them becomes Ready. One that is still being created or updated is waited for.
+wait_config_ready() {
+  local config=$1 timeout=$2 deadline last="" line json state
+  deadline=$(( $(date +%s) + 10#$timeout ))
+  echo "Waiting up to ${timeout}s for config $config to become Ready"
+  while :; do
+    if ! json=$(cr_json "$CFG_RES" "$config"); then
+      echo "Read failed, retrying"
+    elif [[ -z "$json" ]]; then
+      fail "workstation config '$config' does not exist in namespace $CWS_NAMESPACE"
+    elif [[ -n "$(jq -r '.metadata.deletionTimestamp // empty' <<<"$json")" ]]; then
+      fail "workstation config '$config' is being deleted; choose a config that is not being deleted"
+    else
+      line=$(progress_line <<<"$json")
+      [[ "$line" != "$last" ]] && echo "$(date -u +%H:%M:%S) $line" && last=$line
+      state=$(ready_state <<<"$json")
+      [[ "$state" == ready ]] && return 0
+      if [[ "$state" == failed ]]; then
+        print_status <<<"$json"
+        fail "workstation config '$config' failed; see the conditions above"
+      fi
+    fi
+    if (( $(date +%s) >= deadline )); then
+      fail "timed out after ${timeout}s waiting for config $config to become Ready"
+    fi
+    sleep 10
+  done
+}
+
 # require_member WORKSTATION_JSON PRINCIPAL
 require_member() {
   # Same comparison as the controller: case-insensitive, stored spelling unchanged.

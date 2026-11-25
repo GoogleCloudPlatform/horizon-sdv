@@ -26,7 +26,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
-    workflows.argoproj.io/description: "Create a Cloud Workstation from an existing WorkstationConfig and wait until it is Ready."
+    workflows.argoproj.io/description: "Create a Cloud Workstation from an existing WorkstationConfig and wait until it is Ready. Waits for a config that is still being created, and fails at once if the config does not exist, is being deleted or has failed."
 spec:
   entrypoint: main
   serviceAccountName: workflow-executor
@@ -64,22 +64,24 @@ spec:
             value: "{{ "{{workflow.parameters.users}}" }}"
           - name: WORKFLOW_NAME
             value: "{{ "{{workflow.name}}" }}"
+          - name: TIMEOUT_SECONDS
+            value: {{ .Values.readyTimeoutSeconds | quote }}
         args:
           - |
             set -euo pipefail
             {{- include "cws-ws.shlib" . | nindent 12 }}
 
+            check_timeout "$TIMEOUT_SECONDS"
             name=$(resource_name workstationId "$WORKSTATION_NAME")
             config=$(resource_name configName "$CONFIG_NAME")
             display_name=$(trim "$DISPLAY_NAME")
             users=$(principals_json "$USERS")
 
             # configRef is immutable, so a wrong config means deleting and recreating the workstation.
+            # A config that is still being created is waited for. A missing or deleting one fails here
+            # first, with a clearer message than the controller's removal of the Workstation.
+            wait_config_ready "$config" "$TIMEOUT_SECONDS"
             cfg=$(require_cfg "$config")
-            # The controller would delete a Workstation created on a deleting config. Fail here first
-            # with the clearer message.
-            deleting=$(jq -r '.metadata.deletionTimestamp // ""' <<<"$cfg")
-            [[ -z "$deleting" ]] || fail "workstation config '$config' is being deleted; choose a config that is not being deleted"
             echo "Parent config $config: $(progress_line <<<"$cfg")"
 
             jq -nc --arg name "$name" --arg config "$config" --arg displayName "$display_name" \
