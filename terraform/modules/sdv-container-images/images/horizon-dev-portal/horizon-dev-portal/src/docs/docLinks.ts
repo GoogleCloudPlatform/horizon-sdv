@@ -15,6 +15,9 @@
 const GITHUB_BLOB =
   /^https?:\/\/github\.com\/GoogleCloudPlatform\/horizon-sdv\/blob\/[^/]+\/([^?#]+)/i;
 
+/** Image types bundle-docs.mjs copies from anywhere under docs/ (same list as the proxy's docsImageTypes). */
+const IMAGE_FILE = /\.(png|jpe?g|gif|svg|webp)$/i;
+
 export type ResolvedHref =
   | { kind: 'doc'; path: string; hash: string }
   | { kind: 'hash'; hash: string }
@@ -88,7 +91,7 @@ export function resolveDocHref(
     return { kind: 'external', url: trimmed };
   }
 
-  if (beforeQuery.startsWith('/docs/images/')) {
+  if (beforeQuery.startsWith('/docs/') && IMAGE_FILE.test(beforeQuery)) {
     return {
       kind: 'asset',
       imagePath: normalizeRepoPath(decodeSegment(beforeQuery.slice(1))),
@@ -113,7 +116,7 @@ export function resolveDocHref(
     return { kind: 'doc', path: asReadme, hash };
   }
 
-  if (joined.startsWith('docs/images/')) {
+  if (joined.startsWith('docs/') && IMAGE_FILE.test(joined)) {
     return { kind: 'asset', imagePath: joined };
   }
 

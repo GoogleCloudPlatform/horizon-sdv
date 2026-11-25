@@ -437,6 +437,7 @@ export const DocMarkdown = memo(function DocMarkdown({
           bgcolor: 'action.hover',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
           fontSize: '0.875em',
+          overflowWrap: 'anywhere',
         },
         '& img': { maxWidth: '100%', height: 'auto' },
       }}

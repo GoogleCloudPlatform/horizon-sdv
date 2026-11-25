@@ -27,13 +27,14 @@ import (
 
 func docsFixture() fstest.MapFS {
 	return fstest.MapFS{
-		"bundled-docs/manifest.json":  {Data: []byte(`{"files":["docs/guide.md"]}`)},
-		"bundled-docs/docs/guide.md":  {Data: []byte("# Guide\n")},
-		"bundled-docs/docs/notes.txt": {Data: []byte("not served")},
-		"docs-images/shot.png":        {Data: []byte("png")},
-		"docs-images/diagram.svg":     {Data: []byte("<svg/>")},
-		"docs-images/readme.txt":      {Data: []byte("not served")},
-		"index.html":                  {Data: []byte("<html></html>")},
+		"bundled-docs/manifest.json":                   {Data: []byte(`{"files":["docs/guide.md"]}`)},
+		"bundled-docs/docs/guide.md":                   {Data: []byte("# Guide\n")},
+		"bundled-docs/docs/notes.txt":                  {Data: []byte("not served")},
+		"docs-images/shot.png":                         {Data: []byte("png")},
+		"docs-images/diagram.svg":                      {Data: []byte("<svg/>")},
+		"docs-images/architecture/images/overview.jpg": {Data: []byte("jpg")},
+		"docs-images/readme.txt":                       {Data: []byte("not served")},
+		"index.html":                                   {Data: []byte("<html></html>")},
 	}
 }
 
@@ -72,6 +73,7 @@ func TestDocsRoutes(t *testing.T) {
 			{"/api/docs/v1/files/docs/guide.md", "# Guide\n", "text/markdown; charset=utf-8"},
 			{"/api/docs/v1/images/shot.png", "png", "image/png"},
 			{"/api/docs/v1/images/diagram.svg", "<svg/>", "image/svg+xml"},
+			{"/api/docs/v1/images/architecture/images/overview.jpg", "jpg", "image/jpeg"},
 		}
 		for _, c := range cases {
 			rec := docsGet(t, mux, c.target, "good")

@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 import { apiDocs } from '../utils/api';
+import { sanitizeSvg } from './svgSanitize';
 
 type Manifest = {
   files?: unknown;
@@ -62,14 +63,20 @@ export async function loadBundledDoc(repoPath: string, signal?: AbortSignal): Pr
   return response.text();
 }
 
-/** Fetch a bundled docs/images file with the user token and return an object URL the caller must revoke. */
+/**
+ * Fetch a bundled image (repo path under docs/) with the user token and return an object URL the caller
+ * must revoke. The proxy serves images by their path relative to docs/.
+ */
 export async function loadDocsImageUrl(imagePath: string, signal?: AbortSignal): Promise<string> {
-  const relative = imagePath.startsWith('docs/images/')
-    ? imagePath.slice('docs/images/'.length)
-    : imagePath;
+  const relative = imagePath.startsWith('docs/') ? imagePath.slice('docs/'.length) : imagePath;
   const response = await apiDocs(`/v1/images/${encodePath(relative)}`, { signal });
   if (!response.ok || isHtmlResponse(response)) {
     throw new Error('missing');
+  }
+  const type = response.headers.get('content-type') ?? '';
+  if (type.includes('svg') || relative.toLowerCase().endsWith('.svg')) {
+    const clean = sanitizeSvg(await response.text());
+    return URL.createObjectURL(new Blob([clean], { type: 'image/svg+xml' }));
   }
   return URL.createObjectURL(await response.blob());
 }
