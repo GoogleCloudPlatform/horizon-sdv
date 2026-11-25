@@ -14,7 +14,9 @@
 
 # RBAC cannot see which template a Workflow uses, so this policy limits what the module controller
 # (cloud-workstations-module-sa) may create with its create permission on Workflows: a run of the
-# namespaced cws-image-build template, with no inline templates and no ServiceAccount override.
+# namespaced cws-image-build template. Only spec.workflowTemplateRef and spec.arguments are allowed:
+# a Workflow spec overrides the referenced template, so any other field (templateDefaults,
+# podSpecPatch, hooks, onExit, entrypoint, volumes, ...) could swap containers or the ServiceAccount.
 # Other callers are not affected: matchConditions skips every request that is not from that account.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -47,11 +49,8 @@ spec:
         !has(object.spec.workflowTemplateRef.clusterScope)
       message: "spec.workflowTemplateRef.clusterScope must not be set."
     - expression: >-
-        !has(object.spec) || !has(object.spec.templates)
-      message: "spec.templates must not be set. The module controller cannot attach inline templates."
-    - expression: >-
-        !has(object.spec) || !has(object.spec.serviceAccountName)
-      message: "spec.serviceAccountName must not be set. The run keeps the template's ServiceAccount."
+        !has(object.spec) || object.spec.all(key, key in ['workflowTemplateRef', 'arguments'])
+      message: "Only spec.workflowTemplateRef and spec.arguments may be set."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
