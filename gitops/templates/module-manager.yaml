@@ -89,6 +89,9 @@ spec:
           nginx:
             image: {{ .Values.config.nginx.image }}
             tag: {{ .Values.config.nginx.tag | quote }}
+          alpine:
+            image: {{ .Values.config.alpine.image | quote }}
+            tag: {{ .Values.config.alpine.tag | quote }}
     path: gitops/apps/module-manager
   destination:
     server: https://kubernetes.default.svc
