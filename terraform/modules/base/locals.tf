@@ -48,8 +48,8 @@ locals {
     }
     "mtk-connect-module-app" = {
       directory      = "mtk-connect-module"
-      build_version  = "0.3.1"
-      deploy_version = "0.3.1"
+      build_version  = "0.3.4"
+      deploy_version = "0.3.4"
     }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"

@@ -124,8 +124,12 @@ func (c *Client) EnsureRegistration(ctx context.Context, name, token string) err
 	if err := c.do(ctx, http.MethodGet, "/registrations?q="+q, nil, &found); err != nil {
 		return err
 	}
-	if len(found.Data) > 0 {
-		return nil
+	// The name filter is not reliable: the server can return other registrations. Only an exact name
+	// means this registration already exists. Any other row must still be created.
+	for _, reg := range found.Data {
+		if reg.Name == name {
+			return nil
+		}
 	}
 	err = c.do(ctx, http.MethodPost, "/registrations", map[string]string{"name": name, "token": token}, nil)
 	if registrationAlreadyExists(err) {

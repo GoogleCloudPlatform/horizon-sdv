@@ -154,11 +154,13 @@ func TestEnsureRegistration(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/registrations":
 			name := map[string]string{}
 			_ = json.Unmarshal([]byte(r.URL.Query().Get("q")), &name)
+			// Other registrations are always present. The live server returns them even when q asks
+			// for a different name, so a non-empty list must not count as a hit.
+			body := `{"data":[{"name":"hz-981159df7563da4f","status":"approved"}]}`
 			if names[name["name"]] {
-				_, _ = w.Write([]byte(`{"data":[{"name":"` + name["name"] + `"}]}`))
-				return
+				body = `{"data":[{"name":"hz-981159df7563da4f"},{"name":"` + name["name"] + `"}]}`
 			}
-			_, _ = w.Write([]byte(`{"data":[]}`))
+			_, _ = w.Write([]byte(body))
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/registrations":
 			var body map[string]string
 			_ = json.NewDecoder(r.Body).Decode(&body)
