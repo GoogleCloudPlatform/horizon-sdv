@@ -18,6 +18,13 @@ workflowNamespace: workflows
 # Namespace where Argo Events Sensors are installed (must match EventSource/EventBus from platform argo-events).
 eventsNamespace: argo-events
 
+# Fallback when config.alpine is not injected yet (standalone helm lint/template, or before Terraform publishes it).
+# GitOps overrides this. Keep the tag quoted so YAML does not parse 3.24 as a number. Matches versions.yaml tools.alpine.tag.
+config:
+  alpine:
+    image: alpine
+    tag: "3.24"
+
 # sample-soft WorkflowTemplate ref (parent Application sets from softFeaturesEnabled).
 referenceSampleSoftWorkflowTemplate: false
 

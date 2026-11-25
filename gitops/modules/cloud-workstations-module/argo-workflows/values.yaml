@@ -14,6 +14,14 @@
 
 workflowNamespace: workflows
 eventsNamespace: argo-events
+
+# Fallback when config.alpine is not injected yet (standalone helm lint/template, or before Terraform publishes it).
+# GitOps overrides this. Keep the tag quoted so YAML does not parse 3.24 as a number. Matches versions.yaml tools.alpine.tag.
+config:
+  alpine:
+    image: alpine
+    tag: "3.24"
+    
 moduleName: cloud-workstations
 
 # Namespace of the Horizon Cloud Workstations CRs (created by the parent chart, wave 0).

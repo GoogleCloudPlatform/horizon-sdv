@@ -265,7 +265,8 @@ spec:
             valueFrom:
               path: /tmp/gnome-uri
       container:
-        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         command: [sh, -eu, -c]
         {{- include "cws.nonRootSecurityContext" . | nindent 8 }}
         env:
@@ -409,7 +410,8 @@ spec:
           - name: context
             path: /out
       container:
-        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         command: [sh, -eu, -c]
         {{- include "cws.nonRootSecurityContext" . | nindent 8 }}
         volumeMounts:

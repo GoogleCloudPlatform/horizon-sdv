@@ -117,7 +117,8 @@ spec:
 {{- end }}
     - name: log-parameters
       container:
-        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         # Parameters are passed as env vars and read as "$VAR" — never interpolated
         # into the script, so free-text values cannot break out into command execution.
         env:
@@ -180,7 +181,8 @@ spec:
 {{- end }}
     - name: echo-and-artifact
       container:
-        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -202,7 +204,8 @@ spec:
             path: /tmp/smoke-test.tgz
     - name: verify-gcs
       container:
-        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         env:
           # Parameter via env var, not interpolated into the script.
           - name: LARGE_UPLOAD_SIZE_MIB
@@ -262,7 +265,7 @@ spec:
             dependencies: [echo-and-artifact]
     - name: log-parameters
       container:
-        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         # Parameters via env vars, never interpolated into the script.
         env:
           - name: RELEASE_CHANNEL
@@ -285,7 +288,7 @@ spec:
             echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: echo-and-artifact
       container:
-        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -303,7 +306,7 @@ spec:
             path: /tmp/result.txt
     - name: verify-gcs
       container:
-        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
