@@ -32,11 +32,11 @@ locals {
   horizon_repo_root       = abspath("${path.module}/../../..")
   horizon_docs_root       = abspath("${path.module}/../../../docs")
   horizon_doc_files       = fileset(local.horizon_docs_root, "**/*.md")
-  horizon_doc_image_files = fileset("${local.horizon_docs_root}/images", "**")
+  horizon_doc_image_files = fileset(local.horizon_docs_root, "**/*.{png,jpg,jpeg,gif,svg,webp}")
   horizon_docs_sha = sha1(join("", concat(
     [filesha1("${local.horizon_repo_root}/release-notes.md")],
     [for f in sort(tolist(local.horizon_doc_files)) : filesha1("${local.horizon_docs_root}/${f}")],
-    [for f in sort(tolist(local.horizon_doc_image_files)) : filesha1("${local.horizon_docs_root}/images/${f}")],
+    [for f in sort(tolist(local.horizon_doc_image_files)) : filesha1("${local.horizon_docs_root}/${f}")],
   )))
 
   # The portal's cli/ is written during apply by local_file.horizon_cli_docker_src, so it must never be listed:
@@ -92,19 +92,25 @@ resource "terraform_data" "horizon_portal_doc_images" {
   triggers_replace = {
     images_sha = sha1(join("", [
       for f in sort(tolist(local.horizon_doc_image_files)) :
-      filesha1("${local.horizon_docs_root}/images/${f}")
+      filesha1("${local.horizon_docs_root}/${f}")
     ]))
   }
 
+  # Images sit next to the Markdown that references them (docs/images, docs/architecture/images, ...),
+  # so they are staged into the same doc-src/docs tree, keeping their path relative to docs/.
   provisioner "local-exec" {
     interpreter = ["bash", "-c"]
     command     = <<-EOT
       set -euo pipefail
-      src='${replace(local.horizon_docs_root, "\\", "/")}/images'
-      dest='${replace(local.docker_context[local.portal_image_key], "\\", "/")}/doc-src/images'
-      rm -rf "$dest"
+      src='${replace(local.horizon_docs_root, "\\", "/")}'
+      dest='${replace(local.docker_context[local.portal_image_key], "\\", "/")}/doc-src/docs'
       mkdir -p "$dest"
-      cp -a "$src/." "$dest/"
+      find "$dest" -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.svg' -o -name '*.webp' \) -delete
+      cd "$src"
+      find . -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.svg' -o -name '*.webp' \) | while IFS= read -r f; do
+        mkdir -p "$dest/$(dirname "$f")"
+        cp -a "$f" "$dest/$f"
+      done
     EOT
   }
 }
