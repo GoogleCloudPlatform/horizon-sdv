@@ -18,7 +18,7 @@ metadata:
   name: {{ .Values.config.namespacePrefix }}horizon-dev-portal
   namespace: {{ .Values.config.namespacePrefix }}argocd
   annotations:
-    # After keycloak-post-horizon-api (wave 5) — that job creates horizon-dev-portal-secrets with CI client secret.
+    # After Keycloak and its post jobs (wave 5): the proxy reads the realm's discovery document at startup.
     argocd.argoproj.io/sync-wave: "6"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -45,14 +45,10 @@ spec:
           keycloakRealm: {{ .Values.config.horizonDevelopmentPortal.keycloakRealm | quote }}
           keycloakHttpPathPrefix: {{ .Values.config.horizonDevelopmentPortal.keycloakHttpPathPrefix | quote }}
           oidcIssuerUrl: "https://{{ .Values.config.domain }}{{ .Values.config.horizonDevelopmentPortal.keycloakHttpPathPrefix }}/realms/{{ .Values.config.horizonDevelopmentPortal.keycloakRealm }}"
-          keycloakTokenUrl: "https://{{ .Values.config.domain }}{{ .Values.config.horizonDevelopmentPortal.keycloakHttpPathPrefix }}/realms/{{ .Values.config.horizonDevelopmentPortal.keycloakRealm }}/protocol/openid-connect/token"
           keycloakTokenPath: "{{ .Values.config.horizonDevelopmentPortal.keycloakHttpPathPrefix }}/realms/{{ .Values.config.horizonDevelopmentPortal.keycloakRealm }}/protocol/openid-connect/token"
           keycloakClientId: {{ .Values.config.horizonDevelopmentPortal.keycloakClientId | quote }}
-          horizonApiCiClientId: {{ .Values.config.horizonDevelopmentPortal.horizonApiCiClientId | quote }}
           horizonApiBaseUrl: {{ if .Values.config.horizonDevelopmentPortal.horizonApiInternalBaseUrl }}{{ .Values.config.horizonDevelopmentPortal.horizonApiInternalBaseUrl | quote }}{{ else }}"http://horizon-api.{{ .Values.config.namespacePrefix }}horizon-api.svc.cluster.local"{{ end }}
           moduleManagerBaseUrl: {{ if .Values.config.horizonDevelopmentPortal.moduleManagerInternalBaseUrl }}{{ .Values.config.horizonDevelopmentPortal.moduleManagerInternalBaseUrl | quote }}{{ else }}"http://module-manager.{{ .Values.config.namespacePrefix }}module-manager.svc.cluster.local:8082"{{ end }}
-        secret:
-          horizonApiCiClientSecret: ""
         spec:
           source:
             repoURL: {{ .Values.spec.source.repoURL | quote }}

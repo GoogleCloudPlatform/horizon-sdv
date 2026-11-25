@@ -40,9 +40,6 @@ resources:
     memory: "512Mi"
     cpu: "500m"
 
-secret:
-  horizonApiCiClientSecret: ""
-
 config:
   namespacePrefix: ""
   gitops:
@@ -56,16 +53,16 @@ config:
   # Horizon platform version shown in the UI via window.APP_CONFIG.horizonVersion. Same value as the portal image tag (versions.yaml components.horizoncore).
   horizonVersion: ""
 
-  # Keycloak / OIDC (browser uses relative keycloakTokenPath; Go proxy uses full issuer + token URLs).
+  # Keycloak / OIDC (browser uses relative keycloakTokenPath; Go proxy uses the full issuer URL).
   keycloakRealm: "horizon"
   keycloakHttpPathPrefix: "/auth"
   oidcIssuerUrl: ""
-  keycloakTokenUrl: ""
   # Relative path for window.APP_CONFIG.keycloakUrl (same host as the portal).
   keycloakTokenPath: "/auth/realms/horizon/protocol/openid-connect/token"
   keycloakClientId: "horizon-dev-portal"
-  # Confidential client id for Horizon API access from the Go proxy (must match Keycloak + Secret).
-  horizonApiCiClientId: "horizon-api-ci"
+  # The proxy forwards the user's token to Horizon API only if this client is in its aud claim.
+  # Must match Horizon API's oidcClientId.
+  horizonApiClientId: "horizon-api"
 
   # In-cluster HTTP base URLs (override if your Service names differ).
   moduleManagerBaseUrl: "http://module-manager.module-manager.svc.cluster.local:8082"

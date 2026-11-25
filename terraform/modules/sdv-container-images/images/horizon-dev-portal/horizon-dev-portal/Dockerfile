@@ -14,11 +14,12 @@
 
 # SPDX-License-Identifier: Apache-2.0
 
+# Built with images/ as the context, so paths are relative to it.
 # CLI sources are staged into ./cli (terraform local_file, or copy tools/horizon/*.{go,mod,sum}).
 ARG GO_VERSION
 FROM golang:${GO_VERSION}-alpine AS cli
 WORKDIR /src
-COPY cli/ ./
+COPY horizon-dev-portal/horizon-dev-portal/cli/ ./
 ARG HORIZON_CLI_VERSION=dev
 ARG HORIZON_CLI_COMMIT=unknown
 ENV HORIZON_CLI_COMMIT=$HORIZON_CLI_COMMIT
@@ -27,16 +28,18 @@ RUN go run mkdist.go /out "$HORIZON_CLI_VERSION"
 FROM node:22-alpine AS frontend
 ENV HUSKY=0
 WORKDIR /app
-COPY package.json package-lock.json* .npmrc* ./
+COPY horizon-dev-portal/horizon-dev-portal/package.json horizon-dev-portal/horizon-dev-portal/package-lock.json* horizon-dev-portal/horizon-dev-portal/.npmrc* ./
 RUN npm ci
-COPY . .
+COPY horizon-dev-portal/horizon-dev-portal/ ./
 RUN npm run build
 
 FROM golang:${GO_VERSION}-alpine AS backend
-WORKDIR /src
-COPY proxy/go.mod proxy/go.sum* ./
+# The working directory mirrors the repo layout so go.mod's replace ../../../shared/horizonauth resolves.
+WORKDIR /src/horizon-dev-portal/horizon-dev-portal/proxy
+COPY shared/horizonauth/ /src/shared/horizonauth/
+COPY horizon-dev-portal/horizon-dev-portal/proxy/go.mod horizon-dev-portal/horizon-dev-portal/proxy/go.sum* ./
 RUN go mod download
-COPY proxy/*.go ./
+COPY horizon-dev-portal/horizon-dev-portal/proxy/*.go ./
 # The proxy embeds spa. Replace the committed test fixture with the Vite build.
 COPY --from=frontend /app/dist ./spa
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /horizon-dev-portal .

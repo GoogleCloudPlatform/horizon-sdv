@@ -38,7 +38,7 @@ async function fetchWithAuth(url: string, init: RequestInit): Promise<Response> 
 
   let resp = await doFetch();
 
-  // 401 may be stale user JWT (proxy OIDC) or stale Horizon CI token (proxy invalidates CI on upstream 401).
+  // 401 usually means a stale user JWT (rejected by the proxy or by Horizon API).
   // Always attempt refresh + retry; allow two refresh cycles for stubborn failures.
   for (let attempt = 0; resp.status === 401 && attempt < 2; attempt++) {
     await authService.refreshAccessTokenBestEffort();
@@ -87,8 +87,8 @@ export async function readCliJson<T>(resp: Response): Promise<T> {
 
 /**
  * Horizon API via same-origin proxy (user JWT required, same as apiMm).
- * The proxy verifies the user bearer, then swaps in the confidential CI client (K8s secret).
- * On 401 fetchWithAuth refreshes the user token and retries; the proxy also drops a stale CI token.
+ * The proxy checks the user's token (it must be meant for horizon-api) and forwards it unchanged.
+ * On 401 fetchWithAuth refreshes the user token and retries.
  */
 export async function apiHorizon(path: string, init: RequestInit = {}): Promise<Response> {
   const originBase = getAppOriginBase();

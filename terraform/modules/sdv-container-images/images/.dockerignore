@@ -1,0 +1,5 @@
+# Context of the images built from images/ (horizonauth_image_keys in ../main.tf).
+**/node_modules
+**/dist
+**/.git
+horizon-dev-portal/horizon-dev-portal/*.md
