@@ -28,7 +28,7 @@ A workstation id is 1 to 63 characters: lowercase letters, digits, and `-`, star
 
 ### cws-admin-create-workstation
 
-Creates a workstation from an existing configuration and waits until it is ready. Fails if the configuration is being deleted. The configuration cannot be changed later. Delete the workstation and create it again to use a different configuration.
+Creates a workstation from an existing configuration and waits until it is ready. If the configuration is still being created, the run waits for it first. It fails at once if the configuration does not exist, has failed, or is being deleted, including when its delete starts before the workstation is provisioned; the workstation is then removed. The configuration cannot be changed later. Delete the workstation and create it again to use a different configuration.
 
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|

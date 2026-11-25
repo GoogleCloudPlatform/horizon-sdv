@@ -124,6 +124,8 @@ func main() {
 	// Register Workstation controller
 	if err := (&controller.WorkstationReconciler{
 		Client:         mgr.GetClient(),
+		APIReader:      mgr.GetAPIReader(),
+		Recorder:       mgr.GetEventRecorder("workstation-controller"),
 		Scheme:         mgr.GetScheme(),
 		WS:             wsClient,
 		ResyncInterval: resync,
