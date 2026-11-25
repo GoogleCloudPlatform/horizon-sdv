@@ -31,6 +31,7 @@ limitations under the License. -->
   - [Tools](#tools)
     - [Horizon CLI](#horizon-cli)
     - [Horizon API](#horizon-api)
+  - [Documentation](#documentation)
 
 ## Developer Portal
 
@@ -65,7 +66,7 @@ The session lasts for the browser tab and is refreshed automatically while you u
 
 The sidebar always shows these entries:
 
-- **Welcome**: introduction to Horizon, the portal, modules and platform delivery, with shortcuts to **Administration → Modules**, **Administration → Settings** and **Tools**, and links to the GitHub repository and the deployment guide.
+- **Welcome**: introduction to Horizon, the portal, modules and platform delivery, with shortcuts to **Administration → Modules**, **Administration → Settings** and **Tools**, and links to Documentation and the GitHub repository.
 - **Landing page**: cards for the platform applications, each opening in a new tab:
   - Developer: Gerrit, Jenkins, MTK Connect, MCP Gateway Registry
   - Admin: Keycloak, Argo CD, Headlamp, Grafana, Argo Workflows
@@ -73,6 +74,7 @@ The sidebar always shows these entries:
   All cards open a path on your Horizon domain, except MCP Gateway Registry, which opens the `mcp.<your-horizon-domain>` subdomain.
 - **Tools**: the Horizon CLI download and the Horizon API reference. See [Tools](#tools).
 - **Administration**: module management and portal settings. See [Administration](#administration).
+- **Documentation**: guides bundled with this deployment. See [Documentation](#documentation).
 
 Below these, the sidebar lists one entry per enabled module, once the module is **READY**. A module that is still installing or updating does not appear yet. A module that is being uninstalled stays listed until the uninstall finishes. The sidebar refreshes every few seconds.
 
@@ -181,3 +183,16 @@ Templates that are not exposed (for example `sample-hard-smoke-test`) do not app
 3. Execute the operation. Optional submit header `X-Horizon-Submitted-From` is `api` by default. `developer-portal`, `horizon-cli` and `custom` are the other standard values; with `custom`, put your integration ID in `X-Horizon-Submitted-From-Detail`.
 
 The same document is also served directly at `https://<your-horizon-domain>/horizon-api/swagger` (`openapi.json` is next to it). Swagger UI loads its scripts and styles from `unpkg.com`. If the embedded page stays blank, your browser or network is probably blocking that site; use the direct URL, or `openapi.json` with a local OpenAPI viewer.
+
+### Documentation
+
+**Documentation** in the sidebar is available to every signed-in user. It opens the guides that were copied into this portal when the environment was deployed: the `docs/` tree and `release-notes.md` from the Horizon version you installed. They stay aligned with the cluster when the public repository has moved on.
+
+The page has two panes:
+
+- The left pane lists the guides in importance order, each with a title, a short summary, and a category. **Filter documents** narrows that list. It does not change the order.
+- The right pane renders the selected guide as Markdown, including tables, highlighted code, and Mermaid diagrams. **On this page** jumps to a heading.
+
+Links from one bundled guide to another open in this reader. The address includes the document path (`/developer-portal/documentation/docs/deployment_guide.md`), so a guide can be bookmarked. Version-to-version upgrade steps are linked from **Upgrade Guides**. Workload setup and usage are linked from **Workload Guides**. **Release Notes** is the `release-notes.md` shipped with this version; extended notes for 2.0.0 and 3.0.0 open from it when those files are in the bundle. Links to repository files that are not in the bundle open on GitHub at the release tag of your version (`HORIZON_RELEASE_<version>`).
+
+The guides and their images are served by the portal proxy only to signed-in users, through `/api/docs/v1/...`; they are not public static files.

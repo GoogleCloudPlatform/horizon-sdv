@@ -60,6 +60,23 @@ function walkMarkdown(dir, repoPrefix, out) {
   }
 }
 
+const IMAGE_FILE = /\.(png|jpe?g|gif|svg|webp)$/;
+
+function walkImages(dir, relPrefix, out) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name === '.git') {
+      continue;
+    }
+    const absolute = path.join(dir, entry.name);
+    const relPath = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      walkImages(absolute, relPath, out);
+    } else if (entry.isFile() && IMAGE_FILE.test(entry.name)) {
+      out.push({ relPath, absolute });
+    }
+  }
+}
+
 function resetDir(dir) {
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
@@ -74,17 +91,14 @@ function copyRepoFile(absolute, repoPath) {
 const repoRoot = findRepoRoot(portalRoot);
 let docsRoot;
 let releaseNotes;
-let imagesRoot;
 
 if (repoRoot) {
   docsRoot = path.join(repoRoot, 'docs');
   releaseNotes = path.join(repoRoot, 'release-notes.md');
-  imagesRoot = path.join(docsRoot, 'images');
   console.log(`[bundle-docs] source repo ${repoRoot}`);
 } else if (fs.existsSync(path.join(stagedRoot, 'docs', 'deployment_guide.md'))) {
   docsRoot = path.join(stagedRoot, 'docs');
   releaseNotes = path.join(stagedRoot, 'release-notes.md');
-  imagesRoot = path.join(stagedRoot, 'images');
   console.log(`[bundle-docs] staged source ${stagedRoot}`);
 } else {
   console.error(
@@ -110,11 +124,15 @@ for (const file of files) {
 const manifest = { files: files.map((file) => file.repoPath) };
 fs.writeFileSync(path.join(publicDocs, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
+// Every image under docs/ (docs/images, docs/architecture/images, workload guides, ...), keyed by its
+// path relative to docs/, which is what /api/docs/v1/images/{path} serves.
 resetDir(publicImages);
-if (fs.existsSync(imagesRoot)) {
-  fs.cpSync(imagesRoot, publicImages, { recursive: true });
-} else {
-  console.warn(`[bundle-docs] no images directory at ${imagesRoot}`);
+const images = [];
+walkImages(docsRoot, '', images);
+for (const image of images) {
+  const dest = path.join(publicImages, ...image.relPath.split('/'));
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(image.absolute, dest);
 }
 
-console.log(`[bundle-docs] ${manifest.files.length} markdown files`);
+console.log(`[bundle-docs] ${manifest.files.length} markdown files, ${images.length} images`);

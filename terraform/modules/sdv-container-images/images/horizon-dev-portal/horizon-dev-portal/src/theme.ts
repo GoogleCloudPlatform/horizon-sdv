@@ -15,6 +15,25 @@
 import { createTheme } from '@mui/material/styles';
 import type { PaletteMode } from '@mui/material/styles';
 
+/** Colours of the Documentation reader (category chip, On this page card, code and diagram blocks). */
+export type DocsPalette = {
+  chip: string;
+  contentsBorder: string;
+  contentsLink: string;
+  codeBackground: string;
+  codeText: string;
+  diagramBackground: string;
+};
+
+declare module '@mui/material/styles' {
+  interface Palette {
+    docs: DocsPalette;
+  }
+  interface PaletteOptions {
+    docs?: DocsPalette;
+  }
+}
+
 export const getTheme = (mode: PaletteMode) =>
   createTheme({
     palette: {
@@ -61,6 +80,14 @@ export const getTheme = (mode: PaletteMode) =>
               primary: '#202124',
               secondary: '#5f6368',
             },
+            docs: {
+              chip: '#1a4f9c',
+              contentsBorder: 'rgba(0, 0, 0, 0.12)',
+              contentsLink: '#1a73e8',
+              codeBackground: '#0d1117',
+              codeText: '#e6edf3',
+              diagramBackground: '#f8f9fa',
+            },
           }
         : {
             background: {
@@ -70,6 +97,14 @@ export const getTheme = (mode: PaletteMode) =>
             text: {
               primary: '#e8eaed',
               secondary: '#9aa0a6',
+            },
+            docs: {
+              chip: '#8ab4f8',
+              contentsBorder: '#3c4043',
+              contentsLink: '#8ab4f8',
+              codeBackground: '#0d1117',
+              codeText: '#e6edf3',
+              diagramBackground: '#202124',
             },
           }),
     },

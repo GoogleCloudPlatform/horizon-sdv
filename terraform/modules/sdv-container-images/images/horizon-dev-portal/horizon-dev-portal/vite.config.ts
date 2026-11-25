@@ -136,6 +136,77 @@ function horizonCliDevApi(): Plugin {
   };
 }
 
+const DOCS_IMAGE_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+};
+
+function docsContentType(kind: string, rel: string): string | null {
+  if (kind === 'images') {
+    return DOCS_IMAGE_TYPES[path.posix.extname(rel).toLowerCase()] ?? null;
+  }
+  if (rel === 'manifest.json') {
+    return 'application/json; charset=utf-8';
+  }
+  return rel.endsWith('.md') ? 'text/markdown; charset=utf-8' : null;
+}
+
+/**
+ * Serve GET /api/docs/v1/{files,images}/* from public/ during `npm run dev`,
+ * mirroring the proxy routes (run `npm run dev` so predev bundles the docs first).
+ */
+function horizonDocsDevApi(): Plugin {
+  return {
+    name: 'horizon-docs-dev-api',
+    configureServer(server) {
+      const roots: Record<string, string> = {
+        files: path.join(server.config.publicDir, 'bundled-docs'),
+        images: path.join(server.config.publicDir, 'docs-images'),
+      };
+      server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          next();
+          return;
+        }
+        const pathOnly = (req.url ?? '').split('?')[0];
+        const match = /\/api\/docs\/v1\/(files|images)\/(.+)$/.exec(pathOnly);
+        if (!match) {
+          next();
+          return;
+        }
+        let rel: string;
+        try {
+          rel = decodeURIComponent(match[2]);
+        } catch {
+          sendJson(res, 404, { error: 'not found' });
+          return;
+        }
+        const contentType = docsContentType(match[1], rel);
+        const unsafe =
+          rel.includes('\\') || path.posix.normalize(rel) !== rel || rel.split('/').includes('..');
+        const filePath = path.join(roots[match[1]], ...rel.split('/'));
+        if (!contentType || unsafe || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+          sendJson(res, 404, { error: 'not found' });
+          return;
+        }
+        res.statusCode = 200;
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        if (req.method === 'HEAD') {
+          res.end();
+          return;
+        }
+        fs.createReadStream(filePath).pipe(res);
+      });
+    },
+  };
+}
+
 /** Relative base so the same build can be mounted at any HTTP path (set at runtime via config.js `publicPath`). */
 export default defineConfig({
   base: './',
@@ -165,5 +236,5 @@ export default defineConfig({
       },
     },
   },
-  plugins: [horizonCliDevApi(), react()],
+  plugins: [horizonDocsDevApi(), horizonCliDevApi(), react()],
 });
