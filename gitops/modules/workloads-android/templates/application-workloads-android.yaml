@@ -52,7 +52,7 @@ spec:
       helm:
         values: |
           namespacePrefix: {{ .Values.config.namespacePrefix | quote }}
-          alpineImage: "{{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}"
+          alpineImage: "{{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}"
           scm:
             authMethod: {{ .Values.config.scm.authMethod | quote }}
           spec:
@@ -73,7 +73,7 @@ spec:
           - values-abfs.yaml
         values: |
           namespacePrefix: {{ .Values.config.namespacePrefix | quote }}
-          alpineImage: "{{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}"
+          alpineImage: "{{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}"
           scm:
             authMethod: {{ .Values.config.scm.authMethod | quote }}
           spec:
