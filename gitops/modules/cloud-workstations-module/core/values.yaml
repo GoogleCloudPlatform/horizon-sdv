@@ -14,6 +14,12 @@
 
 moduleName: cloud-workstations
 
+# Requests only: a memory limit could OOM-kill the controller mid-reconcile.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
 config:
   namespacePrefix: ""
   projectID: ""
