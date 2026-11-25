@@ -15,6 +15,7 @@
 # Admin-family workstation WorkflowTemplates (Horizon catalog: exposed). Sensors: sensors.yaml.
 # Every step reads or writes Horizon CRs only, through cws-helpers (shared/workflowtemplate-helpers.yaml)
 # or kubectl on the module namespace. Config Connector and the Workstations API are the controller's job.
+# The one exception is the read-only live-state step of cws-admin-get-workstation (workstations/_helpers.tpl).
 # Admin and user families are an operations grouping: Horizon API authenticates the caller but does not
 # authorize per template, so any authenticated caller can submit these.
 apiVersion: argoproj.io/v1alpha1
@@ -205,6 +206,11 @@ spec:
     {{- include "cws-ws.arguments" (dict "root" . "name" "cws-admin-get-workstation") | nindent 4 }}
   templates:
     - name: main
+      steps:
+        - - name: show
+            template: show
+        {{- include "cws-ws.liveStateStep" (dict "from" "show") | nindent 8 }}
+    - name: show
       container:
         {{- include "cws.stepContainer" . | nindent 8 }}
         env:
@@ -216,6 +222,7 @@ spec:
           - |
             set -euo pipefail
             {{- include "cws-ws.shlib" . | nindent 12 }}
+            {{- include "cws-ws.externalRefLib" . | nindent 12 }}
 
             json=$(require_ws "$(resource_name workstationId "$WORKSTATION_NAME")")
             print_workstation "$json"
@@ -223,6 +230,10 @@ spec:
             echo
             echo "Full spec and status:"
             jq '{spec, status}' <<<"$json"
+            write_external_ref "$json"
+      outputs:
+        {{- include "cws-ws.externalRefOutputs" . | nindent 8 }}
+    {{- include "cws-ws.liveStateTemplate" . | nindent 4 }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate

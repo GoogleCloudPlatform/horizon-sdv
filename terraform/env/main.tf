@@ -558,7 +558,7 @@ module "base" {
           }
         ]
 
-        # Start and stop are the custom role horizonCloudWorkstationsPower in terraform/modules/base.
+        # Start, stop and get are the custom role horizonCloudWorkstationsPower in terraform/modules/base.
         roles    = toset([])
         sa_roles = toset([])
         # Argo archives step logs to the artifact bucket with the pod identity. That bucket is created by

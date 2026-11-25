@@ -158,7 +158,7 @@ listWorkstationsByConfigParameters:
 # From MODULE_CONFIG.
 config: {}
 
-# ServiceAccount for start and stop only. Workload Identity: gke-cws-workstation-power-sa.
+# ServiceAccount for start, stop and the live-state step only. Workload Identity: gke-cws-workstation-power-sa.
 powerServiceAccount: cws-workstation-power
 # Clone source for Dockerfile contexts (parent Application sets these from repo.url / repo.revision).
 pipelineRepoUrl: ""

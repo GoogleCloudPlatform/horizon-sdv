@@ -16,7 +16,8 @@
 # submittedBy is matched against Workstation.spec.users, the same data the controller reconciles to GCP IAM.
 # Horizon API does not verify that the caller is that user, so this filters results and is not an
 # authorization boundary. The Portal fills submittedBy from the signed-in username and hides the field.
-# Start and stop steps are in workstations/_helpers.tpl (cws-ws.powerTemplates).
+# Start and stop steps are in workstations/_helpers.tpl (cws-ws.powerTemplates), and so is live-state,
+# which start, stop and cws-user-get-workstation run to print the state from the Workstations API.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -77,6 +78,11 @@ spec:
     {{- include "cws-ws.arguments" (dict "root" . "name" "cws-user-get-workstation") | nindent 4 }}
   templates:
     - name: main
+      steps:
+        - - name: show
+            template: show
+        {{- include "cws-ws.liveStateStep" (dict "from" "show") | nindent 8 }}
+    - name: show
       container:
         {{- include "cws.stepContainer" . | nindent 8 }}
         env:
@@ -90,6 +96,7 @@ spec:
           - |
             set -euo pipefail
             {{- include "cws-ws.shlib" . | nindent 12 }}
+            {{- include "cws-ws.externalRefLib" . | nindent 12 }}
 
             name=$(resource_name workstationId "$WORKSTATION_NAME")
             users=$(single_principal submittedBy "$USERS")
@@ -97,6 +104,10 @@ spec:
             require_member "$json" "$users"
             print_workstation "$json"
             print_status <<<"$json"
+            write_external_ref "$json"
+      outputs:
+        {{- include "cws-ws.externalRefOutputs" . | nindent 8 }}
+    {{- include "cws-ws.liveStateTemplate" . | nindent 4 }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
