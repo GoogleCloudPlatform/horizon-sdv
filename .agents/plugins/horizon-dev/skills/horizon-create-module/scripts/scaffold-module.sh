@@ -448,6 +448,11 @@ spec:
         parentModuleName: {{ .Values.moduleName | quote }}
         softFeaturesEnabled:
 {{ .Values.softFeaturesEnabled | toYaml | nindent 10 }}
+        # Shared Alpine image for workflow steps. Must be forwarded here; this child chart does not inherit root config.
+        config:
+          alpine:
+            image: {{ .Values.config.alpine.image | quote }}
+            tag: {{ .Values.config.alpine.tag | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.config.namespacePrefix }}workflows
