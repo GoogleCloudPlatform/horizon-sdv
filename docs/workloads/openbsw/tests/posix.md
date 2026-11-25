@@ -88,24 +88,30 @@ One-time setup requirements.
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
-**Jenkins Parameters:** Defined in the groovy job definition `groovy/job.groovy`.
+**Jenkins Parameters:** Defined in the groovy job definition `groovy/job.groovy`. The Developer Portal workflow `openbsw-posix-test` uses the names in parentheses. Defaults are in `gitops/modules/openbsw-module/argo-workflows/values.yaml`.
 
-### `OPENBSW_DOWNLOAD_URL`
+### `OPENBSW_DOWNLOAD_URL` (`openbswDownloadUrl`)
 
-Storage URL pointing to the location of the POSIX target application image that was build using `BSW Builder`, e.g.`gs://${OPENBSW_BUILD_BUCKET_ROOT_NAME}/OpenBSW/Builds/BSW_Builder/<BUILD_NUMBER>/posix`, or `<STORAGE_BUCKET_DESTINATION>/posix` if destination was overridden.
+Storage URL of the POSIX artifact folder (`posix.tgz`) from BSW Builder.
 
-### `IMAGE_TAG`
+Jenkins, when `STORAGE_BUCKET_DESTINATION` is empty: `gs://${OPENBSW_BUILD_BUCKET_ROOT_NAME}/OpenBSW/Builds/BSW_Builder/<BUILD_NUMBER>/posix`.
+
+Portal workflow `openbsw-bsw-builder`, when `storageBucketDestination` is empty: `gs://<project>-openbsw/OpenBSW/Builds/BSW_Builder/<date>-<time>_<workflow>/posix`.
+
+An empty `openbswDownloadUrl`, or a URL outside `posixTest.downloadUrlAllowPrefixes`, fails the workflow. The default allow-list is the module bucket `gs://<project>-openbsw/`.
+
+### `IMAGE_TAG` (`imageTag`)
 
 Specifies the name of the Docker image to be used when running this job.
 
-The default value is defined by the `Seed Workloads` pipeline job. Users may override to provide a unique tag that describes the Linux distribution and tool chain versions.
+The Jenkins default is the `Seed Workloads` tag `OPENBSW_IMAGE_TAG`. The portal default is `argowf-latest`.
 
-### `NUM_HOST_INSTANCES`
+### `NUM_HOST_INSTANCES` (`numHostInstances`)
 
 Number of host instances to create for testing the POSIX application. This is effectively the number of devices that
-will be created associated with the development instance testbench in MTK Connect.
+will be created associated with the development instance testbench in MTK Connect. The portal accepts 1 to 8.
 
-### `POSIX_KEEP_ALIVE_TIME`
+### `POSIX_KEEP_ALIVE_TIME` (`posixKeepAliveTime`)
 
 When using MTK Connect to test the POSIX images, the VM instance must be allowed to continue to run. This timeout, in
 minutes, gives the tester time to keep the instance alive so they may work with the devices via MTK Connect.

@@ -46,6 +46,21 @@ The module runs on the main environment only. It is not deployed on a sub-enviro
 
 Module Manager injects `moduleName`, `config`, `repo.url`, and `repo.revision` when the module is enabled. `moduleName` stays empty in `values.yaml`.
 
+## Configuration
+
+Parent chart values in `values.yaml`. Module Manager overwrites `moduleName`, `repo.url`, `repo.revision`, and `config` on enable.
+
+| Value | Default | Effect |
+|-------|---------|--------|
+| `nodePool.name` | `sdv-openbsw-build-node-pool` | Existing Terraform pool. This module does not create the pool |
+| `nodeSelector` | `workloadLabel: openbsw` | Selector for workflow pods and the CAN DaemonSet. Workflow templates also select `cloud.google.com/gke-nodepool` equal to `nodePool.name` |
+| `tolerations` | `workloadType=openbsw:NoSchedule` | Matches the pool taint |
+| `canKernel.image` | `ubuntu:22.04` | Image for DaemonSet `openbsw-can-kernel` |
+| `canKernel.modules` | `can`, `can-raw`, `vcan` | Kernel modules the DaemonSet loads with `modprobe` |
+| `config.enableNetworkPolicies` | set by Module Manager | When true, namespace `openbsw` gets NetworkPolicies `default-deny-all` and `allow-dns` |
+
+On a sub-environment (`config.isSubEnvironment` true) the chart renders no resources. The OpenBSW node pool is shared by the cluster.
+
 ## Workflows
 
 The `argo-workflows/` chart ports the OpenBSW Jenkins jobs. Every WorkflowTemplate carries `horizon-sdv.io/expose: "true"` and `horizon-sdv.io/module: openbsw-module`, so they appear in the Developer Portal and Horizon CLI. Each has a Sensor on EventSource `webhook`, event `workflow-dispatch`, matching `body.workflowTemplateName`.
@@ -58,7 +73,24 @@ The `argo-workflows/` chart ports the OpenBSW Jenkins jobs. Every WorkflowTempla
 | `openbsw-dev-instance` | `webhook-openbsw-dev-instance` | OpenBSW Workflows/Environment/Development Instance | Keeps a builder pod for `instanceMaxUptime` hours, optionally on MTK Connect |
 | `openbsw-delete-mtkc-testbench` | `webhook-openbsw-delete-mtkc-testbench` | OpenBSW Workflows/Environment/Delete MTK Connect Testbench | Deletes one offline testbench by name. Runs one at a time |
 
-Parameters use the Jenkins names in camelCase with the same defaults. They are defined once, in order, under `<template>.parameters` (`bswBuilder`, `builderImage`, `posixTest`, `devInstance`, `deleteMtkcTestbench`) in `argo-workflows/values.yaml`. The WorkflowTemplate arguments and the Sensor mappings are both generated from those lists. Job details are in the [BSW Builder](../../../workloads/openbsw/pipelines/builds/bsw_builder/README.md), [Docker Image Template](../../../workloads/openbsw/pipelines/environment/docker_image_template/README.md), [POSIX](../../../workloads/openbsw/pipelines/tests/posix/README.md), [Development Instance](../../../workloads/openbsw/pipelines/environment/dev_instance/README.md) and [Delete MTK Connect Testbench](../../../workloads/openbsw/pipelines/environment/delete_mtkc_testbench/README.md) READMEs.
+Workflow parameters use the Jenkins names in camelCase. They are defined once, in order, under `<template>.parameters` (`bswBuilder`, `builderImage`, `posixTest`, `devInstance`, `deleteMtkcTestbench`) in `argo-workflows/values.yaml`. The WorkflowTemplate arguments and the Sensor mappings are both generated from those lists.
+
+The READMEs linked below describe the Jenkins jobs. Portal names and defaults are the `value` fields in `argo-workflows/values.yaml`. These defaults differ:
+
+| Portal parameter | Workflow default | Jenkins |
+|------------------|------------------|---------|
+| `imageTag` | `argowf-latest` | Seed Workloads tag `OPENBSW_IMAGE_TAG` |
+| `dryRun` on `openbsw-builder-image` | `false`, so the image is pushed | `NO_PUSH` defaults to `true`, so the image stays local |
+| `storageBucketDestination` left empty | `gs://<project>-openbsw/OpenBSW/Builds/BSW_Builder/<date>-<time>_<workflow>` | `gs://<bucket>/OpenBSW/Builds/BSW_Builder/<BUILD_NUMBER>` |
+| `dockerArtifactPathName` | workflow parameter, default `horizon-sdv/openbsw-builder` | system variable `OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME` |
+| `forceImageBuild` | `false`. `true` rebuilds the builder image inside `openbsw-bsw-builder` before the build | the image is built by the Docker Image Template job |
+| `submittedBy` | Horizon API sets the signed-in user | Jenkins records the user who started the job |
+| `geminiCommandLine` | chart value `bswBuilder.geminiCommandLine` (`gemini --yolo --output-format json`). Change it in `argo-workflows/values.yaml`; the submit form omits it | parameter `GEMINI_COMMAND_LINE` |
+| `openbsw-delete-mtkc-testbench` | parameter `mtkConnectTestbench` only; the step runs `node:22-bookworm-slim` | also takes `IMAGE_TAG` and runs the builder image |
+
+`BUILDKIT_RELEASE_TAG` and `DOCKER_CREDENTIALS_URL` are Jenkins parameters of the Docker Image Template job. `openbsw-builder-image` leaves them to ClusterWorkflowTemplate `common-docker-image-build` (workloads-common), whose defaults are BuildKit `v0.24.0` and that chart's `dockerCredentialsUrl`.
+
+Jenkins job details: [BSW Builder](../../../workloads/openbsw/pipelines/builds/bsw_builder/README.md), [Docker Image Template](../../../workloads/openbsw/pipelines/environment/docker_image_template/README.md), [POSIX](../../../workloads/openbsw/pipelines/tests/posix/README.md), [Development Instance](../../../workloads/openbsw/pipelines/environment/dev_instance/README.md), and [Delete MTK Connect Testbench](../../../workloads/openbsw/pipelines/environment/delete_mtkc_testbench/README.md).
 
 `openbsw-bsw-builder` runs these steps:
 
@@ -84,7 +116,7 @@ Workflow pods run as `workflow-executor-elevated` (Artifact Registry push, GCS u
 
 ### MTK Connect
 
-The three new templates call the same `workloads/common/mtk-connect/mtk_connect.sh` as Jenkins, fetched from the module's `repo.url` / `repo.revision`.
+The POSIX, development-instance, and delete templates call the same `workloads/common/mtk-connect/mtk_connect.sh` as Jenkins, fetched from the module's `repo.url` / `repo.revision`.
 
 | Setting | Value |
 |---------|-------|

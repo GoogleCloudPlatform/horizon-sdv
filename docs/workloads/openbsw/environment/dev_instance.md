@@ -24,18 +24,26 @@ limitations under the License. -->
 
 During developing the OpenBSW workload and workflow/pipelines, sometimes it may be necessary to gain access to a VM build instance in order to develop build jobs.
 
-Users may gain access via MTK Connect HOST interface by selecting `MTK_CONNECT_ENABLE`, alternatively accessing the pod using `kubectl`, e.g.
+Users may gain access via MTK Connect HOST interface by selecting `MTK_CONNECT_ENABLE`, or by opening a shell in the pod with `kubectl`.
+
+Jenkins agents run in the `jenkins` namespace. Find `<pod name>` in the Jenkins console log or on the Jenkins build executor.
 
 ```
 kubectl exec -it -n jenkins <pod name> -- bash
 ```
+
+The portal workflow `openbsw-dev-instance` runs in the `workflows` namespace. Its log prints the `kubectl exec` command for that pod.
+
+```
+kubectl exec -it -n workflows <pod name> -- bash
+```
+
 Reference [Fleet management](https://docs.cloud.google.com/kubernetes-engine/enterprise/multicluster-management/gateway) to fetch credentials for a fleet-registered cluster to be used in Connect Gateway, e.g.
 - `gcloud container fleet memberships list`
 - `gcloud container fleet memberships get-credentials sdv-cluster`
 
 **Note:**
 - These instances only remain active for a limited time, defined by `INSTANCE_MAX_UPTIME`.
-- User can find `<pod name>` from either the Jenkins UI console log or from the Jenkins Build Executor nodes.
 - Users are responsible for managing their work and saving to their own storage, that's beyond the purpose of this job.
 
 ## Prerequisites<a name="prerequisites"></a>
@@ -49,11 +57,11 @@ One-time setup requirements.
 
 **Jenkins Parameters:** Defined in the groovy job definition `groovy/job.groovy`.
 
-### `IMAGE_TAG`
+### `IMAGE_TAG` (`imageTag`)
 
 Specifies the name of the Docker image to be used when running this job.
 
-The default value is defined by the `Seed Workloads` pipeline job. Users may override to provide a unique tag that describes the Linux distribution and tool chain versions.
+The Jenkins default is the `Seed Workloads` tag `OPENBSW_IMAGE_TAG`. The portal workflow `openbsw-dev-instance` defaults to `argowf-latest`.
 
 ### `INSTANCE_MAX_UPTIME`
 

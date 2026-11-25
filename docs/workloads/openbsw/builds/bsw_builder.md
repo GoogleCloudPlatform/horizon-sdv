@@ -123,7 +123,9 @@ Select the compiler toolchain for S32K148 (`gcc` or `clang`). GCC is standard; C
 
 Specifies the name of the Docker image to be used when running this job.
 
-The default value is defined by the `Seed Workloads` pipeline job. Users may override to provide a unique tag that describes the Linux distribution and tool chain versions.
+The Jenkins default is the `Seed Workloads` tag `OPENBSW_IMAGE_TAG`. Users may override it with a tag that describes the Linux distribution and toolchain versions.
+
+The portal workflow `openbsw-bsw-builder` uses `imageTag`, default `argowf-latest`. Set `forceImageBuild` to `true` to rebuild that image before the build.
 
 ### `CMAKE_SYNC_JOBS`
 
@@ -217,7 +219,12 @@ The artifact to store. Default is the `app.referenceApp.elf`.
 
 Keep the build VM instance and container running to allow user to connect to it. Useful for debugging build issues, determining target output archives etc. Time in minutes.
 
-Access using `kubectl` e.g. `kubectl exec -it -n jenkins <pod name> -- bash`
+Access using `kubectl`. Jenkins pods are in the `jenkins` namespace. The `openbsw-bsw-builder` retain step is in the `workflows` namespace, and the workflow log prints the command.
+
+```
+kubectl exec -it -n jenkins <pod name> -- bash
+kubectl exec -it -n workflows <pod name> -- bash
+```
 
 Reference [Fleet management](https://docs.cloud.google.com/kubernetes-engine/enterprise/multicluster-management/gateway) to fetch credentials for a fleet-registered cluster to be used in Connect Gateway, e.g.
 - `gcloud container fleet memberships list`
@@ -234,6 +241,8 @@ Currently `GCS_BUCKET` default pushes to GCS bucket, if empty then nothing will 
 Lets you override the default artifact storage destination. If not set, the build derives it automatically, for example:
 
 `gs://${OPENBSW_BUILD_BUCKET_ROOT_NAME}/OpenBSW/Builds/BSW_Builder/<BUILD_NUMBER>`
+
+The portal workflow, with `storageBucketDestination` empty, writes to `gs://<project>-openbsw/OpenBSW/Builds/BSW_Builder/<date>-<time>_<workflow>`.
 
 The override must be a full GCS URI, including the `gs://` prefix, bucket name, and the artifact path. For example:
 
@@ -254,9 +263,13 @@ Use this to specify settings such as the [Gemini model](https://ai.google.dev/ge
 `--debug` to include debug output.
 Note: Prompts are piped via `stdin` and output is redirected to a JSON file. Antigravity does not read this parameter.
 
+On the portal workflow this setting is chart value `bswBuilder.geminiCommandLine` (`gemini --yolo --output-format json`) in `gitops/modules/openbsw-module/argo-workflows/values.yaml`. The submit form omits it.
+
 ### `AI_REVIEW_RUNTIME`
 
-`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`. This job has no Argo workflow. Antigravity uses `workloads/common/agentic-ai/antigravity/skills/openbsw/SKILL.md`.
+`agy` (Antigravity, default) or `gemini-cli`. Jenkins lists `agy` first. When the variable is unset, `run_ai_review.sh` uses `agy`.
+
+The Developer Portal workflow is `openbsw-bsw-builder`. Its parameter is `aiReviewRuntime` (default `agy`) in `gitops/modules/openbsw-module/argo-workflows/values.yaml`. Workflow behavior is in `gitops/modules/openbsw-module/README.md`. Antigravity uses `workloads/common/agentic-ai/antigravity/skills/openbsw/SKILL.md`.
 
 ### `GEMINI_AI_EXECUTION_TIMEOUT_MINUTES`
 
