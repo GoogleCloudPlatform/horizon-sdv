@@ -83,13 +83,13 @@ locals {
     }
     "keycloak-post-gerrit" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-jenkins" = {
       directory      = "keycloak"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "keycloak-post-argocd" = {
       directory      = "keycloak"
