@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -euo pipefail
+
 APISERVER=https://kubernetes.default.svc
 SERVICEACCOUNT=/var/run/secrets/kubernetes.io/serviceaccount
 NAMESPACE=$(cat ${SERVICEACCOUNT}/namespace)
@@ -22,7 +24,18 @@ CACERT=${SERVICEACCOUNT}/ca.crt
 
 npm install --ignore-scripts
 node keycloak.mjs
-SECRET=$(cat client-jenkins.json | jq -r ".secret")
+
+if [[ ! -s client-jenkins.json ]]; then
+  echo "client-jenkins.json was not generated or is empty" >&2
+  exit 1
+fi
+
+SECRET=$(jq -er '.secret' client-jenkins.json)
+if [[ -z "${SECRET}" || "${SECRET}" == "null" ]]; then
+  echo "jenkins client secret is empty" >&2
+  exit 1
+fi
+
 DOMAIN_BS=$(echo $DOMAIN | sed 's:/:\\/:g')
 sed -i "s/##DOMAIN##/${DOMAIN_BS}/g" ./secret.json
 sed -i "s/##SECRET##/${SECRET}/g" ./secret.json

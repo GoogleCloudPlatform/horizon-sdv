@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+set -euo pipefail
 
 APISERVER=https://kubernetes.default.svc
 SERVICEACCOUNT=/var/run/secrets/kubernetes.io/serviceaccount
@@ -24,7 +25,17 @@ UPDATE_NEEDED=false
 
 npm install --ignore-scripts
 node keycloak.mjs
-SECRET=$(cat client-gerrit.json | jq -r ".secret")
+
+if [[ ! -s client-gerrit.json ]]; then
+  echo "client-gerrit.json was not generated or is empty" >&2
+  exit 1
+fi
+
+SECRET=$(jq -er '.secret' client-gerrit.json)
+if [[ -z "${SECRET}" || "${SECRET}" == "null" ]]; then
+  echo "gerrit client secret is empty" >&2
+  exit 1
+fi
 
 curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}gerrit/secrets/gerrit-secure-config >current.json
 CURRENT_SECURE_CONFIG=$(jq -r '.data."secure.config"' current.json)
@@ -48,9 +59,14 @@ if [ "${CURRENT_KEY}" == "null" ] || [ -z "${CURRENT_KEY}" ] || [ "${CURRENT_PUB
 fi
 
 if [ $UPDATE_NEEDED == true ]; then
-  ssh-keygen -t ecdsa -b 256 -f ./id_ecdsa -C "horizon-sdv" -N "" -q
-  SSH_KEY=$(cat id_ecdsa | base64 -w0)
-  SSH_KEY_PUB=$(cat id_ecdsa.pub | base64 -w0)
+  if [ "${CURRENT_KEY}" == "null" ] || [ -z "${CURRENT_KEY}" ] || [ "${CURRENT_PUBKEY}" == "null" ] || [ -z "${CURRENT_PUBKEY}" ]; then
+    ssh-keygen -t ecdsa -b 256 -f ./id_ecdsa -C "horizon-sdv" -N "" -q
+    SSH_KEY=$(cat id_ecdsa | base64 -w0)
+    SSH_KEY_PUB=$(cat id_ecdsa.pub | base64 -w0)
+  else
+    SSH_KEY="${CURRENT_KEY}"
+    SSH_KEY_PUB="${CURRENT_PUBKEY}"
+  fi
 
   sed -i "s/##SECRET##/${SECRET}/g" ./secure.config
   SECURE_CONFIG=$(cat secure.config | base64 -w0)
