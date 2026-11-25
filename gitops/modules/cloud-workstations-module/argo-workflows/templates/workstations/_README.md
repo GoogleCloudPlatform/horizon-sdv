@@ -18,8 +18,6 @@ These workflows create, inspect, and use a workstation. The configuration must a
 
 Run them from the Developer Portal. Any signed-in user can run the admin workflows as well as the user workflows. The Portal does not hide the admin ones.
 
-You may see `horizonSubmittedFrom`. Leave it blank. The Portal already records that the run came from the Developer Portal. If you set it, the only accepted values are `developer-portal`, `api`, and `horizon-cli`.
-
 Create, delete, user changes, start, and stop of the same workstation wait for each other. Lookup workflows do not wait. Different workstations do not wait for each other.
 
 A workstation id is 1 to 63 characters: lowercase letters, digits, and `-`, starting with a letter and not ending with `-`.

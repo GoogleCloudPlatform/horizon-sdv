@@ -84,7 +84,7 @@ spec:
                 - name: pipelineStaticGitSecretName
                   value: "workflow-pipeline-git-creds"
                 - name: horizonSubmittedFrom
-                  value: '{{ "{{" }}workflow.parameters.horizonSubmittedFrom{{ "}}" }}'
+                  value: ""
 {{- end }}
           - name: validate
             template: validate

@@ -35,7 +35,7 @@ spec:
   {{- include "cws.configMutex" . | nindent 2 }}
   arguments:
     parameters:
-      {{- include "cws.arguments" $create | nindent 6 }}
+      {{- include "cws.arguments" $create | trim | nindent 6 }}
   templates:
     - name: main
       dag:
@@ -117,7 +117,7 @@ spec:
   {{- include "cws.configMutex" . | nindent 2 }}
   arguments:
     parameters:
-      {{- include "cws.arguments" $update | nindent 6 }}
+      {{- include "cws.arguments" $update | trim | nindent 6 }}
   templates:
     - name: main
       dag:
@@ -203,7 +203,7 @@ spec:
   {{- include "cws.configMutex" . | nindent 2 }}
   arguments:
     parameters:
-      {{- include "cws.arguments" .Values.deleteConfigParameters | nindent 6 }}
+      {{- include "cws.arguments" .Values.deleteConfigParameters | trim | nindent 6 }}
   templates:
     - name: main
       dag:
@@ -283,7 +283,7 @@ spec:
   serviceAccountName: workflow-executor
   arguments:
     parameters:
-      {{- include "cws.arguments" .Values.getConfigParameters | nindent 6 }}
+      {{- include "cws.arguments" .Values.getConfigParameters | trim | nindent 6 }}
   templates:
     - name: get-config
       container:
@@ -324,7 +324,7 @@ spec:
   serviceAccountName: workflow-executor
   arguments:
     parameters:
-      {{- include "cws.arguments" .Values.listConfigsParameters | nindent 6 }}
+      {{- include "cws.arguments" .Values.listConfigsParameters | trim | nindent 6 }}
   templates:
     - name: list-configs
       container:
@@ -370,7 +370,7 @@ spec:
   serviceAccountName: workflow-executor
   arguments:
     parameters:
-      {{- include "cws.arguments" .Values.listWorkstationsByConfigParameters | nindent 6 }}
+      {{- include "cws.arguments" .Values.listWorkstationsByConfigParameters | trim | nindent 6 }}
   templates:
     - name: list-workstations-by-config
       container:
