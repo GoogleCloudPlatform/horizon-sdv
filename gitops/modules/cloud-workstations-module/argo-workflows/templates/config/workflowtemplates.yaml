@@ -29,6 +29,7 @@ metadata:
     horizon-sdv.io/expose: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: admin
 spec:
   entrypoint: main
   serviceAccountName: workflow-executor
@@ -111,6 +112,7 @@ metadata:
     horizon-sdv.io/expose: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: admin
 spec:
   entrypoint: main
   serviceAccountName: workflow-executor
@@ -197,6 +199,8 @@ metadata:
     horizon-sdv.io/expose: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: admin
+    horizon-sdv.io/required-role-reason: "Deleting a workstation configuration cannot be undone, so only Horizon administrators can run it."
 spec:
   entrypoint: main
   serviceAccountName: workflow-executor
@@ -278,6 +282,7 @@ metadata:
     horizon-sdv.io/expose: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: developer
 spec:
   entrypoint: get-config
   serviceAccountName: workflow-executor
@@ -319,6 +324,7 @@ metadata:
     horizon-sdv.io/expose: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: developer
 spec:
   entrypoint: list-configs
   serviceAccountName: workflow-executor
@@ -365,6 +371,7 @@ metadata:
     horizon-sdv.io/expose: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: developer
 spec:
   entrypoint: list-workstations-by-config
   serviceAccountName: workflow-executor

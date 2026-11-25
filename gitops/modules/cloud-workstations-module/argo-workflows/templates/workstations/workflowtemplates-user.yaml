@@ -27,6 +27,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "user" }}
     workflows.argoproj.io/description: "List Cloud Workstations that include submittedBy in spec.users. This is a filter, not access control."
 spec:
   entrypoint: main
@@ -70,6 +71,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "user" }}
     workflows.argoproj.io/description: "Show a Cloud Workstation that includes submittedBy in spec.users. This is a filter, not access control."
 spec:
   entrypoint: main
@@ -118,6 +120,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "user" }}
     workflows.argoproj.io/description: "Show the WorkstationConfig of a Cloud Workstation that includes submittedBy in spec.users. This is a filter, not access control."
 spec:
   entrypoint: main
@@ -160,6 +163,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "user" }}
     workflows.argoproj.io/description: "Start a Cloud Workstation once its WorkstationConfig is Ready."
 spec:
   entrypoint: main
@@ -178,6 +182,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "user") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "user" }}
     workflows.argoproj.io/description: "Stop a Cloud Workstation. Does not wait for its WorkstationConfig to be Ready."
 spec:
   entrypoint: main

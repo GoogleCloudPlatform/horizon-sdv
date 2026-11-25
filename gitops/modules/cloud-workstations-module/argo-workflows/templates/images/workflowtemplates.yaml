@@ -32,6 +32,8 @@ metadata:
     horizon-sdv.io/expose: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: admin
+    horizon-sdv.io/required-role-reason: "Image builds push the workstation and workflow step images used by everyone in this environment, so only Horizon administrators can run them."
 spec:
   entrypoint: build-images
   archiveLogs: true
