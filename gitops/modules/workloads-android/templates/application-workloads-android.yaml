@@ -52,6 +52,7 @@ spec:
       helm:
         values: |
           namespacePrefix: {{ .Values.config.namespacePrefix | quote }}
+          alpineImage: "{{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}"
           scm:
             authMethod: {{ .Values.config.scm.authMethod | quote }}
           spec:
@@ -72,6 +73,7 @@ spec:
           - values-abfs.yaml
         values: |
           namespacePrefix: {{ .Values.config.namespacePrefix | quote }}
+          alpineImage: "{{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}"
           scm:
             authMethod: {{ .Values.config.scm.authMethod | quote }}
           spec:
