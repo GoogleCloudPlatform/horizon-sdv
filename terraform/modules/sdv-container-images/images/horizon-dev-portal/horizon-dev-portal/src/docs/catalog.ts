@@ -21,19 +21,45 @@ export const DOC_CATEGORIES = {
   operate: { label: 'OPERATE' },
   workloads: { label: 'WORKLOADS' },
   architecture: { label: 'ARCHITECTURE' },
-  governance: { label: 'GOVERNANCE' },
+  contribute: { label: 'CONTRIBUTE' },
   ai: { label: 'AI' },
+  external: { label: 'EXTERNAL' },
 } as const;
 
 export type DocCategoryId = keyof typeof DOC_CATEGORIES;
 
-export type PortalGuide = {
-  /** Repo-relative path, also the document id in the URL. */
-  path: string;
+type GuideBase = {
   title: string;
   summary: string;
   category: DocCategoryId;
 };
+
+/** Bundled Markdown guide rendered in the right-hand reader (the default entry type). */
+export type MarkdownGuide = GuideBase & {
+  kind?: 'markdown';
+  /** Repo-relative path, also the document id in the URL. */
+  path: string;
+};
+
+/**
+ * Documentation that lives in another application. It opens in a new tab and never loads the reader.
+ * `url` is relative to the deployment's domain (like the Landing page app cards), never an absolute host.
+ */
+export type ExternalGuide = GuideBase & {
+  kind: 'external';
+  url: string;
+};
+
+export type PortalGuide = MarkdownGuide | ExternalGuide;
+
+export function isExternalGuide(guide: PortalGuide): guide is ExternalGuide {
+  return guide.kind === 'external';
+}
+
+/** Stable React key / identity for a catalog entry. */
+export function guideKey(guide: PortalGuide): string {
+  return isExternalGuide(guide) ? guide.url : guide.path;
+}
 
 /**
  * Guides shown in the reader, most important first.
@@ -56,7 +82,7 @@ export const PORTAL_GUIDES: PortalGuide[] = [
   {
     path: 'release-notes.md',
     title: 'Release Notes',
-    summary: 'What changed in this Horizon release, plus the extended notes that exist.',
+    summary: 'New features, improvements and fixes in this release.',
     category: 'release',
   },
   {
@@ -68,19 +94,26 @@ export const PORTAL_GUIDES: PortalGuide[] = [
   {
     path: 'docs/workloads/guides/README.md',
     title: 'Workload Guides',
-    summary: 'Set up and run Android, Cloud Workstations, and OpenBSW workloads.',
+    summary: 'Setting up and running Android, Cloud Workstations, and OpenBSW workloads.',
     category: 'workloads',
+  },
+  {
+    kind: 'external',
+    url: '/mtk-connect/docs/',
+    title: 'MTK Connect Documentation',
+    summary: 'Remote access docs for physical and virtual testbenches. Opens in a new tab.',
+    category: 'external',
   },
   {
     path: 'docs/workloads/guides/pipeline_guide.md',
     title: 'Pipeline Guide',
-    summary: 'How workload Jenkins pipelines are defined, seeded, and updated.',
+    summary: 'How workflow pipelines are defined and executed.',
     category: 'workloads',
   },
   {
     path: 'docs/architecture/04_module-architecture.md',
     title: 'Module Architecture',
-    summary: 'How the portal, Module Manager, API, and GitOps fit together.',
+    summary: 'How modules work and how to create a new one.',
     category: 'architecture',
   },
   {
@@ -92,18 +125,18 @@ export const PORTAL_GUIDES: PortalGuide[] = [
   {
     path: 'docs/contributing.md',
     title: 'Contributing Guide',
-    summary: 'Contributor agreement, reviews, and how to propose a change.',
-    category: 'governance',
+    summary: 'Branching, reviews and submitting changes.',
+    category: 'contribute',
   },
   {
     path: 'docs/guides/mcp_setup.md',
     title: 'MCP Setup Guide',
-    summary: 'Configure MCP Gateway Registry servers and IDE clients.',
+    summary: 'Configure MCP Gateway Registry servers and clients.',
     category: 'ai',
   },
 ];
 
-export const DEFAULT_GUIDE_PATH = PORTAL_GUIDES[0].path;
+export const DEFAULT_GUIDE_PATH = 'docs/deployment_guide.md';
 
 const UPGRADE_GUIDES = 'docs/guides/README.md';
 const WORKLOAD_GUIDES = 'docs/workloads/guides/README.md';
@@ -118,8 +151,10 @@ const ARCHITECTURE_REFERENCES = new Set([
   'docs/architecture/06_interfaces.md',
 ]);
 
-export function guideForPath(repoPath: string): PortalGuide | undefined {
-  return PORTAL_GUIDES.find((guide) => guide.path === repoPath);
+export function guideForPath(repoPath: string): MarkdownGuide | undefined {
+  return PORTAL_GUIDES.find(
+    (guide): guide is MarkdownGuide => !isExternalGuide(guide) && guide.path === repoPath
+  );
 }
 
 /**
@@ -127,7 +162,7 @@ export function guideForPath(repoPath: string): PortalGuide | undefined {
  * Exact guides highlight themselves. Linked files (upgrade steps, workload
  * pages, extended release notes) highlight the guide they belong to.
  */
-export function sectionForPath(repoPath: string): PortalGuide | undefined {
+export function sectionForPath(repoPath: string): MarkdownGuide | undefined {
   const exact = guideForPath(repoPath);
   if (exact) {
     return exact;
@@ -167,6 +202,7 @@ export function guideMatchesQuery(guide: PortalGuide, query: string): boolean {
     return true;
   }
   const category = DOC_CATEGORIES[guide.category].label;
-  const haystack = `${guide.title} ${guide.summary} ${category} ${guide.path}`.toLowerCase();
+  const location = isExternalGuide(guide) ? guide.url : guide.path;
+  const haystack = `${guide.title} ${guide.summary} ${category} ${location}`.toLowerCase();
   return haystack.includes(needle);
 }

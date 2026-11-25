@@ -190,7 +190,7 @@ The same document is also served directly at `https://<your-horizon-domain>/hori
 
 The page has two panes:
 
-- The left pane lists the guides in importance order, each with a title, a short summary, and a category. **Filter documents** narrows that list. It does not change the order.
+- The left pane lists the guides in importance order, each with a title, a short summary, and a category. **Filter documents** narrows that list. It does not change the order. **MTK Connect Documentation** is not a bundled guide: its row has an open-in-new-tab icon and opens the documentation of the MTK Connect application (`/mtk-connect/docs/` on your Horizon domain) in a new browser tab, without changing the right pane.
 - The right pane renders the selected guide as Markdown, including tables, highlighted code, and Mermaid diagrams. **On this page** jumps to a heading.
 
 Links from one bundled guide to another open in this reader. The address includes the document path (`/developer-portal/documentation/docs/deployment_guide.md`), so a guide can be bookmarked. Version-to-version upgrade steps are linked from **Upgrade Guides**. Workload setup and usage are linked from **Workload Guides**. **Release Notes** is the `release-notes.md` shipped with this version; extended notes for 2.0.0 and 3.0.0 open from it when those files are in the bundle. Links to repository files that are not in the bundle open on GitHub at the release tag of your version (`HORIZON_RELEASE_<version>`).
