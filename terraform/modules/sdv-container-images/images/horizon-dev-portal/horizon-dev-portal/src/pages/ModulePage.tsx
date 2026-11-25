@@ -1019,6 +1019,39 @@ function cfInstanceTemplateSubmitWarning(templateName: string): string | undefin
   return undefined;
 }
 
+type WorkflowFormParam = { name: string; default?: string; description?: string; enum?: string[] };
+
+/**
+ * Value submitted for one workflow parameter. A predefined uploader row shows a read-only
+ * Configuration built from the description template; that block must be the submitted value
+ * so the Argo workflow page shows the selected row rather than the custom default.
+ */
+function submittedWorkflowParamValue(
+  p: WorkflowFormParam,
+  params: Record<string, string>,
+  parameters: WorkflowFormParam[],
+): { value: string; readOnly: boolean } {
+  const stored = params[p.name] ?? '';
+  if (dropdownOptions(p).length > 0) {
+    return { value: stored, readOnly: false };
+  }
+  const choiceParam = parameters.find((item) =>
+    dropdownOptions(item).some((option) => isCustomChoice(option)),
+  );
+  const choiceOptions = choiceParam ? dropdownOptions(choiceParam) : [];
+  const chosenRaw = choiceParam ? (params[choiceParam.name] ?? '') : '';
+  const chosen = choiceOptions.includes(chosenRaw) ? chosenRaw : (choiceOptions[0] ?? '');
+  const readOnly =
+    choiceOptions.some((option) => isCustomChoice(option)) &&
+    !isCustomChoice(chosen) &&
+    (p.default ?? stored).includes('\n');
+  if (!readOnly) {
+    return { value: stored, readOnly: false };
+  }
+  const filled = configForChoice(predefinedTemplate(p.description), chosen);
+  return { value: filled || (p.default ?? stored), readOnly: true };
+}
+
 function SubmitDialog({
   entry,
   moduleName,
@@ -1050,6 +1083,12 @@ function SubmitDialog({
     try {
       const path = `/v1/modules/${encodeURIComponent(moduleName)}/workflowTemplates/${encodeURIComponent(entry.templateName)}/submit`;
       const submitParams = { ...params };
+      for (const p of entry.parameters) {
+        if (p.name === 'submittedBy') {
+          continue;
+        }
+        submitParams[p.name] = submittedWorkflowParamValue(p, params, entry.parameters).value;
+      }
       const username = authService.getUsername();
       const hasSubmittedBy = entry.parameters.some((p) => p.name === 'submittedBy');
       if (hasSubmittedBy && username) {
@@ -1129,20 +1168,11 @@ function SubmitDialog({
                 </FormControl>
               );
             }
-            const choiceParam = entry.parameters.find((item) =>
-              dropdownOptions(item).some((option) => isCustomChoice(option))
+            const { value: shown, readOnly: readOnlyConfig } = submittedWorkflowParamValue(
+              p,
+              params,
+              entry.parameters,
             );
-            const choiceOptions = choiceParam ? dropdownOptions(choiceParam) : [];
-            const chosenRaw = choiceParam ? (params[choiceParam.name] ?? '') : '';
-            const chosen = choiceOptions.includes(chosenRaw) ? chosenRaw : (choiceOptions[0] ?? '');
-            const readOnlyConfig =
-              choiceOptions.some((option) => isCustomChoice(option)) &&
-              !isCustomChoice(chosen) &&
-              (p.default ?? value).includes('\n');
-            const template = predefinedTemplate(p.description);
-            const shown = readOnlyConfig
-              ? configForChoice(template, chosen) || (p.default ?? value)
-              : value;
             const yaml = isYamlWorkflowParam(shown || (p.default ?? ''));
             return (
               <TextField
