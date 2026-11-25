@@ -48,7 +48,7 @@ Shows the workstation, then deletes it. Set `confirmDelete` to `true`. The form 
 
 Shows one workstation: configuration, name, state, URL, users, and status. It does not change anything.
 
-The state and URL in the first step are the recorded state and can lag a start or stop by a few minutes. The `live-state` step then prints the current state read from the Workstations API. If that read fails, the run fails.
+The state and URL in the first step are the recorded state and can lag a start or stop by a few minutes. The `live-state` step then prints the current state read from the Workstations API. If that read fails, or the workstation has no `status.externalRef` yet, the run fails.
 
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|
@@ -108,7 +108,7 @@ Lists workstations that include you. It prints the name, configuration, state, a
 
 Shows one workstation you are on: name, configuration, state, URL, users, and status. Fails if you are not on it.
 
-The state and URL in the first step are the recorded state and can lag a start or stop by a few minutes. The `live-state` step then prints the current state read from the Workstations API. If that read fails, the run fails.
+The state and URL in the first step are the recorded state and can lag a start or stop by a few minutes. The `live-state` step then prints the current state read from the Workstations API. If that read fails, or the workstation has no `status.externalRef` yet, the run fails.
 
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|

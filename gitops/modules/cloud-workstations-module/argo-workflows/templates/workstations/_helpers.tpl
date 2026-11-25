@@ -514,7 +514,7 @@ Kept out of cws-ws.shlib so the templates that do not run live-state render unch
 {{- define "cws-ws.externalRefLib" -}}
 # write_external_ref WORKSTATION_JSON
 # Splits status.externalRef into /tmp/project, region, cluster, config and workstation for the
-# live-state step. With no externalRef yet every file is empty and live-state reports that.
+# live-state step. With no externalRef yet every file is empty and live-state fails on that.
 write_external_ref() {
   local ref i fields=(project region cluster config workstation)
   ref=$(jq -r '.status.externalRef // ""' <<<"$1")
@@ -579,8 +579,8 @@ identity: the other steps of a get workflow stay on workflow-executor, which has
       - |
         set -euo pipefail
         if [[ -z "$WORKSTATION" ]]; then
-          echo "Live state: not available, the workstation has no status.externalRef yet and is not provisioned in Google Cloud"
-          exit 0
+          echo "ERROR: the workstation has no status.externalRef yet, so its live state cannot be read from the Workstations API. Wait until it is Ready and try again." >&2
+          exit 1
         fi
         echo "Google identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
         err=$(mktemp)
