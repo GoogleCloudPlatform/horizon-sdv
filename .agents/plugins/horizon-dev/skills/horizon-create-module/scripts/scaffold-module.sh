@@ -171,16 +171,14 @@ app:
   rootPath: ${PATH_PREFIX}
 
 # Environment config injected by Module Manager.
-config: {}
-
-# Soft feature flags injected dynamically by Module Manager.
-softFeaturesEnabled: {}
-
 # Fallback when config.alpine is not injected yet. GitOps overrides this. Keep the tag quoted.
 config:
   alpine:
     image: alpine
     tag: "3.24"
+
+# Soft feature flags injected dynamically by Module Manager.
+softFeaturesEnabled: {}
 EOF
 
 # 3. Parent README.md
@@ -683,6 +681,11 @@ workflowNamespace: ""
 eventsNamespace: ""
 parentModuleName: ""
 softFeaturesEnabled: {}
+# Fallback when config.alpine is not injected yet. GitOps overrides this. Keep the tag quoted.
+config:
+  alpine:
+    image: alpine
+    tag: "3.24"
 EOF
 
 cat << 'EOF' > "${TARGET_DIR}/argo-workflows/templates/workflowtemplates.yaml"
