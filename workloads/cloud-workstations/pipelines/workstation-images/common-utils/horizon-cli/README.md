@@ -24,7 +24,7 @@ limitations under the License. -->
 
 ## Introduction <a name="introduction"></a>
 
-A Cloud Workstation user should be able to trigger Horizon workloads from the workstation terminal using the Horizon CLI. The CLI is built into the workstation image, and the cluster configuration is already set, so the CI/CD system is reachable without any manual setup.
+A Cloud Workstation user can trigger Horizon workloads from the workstation terminal using the Horizon CLI. The CLI is built into the image, so there is no download or install. Before you submit a workflow, set `HORIZON_DOMAIN` (or pass `--domain`) and run `horizon auth login`. Only the MCP client gets `HORIZON_DOMAIN` at image build; the CLI does not.
 
 `horizon` is installed by default at `/usr/local/bin/horizon`. Jenkins image jobs and the `cws-image-build` workflow use the same Dockerfiles. Command reference: [Horizon CLI](../../../../../../docs/architecture/03_horizon-cli.md).
 
@@ -55,9 +55,9 @@ The CLI does not start with the workstation. `horizon version` and `horizon --he
 
 Run these from the Developer Portal. The cloud-workstations module must already be enabled. Names are lowercase letters, digits, and `-`.
 
-1. **Build the image** with `cws-image-build`. Set `dryRun` to `false`, `imageTag` to `latest`, and only the image you need (`buildCodeOss`, `buildGnome`, `buildAndroidStudio`, or `buildAsfp`). Leave the other `build...` fields `false`. Copy the `image@sha256:...` address from the log. Android Studio and ASfP need a published GNOME image (`gnomeImage`) when GNOME is not built in the same run.
+1. **Build the image** with `cws-image-build`. Set `dryRun` to `false`, `imageTag` to `latest`, and only the image you need (`buildCodeOss`, `buildGnome`, `buildAndroidStudio`, or `buildAsfp`). Leave the other `build...` fields `false`. If `buildGnome` is `true`, also set `buildPreflight` to `true` or pass `preflightImage`. If you build Android Studio or ASfP without GNOME in the same run, pass `gnomeImage`. Copy the `image@sha256:...` address from the log.
 2. **Create a configuration** with `cws-create-config`. Set `cloudWsConfigName`, `wsAdminIamMembers` to your email, and `containerImage` to that address (`containerImageTag` is ignored for a full address). `C-OSS (VCS)`, `AS`, and `ASfP` select the published Code OSS, Android Studio, and ASfP images instead.
-3. **Create the workstation** with `cws-admin-create-workstation`. Set `workstationId`, `configName`, and `users` to the email you sign in with. Start only lists workstations that include that user.
+3. **Create the workstation** with `cws-admin-create-workstation`. Set `workstationId`, `configName`, and `users` to the email you sign in with. `cws-user-start-workstation` only starts a workstation that lists you; `cws-user-list-usable-workstations` lists those workstations.
 4. **Start it** with `cws-user-start-workstation` and the same `workstationId`. Open the URL from the log, then open a terminal.
 
 ## Use the CLI <a name="use-the-cli"></a>
