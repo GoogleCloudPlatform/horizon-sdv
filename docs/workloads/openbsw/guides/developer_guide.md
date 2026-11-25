@@ -19,6 +19,8 @@ This page offers a general overview of the Eclipse Foundation OpenBSW workload, 
 
 The purpose of this page is to provide a high-level understanding of how to configure the workload and utilize the provided jobs to build and test OpenBSW. It is not intended to serve as a comprehensive lab exercise guide.
 
+Jenkins jobs are described below. The Developer Portal module is [openbsw-module](../../../../gitops/modules/openbsw-module/README.md). Enable it on the main environment after **workloads-common**. Its workflows are `openbsw-bsw-builder`, `openbsw-builder-image`, `openbsw-posix-test`, `openbsw-dev-instance`, and `openbsw-delete-mtkc-testbench`.
+
 ## <span style="color:#335bff">2. Table Of Contents <a name="2-table-of-contents"></a></span>
 
 - [1. Overview](#1-overview)
