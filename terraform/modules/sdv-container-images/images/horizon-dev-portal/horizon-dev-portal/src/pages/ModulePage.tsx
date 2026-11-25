@@ -376,7 +376,7 @@ export function ModulePage() {
     }
   }, [activeTab, names, loadRunning, loadHistory]);
 
-  // After long idle / background tab, timers are throttled and the CI token may have rotated;
+  // After long idle / background tab, timers are throttled and the user's token may have expired;
   // refresh when the user comes back so we clear stale 401s without a full page reload.
   useEffect(() => {
     const onVisible = () => {
@@ -1757,17 +1757,6 @@ function WorkflowDetailSections({
           {formatStartedByLabel(detail.startedBy)}
         </Box>
       </Typography>
-
-      <Card variant="outlined" sx={{ bgcolor: 'action.hover' }}>
-        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-          <Typography variant="body2" color="text.secondary">
-            Horizon API OAuth client:{' '}
-            <Box component="code" sx={{ fontSize: 12 }}>
-              {config.getString('horizonApiOAuthClientId', 'horizon-api-ci')}
-            </Box>
-          </Typography>
-        </CardContent>
-      </Card>
 
       <Card variant="outlined">
         <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>

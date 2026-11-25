@@ -13,8 +13,8 @@
 # limitations under the License.
 
 locals {
-  # Effective Docker build context per image (default: folder under images/).
-  docker_context = {
+  # Each image's own folder (default: folder under images/). Its files decide when the image is rebuilt.
+  image_dir = {
     for name, img in var.images : name => coalesce(try(img.context_path, null), "${path.module}/images/${img.directory}/${name}")
   }
 
@@ -27,14 +27,27 @@ locals {
   ])
   portal_image_key = "horizon-dev-portal"
 
-  # Shared Go auth library. Each image below replaces it in go.mod with ../../shared/horizonauth,
-  # so it is copied into the image's build context as shared/horizonauth/.
+  # Shared Go auth library. Each image below replaces it in go.mod with a relative path to
+  # images/shared/horizonauth, so it is built with images/ as the Docker context, which holds both the
+  # library and the image's own folder. Its Dockerfile therefore copies paths relative to images/.
+  images_root      = "${path.module}/images"
   horizonauth_root = abspath("${path.module}/images/shared/horizonauth")
   horizonauth_files = sort([
     for f in fileset(local.horizonauth_root, "**") : f
     if !endswith(f, "_test.go") && (endswith(f, ".go") || endswith(f, ".mod") || endswith(f, ".sum"))
   ])
-  horizonauth_image_keys = toset(["horizon-api-app", "module-manager-app"])
+  horizonauth_image_keys = toset(["horizon-api-app", "module-manager-app", local.portal_image_key])
+
+  docker_context = {
+    for name, img in var.images : name => contains(local.horizonauth_image_keys, name) ? local.images_root : local.image_dir[name]
+  }
+  # An image built from images/ uses the Dockerfile in its own folder, given relative to images/.
+  dockerfile = {
+    for name, img in var.images : name => coalesce(
+      try(img.dockerfile_path, null),
+      contains(local.horizonauth_image_keys, name) ? "${trimprefix(abspath(local.image_dir[name]), "${abspath(local.images_root)}/")}/Dockerfile" : "Dockerfile",
+    )
+  }
 
   # The portal's cli/ is written during apply by local_file.horizon_cli_docker_src, so it must never be listed:
   # Terraform fails when fileset() returns a different result at apply than at plan.
@@ -42,27 +55,16 @@ locals {
   portal_context_patterns = ["*", "proxy/**", "public/**", "src/**"]
 
   # When context_path is set, skip hashing paths that match local npm/build artifacts (like .dockerignore).
-  docker_context_files = {
+  image_files = {
     for name, img in var.images : name => sort([
       for f in setunion([
-        for p in(name == local.portal_image_key ? local.portal_context_patterns : ["**"]) : fileset(local.docker_context[name], p)
+        for p in(name == local.portal_image_key ? local.portal_context_patterns : ["**"]) : fileset(local.image_dir[name], p)
       ]...) : f
-      # shared/ is written during apply by local_file.horizonauth_docker_src; hashed via horizonauth_files instead.
-      if !(contains(local.horizonauth_image_keys, name) && startswith(f, "shared/")) && (try(img.context_path, null) == null ? true : !(
+      if try(img.context_path, null) == null ? true : !(
         startswith(f, "node_modules/") || startswith(f, "dist/") || startswith(f, ".git/") || startswith(f, "cli/")
-      ))
+      )
     ])
   }
-}
-
-resource "local_file" "horizonauth_docker_src" {
-  for_each = {
-    for pair in setproduct(setintersection(local.horizonauth_image_keys, keys(var.images)), local.horizonauth_files) :
-    "${pair[0]}/${pair[1]}" => { image = pair[0], file = pair[1] }
-  }
-
-  content  = file("${local.horizonauth_root}/${each.value.file}")
-  filename = "${local.docker_context[each.value.image]}/shared/horizonauth/${each.value.file}"
 }
 
 # Copy Horizon CLI sources into the portal Docker context (legacy builder cannot use additional_contexts).
@@ -72,13 +74,13 @@ resource "local_file" "horizon_cli_docker_src" {
   } : {}
 
   content  = file("${local.horizon_cli_root}/${each.value}")
-  filename = "${local.docker_context[local.portal_image_key]}/cli/${each.value}"
+  filename = "${local.image_dir[local.portal_image_key]}/cli/${each.value}"
 }
 
 resource "docker_image" "sdv-container-images" {
   for_each = var.images
 
-  depends_on = [local_file.horizon_cli_docker_src, local_file.horizonauth_docker_src]
+  depends_on = [local_file.horizon_cli_docker_src]
 
   name = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"
   build {
@@ -88,15 +90,15 @@ resource "docker_image" "sdv-container-images" {
     tag        = ["${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/${each.key}:${each.value.version}"]
     build_args = each.value.build_args
 
-    # Default "Dockerfile" in context; override with absolute path when context is external.
-    dockerfile = coalesce(try(each.value.dockerfile_path, null), "Dockerfile")
+    dockerfile = local.dockerfile[each.key]
     platform   = try(each.value.platform, null)
   }
 
   triggers = {
     dir_sha1 = sha1(join("", concat(
-      [for f in local.docker_context_files[each.key] : filesha1("${local.docker_context[each.key]}/${f}")],
+      [for f in local.image_files[each.key] : filesha1("${local.image_dir[each.key]}/${f}")],
       contains(local.horizonauth_image_keys, each.key) ? [for f in local.horizonauth_files : filesha1("${local.horizonauth_root}/${f}")] : [],
+      contains(local.horizonauth_image_keys, each.key) ? [filesha1("${local.images_root}/.dockerignore")] : [],
     )))
 
     build_args_sha = sha1(jsonencode(each.value.build_args))

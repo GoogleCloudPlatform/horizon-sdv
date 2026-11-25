@@ -18,9 +18,14 @@ go 1.27.0
 
 toolchain go1.27.2
 
-require github.com/coreos/go-oidc/v3 v3.17.0
+require (
+	github.com/acn-horizon-sdv/horizonauth v0.0.0-00010101000000-000000000000
+	github.com/coreos/go-oidc/v3 v3.17.0
+)
 
 require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 )
+
+replace github.com/acn-horizon-sdv/horizonauth => ../../../shared/horizonauth

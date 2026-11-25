@@ -29,7 +29,6 @@ spec:
         app.kubernetes.io/name: horizon-dev-portal
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -45,12 +44,6 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ .Values.config.namespacePrefix }}horizon-dev-portal-config
-          env:
-            - name: HORIZON_API_CI_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.config.namespacePrefix }}horizon-dev-portal-secrets
-                  key: HORIZON_API_CI_CLIENT_SECRET
           readinessProbe:
             httpGet:
               path: /healthz

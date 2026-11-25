@@ -25,3 +25,4 @@ See [`variables.tf`](variables.tf). Optional per image:
 - `platform` — e.g. `linux/amd64` for GKE-compatible builds from Apple Silicon
 
 Default images use `images/<directory>/<image_name>/` as context and `Dockerfile` in that folder.
+Images that use the shared Go library `images/shared/horizonauth` (`horizonauth_image_keys` in `main.tf`) are built with `images/` as context and the `Dockerfile` in their own folder, so their Dockerfiles copy paths relative to `images/`.

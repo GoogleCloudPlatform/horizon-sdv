@@ -17,13 +17,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"embed"
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -31,9 +29,9 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/acn-horizon-sdv/horizonauth"
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
@@ -46,51 +44,13 @@ var staticFS embed.FS
 
 const staticRoot = "spa"
 
-// Renew access token this long before JWT expiry (proactive refresh / refresh_token exchange).
-const ciTokenRefreshLead = 90 * time.Second
-
-// If Keycloak omits refresh_expires_in, we still try refresh until the server rejects it.
-const ciRefreshMinRemaining = 30 * time.Second
-
-// parseJWTExpiry returns access token exp (wall clock). Used to cap cache lifetime so we never
-// send a JWT past exp when expires_in and cluster clocks disagree with Horizon's validation.
-func parseJWTExpiry(accessToken string) (time.Time, bool) {
-	parts := strings.Split(accessToken, ".")
-	if len(parts) < 2 {
-		return time.Time{}, false
-	}
-	payload := parts[1]
-	raw, err := base64.RawURLEncoding.DecodeString(payload)
-	if err != nil {
-		l := len(payload) % 4
-		if l > 0 {
-			payload += strings.Repeat("=", 4-l)
-		}
-		raw, err = base64.URLEncoding.DecodeString(payload)
-		if err != nil {
-			return time.Time{}, false
-		}
-	}
-	var claims struct {
-		Exp int64 `json:"exp"`
-	}
-	if err := json.Unmarshal(raw, &claims); err != nil || claims.Exp == 0 {
-		return time.Time{}, false
-	}
-	return time.Unix(claims.Exp, 0), true
-}
-
 func main() {
 	addr := env("LISTEN_ADDR", ":8080")
 	issuer := mustEnv("OIDC_ISSUER_URL")
-	tokenURL := env("KEYCLOAK_TOKEN_URL", "")
-	if tokenURL == "" {
-		tokenURL = strings.TrimSuffix(issuer, "/") + "/protocol/openid-connect/token"
-	}
 	mmBase := mustEnv("MODULE_MANAGER_BASE_URL")
 	haBase := mustEnv("HORIZON_API_BASE_URL")
-	ciID := mustEnv("HORIZON_API_CI_CLIENT_ID")
-	ciSecret := mustEnv("HORIZON_API_CI_CLIENT_SECRET")
+	// Keycloak client a token must be meant for to reach Horizon API (Horizon API's --oidc-client-id).
+	haClientID := env("HORIZON_API_CLIENT_ID", "horizon-api")
 
 	ctx := context.Background()
 	provider, err := oidc.NewProvider(ctx, issuer)
@@ -98,10 +58,14 @@ func main() {
 		log.Fatalf("oidc provider: %v", err)
 	}
 	verifier := provider.Verifier(&oidc.Config{SkipClientIDCheck: true})
+	haVerifier, err := horizonauth.NewVerifier(ctx, issuer, haClientID)
+	if err != nil {
+		log.Fatalf("oidc: %v", err)
+	}
+	log.Printf("auth: /api/horizon forwards the caller's token; it must have aud %q", haClientID)
 
 	mmURL := mustParseURL(mmBase)
 	haURL := mustParseURL(haBase)
-	ci := newCITokenSource(tokenURL, ciID, ciSecret)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -109,11 +73,11 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("GET /config.js", func(w http.ResponseWriter, r *http.Request) {
-		serveConfigJS(w, env("PUBLIC_BASE_URL", ""), normalizePublicPath(env("PUBLIC_PATH", "")), env("KEYCLOAK_TOKEN_PATH", "/auth/realms/horizon/protocol/openid-connect/token"), env("KEYCLOAK_CLIENT_ID", "horizon-dev-portal"), ciID, env("HORIZON_VERSION", ""))
+		serveConfigJS(w, env("PUBLIC_BASE_URL", ""), normalizePublicPath(env("PUBLIC_PATH", "")), env("KEYCLOAK_TOKEN_PATH", "/auth/realms/horizon/protocol/openid-connect/token"), env("KEYCLOAK_CLIENT_ID", "horizon-dev-portal"), env("HORIZON_VERSION", ""))
 	})
 	mux.Handle("/api/mm/", newMMProxy(mmURL, verifier))
 	var cliVer bearerVerifier = oidcBearerVerifier{inner: verifier}
-	mux.Handle("/api/horizon/", newHorizonProxy(haURL, ci, verifier))
+	mux.Handle("/api/horizon/", newHorizonProxy(haURL, haVerifier))
 	registerCLIRoutes(mux, env("CLI_DIST_DIR", "/cli-dist"), cliVer)
 	mux.Handle("/", spaHandler(htmlBaseTagHref(normalizePublicPath(env("PUBLIC_PATH", "")))))
 
@@ -193,7 +157,7 @@ func htmlEscapeAttr(s string) string {
 	return s
 }
 
-func serveConfigJS(w http.ResponseWriter, publicBase, publicPath, keycloakTokenPath, clientID, horizonApiOAuthClientID, horizonVersion string) {
+func serveConfigJS(w http.ResponseWriter, publicBase, publicPath, keycloakTokenPath, clientID, horizonVersion string) {
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	cfg := map[string]string{
@@ -201,9 +165,6 @@ func serveConfigJS(w http.ResponseWriter, publicBase, publicPath, keycloakTokenP
 		"publicPath":       publicPath,
 		"keycloakUrl":      keycloakTokenPath,
 		"keycloakClientId": clientID,
-	}
-	if strings.TrimSpace(horizonApiOAuthClientID) != "" {
-		cfg["horizonApiOAuthClientId"] = strings.TrimSpace(horizonApiOAuthClientID)
 	}
 	if strings.TrimSpace(horizonVersion) != "" {
 		cfg["horizonVersion"] = strings.TrimSpace(horizonVersion)
@@ -254,61 +215,6 @@ func newMMProxy(upstream *url.URL, verifier *oidc.IDTokenVerifier) http.Handler 
 	})
 }
 
-// retryCI401Transport retries GET/HEAD after upstream 401: ci.invalidate() then ci.get() prefers
-// refresh_token (if Keycloak issued one), else client_credentials.
-type retryCI401Transport struct {
-	rt http.RoundTripper
-	ci *ciTokenSource
-}
-
-func (t *retryCI401Transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	base := t.rt
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	retry401 := req.Method == http.MethodGet || req.Method == http.MethodHead || req.GetBody != nil
-	if !retry401 {
-		return base.RoundTrip(req)
-	}
-	const max401Attempts = 2
-	cur := req
-	for attempt := 0; attempt < max401Attempts; attempt++ {
-		resp, err := base.RoundTrip(cur)
-		if err != nil || resp == nil {
-			return resp, err
-		}
-		if resp.StatusCode != http.StatusUnauthorized {
-			return resp, err
-		}
-		if attempt == max401Attempts-1 {
-			return resp, err
-		}
-		t.ci.invalidate()
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-		tok, err := t.ci.get(req.Context())
-		if err != nil {
-			return nil, err
-		}
-		r2 := req.Clone(req.Context())
-		if r2.Header != nil {
-			r2.Header = r2.Header.Clone()
-		}
-		r2.Header.Set("Authorization", "Bearer "+tok)
-		if req.Method == http.MethodGet || req.Method == http.MethodHead {
-			r2.Body = nil
-		} else {
-			body, err := req.GetBody()
-			if err != nil {
-				return nil, err
-			}
-			r2.Body = body
-		}
-		cur = r2
-	}
-	return nil, fmt.Errorf("retryCI401Transport: internal")
-}
-
 // horizonDocsPaths are reachable without a bearer: the embedded Swagger UI iframe cannot send an
 // Authorization header, and the spec it fetches is public developer documentation.
 var horizonDocsPaths = []string{"/api/horizon/swagger", "/api/horizon/openapi.json"}
@@ -323,11 +229,13 @@ func isHorizonDocsPath(path string) bool {
 	return false
 }
 
-// newHorizonProxy forwards to Horizon API with the confidential CI client (K8s secret).
-// The caller must present a valid user bearer (same check as newMMProxy) before the CI swap.
-func newHorizonProxy(upstream *url.URL, ci *ciTokenSource, verifier *oidc.IDTokenVerifier) http.Handler {
+// maxHorizonBody caps request bodies forwarded to Horizon API, which decodes them without a limit.
+const maxHorizonBody = 4 << 20
+
+// newHorizonProxy forwards to Horizon API with the caller's own access token. The token gets the
+// same checks as in Horizon API, so the proxy forwards only tokens Horizon API accepts.
+func newHorizonProxy(upstream *url.URL, verifier *horizonauth.Verifier) http.Handler {
 	rp := httputil.NewSingleHostReverseProxy(upstream)
-	rp.Transport = &retryCI401Transport{rt: http.DefaultTransport, ci: ci}
 	// Chunked NDJSON log streams: periodic flush so the browser sees lines without buffering the whole body.
 	rp.FlushInterval = 100 * time.Millisecond
 	rp.Director = func(req *http.Request) {
@@ -339,180 +247,35 @@ func newHorizonProxy(upstream *url.URL, ci *ciTokenSource, verifier *oidc.IDToke
 			req.URL.Path = "/"
 		}
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isHorizonDocsPath(r.URL.Path) {
-			raw, err := bearerToken(r)
-			if err != nil {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-			if _, err := verifier.Verify(r.Context(), raw); err != nil {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-		}
-		tok, err := ci.get(r.Context())
-		if err != nil {
-			http.Error(w, "token exchange failed", http.StatusBadGateway)
+	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			http.Error(w, "body too large", http.StatusRequestEntityTooLarge)
 			return
 		}
-		r2 := r.Clone(r.Context())
-		r2.Header.Del("Authorization")
-		r2.Header.Set("Authorization", "Bearer "+tok)
-
-		// Allow retryCI401Transport to replay POST/PUT/PATCH/DELETE after refreshing the CI token (same as GET catalog).
-		if r2.Body != nil && (r2.Method == http.MethodPost || r2.Method == http.MethodPut || r2.Method == http.MethodPatch || r2.Method == http.MethodDelete) {
-			const maxBody = 4 << 20
-			b, err := io.ReadAll(io.LimitReader(r2.Body, maxBody+1))
-			_ = r2.Body.Close()
-			if err != nil {
-				http.Error(w, "read body", http.StatusBadRequest)
-				return
-			}
-			if len(b) > maxBody {
-				http.Error(w, "body too large", http.StatusRequestEntityTooLarge)
-				return
-			}
-			buf := bytes.Clone(b)
-			r2.GetBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewReader(buf)), nil
-			}
-			body, err := r2.GetBody()
-			if err != nil {
-				http.Error(w, "body", http.StatusInternalServerError)
-				return
-			}
-			r2.Body = body
-			r2.ContentLength = int64(len(buf))
-			r2.Header.Del("Transfer-Encoding")
+		log.Printf("http: proxy error: %v", err)
+		w.WriteHeader(http.StatusBadGateway)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxHorizonBody)
+		if isHorizonDocsPath(r.URL.Path) {
+			// Sent without credentials, so no unchecked token reaches Horizon API.
+			r = r.Clone(r.Context())
+			r.Header.Del("Authorization")
+			rp.ServeHTTP(w, r)
+			return
 		}
-
-		rp.ServeHTTP(w, r2)
+		raw, err := bearerToken(r)
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if _, err := verifier.Verify(r.Context(), raw); err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		rp.ServeHTTP(w, r)
 	})
-}
-
-type ciTokenSource struct {
-	mu        sync.Mutex
-	token     string
-	expiresAt time.Time
-
-	refreshTok string
-	refreshExp time.Time // zero if Keycloak did not send refresh_expires_in
-
-	tokenURL string
-	id       string
-	secret   string
-}
-
-func newCITokenSource(tokenURL, id, secret string) *ciTokenSource {
-	return &ciTokenSource{tokenURL: tokenURL, id: id, secret: secret}
-}
-
-// invalidate clears only the access token so the next get() can try refresh_token before client_credentials.
-func (c *ciTokenSource) invalidate() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.token = ""
-	c.expiresAt = time.Time{}
-}
-
-type tokenEndpointJSON struct {
-	AccessToken      string `json:"access_token"`
-	ExpiresIn        int    `json:"expires_in"`
-	RefreshToken     string `json:"refresh_token"`
-	RefreshExpiresIn int    `json:"refresh_expires_in"`
-}
-
-// clearRefreshWhenMissing: for client_credentials, drop stored refresh if IdP omits refresh_token.
-// For refresh_token grant, false preserves the previous refresh when the response does not rotate it.
-func (c *ciTokenSource) applyTokenResponse(tr *tokenEndpointJSON, clearRefreshWhenMissing bool) {
-	c.token = tr.AccessToken
-	sec := tr.ExpiresIn
-	if sec <= 0 {
-		sec = 300
-	}
-	deadline := time.Now().Add(time.Duration(sec) * time.Second)
-	if jwtExp, ok := parseJWTExpiry(tr.AccessToken); ok && jwtExp.Before(deadline) {
-		deadline = jwtExp
-	}
-	c.expiresAt = deadline
-	if tr.RefreshToken != "" {
-		c.refreshTok = tr.RefreshToken
-		if tr.RefreshExpiresIn > 0 {
-			c.refreshExp = time.Now().Add(time.Duration(tr.RefreshExpiresIn) * time.Second)
-		} else {
-			c.refreshExp = time.Time{}
-		}
-		return
-	}
-	if clearRefreshWhenMissing {
-		c.refreshTok = ""
-		c.refreshExp = time.Time{}
-	}
-}
-
-func (c *ciTokenSource) postTokenForm(ctx context.Context, form url.Values, clearRefreshWhenMissing bool) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.tokenURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("token %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var tr tokenEndpointJSON
-	if err := json.Unmarshal(body, &tr); err != nil {
-		return err
-	}
-	if tr.AccessToken == "" {
-		return fmt.Errorf("no access_token")
-	}
-	c.applyTokenResponse(&tr, clearRefreshWhenMissing)
-	return nil
-}
-
-func (c *ciTokenSource) refreshAllowedLocked() bool {
-	if c.refreshTok == "" {
-		return false
-	}
-	if c.refreshExp.IsZero() {
-		return true
-	}
-	return time.Until(c.refreshExp) > ciRefreshMinRemaining
-}
-
-func (c *ciTokenSource) get(ctx context.Context) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.token != "" && time.Until(c.expiresAt) > ciTokenRefreshLead {
-		return c.token, nil
-	}
-	if c.refreshAllowedLocked() {
-		form := url.Values{}
-		form.Set("grant_type", "refresh_token")
-		form.Set("refresh_token", c.refreshTok)
-		form.Set("client_id", c.id)
-		form.Set("client_secret", c.secret)
-		if err := c.postTokenForm(ctx, form, false); err == nil {
-			return c.token, nil
-		}
-		c.refreshTok = ""
-		c.refreshExp = time.Time{}
-	}
-	form := url.Values{}
-	form.Set("grant_type", "client_credentials")
-	form.Set("client_id", c.id)
-	form.Set("client_secret", c.secret)
-	if err := c.postTokenForm(ctx, form, true); err != nil {
-		return "", err
-	}
-	return c.token, nil
 }
 
 func spaHandler(baseHref string) http.Handler {

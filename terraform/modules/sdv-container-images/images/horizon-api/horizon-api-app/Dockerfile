@@ -14,13 +14,13 @@
 #
 ARG GO_VERSION
 FROM --platform=linux/amd64 golang:${GO_VERSION}-alpine AS builder
-# shared/ is staged into the build context (Terraform local_file or build.sh). The working
-# directory mirrors the repo layout so go.mod's replace ../../shared/horizonauth resolves.
+# Built with images/ as the context, so paths are relative to it. The working directory
+# mirrors the repo layout so go.mod's replace ../../shared/horizonauth resolves.
 WORKDIR /src/horizon-api/horizon-api-app
 COPY shared/horizonauth/ /src/shared/horizonauth/
-COPY go.mod go.sum ./
+COPY horizon-api/horizon-api-app/go.mod horizon-api/horizon-api-app/go.sum ./
 RUN go mod download
-COPY . .
+COPY horizon-api/horizon-api-app/ ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /horizon-api .
 
 FROM --platform=linux/amd64 alpine:3.19

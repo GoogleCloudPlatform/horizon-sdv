@@ -62,8 +62,6 @@ config:
     keycloakHttpPathPrefix: "/auth"
     # OAuth public client id (Keycloak client + config.js).
     keycloakClientId: "horizon-dev-portal"
-    # Confidential client for the Go proxy (token exchange to Horizon API); must exist in Keycloak.
-    horizonApiCiClientId: "horizon-api-ci"
     # Optional in-cluster service URLs (empty = defaults from namespace prefix + standard Service names).
     horizonApiInternalBaseUrl: ""
     moduleManagerInternalBaseUrl: ""
