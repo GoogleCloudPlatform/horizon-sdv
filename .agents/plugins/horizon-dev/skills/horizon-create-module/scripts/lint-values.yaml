@@ -43,3 +43,6 @@ config:
   nginx:
     image: nginx
     tag: "1.27-alpine"
+  alpine:
+    image: alpine
+    tag: "3.24"
