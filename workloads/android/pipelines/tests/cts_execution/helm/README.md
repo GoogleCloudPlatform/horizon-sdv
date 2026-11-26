@@ -42,7 +42,7 @@ Deploy-time only (Helm **`spec.*`**, not submit UI): `pipelineRepoUrl`, `cloudPr
 
 ## Submitter identity (Portal / webhook)
 
-Same model as **`cvd-launcher`**: Horizon API sets **`horizon-sdv.io/submitted-by`** (token subject, the owner) and **`submittedBy`** (username) on the Workflow from the caller's token; Developer Portal lists **Triggered from** + **Submitted by** for all users with access. See **`cvd-launcher` chart README** (Submitter identity, MTK debug logs). Jenkins CTS jobs are not Argo workflows and do not appear in that list.
+Same model as **`cvd-launcher`**: Horizon API sets **`horizon-sdv.io/submitted-by`** (token subject, the owner), **`horizon-sdv.io/submitted-by-name`** and **`submittedBy`** (username) on the Workflow from the caller's token; Developer Portal lists **Triggered from** + **Submitted by** for all users with access. See **`cvd-launcher` chart README** (Submitter identity, MTK debug logs). Jenkins CTS jobs are not Argo workflows and do not appear in that list.
 
 ## Behaviour notes
 

@@ -31,6 +31,9 @@ const LabelSubmittedFrom = "horizon-sdv.io/submitted-from"
 // LabelSubmittedBy is the Workflow annotation that holds the owner: the token subject of the
 // caller who submitted the run through Horizon API (sensor maps it from the webhook body).
 const LabelSubmittedBy = "horizon-sdv.io/submitted-by"
+// AnnotationSubmittedByName is the Workflow annotation with the submitter's username, for display
+// only (sensors map it from the submittedBy webhook field). Never use it for access decisions.
+const AnnotationSubmittedByName = "horizon-sdv.io/submitted-by-name"
 const LabelModule = "horizon-sdv.io/module"
 
 const (
@@ -38,7 +41,8 @@ const (
 	SubmittedFromDeveloperPortal = "developer-portal"
 	SubmittedFromHorizonCLI      = "horizon-cli"
 	SubmitParamSubmittedFrom     = "horizonSubmittedFrom"
-	// SubmitParamSubmittedBy is the webhook field and workflow parameter with the caller's username.
+	// SubmitParamSubmittedBy is the webhook field and workflow parameter with the caller's username;
+	// sensors map the field to AnnotationSubmittedByName.
 	SubmitParamSubmittedBy = "submittedBy"
 	// WebhookFieldSubmittedBy is the webhook field with the owner; sensors map it to LabelSubmittedBy.
 	WebhookFieldSubmittedBy = "horizonSubmittedBy"

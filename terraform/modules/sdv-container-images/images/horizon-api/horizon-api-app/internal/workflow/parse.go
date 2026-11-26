@@ -31,12 +31,16 @@ func Owner(u *unstructured.Unstructured) string {
 	return strings.TrimSpace(u.GetAnnotations()[LabelSubmittedBy])
 }
 
-// StartedBy returns a name to display for who started the workflow: the submittedBy workflow
-// parameter when the template has one (the caller's username), else the owner, else Argo UI
-// creator labels when set.
+// StartedBy returns a name to display for who started the workflow: the submitter's username
+// (annotation horizon-sdv.io/submitted-by-name), else the submittedBy workflow parameter, else
+// the owner, else Argo UI creator labels when set. Workflows from sensors that do not map the
+// username yet (for example a module pinned to an older revision) fall back to the later sources.
 func StartedBy(u *unstructured.Unstructured) string {
 	if u == nil {
 		return ""
+	}
+	if v := strings.TrimSpace(u.GetAnnotations()[AnnotationSubmittedByName]); v != "" {
+		return v
 	}
 	if v := argumentValue(u, SubmitParamSubmittedBy); v != "" {
 		return v

@@ -31,6 +31,15 @@ func TestSummaryWorkflowTemplateRef(t *testing.T) {
 
 func TestSummaryOwnerAndStartedBy(t *testing.T) {
 	const subject = "c7eae7a2-0420-4942-9a83-492a87401631"
+	withName := func(u *unstructured.Unstructured, name string) *unstructured.Unstructured {
+		a := u.GetAnnotations()
+		if a == nil {
+			a = map[string]string{}
+		}
+		a[AnnotationSubmittedByName] = name
+		u.SetAnnotations(a)
+		return u
+	}
 	workflow := func(annotation, submittedBy string, labels map[string]string) *unstructured.Unstructured {
 		u := &unstructured.Unstructured{Object: map[string]interface{}{}}
 		if annotation != "" {
@@ -52,8 +61,12 @@ func TestSummaryOwnerAndStartedBy(t *testing.T) {
 		wantOwner     string
 		wantStartedBy string
 	}{
-		{"template with submittedBy: name from the parameter", workflow(subject, "dev-alice", nil), subject, "dev-alice"},
-		{"template without submittedBy: the owner is all there is", workflow(subject, "", nil), subject, subject},
+		{"name annotation: shown instead of the owner", withName(workflow(subject, "", nil), "dev-alice"), subject, "dev-alice"},
+		{"name annotation wins over the submittedBy parameter", withName(workflow(subject, "param-user", nil), "dev-alice"), subject, "dev-alice"},
+		{"impersonated run: name is the user, owner the service account", withName(workflow("sa-subject", "bob", nil), "bob"), "sa-subject", "bob"},
+		{"blank name annotation is ignored", withName(workflow(subject, "dev-alice", nil), "  "), subject, "dev-alice"},
+		{"no name annotation, template with submittedBy: name from the parameter", workflow(subject, "dev-alice", nil), subject, "dev-alice"},
+		{"no name annotation, template without submittedBy: the owner is all there is", workflow(subject, "", nil), subject, subject},
 		{"impersonated run: owner stays the service account", workflow("sa-subject", "bob", nil), "sa-subject", "bob"},
 		{"owner wins over Argo creator labels", workflow(subject, "", creator), subject, subject},
 		{"not submitted through Horizon API: no owner", workflow("", "", creator), "", "argo-ui-user"},

@@ -481,7 +481,7 @@ func workflowOpenAPIComponentSchemas() map[string]interface{} {
 				"workflowTemplate": map[string]interface{}{"type": "string"},
 				"startedBy": map[string]interface{}{
 					"type":        "string",
-					"description": "Name to display for who started the run: the `submittedBy` workflow parameter when the template has one (the caller's username), else the owner, else the Argo creator label when present.",
+					"description": "Name to display for who started the run: the submitter's username (annotation horizon-sdv.io/submitted-by-name), else the `submittedBy` workflow parameter when the template has one, else the owner, else the Argo creator label when present. Display only; use `owner` to decide whose run it is.",
 				},
 				"owner": map[string]interface{}{
 					"type":        "string",
