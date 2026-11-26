@@ -18,6 +18,8 @@ import type { PaletteMode } from '@mui/material/styles';
 /** Colours of the Documentation reader (category chip, On this page card, code and diagram blocks). */
 export type DocsPalette = {
   chip: string;
+  /** Chip of entries that open another application (neutral, so they stand apart from bundled guides). */
+  chipExternal: string;
   contentsBorder: string;
   contentsLink: string;
   codeBackground: string;
@@ -82,6 +84,7 @@ export const getTheme = (mode: PaletteMode) =>
             },
             docs: {
               chip: '#1a4f9c',
+              chipExternal: '#5f6368',
               contentsBorder: 'rgba(0, 0, 0, 0.12)',
               contentsLink: '#1a73e8',
               codeBackground: '#0d1117',
@@ -100,6 +103,7 @@ export const getTheme = (mode: PaletteMode) =>
             },
             docs: {
               chip: '#8ab4f8',
+              chipExternal: '#9aa0a6',
               contentsBorder: '#3c4043',
               contentsLink: '#8ab4f8',
               codeBackground: '#0d1117',

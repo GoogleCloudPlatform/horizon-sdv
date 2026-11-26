@@ -25,13 +25,17 @@ import {
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { Link, useParams } from 'react-router-dom';
+import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { config } from '../utils/config';
 import {
   DOC_CATEGORIES,
   PORTAL_GUIDES,
+  DEFAULT_GUIDE_PATH,
   documentationHref,
+  guideKey,
   guideForPath,
   guideMatchesQuery,
+  isExternalGuide,
   sectionForPath,
   type PortalGuide,
 } from '../docs/catalog';
@@ -67,43 +71,67 @@ function decodeDocPath(splat: string | undefined): string {
   }
 }
 
+const SCREEN_READER_ONLY = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  p: 0,
+  m: '-1px',
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+} as const;
+
 function GuideRow({ guide, active }: { guide: PortalGuide; active: boolean }) {
   const theme = useTheme();
   const dark = theme.palette.mode === 'dark';
   const chip = DOC_CATEGORIES[guide.category];
-  const color = theme.palette.docs.chip;
+  const external = isExternalGuide(guide);
+  const color = external ? theme.palette.docs.chipExternal : theme.palette.docs.chip;
 
-  return (
-    <ListItemButton
-      component={Link}
-      to={documentationHref(guide.path)}
-      selected={active}
-      data-active={active ? 'true' : 'false'}
-      sx={{
-        display: 'block',
-        borderRadius: 0,
-        borderLeft: '3px solid',
-        borderLeftColor: active ? 'primary.main' : 'transparent',
-        borderBottom: '1px solid',
-        borderBottomColor: active ? 'transparent' : 'divider',
-        bgcolor: active ? alpha(theme.palette.primary.main, dark ? 0.18 : 0.08) : 'transparent',
-        py: 1.25,
-        px: 1.5,
-        '&.Mui-selected, &.Mui-selected:hover': {
-          bgcolor: alpha(theme.palette.primary.main, dark ? 0.24 : 0.1),
-        },
-      }}
-    >
-      <Typography
-        sx={{
-          fontWeight: active ? 700 : 600,
-          fontSize: 14,
-          color: active ? 'primary.main' : 'text.primary',
-          lineHeight: 1.3,
-        }}
+  const rowSx = {
+    display: 'block',
+    borderRadius: 0,
+    borderLeft: '3px solid',
+    borderLeftColor: active ? 'primary.main' : 'transparent',
+    borderBottom: '1px solid',
+    borderBottomColor: active ? 'transparent' : 'divider',
+    bgcolor: active ? alpha(theme.palette.primary.main, dark ? 0.18 : 0.08) : 'transparent',
+    py: 1.25,
+    px: 1.5,
+    '&.Mui-selected, &.Mui-selected:hover': {
+      bgcolor: alpha(theme.palette.primary.main, dark ? 0.24 : 0.1),
+    },
+  };
+
+  const content = (
+    <>
+      <Box
+        sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}
       >
-        {guide.title}
-      </Typography>
+        <Typography
+          sx={{
+            fontWeight: active ? 700 : 600,
+            fontSize: 14,
+            color: active ? 'primary.main' : 'text.primary',
+            lineHeight: 1.3,
+          }}
+        >
+          {guide.title}
+          {external ? (
+            <Box component="span" sx={SCREEN_READER_ONLY}>
+              {' (opens in a new tab)'}
+            </Box>
+          ) : null}
+        </Typography>
+        {external ? (
+          <OpenInNewOutlinedIcon
+            aria-hidden="true"
+            sx={{ fontSize: 16, mt: '1px', flexShrink: 0, color: 'text.secondary' }}
+          />
+        ) : null}
+      </Box>
       <Typography
         variant="body2"
         color="text.secondary"
@@ -137,6 +165,32 @@ function GuideRow({ guide, active }: { guide: PortalGuide; active: boolean }) {
       >
         {chip.label}
       </Box>
+    </>
+  );
+
+  // External entries are plain links to another application: they never select the reader.
+  if (external) {
+    return (
+      <ListItemButton
+        component="a"
+        href={guide.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        sx={rowSx}
+      >
+        {content}
+      </ListItemButton>
+    );
+  }
+  return (
+    <ListItemButton
+      component={Link}
+      to={documentationHref(guide.path)}
+      selected={active}
+      data-active={active ? 'true' : 'false'}
+      sx={rowSx}
+    >
+      {content}
     </ListItemButton>
   );
 }
@@ -145,7 +199,8 @@ function GuideRow({ guide, active }: { guide: PortalGuide; active: boolean }) {
 function GuideList({ activePath }: { activePath: string | undefined }) {
   const [query, setQuery] = useState('');
   const visibleGuides = PORTAL_GUIDES.filter(
-    (guide) => guide.path === activePath || guideMatchesQuery(guide, query)
+    (guide) =>
+      (!isExternalGuide(guide) && guide.path === activePath) || guideMatchesQuery(guide, query)
   );
 
   return (
@@ -181,7 +236,11 @@ function GuideList({ activePath }: { activePath: string | undefined }) {
           </Typography>
         ) : (
           visibleGuides.map((guide) => (
-            <GuideRow key={guide.path} guide={guide} active={activePath === guide.path} />
+            <GuideRow
+              key={guideKey(guide)}
+              guide={guide}
+              active={!isExternalGuide(guide) && activePath === guide.path}
+            />
           ))
         )}
       </List>
@@ -344,7 +403,7 @@ export function DocumentationPage() {
           ) : current?.status === 'missing' ? (
             <Alert severity="warning">
               This document is not in the bundle for this deployment.{' '}
-              <Link to={documentationHref(PORTAL_GUIDES[0].path)}>Open the deployment guide</Link>
+              <Link to={documentationHref(DEFAULT_GUIDE_PATH)}>Open the deployment guide</Link>
             </Alert>
           ) : current?.status === 'error' ? (
             <Alert severity="error">{current.message}</Alert>
