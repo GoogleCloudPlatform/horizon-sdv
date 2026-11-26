@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
+
 package api
 
 import (
@@ -529,7 +529,7 @@ func (s *Server) handleWorkflowDelete(w http.ResponseWriter, r *http.Request, _ 
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }
 
-func (s *Server) handleWorkflowAbort(w http.ResponseWriter, r *http.Request, _ *horizonauth.Principal) {
+func (s *Server) handleWorkflowAbort(w http.ResponseWriter, r *http.Request, p *horizonauth.Principal) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -550,6 +550,12 @@ func (s *Server) handleWorkflowAbort(w http.ResponseWriter, r *http.Request, _ *
 	}
 	if !workflow.IsHorizonClientVisible(u) {
 		http.Error(w, "workflow not found", http.StatusNotFound)
+		return
+	}
+	// Decide before looking at the phase: a caller who may not abort this workflow gets the
+	// same answer whether or not it is still running.
+	if f := s.abortForbidden(p, u); f != nil {
+		horizonauth.WriteForbidden(w, f)
 		return
 	}
 	if workflow.TerminalPhase(workflow.Phase(u)) {

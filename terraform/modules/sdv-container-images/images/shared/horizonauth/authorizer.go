@@ -14,7 +14,10 @@
 
 package horizonauth
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // Authorizer ranks callers and applies the minimum role each endpoint declares.
 type Authorizer struct {
@@ -25,6 +28,17 @@ type Authorizer struct {
 // NewAuthorizer returns an Authorizer. With roleChecks off, Check allows every signed-in caller.
 func NewAuthorizer(order RoleOrder, roleChecks bool) *Authorizer {
 	return &Authorizer{order: order, roleChecks: roleChecks}
+}
+
+// Roles returns the role order, lowest first.
+func (a *Authorizer) Roles() []string {
+	return slices.Clone(a.order.names)
+}
+
+// RoleChecks reports whether Check applies minimum roles. When it is off, Check allows every
+// signed-in caller.
+func (a *Authorizer) RoleChecks() bool {
+	return a.roleChecks
 }
 
 // Role returns the caller's rank. It is computed whether or not role checks are on.

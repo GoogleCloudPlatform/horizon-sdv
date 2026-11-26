@@ -132,8 +132,8 @@ locals {
     }
     "module-manager-app" = {
       directory      = "module-manager"
-      build_version  = "0.3.8"
-      deploy_version = "0.3.8"
+      build_version  = "0.3.9"
+      deploy_version = "0.3.9"
     }
     "workflow-namespace-drain-app" = {
       directory      = "workflow-namespace-drain"
@@ -142,8 +142,8 @@ locals {
     }
     "horizon-api-app" = {
       directory      = "horizon-api"
-      build_version  = "1.3.0"
-      deploy_version = "1.3.0"
+      build_version  = "1.4.0"
+      deploy_version = "1.4.0"
     }
     "kcc-webhook-cert-monitor" = {
       directory      = "kcc-webhook-cert-monitor"

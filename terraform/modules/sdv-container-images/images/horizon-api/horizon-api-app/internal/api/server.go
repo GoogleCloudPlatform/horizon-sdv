@@ -37,6 +37,7 @@ import (
 type Options struct {
 	Catalog          *catalog.Catalog
 	Verifier         *horizonauth.Verifier
+	Authorizer       *horizonauth.Authorizer
 	WorkflowsNS      string
 	HTTPAddr         string
 	EventsWebhookURL string
@@ -77,26 +78,51 @@ type Server struct {
 	srv *http.Server
 }
 
+// authedHandler serves a request from a caller whose token was verified.
+type authedHandler func(http.ResponseWriter, *http.Request, *horizonauth.Principal)
+
 func New(opt Options) *Server {
+	if opt.Authorizer == nil {
+		order, err := horizonauth.ParseRoleOrder(horizonauth.DefaultRoleOrder)
+		if err != nil {
+			panic("horizonauth.DefaultRoleOrder: " + err.Error())
+		}
+		opt.Authorizer = horizonauth.NewAuthorizer(order, false)
+	}
 	mux := http.NewServeMux()
 	s := &Server{opt: opt}
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+	// Register routes only through public and authed, so that every route is either served
+	// without a token or declares the capability a caller needs.
+	public := func(pattern string, h http.HandlerFunc) {
+		mux.HandleFunc(pattern, h)
+	}
+	authed := func(pattern string, c capability, h authedHandler) {
+		mux.HandleFunc(pattern, s.withAuth(c, h))
+	}
+	public("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	mux.HandleFunc("GET /v1/catalog", s.withAuth(s.handleCatalog))
-	mux.HandleFunc("GET /openapi.json", s.handleOpenAPI)
-	mux.HandleFunc("GET /swagger", s.handleSwagger)
-	mux.HandleFunc("POST /v1/modules/{module}/workflowTemplates/{template}/submit", s.withAuth(s.handleSubmit))
-	mux.HandleFunc("GET /v1/workflows/running", s.withAuth(s.handleWorkflowsRunning))
-	mux.HandleFunc("GET /v1/workflows/history", s.withAuth(s.handleWorkflowsHistory))
-	mux.HandleFunc("GET /v1/workflows/{workflowName}/log", s.withAuth(s.handleWorkflowLogs))
-	mux.HandleFunc("GET /v1/workflows/{workflowName}/downloadArtifact/{artifactName}", s.withAuth(s.handleWorkflowDownloadArtifact))
-	mux.HandleFunc("GET /v1/workflows/{workflowName}", s.withAuth(s.handleWorkflowGet))
-	mux.HandleFunc("DELETE /v1/workflows/{workflowName}", s.withAuth(s.handleWorkflowDelete))
-	mux.HandleFunc("POST /v1/workflows/{workflowName}/abort", s.withAuth(s.handleWorkflowAbort))
-	mux.HandleFunc("GET /v1/artifacts/buckets", s.withAuth(s.handleArtifactsListBuckets))
-	mux.HandleFunc("GET /v1/artifacts/buckets/{bucket}/objects", s.withAuth(s.handleArtifactsListObjects))
+	// The API description is public so that the Swagger page loads before sign-in.
+	public("GET /openapi.json", s.handleOpenAPI)
+	public("GET /swagger", s.handleSwagger)
+
+	authed("GET /v1/me", capView, s.handleMe)
+	authed("GET /v1/catalog", capView, s.handleCatalog)
+	authed("POST /v1/modules/{module}/workflowTemplates/{template}/submit", capSubmit, s.handleSubmit)
+	authed("GET /v1/workflows/running", capView, s.handleWorkflowsRunning)
+	authed("GET /v1/workflows/history", capView, s.handleWorkflowsHistory)
+	authed("GET /v1/workflows/{workflowName}/log", capView, s.handleWorkflowLogs)
+	authed("GET /v1/workflows/{workflowName}/downloadArtifact/{artifactName}", capView, s.handleWorkflowDownloadArtifact)
+	authed("GET /v1/workflows/{workflowName}", capView, s.handleWorkflowGet)
+	// Admin only, including for the caller's own workflows.
+	authed("DELETE /v1/workflows/{workflowName}", capDelete, s.handleWorkflowDelete)
+	// capAbortOwn is the floor. The handler also requires capAbortOthers unless the caller
+	// owns the workflow.
+	authed("POST /v1/workflows/{workflowName}/abort", capAbortOwn, s.handleWorkflowAbort)
+	authed("GET /v1/artifacts/buckets", capView, s.handleArtifactsListBuckets)
+	authed("GET /v1/artifacts/buckets/{bucket}/objects", capView, s.handleArtifactsListObjects)
+
 	s.srv = &http.Server{Addr: opt.HTTPAddr, Handler: mux}
 	return s
 }
@@ -129,11 +155,17 @@ func (s *Server) bearerAuth(r *http.Request) (*horizonauth.Principal, error) {
 	return s.opt.Verifier.Verify(r.Context(), raw)
 }
 
-func (s *Server) withAuth(next func(http.ResponseWriter, *http.Request, *horizonauth.Principal)) http.HandlerFunc {
+// withAuth verifies the caller's token and then applies the minimum role of capability c. With
+// role checks off the role is not applied, so every signed-in caller reaches next.
+func (s *Server) withAuth(c capability, next authedHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.bearerAuth(r)
 		if err != nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if f := s.opt.Authorizer.Check(p, c.RequiredRole, c.Reason); f != nil {
+			horizonauth.WriteForbidden(w, f)
 			return
 		}
 		next(w, r, p)

@@ -448,6 +448,36 @@ func TestCmdCatalogAndAbort(t *testing.T) {
 	if posts.Load() != 1 {
 		t.Fatalf("posts = %d", posts.Load())
 	}
+
+	forbidden, _ := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":"forbidden","reason":"Admins can abort any workflow."}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"phase":"Running"}`))
+	}))
+	err := CmdAbortWorkflowName(forbidden, "another-users-workflow")
+	if err == nil || !strings.Contains(err.Error(), "HTTP 403") || !strings.Contains(err.Error(), "Admins can abort any workflow.") {
+		t.Fatalf("abort 403 error = %v", err)
+	}
+
+	var finished atomic.Bool
+	racing, _ := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			finished.Store(true)
+			http.Error(w, "workflow is not running", http.StatusConflict)
+			return
+		}
+		if finished.Load() {
+			_, _ = w.Write([]byte(`{"phase":"Succeeded"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"phase":"Running"}`))
+	}))
+	if err := CmdAbortWorkflowName(racing, "finishes-during-abort"); err != nil {
+		t.Fatalf("abort of a run that finished during the call = %v, want nil", err)
+	}
 }
 
 func TestCmdArtifactCommands(t *testing.T) {

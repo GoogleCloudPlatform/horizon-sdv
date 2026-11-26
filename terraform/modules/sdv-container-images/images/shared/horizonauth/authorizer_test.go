@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 )
 
@@ -61,6 +62,22 @@ func TestCheckWithRoleChecksOn(t *testing.T) {
 		if (f == nil) != tc.allowed {
 			t.Errorf("Check(%s, %s) = %+v, want allowed=%v", tc.p.Subject, tc.required, f, tc.allowed)
 		}
+	}
+}
+
+func TestRolesAndRoleChecks(t *testing.T) {
+	a := NewAuthorizer(mustOrder(t, "viewer,developer,maintainer,admin"), true)
+	roles := a.Roles()
+	if want := []string{"viewer", "developer", "maintainer", "admin"}; !slices.Equal(roles, want) {
+		t.Errorf("Roles = %v, want %v", roles, want)
+	}
+	// The caller gets a copy: changing it must not change how the authorizer ranks roles.
+	roles[0] = "admin"
+	if got := a.Role(viewer); got != "viewer" {
+		t.Errorf("Role = %q after the returned roles were changed, want viewer", got)
+	}
+	if !a.RoleChecks() || NewAuthorizer(mustOrder(t, DefaultRoleOrder), false).RoleChecks() {
+		t.Error("RoleChecks does not report the setting")
 	}
 }
 

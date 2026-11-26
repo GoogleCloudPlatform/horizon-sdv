@@ -194,6 +194,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("role-order: %v", err)
 	}
+	authorizer := horizonauth.NewAuthorizer(order, roleChecks)
+	// Checked with role checks off too, so turning them on later cannot lock everyone out.
+	if err := api.CheckRoleOrder(authorizer); err != nil {
+		log.Fatalf("role-order: %v", err)
+	}
 	log.Printf("auth: tokens must have aud %q; roles %s; role checks %t", oidcClientID, order, roleChecks)
 
 	cfg := ctrl.GetConfigOrDie()
@@ -248,6 +253,7 @@ func main() {
 	handler := api.New(api.Options{
 		Catalog:                       cat,
 		Verifier:                      verifier,
+		Authorizer:                    authorizer,
 		WorkflowsNS:                   workflowsNS,
 		HTTPAddr:                      httpAddr,
 		EventsWebhookURL:              eventsWebhookURL,
