@@ -70,6 +70,9 @@ type EnvironmentImageBootstrap struct {
 	RetryFirst       time.Duration
 	RetryCeiling     time.Duration
 	RetryWindow      time.Duration
+
+	// MaxFailedBuilds stops automatic submits once this many bootstrap builds ended Failed or Error. 0 disables the cap.
+	MaxFailedBuilds int
 }
 
 // NewEnvironmentImageBootstrap uses the production intervals.
@@ -84,6 +87,7 @@ func NewEnvironmentImageBootstrap(c client.Client, reader client.Reader, images 
 		RetryFirst:       30 * time.Second,
 		RetryCeiling:     5 * time.Minute,
 		RetryWindow:      30 * time.Minute,
+		MaxFailedBuilds:  3,
 	}
 }
 
@@ -114,17 +118,22 @@ func (b *EnvironmentImageBootstrap) Start(ctx context.Context) error {
 		return nil
 	}
 
-	running, name, err := b.runningBootstrap(ctx)
+	running, failed, err := b.bootstrapState(ctx)
 	if err != nil {
 		logger.Error(err, "could not list environment image builds, not submitting a build")
 		return nil
 	}
-	if running {
-		logger.Info("environment image build already in progress", "workflow", name)
+	if running != "" {
+		logger.Info("environment image build already in progress", "workflow", running)
+		return nil
+	}
+	if b.MaxFailedBuilds > 0 && failed >= b.MaxFailedBuilds {
+		logger.Error(nil, "environment image builds keep failing, not submitting another; run cws-image-build with buildEnvironmentImage=true, or delete the failed bootstrap Workflows to retry",
+			"failedBuilds", failed, "limit", b.MaxFailedBuilds, "image", b.Image)
 		return nil
 	}
 
-	name, err = b.submit(ctx)
+	name, err := b.submit(ctx)
 	if err != nil {
 		logger.Error(err, "submitting environment image build failed", "image", b.Image)
 		return nil
@@ -153,22 +162,29 @@ func (b *EnvironmentImageBootstrap) waitForTemplate(ctx context.Context) error {
 	}
 }
 
-// runningBootstrap reads live state. A Workflow with no phase yet counts as in progress.
-func (b *EnvironmentImageBootstrap) runningBootstrap(ctx context.Context) (bool, string, error) {
+// bootstrapState reads live state. It returns the name of a build still in progress (a Workflow with
+// no phase yet counts as in progress) and how many bootstrap Workflows ended Failed or Error. Argo
+// removes finished Workflows after its ttlStrategy, which lifts the failure cap on its own.
+func (b *EnvironmentImageBootstrap) bootstrapState(ctx context.Context) (string, int, error) {
 	list := &unstructured.UnstructuredList{}
 	list.SetGroupVersionKind(workflowListGVK)
 	if err := b.APIReader.List(ctx, list,
 		client.InNamespace(b.Namespace),
 		client.MatchingLabels{bootstrapLabel: "true"},
 	); err != nil {
-		return false, "", err
+		return "", 0, err
 	}
+	failed := 0
 	for i := range list.Items {
-		if !finishedWorkflowPhase(workflowPhase(&list.Items[i])) {
-			return true, list.Items[i].GetName(), nil
+		phase := workflowPhase(&list.Items[i])
+		if !finishedWorkflowPhase(phase) {
+			return list.Items[i].GetName(), 0, nil
+		}
+		if phase == "Failed" || phase == "Error" {
+			failed++
 		}
 	}
-	return false, "", nil
+	return "", failed, nil
 }
 
 func (b *EnvironmentImageBootstrap) submit(ctx context.Context) (string, error) {

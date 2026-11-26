@@ -80,6 +80,7 @@ func newTestBootstrap(images ImageChecker, c client.Client) *EnvironmentImageBoo
 		RetryFirst:       time.Millisecond,
 		RetryCeiling:     2 * time.Millisecond,
 		RetryWindow:      20 * time.Millisecond,
+		MaxFailedBuilds:  3,
 	}
 }
 
@@ -183,6 +184,56 @@ func TestEnvironmentImageBootstrap_SubmitsAfterFinishedBuild(t *testing.T) {
 				t.Fatalf("workflows = %d, want 2 (finished one plus the new submit)", n)
 			}
 		})
+	}
+}
+
+func TestEnvironmentImageBootstrap_FailureCap(t *testing.T) {
+	tests := []struct {
+		name    string
+		phases  []string
+		submits bool
+	}{
+		{"below the cap submits", []string{"Failed", "Error"}, true},
+		{"at the cap does not submit", []string{"Failed", "Error", "Failed"}, false},
+		{"succeeded builds do not count", []string{"Succeeded", "Succeeded", "Succeeded", "Failed"}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			objs := []client.Object{testTemplate()}
+			for i, phase := range tc.phases {
+				objs = append(objs, testBootstrapWorkflow("cws-environment-image-bootstrap-"+string(rune('a'+i)), phase))
+			}
+			c := fake.NewClientBuilder().WithObjects(objs...).Build()
+			b := newTestBootstrap(&fakeImages{results: []imageResult{{exists: false}}}, c)
+
+			if err := b.Start(context.Background()); err != nil {
+				t.Fatalf("Start returned %v", err)
+			}
+			want := len(tc.phases)
+			if tc.submits {
+				want++
+			}
+			if n := len(bootstrapWorkflows(t, c)); n != want {
+				t.Fatalf("workflows = %d, want %d", n, want)
+			}
+		})
+	}
+}
+
+func TestEnvironmentImageBootstrap_FailureCapDisabled(t *testing.T) {
+	objs := []client.Object{testTemplate()}
+	for _, name := range []string{"a", "b", "c", "d"} {
+		objs = append(objs, testBootstrapWorkflow("cws-environment-image-bootstrap-"+name, "Failed"))
+	}
+	c := fake.NewClientBuilder().WithObjects(objs...).Build()
+	b := newTestBootstrap(&fakeImages{results: []imageResult{{exists: false}}}, c)
+	b.MaxFailedBuilds = 0
+
+	if err := b.Start(context.Background()); err != nil {
+		t.Fatalf("Start returned %v", err)
+	}
+	if n := len(bootstrapWorkflows(t, c)); n != 5 {
+		t.Fatalf("workflows = %d, want 5", n)
 	}
 }
 
