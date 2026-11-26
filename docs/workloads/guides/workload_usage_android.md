@@ -130,6 +130,7 @@ The following devices types are currently supported:
 | --- | --- | --- | --- |
 | Android Studio Virtual Device | `sdk_car_` | `sdk-repo-linux-system-images.zip`<br>`horizon-sdv-aaos-sys-img2-1.xml` | Android SDK AVD targets can be used to spin up virtual devices using the _Android Emulator_ in _Android Studio_.|
 | Cuttlefish Virtual Device | `aosp_cf_` | `cvd-host_package.tar.gz`<br>`aosp_cf_*_auto-img-builder.zip` | [Android Cuttlefish](https://source.android.com/docs/devices/cuttlefish) targets can be used to spin up virtual devices on virtual machine instances using the Cuttlefish host platform. <br>- the artifacts do not need to be downloaded for test pipeline jobs - simply note the google storage location | 
+| AAOS SDV Cuttlefish | `sdv_*_cf` | `cvd-host_package.tar.gz`<br>`sdv_*_cf*-img*.zip`<br>`sdv-cf` | Partner AAOS SDV images for Cuttlefish, built with **AAOS Builder**. Supported and tested lunch targets are listed under [Build Targets](#build-targets). Artifacts do not need to be downloaded for test pipeline jobs; note the Google storage location. |
 | Google Pixel Tablet | `tangorpro_car_` | `*out_sdv-aosp_tangorpro_car-*-userdebug.tgz*` | Android `tagoropro_car` system images can be used to flash [Google Pixel](https://source.android.com/docs/automotive/start/pixelxl) tablet devices. |
 | Raspberry Pi | `aosp_rpi` | `*.img*`<br>e.g. `boot.img`, `system.img`, `vendor.img` | Android `aosp_rpi` system images can be used to flash Raspbery Pi devices. |
 
@@ -194,6 +195,7 @@ Android lunch targets are specified by the build parameter [`AAOS_LUNCH_TARGET`]
 | --- | --- |
 | `sdk_car*` | SDK Virtual Device targets |
 | `aosp_cf*` | Cuttlefish Virtual Device targets |
+| `sdv_*_cf*` | AAOS SDV Cuttlefish targets |
 | `*tangorpro_car*` | Pixel Tablet platform support |
 | `aosp_rpi*` | Raspberry Pi targets (based on Vanilla RPi builds) |
 
@@ -217,7 +219,7 @@ Android lunch targets are specified by the build parameter [`AAOS_LUNCH_TARGET`]
 This page lists the [Codenames, tags, and build IDs](https://source.android.com/docs/setup/reference/build-numbers) associated with each version of Android; to determine which _release identifier_ to use, inspect the _Build ID_ associated with the selected android version.
 
 **Example Lunch Target**
-The full list of Android targets supported on this platform for building Android cuttlefish, virtual devices, Pixel and RPi targets are as follows:
+The full list of Android targets supported on this platform for building Android cuttlefish, virtual devices, Pixel, RPi, and AAOS SDV Cuttlefish targets are as follows:
 
 - Android Studio Virtual Device
     -   `sdk_car_x86_64-ap1a-userdebug` (`android-14.0.0_r30`)
@@ -250,6 +252,12 @@ The full list of Android targets supported on this platform for building Android
     -   `aosp_rpi5_car-bp3a-userdebug` (`android-16.0.0_r3`)
     -   `aosp_rpi4_car-cp2a-userdebug` (`android-17.0.0_r1`)
     -   `aosp_rpi5_car-cp2a-userdebug` (`android-17.0.0_r1`)
+-   AAOS SDV Cuttlefish
+    -   `sdv_core_cf-trunk_staging-userdebug` (`android-17.0.0_r1`) — AAOS SDV Core (`sdv_core`) on Cuttlefish (`cf`).
+    -   `sdv_media_cf-trunk_staging-userdebug` (`android-17.0.0_r1`) — AAOS SDV Core with virtIO-virtualized media APIs (`sdv_media`).
+    -   `sdv_media_har_cf-trunk_staging-userdebug` (`android-17.0.0_r1`) — Extends `sdv_media_cf` with the high-availability renderer (HAR). HAR runs automatically on boot.
+    -   `sdv_ivi_cf-trunk_staging-userdebug` (`android-17.0.0_r1`) — In-Vehicle Infotainment (IVI) with the SDV Gateway and Java sample apps.
+    -   `sdv_ivi_cf_ds-trunk_staging-userdebug` (`android-17.0.0_r1`) — Extends `sdv_ivi_cf` with Display Safety's DriverUI and Instrument Cluster.
 
 <hr width="50%"></details>
 

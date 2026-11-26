@@ -46,7 +46,7 @@ _cts_tradefed_home() {
     fi
 }
 CTS_TESTPLAN=$(echo "${CTS_TESTPLAN}" | xargs)
-CTS_TESTPLAN=${CTS_TESTPLAN:-cts-system-virtual}
+CTS_TESTPLAN=${CTS_TESTPLAN:-cts-virtual-device-stable}
 CTS_MAX_TESTCASE_RUN_COUNT=${CTS_MAX_TESTCASE_RUN_COUNT:-}
 CTS_MODULE=$(echo "${CTS_MODULE}" | xargs)
 CTS_MODULE=${CTS_MODULE:-}

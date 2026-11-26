@@ -172,10 +172,9 @@ pipelineJob('Android/Tests/CTS Execution') {
 
     stringParam {
       name('CTS_TESTPLAN')
-      defaultValue('cts-system-virtual')
+      defaultValue('cts-virtual-device-stable')
       description('''<p>CTS Test plan to execute, e.g.</p>
-        <ul><li>Android 15 and later: <code>cts-system-virtual</code></li>
-            <li>Android 14: <code>cts-virtual-device-stable</code></li></ul>''')
+        Android 15 and later can also use: <code>cts-system-virtual</code>''')
       trim(true)
     }
 

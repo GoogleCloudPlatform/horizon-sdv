@@ -286,7 +286,7 @@ function cts_full_run() {
     ANDROID_VERSION="${ANDROID_VERSION:?}" \
       CTS_DOWNLOAD_URL="${CTS_DOWNLOAD_URL:-}" \
       bash ./workloads/android/pipelines/tests/cts_execution/cts_initialise.sh
-    CTS_TESTPLAN="${CTS_TESTPLAN:-cts-system-virtual}" \
+    CTS_TESTPLAN="${CTS_TESTPLAN:-cts-virtual-device-stable}" \
       CTS_MODULE="${CTS_MODULE:-}" \
       CTS_TIMEOUT="${CTS_TIMEOUT:-600}" \
       CTS_RETRY_STRATEGY="${CTS_RETRY_STRATEGY:-RETRY_ANY_FAILURE}" \

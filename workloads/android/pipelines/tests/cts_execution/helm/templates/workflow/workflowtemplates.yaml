@@ -124,13 +124,13 @@ spec:
         description: "Local tunnel port for MTK Connect when using tunnel mode."
       - name: cvdCommandLine
         value: '/usr/bin/cvd create --noresume -config=auto -report_anonymous_usage_stats=no --num_instances="${NUM_INSTANCES}" --cpus="${VM_CPUS}" --memory_mb="${VM_MEMORY_MB}" --console=true --setupwizard_mode DISABLED --enable_host_bluetooth false --gpu_mode guest_swiftshader'
-        description: "Full cvd create command line; NUM_INSTANCES, VM_CPUS, VM_MEMORY_MB are expanded by the driver."
+        description: "WARNING: sdv targets use a different cvd command - see workload doc"
       - name: androidVersion
-        value: "15"
+        value: "17"
         description: "Android API for CTS (/opt/android-cts_<ver>). Must match CTS baked by your cf-instance-template run."
       - name: ctsTestplan
-        value: "cts-system-virtual"
-        description: "CTS test plan name passed to tradefed (e.g. cts-system-virtual)."
+        value: "cts-virtual-device-stable"
+        description: "CTS test plan name passed to tradefed (e.g. cts-virtual-device-stable)."
       - name: ctsModule
         value: ""
         description: "Optional CTS module name to narrow the plan; empty runs the plan default scope."

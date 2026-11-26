@@ -82,12 +82,10 @@ To run pipeline jobs, users must have access to Jenkins and be granted permissio
 ### Jenkins Pipeline Job Organization
 Each Jenkins Pipeline Job is defined in a separate Groovy file, stored within its own dedicated job directory, e.g.:
 - `workloads/android/pipelines/builds/aaos_builder/groovy/job.groovy`
-- `workloads/android/pipelines/builds/aaos_sdv_builder/groovy/job.groovy`
 - `workloads/openbsw/pipelines/builds/bsw_builder/groovy/job.groovy`
 
 There are also Groovy files that define the folder structure within Jenkins, e.g
 - `Android Workflows` → `Builds` → `AAOS Builder`
-- `Android Workflows` → `Builds` → `AAOS SDV Builder`
 - `OpenBSW Workflows` → `Builds` → `BSW Builder`
 
 ### Initial Jenkins Configuration
