@@ -135,6 +135,17 @@ resource "google_project_iam_member" "cws_module_controller" {
   depends_on = [module.sdv_wi]
 }
 
+# Module controller checks cws-workflow:latest with a manifest HEAD request. Scoped to the one repository.
+resource "google_artifact_registry_repository_iam_member" "cws_module_controller_reader" {
+  project    = data.google_project.project.project_id
+  location   = var.sdv_location
+  repository = var.sdv_artifact_registry_repository_id
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:gke-cws-module-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
+
+  depends_on = [module.sdv_artifact_registry, module.sdv_wi]
+}
+
 # Ensure service-<number>@gcp-sa-workstations.iam.gserviceaccount.com exists.
 resource "google_project_service_identity" "workstations" {
   provider = google-beta

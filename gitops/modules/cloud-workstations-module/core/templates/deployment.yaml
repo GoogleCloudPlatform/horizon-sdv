@@ -14,6 +14,7 @@
 
 {{- if include "cloud-workstations-core.mainEnv" . | eq "true" }}
 {{- $project := required "config.projectID is required" .Values.config.projectID }}
+{{- $region := required "config.region is required" .Values.config.region }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -65,6 +66,10 @@ spec:
                   fieldPath: metadata.namespace
             - name: HOST_SERVICE_ACCOUNT
               value: {{ printf "gke-cws-host-vm-sa@%s.iam.gserviceaccount.com" $project | quote }}
+            - name: ENVIRONMENT_IMAGE
+              value: {{ printf "%s-docker.pkg.dev/%s/%s:%s" $region $project .Values.environmentImage.path .Values.environmentImage.tag | quote }}
+            - name: WORKFLOW_NAMESPACE
+              value: {{ .Values.workflowNamespace | quote }}
           livenessProbe:
             httpGet:
               path: /healthz

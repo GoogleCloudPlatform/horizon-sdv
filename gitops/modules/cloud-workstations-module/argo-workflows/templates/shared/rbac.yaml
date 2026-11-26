@@ -99,3 +99,49 @@ subjects:
   - kind: ServiceAccount
     name: {{ .Values.powerServiceAccount }}
     namespace: {{ .Values.workflowNamespace }}
+---
+# Module controller (cloud-workstations-module-sa) submits the enable-time image build only.
+# Create and list Workflows; read one WorkflowTemplate. No pods, secrets, or other templates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cws-environment-bootstrap
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+rules:
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - workflows
+    verbs:
+      - create
+      - list
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - workflowtemplates
+    resourceNames:
+      - cws-image-build
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cws-environment-bootstrap
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "cws.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cws-environment-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: cloud-workstations-module-sa
+    namespace: {{ .Values.resourceNamespace }}

@@ -213,8 +213,8 @@ imageBuild:
 images:
   environment:
     # Slim image (gcloud, kubectl, jq). Separate GAR path from the Jenkins env image.
-    # Step image for every CWS workflow except cws-image-build. Build it once per environment
-    # with imageTag=latest; until then those workflows stay Pending (ImagePullBackOff).
+    # Step image for every CWS workflow except cws-image-build. The module controller builds it on
+    # enable when missing (imageTag=latest); until it exists those workflows stay Pending (ImagePullBackOff).
     dockerfileDir: gitops/modules/cloud-workstations-module/argo-workflows/images/environment
     dockerArtifactPathName: horizon-sdv/cloud-ws-workloads/cws-workflow
     tag: latest
