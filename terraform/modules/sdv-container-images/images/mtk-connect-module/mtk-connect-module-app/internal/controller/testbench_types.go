@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,7 +36,9 @@ const (
 	FinalizerAgentCleanup = "mtkconnect.horizon-sdv.io/agent-cleanup"
 
 	// AnnotationSkipCleanup lets a testbench be deleted while MTK Connect cannot be reached because the
-	// MTKConnectInstance no longer exists. The agent, if there is one, is then left behind.
+	// MTKConnectInstance no longer exists. The agent and its registration are left behind. The Jenkins
+	// credential is still deleted. The host key is revoked when the API can be reached, and otherwise
+	// stays until credentialTTL.
 	AnnotationSkipCleanup = "mtkconnect.horizon-sdv.io/skip-agent-cleanup"
 
 	// registrationPrefix marks the agents this controller created.
@@ -44,6 +47,11 @@ const (
 
 	defaultPermission = "book"
 	everyoneGroup     = "everyone"
+
+	// defaultCredentialTTL is how long a host credential stays valid when the spec omits credentialTTL.
+	defaultCredentialTTL = "6h"
+	// maxCredentialTTL is the longest credentialTTL the controller accepts. The admission policy uses the same cap.
+	maxCredentialTTL = 24 * time.Hour
 
 	// LabelSubmittedFrom records which integration created the testbench (developer-portal, horizon-cli, api, custom).
 	LabelSubmittedFrom = "horizon-sdv.io/submitted-from"
@@ -69,11 +77,12 @@ const (
 	TbCondInstanceReady  = "InstanceReady"
 	TbCondAgentProvision = "AgentProvisioned"
 	TbCondAccessGranted  = "AccessGranted"
+	TbCondHostCredential = "HostCredential"
 	TbCondAgentOnline    = "AgentOnline"
 )
 
 var testbenchConditionOrder = []string{
-	TbCondSpecValid, TbCondInstanceReady, TbCondAgentProvision, TbCondAccessGranted, TbCondAgentOnline,
+	TbCondSpecValid, TbCondInstanceReady, TbCondAgentProvision, TbCondAccessGranted, TbCondHostCredential, TbCondAgentOnline,
 }
 
 var testbenchPhases = []string{
@@ -88,14 +97,16 @@ type TestbenchAccess struct {
 }
 
 // TestbenchSpec is the spec of MTKConnectTestbench. It is the agent record only, and it is immutable once
-// created. Devices are their own resource, added with the device story, so this spec has no device fields.
+// created. Devices are their own resource. credentialTTL is how long the host credential stays valid.
 type TestbenchSpec struct {
-	DisplayName string          `json:"displayName,omitempty"`
-	Access      TestbenchAccess `json:"access,omitempty"`
+	DisplayName   string          `json:"displayName,omitempty"`
+	Access        TestbenchAccess `json:"access,omitempty"`
+	CredentialTTL string          `json:"credentialTTL,omitempty"`
 }
 
 func (s *TestbenchSpec) applyDefaults(name string) {
 	s.DisplayName = orDefault(s.DisplayName, name)
+	s.CredentialTTL = orDefault(s.CredentialTTL, defaultCredentialTTL)
 	s.Access.Permission = orDefault(s.Access.Permission, defaultPermission)
 	users := make([]string, 0, len(s.Access.Users))
 	seen := map[string]bool{}
@@ -113,6 +124,9 @@ func (s *TestbenchSpec) applyDefaults(name string) {
 func (s *TestbenchSpec) validate() error {
 	if !s.Access.Public && len(s.Access.Users) == 0 {
 		return fmt.Errorf("spec.access: set public to true or list at least one user")
+	}
+	if _, err := credentialTTL(s.CredentialTTL); err != nil {
+		return err
 	}
 	return nil
 }
@@ -138,6 +152,18 @@ func parseTestbenchSpec(obj *unstructured.Unstructured) (*TestbenchSpec, error) 
 		return nil, fmt.Errorf("label %s is required", LabelSubmittedFrom)
 	}
 	return &spec, nil
+}
+
+// credentialTTL parses spec.credentialTTL. An empty value is the default. Longer than maxCredentialTTL is rejected.
+func credentialTTL(raw string) (time.Duration, error) {
+	d, err := time.ParseDuration(orDefault(raw, defaultCredentialTTL))
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("spec.credentialTTL %q is not a positive duration", raw)
+	}
+	if d > maxCredentialTTL {
+		return 0, fmt.Errorf("spec.credentialTTL %q is longer than %s", raw, maxCredentialTTL)
+	}
+	return d, nil
 }
 
 // registrationFor returns the registration name of the testbench's agent. It is derived from the resource's

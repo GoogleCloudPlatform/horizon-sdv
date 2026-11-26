@@ -74,18 +74,18 @@ testbenchPolicy:
     - developer-portal
     - horizon-cli
     - custom
+  # Longest spec.credentialTTL the admission policy accepts.
+  maxCredentialTTL: 24h
 # Portal path reported in status.url; {id} is replaced by the agent id. Empty uses the portal root /mtk-connect/.
 testbenchURLPath: ""
 
-# Secrets that receive the service-account credentials, in addition to mtk-connect-apikey.
-# namespaceSuffix is appended to config.namespacePrefix.
+# Secrets that receive the admin service-account credentials, in addition to mtk-connect-apikey.
+# namespaceSuffix is appended to config.namespacePrefix. Jenkins is deliberately not a target: Jenkins jobs
+# use the per-testbench <testbench>-agent Secret (a short-lived mtk-connect-agent key) instead.
 credentialDistribution:
-  - namespaceSuffix: jenkins
-    secretName: jenkins-mtk-connect-apikey
-    jenkinsCredential: true
   - namespaceSuffix: workflows
     secretName: workflow-mtk-connect-apikey
     labels:
       horizon-sdv.io/credentials-purpose: mtk-connect-argowf
     annotations:
-      horizon-sdv.io/description: MTK Connect API key for Argo workflows (CVD/CTS); same credentials as jenkins-mtk-connect-apikey
+      horizon-sdv.io/description: MTK Connect admin API key for Argo workflows (CVD/CTS)

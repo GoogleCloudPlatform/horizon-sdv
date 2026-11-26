@@ -38,27 +38,25 @@ MTKC_APIKEY=$(kubectl exec "${MTK_CONNECT_POD}" -n "${NAMESPACE}" -c authenticat
 log "Service account API key created (length=${#MTKC_APIKEY})"
 
 log "Preparing secret manifests"
-sed -i "s/##MTKC_APIKEY##/${MTKC_APIKEY}/g" ./secret-jenkins.json
-sed -i "s/##NAMESPACE##/${NAMESPACE_PREFIX}jenkins/g" ./secret-jenkins.json
 sed -i "s/##MTKC_APIKEY##/${MTKC_APIKEY}/g" ./secret-mtk-connect.json
 sed -i "s/##NAMESPACE##/${NAMESPACE_PREFIX}mtk-connect/g" ./secret-mtk-connect.json
 sed -i "s/##MTKC_APIKEY##/${MTKC_APIKEY}/g" ./secret-workflows.json
 sed -i "s/##NAMESPACE##/${NAMESPACE_PREFIX}workflows/g" ./secret-workflows.json
 
-# DELETE may 404 on first run when secrets do not exist yet
-log "Creating jenkins secret in namespace=${NAMESPACE_PREFIX}jenkins"
-curl -sS -o /dev/null -w 'DELETE jenkins-mtk-connect-apikey: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets/jenkins-mtk-connect-apikey" || true
-curl -fsS -o /dev/null -w 'POST jenkins-mtk-connect-apikey: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets" -d @secret-jenkins.json
-log "Jenkins secret created"
+# The admin key is not a Jenkins credential. Remove one left by an older image. DELETE may 404.
+log "Removing admin API key from namespace=${NAMESPACE_PREFIX}jenkins"
+curl -sf --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets/jenkins-mtk-connect-apikey || true
+log "Jenkins admin secret removed"
 
 log "Creating mtk-connect secret in namespace=${NAMESPACE_PREFIX}mtk-connect"
-curl -sS -o /dev/null -w 'DELETE mtk-connect-apikey: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mtk-connect/secrets/mtk-connect-apikey" || true
-curl -fsS -o /dev/null -w 'POST mtk-connect-apikey: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mtk-connect/secrets" -d @secret-mtk-connect.json
+curl -sf --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mtk-connect/secrets/mtk-connect-apikey || true
+# -f fails the script when the write is rejected. -o /dev/null keeps the Secret body, which contains the key, out of the log.
+curl -sf -o /dev/null --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mtk-connect/secrets -d @secret-mtk-connect.json
 log "mtk-connect secret created"
 
 log "Creating workflows secret in namespace=${NAMESPACE_PREFIX}workflows"
-curl -sS -o /dev/null -w 'DELETE workflow-mtk-connect-apikey: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}workflows/secrets/workflow-mtk-connect-apikey" || true
-curl -fsS -o /dev/null -w 'POST workflow-mtk-connect-apikey: %{http_code}\n' --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}workflows/secrets" -d @secret-workflows.json
+curl -sf --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}workflows/secrets/workflow-mtk-connect-apikey || true
+curl -sf -o /dev/null --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}workflows/secrets -d @secret-workflows.json
 log "Workflows secret created"
 
 log "Script end"

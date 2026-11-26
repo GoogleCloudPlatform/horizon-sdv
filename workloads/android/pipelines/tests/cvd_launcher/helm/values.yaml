@@ -45,8 +45,8 @@ spec:
   pipelineRepoSecret: workflow-pipeline-git-creds
   serviceAccountName: workflow-executor
   useElevatedWorkflowIam: true
-  # MTK Connect: mirrors Jenkins jenkins-mtk-connect-apikey (username/password keys). Created by
-  # mtk-connect-post-job configure.sh in the workflows namespace; rotated by mtk-connect-post-key.
+  # MTK Connect admin API key (username/password). Created by mtk-connect-post-job configure.sh
+  # in the workflows namespace; rotated by mtk-connect-post-key. Jenkins uses <testbench>-agent instead.
   mtkConnectSecretName: "workflow-mtk-connect-apikey"
   mtkConnectUsernameKey: "username"
   mtkConnectPasswordKey: "password"

@@ -61,6 +61,10 @@ type TestbenchAPI interface {
 	DeleteRegistration(ctx context.Context, name string) error
 	GrantGroupByName(ctx context.Context, agentID, group, permission string) error
 	GrantUserByName(ctx context.Context, agentID, username, permission string) error
+	EnsureUser(ctx context.Context, username string) (string, error)
+	CreateKey(ctx context.Context, userID string, expiry time.Time) (string, error)
+	Keys(ctx context.Context, userID string) ([]mtk.Key, error)
+	DeleteKey(ctx context.Context, userID, keyID string) error
 }
 
 // TestbenchReconciler reconciles MTKConnectTestbench.
@@ -79,6 +83,10 @@ type TestbenchReconciler struct {
 	// URLPath is the portal path reported in status.url; {id} is replaced by the agent id.
 	URLPath string
 
+	// JenkinsNamespace is where the Kubernetes credentials provider reads Secrets. The host credential
+	// is copied there as <testbench>-agent so a Jenkins job can bind it. Empty skips that copy.
+	JenkinsNamespace string
+
 	// WatchNamespaces are the namespaces whose testbenches are counted. A list without a namespace is
 	// cluster-scoped, and this account only has a Role in each of these namespaces.
 	WatchNamespaces []string
@@ -92,10 +100,23 @@ type testbenchStatus struct {
 	AgentID       string
 	Registration  string
 	TokenSecret   string // namespace/name of the Secret that holds the registration token, never the token
+	HostSecret    string // namespace/name of the Secret that holds the host credential, never the key
 	URL           string
 	AccessGranted bool
 	Generation    int64
 	Conditions    map[string]*condition
+
+	// The host keys issued for this testbench, by id only. Revocation reads them from here, not from the
+	// host Secret, so a deleted or never-written Secret does not leave a key alive.
+	HostKeyID       string
+	HostKeyExpiry   time.Time
+	RetiredHostKeys []retiredHostKey
+}
+
+// retiredHostKey is a superseded host key that stays valid until RevokeAfter.
+type retiredHostKey struct {
+	ID          string
+	RevokeAfter time.Time
 }
 
 func (r *TestbenchReconciler) now() time.Time {
@@ -182,7 +203,7 @@ func (r *TestbenchReconciler) sync(ctx context.Context, tb *unstructured.Unstruc
 		st.Phase = TbPending
 	}
 
-	api, domain, err := r.connect(ctx)
+	api, conn, err := r.connect(ctx)
 	if err != nil {
 		reason := reasonInstanceNotReady
 		logger.Info("MTK Connect is not reachable yet", "reason", err.Error())
@@ -233,7 +254,7 @@ func (r *TestbenchReconciler) sync(ctx context.Context, tb *unstructured.Unstruc
 		r.event(ctx, tb, corev1.EventTypeNormal, "AgentCreated", fmt.Sprintf("created MTK Connect agent %s (registration %s)", created.ID, registration))
 	}
 	st.AgentID = agent.ID
-	st.URL = testbenchURL(domain, r.URLPath, agent.ID)
+	st.URL = testbenchURL(conn.Domain, r.URLPath, agent.ID)
 	r.setCondition(ctx, tb, st, TbCondAgentProvision, true, "Provisioned", "")
 	if st.Phase == TbPending {
 		st.Phase = TbAgentProvisioned
@@ -248,6 +269,22 @@ func (r *TestbenchReconciler) sync(ctx context.Context, tb *unstructured.Unstruc
 		st.AccessGranted = true
 	}
 	r.setCondition(ctx, tb, st, TbCondAccessGranted, true, "Granted", "")
+
+	token, err := r.registrationToken(ctx, registration)
+	if err != nil {
+		logger.Error(err, "registration token unavailable")
+		r.setCondition(ctx, tb, st, TbCondHostCredential, false, "TokenFailed", err.Error())
+		return testbenchRetryDelay
+	}
+	st.TokenSecret = r.ManagerNamespace + "/" + testbenchTokenSecret
+	ref, err := r.ensureHostCredential(ctx, tb, st, api, registration, token, spec.CredentialTTL, conn.Overlap)
+	if err != nil {
+		logger.Error(err, "host credential failed")
+		r.setCondition(ctx, tb, st, TbCondHostCredential, false, "CredentialFailed", err.Error())
+		return testbenchRetryDelay
+	}
+	st.HostSecret = ref
+	r.setCondition(ctx, tb, st, TbCondHostCredential, true, "Issued", "")
 
 	switch {
 	case agent.Online:
@@ -288,8 +325,31 @@ func (r *TestbenchReconciler) finalize(ctx context.Context, tb *unstructured.Uns
 	logger := log.FromContext(ctx)
 
 	if tb.GetAnnotations()[AnnotationSkipCleanup] == "true" {
-		logger.Info("skipping agent cleanup as requested", "annotation", AnnotationSkipCleanup)
-		r.event(ctx, tb, corev1.EventTypeWarning, "CleanupSkipped", "the MTK Connect agent was not deleted ("+AnnotationSkipCleanup+")")
+		// The agent and its registration stay. The Jenkins Secret has no cross-namespace owner, so it is
+		// still deleted. The host key is revoked when the API can be reached; otherwise it expires at credentialTTL.
+		if err := r.deleteJenkinsCredential(ctx, tb); err != nil {
+			logger.Error(err, "skip cleanup: jenkins credential was not deleted")
+			r.event(ctx, tb, corev1.EventTypeWarning, "CleanupFailed", err.Error())
+			return ctrl.Result{RequeueAfter: testbenchRetryDelay}, nil
+		}
+		revoked := false
+		if api, _, err := r.connect(ctx); err != nil {
+			logger.Info("host key left until credentialTTL; MTK Connect cannot be reached", "annotation", AnnotationSkipCleanup)
+		} else if err := r.revokeHostCredential(ctx, api, tb, loadTestbenchStatus(tb)); err != nil {
+			logger.Error(err, "skip cleanup: host key was not revoked")
+			r.event(ctx, tb, corev1.EventTypeWarning, "CleanupFailed", err.Error())
+			return ctrl.Result{RequeueAfter: testbenchRetryDelay}, nil
+		} else {
+			revoked = true
+		}
+		msg := "the MTK Connect agent was not deleted (" + AnnotationSkipCleanup + ")"
+		if revoked {
+			msg += "; the host key was revoked and the Jenkins credential was removed"
+		} else {
+			msg += "; the Jenkins credential was removed and the host key stays until credentialTTL"
+		}
+		logger.Info("skipping agent and registration cleanup", "annotation", AnnotationSkipCleanup)
+		r.event(ctx, tb, corev1.EventTypeWarning, "CleanupSkipped", msg)
 		return ctrl.Result{}, r.removeFinalizer(ctx, tb)
 	}
 
@@ -325,6 +385,12 @@ func (r *TestbenchReconciler) finalize(ctx context.Context, tb *unstructured.Uns
 		err = api.DeleteRegistration(ctx, registration)
 	}
 	if err == nil {
+		err = r.revokeHostCredential(ctx, api, tb, st)
+	}
+	if err == nil {
+		err = r.deleteJenkinsCredential(ctx, tb)
+	}
+	if err == nil {
 		err = r.forgetRegistrationToken(ctx, registration)
 	}
 	if err != nil {
@@ -347,12 +413,12 @@ func (r *TestbenchReconciler) removeFinalizer(ctx context.Context, tb *unstructu
 
 // connect builds an MTK Connect client from the MTKConnectInstance in the manager namespace. The
 // instance is the single place that says where the server is and which Secret holds the API key.
-func (r *TestbenchReconciler) connect(ctx context.Context) (TestbenchAPI, string, error) {
+func (r *TestbenchReconciler) connect(ctx context.Context) (TestbenchAPI, *connection, error) {
 	conn, err := loadConnection(ctx, r.Client, r.Direct, r.ManagerNamespace, r.instanceName())
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
-	return r.NewAPI(conn.ServerURL, conn.Username, conn.Key), conn.Domain, nil
+	return r.NewAPI(conn.ServerURL, conn.Username, conn.Key), conn, nil
 }
 
 // connection says how to reach MTK Connect.
@@ -361,6 +427,8 @@ type connection struct {
 	Username  string
 	Key       string
 	Domain    string
+	// Overlap is spec.keyRotation.overlap: how long a superseded key stays valid before it is revoked.
+	Overlap time.Duration
 }
 
 // loadConnection reads the server URL, user and API key from the MTKConnectInstance and its API key Secret.
@@ -373,7 +441,7 @@ func loadConnection(ctx context.Context, reader, direct client.Reader, namespace
 		}
 		return nil, fmt.Errorf("read MTKConnectInstance: %w", err)
 	}
-	spec, _, err := parseSpec(inst)
+	spec, timings, err := parseSpec(inst)
 	if err != nil {
 		return nil, fmt.Errorf("MTKConnectInstance is invalid: %w", err)
 	}
@@ -384,7 +452,7 @@ func loadConnection(ctx context.Context, reader, direct client.Reader, namespace
 	if !found {
 		return nil, errInstanceNotReady
 	}
-	return &connection{ServerURL: spec.Server.URL, Username: spec.ServiceAccountUser, Key: password, Domain: spec.Domain}, nil
+	return &connection{ServerURL: spec.Server.URL, Username: spec.ServiceAccountUser, Key: password, Domain: spec.Domain, Overlap: timings.Overlap}, nil
 }
 
 func (r *TestbenchReconciler) setCondition(ctx context.Context, tb *unstructured.Unstructured, st *testbenchStatus, typ string, ok bool, reason, message string) {
@@ -436,8 +504,27 @@ func loadTestbenchStatus(tb *unstructured.Unstructured) *testbenchStatus {
 	st.AgentID, _, _ = unstructured.NestedString(tb.Object, "status", "agentId")
 	st.Registration, _, _ = unstructured.NestedString(tb.Object, "status", "registration")
 	st.TokenSecret, _, _ = unstructured.NestedString(tb.Object, "status", "registrationTokenSecret")
+	st.HostSecret, _, _ = unstructured.NestedString(tb.Object, "status", "agentCredentialSecret")
 	st.URL, _, _ = unstructured.NestedString(tb.Object, "status", "url")
 	st.AccessGranted, _, _ = unstructured.NestedBool(tb.Object, "status", "accessGranted")
+	st.HostKeyID, _, _ = unstructured.NestedString(tb.Object, "status", "hostKeyId")
+	expiry, _, _ := unstructured.NestedString(tb.Object, "status", "hostKeyExpiry")
+	st.HostKeyExpiry, _ = time.Parse(time.RFC3339, expiry)
+	retired, _, _ := unstructured.NestedSlice(tb.Object, "status", "retiredHostKeys")
+	for _, item := range retired {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id, _ := m["id"].(string)
+		after, _ := m["revokeAfter"].(string)
+		if id == "" {
+			continue
+		}
+		// An unreadable time is the zero time, so the key is revoked on the next reconcile.
+		at, _ := time.Parse(time.RFC3339, after)
+		st.RetiredHostKeys = append(st.RetiredHostKeys, retiredHostKey{ID: id, RevokeAfter: at})
+	}
 	return st
 }
 
@@ -475,8 +562,22 @@ func (r *TestbenchReconciler) writeStatus(ctx context.Context, tb *unstructured.
 	if st.TokenSecret != "" {
 		status["registrationTokenSecret"] = st.TokenSecret
 	}
+	if st.HostSecret != "" {
+		status["agentCredentialSecret"] = st.HostSecret
+	}
 	if st.URL != "" {
 		status["url"] = st.URL
+	}
+	if st.HostKeyID != "" {
+		status["hostKeyId"] = st.HostKeyID
+		status["hostKeyExpiry"] = st.HostKeyExpiry.UTC().Format(time.RFC3339)
+	}
+	if len(st.RetiredHostKeys) > 0 {
+		retired := make([]interface{}, 0, len(st.RetiredHostKeys))
+		for _, k := range st.RetiredHostKeys {
+			retired = append(retired, map[string]interface{}{"id": k.ID, "revokeAfter": k.RevokeAfter.UTC().Format(time.RFC3339)})
+		}
+		status["retiredHostKeys"] = retired
 	}
 	orig := tb.DeepCopy()
 	if err := unstructured.SetNestedField(tb.Object, status, "status"); err != nil {

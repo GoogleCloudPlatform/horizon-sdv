@@ -73,6 +73,12 @@ spec:
                   minLength: 1
                   maxLength: 63
                   description: Name shown in MTK Connect. Defaults to the resource name.
+                credentialTTL:
+                  type: string
+                  default: 6h
+                  description: >-
+                    How long the host credential for this testbench stays valid. The controller replaces it
+                    before it expires. The admission policy caps it (default 24h).
                 access:
                   type: object
                   description: Who may book the testbench.
@@ -120,6 +126,25 @@ spec:
                 registrationTokenSecret:
                   type: string
                   description: Namespace and name of the Secret that holds the registration token, under the key status.registration. The token itself is never shown here.
+                agentCredentialSecret:
+                  type: string
+                  description: Namespace and name of the Secret that holds the short-lived host credential. The key itself is never shown here.
+                hostKeyId:
+                  type: string
+                  description: Id of the current host key. It is recorded before the key is written to the host Secret, and the key is revoked from this record on delete.
+                hostKeyExpiry:
+                  type: string
+                  description: When the current host key expires (RFC 3339).
+                retiredHostKeys:
+                  type: array
+                  description: Replaced host keys that stay valid until revokeAfter (the instance's keyRotation.overlap, or the key's expiry if sooner), then are revoked.
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      revokeAfter:
+                        type: string
                 url:
                   type: string
                   description: Portal page of the testbench.

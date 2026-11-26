@@ -132,6 +132,7 @@ func main() {
 		ManagerNamespace: managerNS,
 		InstanceName:     os.Getenv("INSTANCE_NAME"),
 		URLPath:          os.Getenv("TESTBENCH_URL_PATH"),
+		JenkinsNamespace: envOr("JENKINS_NAMESPACE", "jenkins"),
 		WatchNamespaces:  testbenchNamespaces,
 		NewAPI: func(serverURL, username, key string) controller.TestbenchAPI {
 			return mtk.New(serverURL, username, key, mtkHTTP)

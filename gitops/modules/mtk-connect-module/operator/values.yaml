@@ -57,6 +57,8 @@ testbenchPolicy:
     - developer-portal
     - horizon-cli
     - custom
+  # Longest spec.credentialTTL the admission policy accepts.
+  maxCredentialTTL: 24h
 
 # Portal path reported in status.url; {id} is replaced by the agent id. Empty uses the portal root /mtk-connect/.
 testbenchURLPath: ""

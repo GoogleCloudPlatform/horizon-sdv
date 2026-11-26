@@ -202,47 +202,22 @@ def update_secret_value(secret_name, namespace, new_value, key="password"):
   return result
 
 
-def create_or_update_jenkins_secret(secret_name, namespace, username, password):
+def delete_jenkins_admin_secret(secret_name, namespace):
   """
-  Creates the Jenkins credential secret if it does not exist, otherwise updates
-  the password. Ensures the credential ID 'jenkins-mtk-connect-apikey' exists
-  even when mtk-connect-post-job has not run or failed.
-  Returns result flag: True if operation was successful.
+  Removes the admin API key from Jenkins. Jenkins jobs use the per-testbench
+  <testbench>-agent credential instead. A missing Secret is already removed.
+  Returns True when the Secret is gone.
   """
-  result = False
   v1 = get_k8s_client()
   try:
-    secret = v1.read_namespaced_secret(name=secret_name, namespace=namespace)
-    if secret.data is None:
-      secret.data = {}
-    secret.data["password"] = base64.b64encode(password.encode()).decode()
-    if "username" not in (secret.data or {}):
-      secret.data["username"] = base64.b64encode(username.encode()).decode()
-    v1.replace_namespaced_secret(name=secret_name, namespace=namespace, body=secret)
-    print(f"Updated Jenkins secret '{secret_name}' with new password.")
-    result = True
+    v1.delete_namespaced_secret(name=secret_name, namespace=namespace)
+    print(f"Deleted Jenkins admin secret '{secret_name}'.")
   except client.exceptions.ApiException as e:
     if e.status == 404:
-      print(f"Secret '{secret_name}' not found in namespace '{namespace}'; creating it.")
-      body = client.V1Secret(
-        metadata=client.V1ObjectMeta(
-          name=secret_name,
-          namespace=namespace,
-          labels={"jenkins.io/credentials-type": "usernamePassword"},
-          annotations={"jenkins.io/credentials-description": "MTK Connect APIKEY"},
-        ),
-        type="Opaque",
-        data={
-          "username": base64.b64encode(username.encode()).decode(),
-          "password": base64.b64encode(password.encode()).decode(),
-        },
-      )
-      v1.create_namespaced_secret(namespace=namespace, body=body)
-      print(f"Created Jenkins secret '{secret_name}'.")
-      result = True
+      print(f"Jenkins admin secret '{secret_name}' is already absent.")
     else:
       raise e
-  return result
+  return True
 
 def log_step(step, message, success=None):
   status = ""
@@ -298,11 +273,9 @@ if __name__ == "__main__":
     log_step(6, "mtk-connect secret update", success=operation_result)
 
   if operation_result:
-    log_step(7, f"Creating/updating Jenkins secret {SECRET_NAME_JENKINS} in {NAMESPACE_JENKINS}")
-    operation_result = create_or_update_jenkins_secret(
-        SECRET_NAME_JENKINS, NAMESPACE_JENKINS, USERNAME, KEY_VAL
-    )
-    log_step(7, "Jenkins secret create/update", success=operation_result)
+    log_step(7, f"Removing Jenkins admin secret {SECRET_NAME_JENKINS} in {NAMESPACE_JENKINS}")
+    operation_result = delete_jenkins_admin_secret(SECRET_NAME_JENKINS, NAMESPACE_JENKINS)
+    log_step(7, "Jenkins admin secret removed", success=operation_result)
 
   if operation_result:
     log_step(8, "GET_CURRENT_USER (identify old keys for deletion)")
