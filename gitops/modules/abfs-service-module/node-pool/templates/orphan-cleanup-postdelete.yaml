@@ -89,7 +89,6 @@ spec:
                 label="$(gcloud container node-pools describe "$1" "${G[@]}" --format='value(config.labels.workloadLabel)' 2>/dev/null)" || return 1
                 [[ -n "$2" && "${label}" == "$2" ]]
               }
-              if ! command -v kubectl >/dev/null 2>&1; then gcloud components install kubectl --quiet; fi
               if ! command -v kubectl >/dev/null 2>&1; then
                 warn "kubectl is not available — nothing deleted; the next enable removes an orphan (PreSync licence job)."
                 exit 0

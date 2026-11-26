@@ -30,8 +30,7 @@ identityConfigMapName: abfs-license-sa-identity
 # Helm-owned Secret placeholder (key license); created on enable, deleted on disable.
 licenseSecretName: abfs-license
 
-# Jobs need gcloud + kubectl. Use debian_component_based so kubectl can be
-# installed at runtime (google-cloud-cli:stable does not ship kubectl).
+# Jobs need gcloud + kubectl (the google-cloud-cli 591.0.0 image set by the parent includes both).
 jobServiceAccountName: workflow-executor-elevated
 # cloudSdkImage is set by the abfs-data-module Application.
 

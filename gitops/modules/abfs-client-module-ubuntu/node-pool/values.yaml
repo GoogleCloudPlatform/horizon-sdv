@@ -46,5 +46,5 @@ cleanup:
   workflowsNamespace: workflows
   # WI → gke-argo-workflows-elevated-sa (roles/container.admin), same as the abfs-service-module licence jobs.
   jobServiceAccountName: workflow-executor-elevated
-  # google-cloud-cli image (gcloud + kubectl component); set by the parent Application.
+  # google-cloud-cli image with gcloud and kubectl; set by the parent Application.
   cloudSdkImage: ""

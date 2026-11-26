@@ -28,6 +28,11 @@ metadata:
     horizon-sdv.io/module: {{ .Values.moduleName }}
     horizon-sdv.io/app-role: child
     horizon-sdv.io/module-manager-managed: "true"
+  annotations:
+    # Wave 1: the parent creates the overview Namespace (wave 0) first, and on
+    # disable deletes this Application — including PostDelete — before that
+    # Namespace. The cleanup Role lives in the Namespace.
+    argocd.argoproj.io/sync-wave: "1"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
     # Argo CD adds these two itself because the chart has a PostDelete hook.

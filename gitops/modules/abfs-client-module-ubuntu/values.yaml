@@ -104,7 +104,9 @@ casfs:
     tolerations: []
 # Orphan GKE node-pool cleanup hooks of the node-pool child Application (see node-pool/templates/orphan-cleanup-hooks.yaml).
 cleanup:
-  # -- cleanup.image -- google-cloud-cli used by the PreSync/PostDelete jobs (gcloud + kubectl component).
-  # Same pin as abfs-service-module license.validation.image (SDK 591.0.0); bump both together.
-  image: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based@sha256:f455f6bfd3d66abe3131ddff47d95c5f01061e8e91937285adcf2a86b5c82e48
+  # -- cleanup.image -- google-cloud-cli used by the PreSync/PostDelete jobs (gcloud + kubectl).
+  # Debian google-cloud-cli 591.0.0, which includes kubectl. The
+  # debian_component_based tag does not, and the Jobs must not install it at runtime.
+  # Same digest in both client modules, abfs-service-module and abfs-data-module.
+  image: gcr.io/google.com/cloudsdktool/google-cloud-cli:591.0.0@sha256:321817fbd59629f12034d736d78b0067ae19f25494c8554f0462de320c2f1eac
 config: {}

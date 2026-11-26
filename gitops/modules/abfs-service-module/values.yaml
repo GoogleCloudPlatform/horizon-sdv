@@ -57,8 +57,10 @@ license:
     serviceAccountName: abfs-license-validator
     # google-cloud-cli image for the data-plane jobs and the node-pool licence jobs.
     # Passed through as license.validation.image and license.cloudSdkImage.
-    # Pinned by digest (SDK 591.0.0): newer builds of this tag have no python3 on PATH, which the ABFS scripts need. Bump digest and re-test before changing.
-    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based@sha256:f455f6bfd3d66abe3131ddff47d95c5f01061e8e91937285adcf2a86b5c82e48
+    # Debian google-cloud-cli 591.0.0, which includes kubectl. The
+    # debian_component_based tag does not, and the Jobs must not install it at runtime.
+    # Same digest in both client modules, abfs-service-module and abfs-data-module.
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:591.0.0@sha256:321817fbd59629f12034d736d78b0067ae19f25494c8554f0462de320c2f1eac
 
 # VPA objects render when licensed; requires GKE vertical_pod_autoscaling addon.
 vpa:

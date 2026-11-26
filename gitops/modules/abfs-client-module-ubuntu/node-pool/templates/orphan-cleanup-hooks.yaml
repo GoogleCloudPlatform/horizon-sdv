@@ -167,7 +167,6 @@ spec:
                 return 1
               }
 
-              if ! command -v kubectl >/dev/null 2>&1; then gcloud components install kubectl --quiet; fi
               if ! command -v kubectl >/dev/null 2>&1; then
                 if [[ "${PHASE}" == "PreSync" ]]; then echo "ERROR: kubectl is not available; nothing is deleted." >&2; exit 1; fi
                 echo "WARNING: kubectl is not available; nothing is deleted. The next enable removes an orphan (PreSync)." >&2

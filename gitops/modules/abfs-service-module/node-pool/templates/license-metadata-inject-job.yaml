@@ -183,7 +183,7 @@ spec:
                 fi
                 echo "Deleting ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME} (if present)..."
                 kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
-                  --ignore-not-found=true --wait=true --timeout=45m || true
+                  --ignore-not-found=true --wait=true --timeout=45m
                 state="$(gke_pool_state)" || return 1
                 if [[ "${state}" == "absent" ]]; then
                   return 0
@@ -472,7 +472,7 @@ spec:
                   return 1
                 fi
                 kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
-                  --ignore-not-found=true --wait=true --timeout=45m || true
+                  --ignore-not-found=true --wait=true --timeout=45m
                 state="$(gke_pool_state)" || return 1
                 if [[ "${state}" == "absent" ]]; then
                   return 0
