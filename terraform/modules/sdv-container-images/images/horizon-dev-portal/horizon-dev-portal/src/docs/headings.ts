@@ -20,28 +20,29 @@ export type DocHeading = {
   id: string;
 };
 
-function decodeEntities(value: string): string {
-  return value
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ');
+/**
+ * Text content of an HTML fragment: tags dropped, entities decoded exactly once.
+ * The browser parser does this in one pass, so no tag can be rebuilt from what is
+ * left (`<<b>script>`) and `&amp;lt;` stays `&lt;`. The document from DOMParser is
+ * inert: scripts do not run and nothing is fetched. The result is only ever
+ * rendered as React text, never as HTML.
+ */
+function htmlToText(value: string): string {
+  if (!value.includes('<') && !value.includes('&')) {
+    return value;
+  }
+  return new DOMParser().parseFromString(value, 'text/html').body.textContent ?? '';
 }
 
 /** Visible heading text, with Markdown emphasis and inline HTML removed. */
 export function plainHeadingText(raw: string): string {
-  return decodeEntities(
-    raw
-      .replace(/<[^>]+>/g, '')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-      .replace(/(\*\*|__)(.*?)\1/g, '$2')
-      .replace(/(\*|_)(.*?)\1/g, '$2')
-      .replace(/`([^`]+)`/g, '$1')
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
+  return htmlToText(raw)
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
