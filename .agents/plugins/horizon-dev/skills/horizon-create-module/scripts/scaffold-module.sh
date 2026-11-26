@@ -845,6 +845,11 @@ spec:
               dest: metadata.annotations.horizon-sdv\.io/submitted-by
             - src:
                 dependencyName: webhook-dep
+                dataKey: body.submittedBy
+                value: ""
+              dest: metadata.annotations.horizon-sdv\.io/submitted-by-name
+            - src:
+                dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedFrom
               dest: metadata.labels.horizon-sdv\.io/submitted-from
             - src:
@@ -903,6 +908,11 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedBy
               dest: metadata.annotations.horizon-sdv\.io/submitted-by
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.submittedBy
+                value: ""
+              dest: metadata.annotations.horizon-sdv\.io/submitted-by-name
             - src:
                 dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedFrom

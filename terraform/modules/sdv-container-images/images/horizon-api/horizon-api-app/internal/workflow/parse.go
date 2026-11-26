@@ -22,15 +22,31 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-// StartedBy returns the Horizon portal subject (sensor annotation), else Argo UI creator labels when set.
+// Owner returns the token subject of the caller who submitted the workflow through Horizon API
+// (annotation horizon-sdv.io/submitted-by), or "" when none was recorded.
+func Owner(u *unstructured.Unstructured) string {
+	if u == nil {
+		return ""
+	}
+	return strings.TrimSpace(u.GetAnnotations()[LabelSubmittedBy])
+}
+
+// StartedBy returns a name to display for who started the workflow: the submitter's username
+// (annotation horizon-sdv.io/submitted-by-name), else the submittedBy workflow parameter, else
+// the owner, else Argo UI creator labels when set. Workflows from sensors that do not map the
+// username yet (for example a module pinned to an older revision) fall back to the later sources.
 func StartedBy(u *unstructured.Unstructured) string {
 	if u == nil {
 		return ""
 	}
-	if ann := u.GetAnnotations(); ann != nil {
-		if v := strings.TrimSpace(ann[LabelSubmittedBy]); v != "" {
-			return v
-		}
+	if v := strings.TrimSpace(u.GetAnnotations()[AnnotationSubmittedByName]); v != "" {
+		return v
+	}
+	if v := argumentValue(u, SubmitParamSubmittedBy); v != "" {
+		return v
+	}
+	if v := Owner(u); v != "" {
+		return v
 	}
 	if labels := u.GetLabels(); labels != nil {
 		for _, k := range []string{
@@ -41,6 +57,23 @@ func StartedBy(u *unstructured.Unstructured) string {
 			if v := strings.TrimSpace(labels[k]); v != "" {
 				return v
 			}
+		}
+	}
+	return ""
+}
+
+// argumentValue returns the value of a workflow argument parameter (spec.arguments.parameters), or "".
+func argumentValue(u *unstructured.Unstructured, name string) string {
+	raw, _, _ := unstructured.NestedFieldNoCopy(u.Object, "spec", "arguments", "parameters")
+	params, _ := raw.([]interface{})
+	for _, p := range params {
+		m, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if n, _ := m["name"].(string); n == name {
+			v, _ := m["value"].(string)
+			return strings.TrimSpace(v)
 		}
 	}
 	return ""
@@ -161,6 +194,7 @@ func summaryWithArchivePods(u *unstructured.Unstructured, ns, defaultBucket stri
 		FinishedAt:       finished,
 		WorkflowTemplate: tplRef,
 		StartedBy:        StartedBy(u),
+		Owner:            Owner(u),
 		SubmittedFrom:    SubmittedFromLabelValue(u),
 		Message:          msg,
 	}

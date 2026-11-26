@@ -26,7 +26,7 @@ limitations under the License.
 {{- end -}}
 
 {{/*
-Sensor trigger: submitted-by / submitted-from, then one mapping per imageBuild parameter.
+Sensor trigger: submitted-by / submitted-by-name / submitted-from, then one mapping per imageBuild parameter.
 src.value is the template default so omitted API fields still submit a Workflow.
 */}}
 {{- define "cws.imageSensor" -}}
@@ -34,6 +34,11 @@ src.value is the template default so omitted API fields still submit a Workflow.
     dependencyName: webhook-dep
     dataKey: body.horizonSubmittedBy
   dest: metadata.annotations.horizon-sdv\.io/submitted-by
+- src:
+    dependencyName: webhook-dep
+    dataKey: body.submittedBy
+    value: ""
+  dest: metadata.annotations.horizon-sdv\.io/submitted-by-name
 - src:
     dependencyName: webhook-dep
     dataKey: body.horizonSubmittedFrom
@@ -443,6 +448,11 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedBy
               dest: metadata.annotations.horizon-sdv\.io/submitted-by
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.submittedBy
+                value: ""
+              dest: metadata.annotations.horizon-sdv\.io/submitted-by-name
             - src:
                 dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedFrom

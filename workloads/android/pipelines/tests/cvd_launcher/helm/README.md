@@ -36,19 +36,18 @@ Helm chart for **`cvd-launcher-on-gce`**: run the same Cuttlefish host scripts a
 
 | Where | Who | Channel |
 |-------|-----|---------|
-| **Developer Portal** | Keycloak **`preferred_username`** via **`authService.getUsername()`** → HTTP header **`X-Horizon-Submitted-By`** and workflow param **`submittedBy`** | Label **`horizon-sdv.io/submitted-from=developer-portal`** |
-| **Horizon API** | Resolves **`horizonSubmittedBy`**: **`X-Horizon-Submitted-By`** → **`parameters.submittedBy`** → OIDC **`sub`** (CLI/REST fallback) | Same webhook body keys; Sensor maps to annotation and **`submittedBy`** |
-| **Horizon CLI / curl** | OIDC **`sub`** unless caller sets **`parameters.submittedBy`** | **`X-Horizon-Submitted-From`**: **`horizon-cli`** / **`api`** |
+| **Developer Portal, Horizon CLI, curl** | Horizon API takes the submitter from the caller's verified access token: **`submittedBy`** = Keycloak **`preferred_username`**, **`horizonSubmittedBy`** = token subject (**`sub`**, the workflow owner). A **`parameters.submittedBy`** or **`X-Horizon-Submitted-By`** sent by the client is ignored | Sensor maps **`body.submittedBy`** to workflow param **`submittedBy`** and to annotation **`horizon-sdv.io/submitted-by-name`** (display only), and **`body.horizonSubmittedBy`** to annotation **`horizon-sdv.io/submitted-by`**. Label **`horizon-sdv.io/submitted-from`**: **`developer-portal`** / **`horizon-cli`** / **`api`** |
+| **Service account with `horizon-api: impersonate`** | May name a user in **`parameters.submittedBy`** or **`X-Horizon-Submitted-By`**; the owner stays the service account | Same webhook body keys |
 | **`argo submit` only** | Often empty → **`jenkins`** fallback for **`BUILD_USER_ID`** | May lack Horizon labels (not listed in Portal) |
 | **Jenkins CVD Launcher job** | **`BUILD_USER_ID`** in Jenkins only | Not an Argo Workflow — does not appear in Portal |
 
 **Portal (after horizon-dev-portal rollout):** **Running / History** show **Triggered from** and **Submitted by** ( **`—`** when unknown). All users see all Horizon-dispatched runs for the module (not filtered to “my” runs).
 
-**kubectl:**
+**kubectl** (owner, then submitter username from the annotation and from the parameter):
 
 ```bash
 kubectl get wf <name> -n <prefix>workflows \
-  -o jsonpath='{.metadata.annotations.horizon-sdv\.io/submitted-by}{"\n"}'
+  -o jsonpath='{.metadata.annotations.horizon-sdv\.io/submitted-by}{"\n"}{.metadata.annotations.horizon-sdv\.io/submitted-by-name}{"\n"}{.spec.arguments.parameters[?(@.name=="submittedBy")].value}{"\n"}'
 ```
 
 ## MTK Connect
@@ -142,7 +141,7 @@ argo submit --from workflowtemplate/cvd-launcher-on-gce -n <prefix>workflows \
   -p enableGeminiAiAssistant=false
 ```
 
-**Webhook:** Sensor **`webhook-cvd-launcher-on-gce`** — `workflowTemplateName: cvd-launcher-on-gce` in the dispatch body. Horizon API sets **`horizonSubmittedBy`**, **`horizonSubmittedFrom`**, and **`submittedBy`** (same resolved username when known). Sensor maps **`body.horizonSubmittedBy`** to annotation **`horizon-sdv.io/submitted-by`** and workflow parameter **`submittedBy`**.
+**Webhook:** Sensor **`webhook-cvd-launcher-on-gce`** — `workflowTemplateName: cvd-launcher-on-gce` in the dispatch body. Horizon API sets **`horizonSubmittedBy`** (token subject), **`horizonSubmittedFrom`**, and **`submittedBy`** (username). Sensor maps **`body.horizonSubmittedBy`** to annotation **`horizon-sdv.io/submitted-by`**, and **`body.submittedBy`** to workflow parameter **`submittedBy`** and annotation **`horizon-sdv.io/submitted-by-name`**.
 
 **GitOps:** Chart is a Helm source on **`workloads-android`**; set **`spec.pipelineRepoUrl`** / **`spec.pipelineRepoRevision`** from module config (same pattern as aaos-builder). Do not rely on manual `kubectl apply` if Argo CD auto-sync is on.
 

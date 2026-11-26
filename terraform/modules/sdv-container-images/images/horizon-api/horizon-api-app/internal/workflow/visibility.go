@@ -28,8 +28,12 @@ import (
 // LabelSubmittedFrom is set on Workflow metadata when the run is dispatched via Horizon (sensor maps webhook body).
 // Values match Argo-style lowercase tokens (compare workflows.argoproj.io/submit-from-ui).
 const LabelSubmittedFrom = "horizon-sdv.io/submitted-from"
-// LabelSubmittedBy is set on Workflow metadata when the run is dispatched via Horizon (sensor maps webhook body).
+// LabelSubmittedBy is the Workflow annotation that holds the owner: the token subject of the
+// caller who submitted the run through Horizon API (sensor maps it from the webhook body).
 const LabelSubmittedBy = "horizon-sdv.io/submitted-by"
+// AnnotationSubmittedByName is the Workflow annotation with the submitter's username, for display
+// only (sensors map it from the submittedBy webhook field). Never use it for access decisions.
+const AnnotationSubmittedByName = "horizon-sdv.io/submitted-by-name"
 const LabelModule = "horizon-sdv.io/module"
 
 const (
@@ -37,15 +41,19 @@ const (
 	SubmittedFromDeveloperPortal = "developer-portal"
 	SubmittedFromHorizonCLI      = "horizon-cli"
 	SubmitParamSubmittedFrom     = "horizonSubmittedFrom"
-	SubmitParamSubmittedBy       = "submittedBy"
-	WebhookFieldSubmittedBy      = "horizonSubmittedBy"
+	// SubmitParamSubmittedBy is the webhook field and workflow parameter with the caller's username;
+	// sensors map the field to AnnotationSubmittedByName.
+	SubmitParamSubmittedBy = "submittedBy"
+	// WebhookFieldSubmittedBy is the webhook field with the owner; sensors map it to LabelSubmittedBy.
+	WebhookFieldSubmittedBy = "horizonSubmittedBy"
 	// SubmitParamSampleSoftEnabled is set only by Horizon API (runtime injection), not by clients.
 	SubmitParamSampleSoftEnabled = "sampleSoftEnabled"
 	// SubmittedFromCustomToken is a reserved header value: the real id is read from HeaderSubmittedFromDetail.
 	SubmittedFromCustomToken = "custom"
 	// HeaderSubmittedFromDetail carries the integration id when X-Horizon-Submitted-From is "custom".
 	HeaderSubmittedFromDetail = "X-Horizon-Submitted-From-Detail"
-	// HeaderSubmittedBy carries the Keycloak username (preferred_username) on Developer Portal submit.
+	// HeaderSubmittedBy names the user a run is for. It is honoured only from a caller with the
+	// impersonate role; from anyone else it is ignored.
 	HeaderSubmittedBy = "X-Horizon-Submitted-By"
 )
 
@@ -128,8 +136,8 @@ func ParseSubmittedFromHeader(r *http.Request) (string, error) {
 	return ParseSubmittedFromValue(raw)
 }
 
-// ParseSubmittedByHeader reads X-Horizon-Submitted-By (Developer Portal: Keycloak preferred_username).
-// Missing header returns empty string; callers fall back to submit body or OIDC sub.
+// ParseSubmittedByHeader reads X-Horizon-Submitted-By; a missing header returns an empty string.
+// The value is client-supplied, so callers must only use it for a caller allowed to impersonate.
 func ParseSubmittedByHeader(r *http.Request) string {
 	return strings.TrimSpace(r.Header.Get(HeaderSubmittedBy))
 }

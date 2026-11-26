@@ -29,6 +29,62 @@ func TestSummaryWorkflowTemplateRef(t *testing.T) {
 	}
 }
 
+func TestSummaryOwnerAndStartedBy(t *testing.T) {
+	const subject = "c7eae7a2-0420-4942-9a83-492a87401631"
+	withName := func(u *unstructured.Unstructured, name string) *unstructured.Unstructured {
+		a := u.GetAnnotations()
+		if a == nil {
+			a = map[string]string{}
+		}
+		a[AnnotationSubmittedByName] = name
+		u.SetAnnotations(a)
+		return u
+	}
+	workflow := func(annotation, submittedBy string, labels map[string]string) *unstructured.Unstructured {
+		u := &unstructured.Unstructured{Object: map[string]interface{}{}}
+		if annotation != "" {
+			u.SetAnnotations(map[string]string{LabelSubmittedBy: annotation})
+		}
+		u.SetLabels(labels)
+		params := []interface{}{map[string]interface{}{"name": "topology", "value": "t1"}}
+		if submittedBy != "" {
+			params = append(params, map[string]interface{}{"name": SubmitParamSubmittedBy, "value": submittedBy})
+		}
+		_ = unstructured.SetNestedSlice(u.Object, params, "spec", "arguments", "parameters")
+		return u
+	}
+	creator := map[string]string{"workflows.argoproj.io/creator-preferred-username": "argo-ui-user"}
+
+	tests := []struct {
+		name          string
+		u             *unstructured.Unstructured
+		wantOwner     string
+		wantStartedBy string
+	}{
+		{"name annotation: shown instead of the owner", withName(workflow(subject, "", nil), "dev-alice"), subject, "dev-alice"},
+		{"name annotation wins over the submittedBy parameter", withName(workflow(subject, "param-user", nil), "dev-alice"), subject, "dev-alice"},
+		{"impersonated run: name is the user, owner the service account", withName(workflow("sa-subject", "bob", nil), "bob"), "sa-subject", "bob"},
+		{"blank name annotation is ignored", withName(workflow(subject, "dev-alice", nil), "  "), subject, "dev-alice"},
+		{"no name annotation, template with submittedBy: name from the parameter", workflow(subject, "dev-alice", nil), subject, "dev-alice"},
+		{"no name annotation, template without submittedBy: the owner is all there is", workflow(subject, "", nil), subject, subject},
+		{"impersonated run: owner stays the service account", workflow("sa-subject", "bob", nil), "sa-subject", "bob"},
+		{"owner wins over Argo creator labels", workflow(subject, "", creator), subject, subject},
+		{"not submitted through Horizon API: no owner", workflow("", "", creator), "", "argo-ui-user"},
+		{"nothing recorded", workflow("", "", nil), "", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := Summary(tc.u, "workflows", "")
+			if s.Owner != tc.wantOwner {
+				t.Errorf("owner = %q, want %q", s.Owner, tc.wantOwner)
+			}
+			if s.StartedBy != tc.wantStartedBy {
+				t.Errorf("startedBy = %q, want %q", s.StartedBy, tc.wantStartedBy)
+			}
+		})
+	}
+}
+
 func TestSummaryClusterWorkflowTemplateRef(t *testing.T) {
 	u := &unstructured.Unstructured{Object: map[string]interface{}{}}
 	_ = unstructured.SetNestedField(u.Object, "my-cwft", "spec", "clusterWorkflowTemplateRef", "name")
