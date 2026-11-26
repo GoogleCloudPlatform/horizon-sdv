@@ -39,9 +39,10 @@ configParameters:
   - name: cloudWsConfigName
     description: "REQUIRED: Name of the workstation configuration."
   - name: containerImage
-    value: "C-OSS (VCS)"
+    value: "C-OSS"
+    enum: ["C-OSS", "AS", "ASfP"]
     updateRequired: true
-    description: "C-OSS (VCS), AS, ASfP, or a full image URI in this environment's Artifact Registry (tag ignored)."
+    description: "C-OSS, AS or ASfP: the Code OSS, Android Studio or ASfP image in this environment's Artifact Registry. containerImageTag selects the tag."
   - name: containerImageTag
     value: "latest"
     description: "Tag appended to the selected image. Empty = latest."
@@ -66,17 +67,21 @@ configParameters:
     description: "Boot disk size in GB (min 31). Empty = 40."
   - name: hostDisablePublicIpAddresses
     value: "true"
-    description: "true or false. true = no public IP. Empty = true."
+    enum: ["true", "false"]
+    description: "true = no public IP."
   - name: hostDisableSsh
     value: "true"
-    description: "true or false. true = SSH disabled. Empty = true."
+    enum: ["true", "false"]
+    description: "true = SSH disabled."
   - name: hostEnableNestedVirtualization
     value: "false"
-    description: "true or false (N1/N2 machine types only). Empty = false."
+    enum: ["true", "false"]
+    description: "true = nested virtualization (N1/N2 machine types only)."
   - name: pdRequired
     value: "false"
+    enum: ["true", "false"]
     updateRequired: true
-    description: "true or false. true = mount a persistent disk (PD_* below)."
+    description: "true = mount a persistent disk (PD_* below)."
   - name: pdMountPath
     value: "/home"
     description: "Persistent disk mount path. Empty = /home."
@@ -85,26 +90,30 @@ configParameters:
     description: "Filesystem type, e.g. ext4. Must be empty with pdSourceSnapshot."
   - name: pdDiskType
     value: "pd-balanced"
-    description: "pd-balanced, pd-ssd, pd-standard or pd-extreme. Empty = pd-standard."
+    enum: ["pd-balanced", "pd-ssd", "pd-standard", "pd-extreme"]
+    description: "Persistent disk type."
   - name: pdSizeGb
     value: "10"
     description: "10, 50, 100, 200, 500 or 1000. Empty = 200. <200 needs balanced/ssd."
   - name: pdReclaimPolicy
     value: "DELETE"
-    description: "DELETE or RETAIN. Empty = DELETE."
+    enum: ["DELETE", "RETAIN"]
+    description: "DELETE removes the disk with the workstation. RETAIN keeps it."
   - name: pdSourceSnapshot
     value: ""
     description: "Snapshot name (no path). Requires empty pdFsType and pdSizeGb."
   - name: edRequired
     value: "false"
+    enum: ["true", "false"]
     updateRequired: true
-    description: "true or false. true = mount an ephemeral disk (ED_* below)."
+    description: "true = mount an ephemeral disk (ED_* below)."
   - name: edMountPath
     value: "/tmp"
     description: "Ephemeral disk mount path. Empty = /tmp."
   - name: edDiskType
     value: "pd-standard"
-    description: "pd-standard, pd-ssd, pd-balanced or pd-extreme. Empty = pd-standard."
+    enum: ["pd-standard", "pd-ssd", "pd-balanced", "pd-extreme"]
+    description: "Ephemeral disk type."
   - name: edSourceSnapshot
     value: ""
     description: "Source snapshot. Not with edSourceImage; needs edReadOnly=true."
@@ -113,7 +122,8 @@ configParameters:
     description: "Source image. Not together with edSourceSnapshot."
   - name: edReadOnly
     value: "false"
-    description: "true or false. true requires edSourceSnapshot."
+    enum: ["true", "false"]
+    description: "true requires edSourceSnapshot."
   - name: containerEntrypointCommands
     value: ""
     description: "Comma-separated entrypoint commands. Empty = image default."
@@ -140,6 +150,7 @@ deleteConfigParameters:
     description: "REQUIRED: Name of the workstation configuration to delete."
   - name: confirmDelete
     value: "false"
+    enum: ["true", "false"]
     description: "REQUIRED: Set to true to confirm deletion (irreversible)."
 
 getConfigParameters:
@@ -176,33 +187,41 @@ imageBuild:
       description: "Tag applied to every image built in this run."
     - name: dryRun
       value: "false"
+      enum: ["true", "false"]
       description: "true = build only, nothing is pushed. Keep false if another image builds on this one."
     - name: buildEnvironmentImage
       value: "false"
+      enum: ["true", "false"]
       description: "Build the cws-workflow step image used by all other CWS workflows."
     - name: buildPreflight
       value: "true"
+      enum: ["true", "false"]
       description: "Build and push horizon-preflight. false = reuse preflightImage."
     - name: preflightImage
       value: "-"
       description: "Published preflight URI in this environment's Artifact Registry when buildPreflight is false. Default - means unused."
     - name: buildGnome
       value: "true"
+      enum: ["true", "false"]
       description: "Build and push horizon-gnome. false = reuse gnomeImage."
     - name: gnomeImage
       value: "-"
       description: "Published GNOME URI in this environment's Artifact Registry when buildGnome is false. Default - means unused."
     - name: buildCodeOss
       value: "true"
+      enum: ["true", "false"]
       description: "Build and push horizon-code-oss. false = reuse codeOssImage."
     - name: buildAndroidStudio
       value: "true"
+      enum: ["true", "false"]
       description: "Build and push horizon-android-studio. false = reuse androidStudioImage."
     - name: buildAsfp
       value: "true"
+      enum: ["true", "false"]
       description: "Build and push horizon-asfp. false = reuse asfpImage."
     - name: installAntigravityAgent
       value: "false"
+      enum: ["true", "false"]
       description: "Forwarded to GNOME when it is built. true = install Antigravity into GNOME."
 
 # Workstation image builds. Paths are relative to the cloned repo root.
