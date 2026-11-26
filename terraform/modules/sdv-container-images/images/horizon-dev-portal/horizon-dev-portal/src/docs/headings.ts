@@ -52,22 +52,15 @@ export function extractHeadings(markdown: string): DocHeading[] {
   const slugger = new GithubSlugger();
   const headings: DocHeading[] = [];
   let inFence = false;
+  // An HTML heading can span lines (<h2 id="x">\n  Title\n</h2>); collect it until it closes.
+  let pendingHtml: string | null = null;
   const htmlHeading = /<h([1-6])\b([^>]*)>([\s\S]*?)<\/h\1>/gi;
 
-  for (const line of markdown.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) {
-      continue;
-    }
-
+  const pushHtmlHeadings = (chunk: string): boolean => {
     htmlHeading.lastIndex = 0;
     let htmlMatch: RegExpExecArray | null;
     let sawHtml = false;
-    while ((htmlMatch = htmlHeading.exec(line)) !== null) {
+    while ((htmlMatch = htmlHeading.exec(chunk)) !== null) {
       sawHtml = true;
       const depth = Number(htmlMatch[1]) as DocHeading['depth'];
       const attrs = htmlMatch[2] ?? '';
@@ -78,6 +71,41 @@ export function extractHeadings(markdown: string): DocHeading[] {
       const explicit = /\bid\s*=\s*["']([^"']+)["']/i.exec(attrs);
       const id = explicit?.[1] ? explicit[1] : slugger.slug(text);
       headings.push({ depth, text, id });
+    }
+    return sawHtml;
+  };
+  const opensHtmlHeading = (chunk: string): boolean =>
+    /<h[1-6]\b/i.test(chunk.replace(/`[^`]*`/g, '').replace(htmlHeading, ''));
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      pendingHtml = null;
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) {
+      continue;
+    }
+
+    if (pendingHtml !== null) {
+      // A blank line ends a Markdown HTML block, so an unclosed tag cannot swallow the rest of the page.
+      if (trimmed === '') {
+        pendingHtml = null;
+        continue;
+      }
+      pendingHtml += `\n${line}`;
+      if (/<\/h[1-6]\s*>/i.test(line)) {
+        pushHtmlHeadings(pendingHtml);
+        pendingHtml = null;
+      }
+      continue;
+    }
+
+    const sawHtml = pushHtmlHeadings(line);
+    if (opensHtmlHeading(line)) {
+      pendingHtml = line.replace(htmlHeading, '');
+      continue;
     }
     if (sawHtml) {
       continue;

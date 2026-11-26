@@ -16,29 +16,43 @@
 // SVG shown through <img> never runs script, but a blob URL can be opened as a page (for example via
 // the browser's "Open image in new tab"), and then scripts run in the portal origin. The proxy's
 // sandbox header is lost once the response becomes a blob, so strip active content before that.
-const ACTIVE_ELEMENTS = ['script', 'iframe', 'embed', 'object', 'audio', 'video'];
+// Mermaid SVG is inserted into the page itself, where HTML inside <foreignObject> is live too.
+const ACTIVE_ELEMENTS = [
+  'script',
+  'iframe',
+  'frame',
+  'frameset',
+  'embed',
+  'object',
+  'applet',
+  'audio',
+  'video',
+  'base',
+  'meta',
+  'link',
+  'form',
+  'portal',
+];
 // Embedded raster pictures (data:image/png;base64,...) are normal in exported diagrams and stay.
 // Everything else with a script-capable scheme goes: javascript:, vbscript:, other data: types.
-const SAFE_DATA_URL = /^\s*data:image\/(png|jpe?g|gif|webp);/i;
+const SAFE_DATA_URL = /^data:image\/(png|jpe?g|gif|webp);/i;
 function isScriptUrl(value: string): boolean {
-  return /^\s*(javascript|vbscript|data):/i.test(value) && !SAFE_DATA_URL.test(value);
+  // URL parsers drop whitespace and control characters, so "java\tscript:" is still javascript:.
+  // eslint-disable-next-line no-control-regex
+  const compact = value.replace(/[\u0000-\u0020]/g, '');
+  return /^(javascript|vbscript|data):/i.test(compact) && !SAFE_DATA_URL.test(compact);
 }
 const URL_ATTRIBUTES = ['href', 'xlink:href', 'src', 'action', 'formaction'];
 
-export function sanitizeSvg(source: string): string {
-  const doc = new DOMParser().parseFromString(source, 'image/svg+xml');
-  const root = doc.documentElement;
-  if (!root || root.localName !== 'svg' || doc.querySelector('parsererror')) {
-    throw new Error('invalid svg');
-  }
-
-  for (const tag of ACTIVE_ELEMENTS) {
-    for (const element of Array.from(doc.getElementsByTagNameNS('*', tag))) {
+function scrub(scope: Element, removeForeignObject: boolean): void {
+  const removed = removeForeignObject ? [...ACTIVE_ELEMENTS, 'foreignObject'] : ACTIVE_ELEMENTS;
+  for (const tag of removed) {
+    for (const element of Array.from(scope.getElementsByTagNameNS('*', tag))) {
       element.remove();
     }
   }
 
-  for (const element of Array.from(doc.getElementsByTagNameNS('*', '*'))) {
+  for (const element of [scope, ...Array.from(scope.getElementsByTagNameNS('*', '*'))]) {
     const local = element.localName;
     // <set>/<animate> can assign a javascript: URL to a link or handler at runtime.
     if (local === 'set' || local === 'animate') {
@@ -57,6 +71,29 @@ export function sanitizeSvg(source: string): string {
       }
     }
   }
+}
 
+/** Clean an SVG image file. Bundled diagrams do not use <foreignObject>, so it is removed. */
+export function sanitizeSvg(source: string): string {
+  const doc = new DOMParser().parseFromString(source, 'image/svg+xml');
+  const root = doc.documentElement;
+  if (!root || root.localName !== 'svg' || doc.querySelector('parsererror')) {
+    throw new Error('invalid svg');
+  }
+  scrub(root, true);
   return new XMLSerializer().serializeToString(doc);
+}
+
+/**
+ * Clean Mermaid output before it is inserted into the page. Mermaid serializes as HTML (not XML)
+ * and draws labels with HTML inside <foreignObject>, so that is kept and only its content is cleaned.
+ */
+export function sanitizeMermaidSvg(source: string): string {
+  const body = new DOMParser().parseFromString(source, 'text/html').body;
+  const root = body.firstElementChild;
+  if (!root || root.localName !== 'svg' || body.children.length !== 1) {
+    throw new Error('invalid svg');
+  }
+  scrub(root, false);
+  return root.outerHTML;
 }

@@ -24,13 +24,13 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { config } from '../utils/config';
 import {
+  DEFAULT_GUIDE_PATH,
   DOC_CATEGORIES,
   PORTAL_GUIDES,
-  DEFAULT_GUIDE_PATH,
   documentationHref,
   guideKey,
   guideForPath,
@@ -399,7 +399,7 @@ export function DocumentationPage() {
 
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, minHeight: 480 }}>
           {!docPath ? (
-            <Alert severity="info">Select a guide.</Alert>
+            <Navigate to={documentationHref(DEFAULT_GUIDE_PATH)} replace />
           ) : current?.status === 'missing' ? (
             <Alert severity="warning">
               This document is not in the bundle for this deployment.{' '}

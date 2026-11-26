@@ -18,6 +18,10 @@ const GITHUB_BLOB =
 /** Image types bundle-docs.mjs copies from anywhere under docs/ (same list as the proxy's docsImageTypes). */
 const IMAGE_FILE = /\.(png|jpe?g|gif|svg|webp)$/i;
 
+/** Files without an extension that would otherwise be taken for directories when linking to GitHub. */
+const EXTENSIONLESS_FILE =
+  /^(Makefile|GNUmakefile|Dockerfile|Containerfile|Jenkinsfile|Vagrantfile|Gemfile|Rakefile|Procfile|Brewfile|LICENSE|LICENCE|NOTICE|COPYING|AUTHORS|CONTRIBUTORS|CHANGELOG|README|OWNERS|CODEOWNERS|VERSION)$/i;
+
 export type ResolvedHref =
   | { kind: 'doc'; path: string; hash: string }
   | { kind: 'hash'; hash: string }
@@ -120,8 +124,14 @@ export function resolveDocHref(
     return { kind: 'asset', imagePath: joined };
   }
 
-  const directory = joined.endsWith('/') || !joined.split('/').pop()?.includes('.');
-  const gitPath = joined.replace(/\/$/, '');
+  const basename = joined.split('/').pop() ?? '';
+  const directory =
+    joined.endsWith('/') || (!basename.includes('.') && !EXTENSIONLESS_FILE.test(basename));
+  const gitPath = joined
+    .replace(/\/$/, '')
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
   const gitKind = directory ? 'tree' : 'blob';
   return {
     kind: 'external',

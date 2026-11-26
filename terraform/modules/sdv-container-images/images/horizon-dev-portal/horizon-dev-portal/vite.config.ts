@@ -145,6 +145,8 @@ const DOCS_IMAGE_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
 };
 
+const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
 function docsContentType(kind: string, rel: string): string | null {
   if (kind === 'images') {
     return DOCS_IMAGE_TYPES[path.posix.extname(rel).toLowerCase()] ?? null;
@@ -176,6 +178,11 @@ function horizonDocsDevApi(): Plugin {
         const match = /\/api\/docs\/v1\/(files|images)\/(.+)$/.exec(pathOnly);
         if (!match) {
           next();
+          return;
+        }
+        // No bearer check here, so answer only this machine even when started with `vite --host`.
+        if (!LOOPBACK_ADDRESSES.has(req.socket.remoteAddress ?? '')) {
+          sendJson(res, 403, { error: 'docs dev API is only served to localhost' });
           return;
         }
         let rel: string;

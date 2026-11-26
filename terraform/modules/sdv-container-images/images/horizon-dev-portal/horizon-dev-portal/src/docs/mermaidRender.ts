@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+import { sanitizeMermaidSvg } from './svgSanitize';
 
 // mermaid.render is not safe to call concurrently.
 let pending: Promise<void> = Promise.resolve();
@@ -26,7 +27,7 @@ export function renderMermaidSvg(id: string, source: string, dark: boolean): Pro
       fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
     });
     const result = await mermaid.render(id, source);
-    return result.svg;
+    return sanitizeMermaidSvg(result.svg);
   });
   pending = run.then(
     () => undefined,

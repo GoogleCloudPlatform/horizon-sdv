@@ -37,7 +37,6 @@ import python from 'highlight.js/lib/languages/python';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
-import 'highlight.js/styles/github-dark.min.css';
 import { loadDocsImageUrl } from '../docs/bundleClient';
 import { documentationHref } from '../docs/catalog';
 import { resolveDocHref } from '../docs/docLinks';
@@ -278,6 +277,8 @@ function AuthImage({
  * page, never navigated to directly, so an SVG cannot run script in the portal origin.
  */
 async function openDocsImage(imagePath: string): Promise<void> {
+  // the window handle is needed to write the image into the blank page.
+  // opener is cleared on the next line, before any content is loaded.
   const win = window.open('', '_blank');
   if (!win) {
     return;
