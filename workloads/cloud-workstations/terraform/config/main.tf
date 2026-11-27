@@ -16,9 +16,7 @@ locals {
   sdv_cloud_ws_host_vm_roles = [
     "roles/artifactregistry.reader",
     "roles/logging.logWriter",
-    "roles/monitoring.metricWriter",
-    "roles/storage.objectViewer",
-    "roles/storage.objectCreator"
+    "roles/monitoring.metricWriter"
   ]
 }
 
