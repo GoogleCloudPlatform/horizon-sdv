@@ -30,7 +30,7 @@ The service module is the ABFS **runtime data plane**: the dedicated server and 
 | **STATUS** | horizon-verified |
 | **OWNER** | Accenture |
 | **CONTACT** | module: [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com), ABFS technology: [horizon-sdv@google.com](mailto:horizon-sdv@google.com) |
-| **CHART VERSION** | 0.2.0 |
+| **CHART VERSION** | 0.2.1 |
 | **CONTAINS_COMMERCIAL** | no |
 
 ---
@@ -129,7 +129,9 @@ The license reaches the ABFS processes as GCE instance attribute `abfs-license` 
 
 - At create, Helm `lookup` of the Secret fills the metadata (best effort: Argo CD's `helm template` often cannot see Secrets).
 - PostSync Job `abfs-license-metadata-inject` waits for each CR, compares metadata with the Secret and, when they differ, re-creates the CR with the metadata (pool recreate). It writes `abfs/abfs-license-metadata-status` (`status: applied`).
-- PreSync of the same Job clears `UpdateFailed` CRs and orphan GKE pools (a pool that exists in GKE without its CR). A Ready CR is never deleted only because the license key is missing.
+- PreSync of the same Job removes orphan GKE pools (a pool that exists in GKE without its CR). When a CR shows `UpdateFailed`, the pool is kept if its GKE metadata already carries the licence of the Secret, and CR plus pool are deleted for a recreate only when the licence on GKE was read and differs. A Ready CR is never deleted only because the license key is missing.
+- Upgrade: a CR written by an earlier release has the full cluster path (`projects/.../clusters/<name>`) in `clusterRef.external`. Config Connector looked up a wrong pool through it (`UpdateFailed ... already exists`, GKE pool left behind on disable) and the field cannot be changed. On the first sync after the upgrade PreSync deletes such a CR and its GKE pool once and the sync creates both again; `abfs-server` and the uploaders restart on the new pools.
+- Both Jobs delete or recreate a pool only when every read worked. A failed read of the pool, its licence, the CR or the Secret stops the Job with `ERROR: cannot read ...` and nothing is deleted; fix the cause and sync `mod-abfs-service-module-node-pool` again. A Secret that does not exist or has an empty `license` key means "no licence"; a Secret that cannot be read is an error.
 - The `abfs-license-import` / `abfs-license-clear` workflows of `abfs-data` also delete both CRs when they exist, so a license change is a pool recreate. Prefer importing before enabling this module.
 
 ### Sizing notes
@@ -185,7 +187,7 @@ The portal overview page (`mod-abfs-service-module-overview`) shows the same: li
 
 ### After disable
 
-Pods, Jobs, DaemonSet, NetworkPolicies and both `ContainerNodePool` CRs are pruned and KCC deletes the GKE pools; uploader PVCs are deleted (`deletePvcWhenDisabled: true`, the default; with `false` they stay and keep billing). Spanner, GCS, the license Secret and the uploader table remain (owned by `abfs-data`). Check the GKE pools are really gone; an orphan pool makes the next enable report `already exists` until the PreSync hook or `gcloud container node-pools delete` removes it.
+Pods, Jobs, DaemonSet, NetworkPolicies and both `ContainerNodePool` CRs are pruned; uploader PVCs are deleted (`deletePvcWhenDisabled: true`, the default; with `false` they stay and keep billing). Config Connector deletes the GKE pools with the CRs. PostDelete Job `abfs-data-pools-orphan-postdelete` (namespace `workflows`) deletes with `gcloud` a server or uploader pool that is still there afterwards. It skips a pool whose CR still exists or that it cannot read, never fails, and stops waiting after 20 minutes (a delete that takes longer finishes in the background). Spanner, GCS, the license Secret and the uploader table remain (owned by `abfs-data`). If a pool is still there at the next enable, the PreSync licence Job removes it before the create.
 
 ### Existing clusters: remove the failed Config Connector objects
 

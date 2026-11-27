@@ -32,6 +32,10 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
+    # Argo CD adds these two itself because the chart has a PostDelete hook.
+    # They are listed here so the parent Application does not show this one as OutOfSync.
+    - post-delete-finalizer.argocd.argoproj.io
+    - post-delete-finalizer.argocd.argoproj.io/cleanup
 spec:
   project: {{ .Values.argocd.project }}
   source:

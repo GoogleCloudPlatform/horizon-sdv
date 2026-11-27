@@ -44,3 +44,13 @@ nodePool:
   maxNodeCount: 20
   workloadLabel: android-abfs-build
   workloadType: android-abfs-build
+# Orphan GKE pool cleanup hooks (templates/orphan-cleanup-hooks.yaml): PreSync deletes a pool that has no
+# ContainerNodePool, PostDelete deletes the pool after module disable if it is still there. PreSync also
+# replaces, once, a ContainerNodePool of an earlier release (full cluster path in clusterRef.external) and its pool.
+cleanup:
+  enabled: true
+  workflowsNamespace: workflows
+  # WI → gke-argo-workflows-elevated-sa (roles/container.admin), same as the abfs-service-module licence jobs.
+  jobServiceAccountName: workflow-executor-elevated
+  # google-cloud-cli image with gcloud and kubectl; set by the parent Application.
+  cloudSdkImage: ""

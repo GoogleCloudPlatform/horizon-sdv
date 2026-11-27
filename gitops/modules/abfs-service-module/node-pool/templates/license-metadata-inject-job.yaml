@@ -27,6 +27,10 @@
 #              Ready CR just because abfs-license is missing: Argo often does not
 #              recreate that CR in the same sync, so PostSync then sees
 #              "ContainerNodePool missing; cannot inject licence".
+#              One exception, once per pool: a CR written by an earlier release
+#              has the full cluster path in clusterRef.external. Config Connector
+#              cannot manage the pool through it and the field is immutable, so
+#              the CR and its GKE pool are deleted and the sync creates both again.
 #   Sync     — Helm creates/updates CRs (lookup best-effort for the licence key).
 #   PostSync — wait until each CR exists, then if metadata != Secret, dump the
 #              CR, stamp abfs-license, delete+apply (create-time metadata).
@@ -71,6 +75,9 @@ spec:
               value: {{ .Values.namespace | quote }}
             - name: NODE_POOL_NAMES
               value: {{ printf "%s %s" .Values.serverNodePool.name .Values.uploaderNodePool.name | quote }}
+            # workloadLabel each pool must carry before it is deleted, in the order of NODE_POOL_NAMES.
+            - name: NODE_POOL_LABELS
+              value: {{ printf "%s %s" (required "serverNodePool.workloadLabel" .Values.serverNodePool.workloadLabel) (required "uploaderNodePool.workloadLabel" .Values.uploaderNodePool.workloadLabel) | quote }}
             - name: HORIZON_NS
               value: {{ .Values.license.secretNamespace | quote }}
             - name: LICENSE_SECRET_NAME
@@ -89,59 +96,142 @@ spec:
                 echo "Installing kubectl (gcloud components)..."
                 gcloud components install kubectl --quiet
               fi
+              command -v kubectl >/dev/null 2>&1 || { echo "ERROR: kubectl is not available — nothing changed, nothing deleted" >&2; exit 1; }
 
-              delete_cr_and_gcp_pool() {
-                echo "Deleting ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME} (if present)..."
-                kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
-                  --ignore-not-found=true --wait=true --timeout=45m || true
-                if gcloud container node-pools describe "${NODE_POOL_NAME}" \
-                    --cluster="${CLUSTER_NAME}" \
-                    --location="${LOCATION}" \
-                    --project="${PROJECT_ID}" >/dev/null 2>&1; then
-                  echo "Deleting orphan GKE node pool ${NODE_POOL_NAME}..."
-                  if ! gcloud container node-pools delete "${NODE_POOL_NAME}" \
-                    --cluster="${CLUSTER_NAME}" \
-                    --location="${LOCATION}" \
-                    --project="${PROJECT_ID}" \
-                    --quiet; then
-                    echo "ERROR: failed to delete GKE node pool ${NODE_POOL_NAME}" >&2
-                    return 1
-                  fi
-                  for i in $(seq 1 60); do
-                    if ! gcloud container node-pools describe "${NODE_POOL_NAME}" \
-                        --cluster="${CLUSTER_NAME}" \
-                        --location="${LOCATION}" \
-                        --project="${PROJECT_ID}" >/dev/null 2>&1; then
-                      echo "GKE node pool gone."
-                      return 0
-                    fi
-                    echo "  waiting for GKE pool delete (${i})..."
-                    sleep 10
-                  done
-                  echo "ERROR: GKE node pool ${NODE_POOL_NAME} still exists after deletion wait" >&2
-                  return 1
+              die() { echo "ERROR: $*" >&2; exit 1; }
+              G=(--cluster="${CLUSTER_NAME}" --location="${LOCATION}" --project="${PROJECT_ID}")
+
+              # Every read below gives a definite answer or stops the hook. A node pool is deleted
+              # only when every read the decision rests on succeeded.
+
+              # GKE pool: present | absent. Only NOT_FOUND counts as absent; any other gcloud error fails.
+              gke_pool_state() {
+                local err
+                if err="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(name)' 2>&1 >/dev/null)"; then
+                  echo present
+                  return 0
                 fi
-                return 0
+                if grep -qE 'code=404|NOT_FOUND|No node pool named' <<<"${err}"; then
+                  echo absent
+                  return 0
+                fi
+                echo "ERROR: cannot read GKE node pool ${NODE_POOL_NAME}: ${err}" >&2
+                return 1
               }
 
-              desired=""
-              if kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" >/dev/null 2>&1; then
-                desired="$(kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" \
-                  -o jsonpath='{.data.license}' 2>/dev/null || true)"
-              fi
+              # Licence stamp of the GKE pool ("" when the key is not set). Fails when the pool cannot be read.
+              gke_metadata() {
+                local json
+                json="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format=json 2>/dev/null)" || return 1
+                python3 -c "import json,sys; m=(json.load(sys.stdin).get('config') or {}).get('metadata') or {}; print(m.get('${METADATA_KEY}',''))" <<<"${json}"
+              }
+
+              # 0 only for the Kubernetes NotFound of this ContainerNodePool (kubectl output in $1).
+              # Forbidden, a missing namespace ('namespaces "x" not found') and every other error return 1.
+              cr_not_found() {
+                grep -qxF "Error from server (NotFound): containernodepools.container.cnrm.cloud.google.com \"${NODE_POOL_NAME}\" not found" <<<"$1"
+              }
+
+              # workloadLabel the pool must carry before it is deleted (NODE_POOL_LABELS, same order as
+              # NODE_POOL_NAMES). 0 when the GKE pool carries it; 1 when not or when it cannot be read.
+              pool_is_ours() {
+                local names labels want="" label i
+                read -r -a names <<<"${NODE_POOL_NAMES}"
+                read -r -a labels <<<"${NODE_POOL_LABELS}"
+                for i in "${!names[@]}"; do
+                  if [[ "${names[$i]}" == "${NODE_POOL_NAME}" ]]; then want="${labels[$i]:-}"; fi
+                done
+                label="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(config.labels.workloadLabel)' 2>/dev/null)" || return 1
+                [[ -n "${want}" && "${label}" == "${want}" ]]
+              }
+
+              # ContainerNodePool CR: present | absent. Any kubectl error other than NotFound fails.
+              cr_state() {
+                local err
+                if err="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" -o name 2>&1 >/dev/null)"; then
+                  echo present
+                  return 0
+                fi
+                if cr_not_found "${err}"; then
+                  echo absent
+                  return 0
+                fi
+                echo "ERROR: cannot read ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME}: ${err}" >&2
+                return 1
+              }
+
+              # Licence from the Secret into ${desired}. "The Secret has no licence" (no Secret, or an
+              # empty key) and "the Secret could not be read" are different: the second stops the hook.
+              read_secret_license() {
+                if desired="$(kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" -o jsonpath='{.data.license}' 2>/tmp/secret.err)"; then
+                  return 0
+                fi
+                desired=""
+                if grep -qxF "Error from server (NotFound): secrets \"${LICENSE_SECRET_NAME}\" not found" /tmp/secret.err; then
+                  echo "Secret ${HORIZON_NS}/${LICENSE_SECRET_NAME} does not exist — no licence."
+                  return 0
+                fi
+                die "cannot read Secret ${HORIZON_NS}/${LICENSE_SECRET_NAME}: $(cat /tmp/secret.err) — nothing changed, nothing deleted"
+              }
+
+              delete_cr_and_gcp_pool() {
+                local state
+                state="$(gke_pool_state)" || return 1
+                if [[ "${state}" == "present" ]] && ! pool_is_ours; then
+                  echo "ERROR: GKE node pool ${NODE_POOL_NAME} does not carry the workloadLabel of this module (or its labels could not be read) — nothing deleted; remove or rename it by hand." >&2
+                  return 1
+                fi
+                echo "Deleting ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME} (if present)..."
+                kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
+                  --ignore-not-found=true --wait=true --timeout=45m
+                state="$(gke_pool_state)" || return 1
+                if [[ "${state}" == "absent" ]]; then
+                  return 0
+                fi
+                echo "Deleting orphan GKE node pool ${NODE_POOL_NAME}..."
+                if ! gcloud container node-pools delete "${NODE_POOL_NAME}" "${G[@]}" --quiet; then
+                  echo "ERROR: failed to delete GKE node pool ${NODE_POOL_NAME}" >&2
+                  return 1
+                fi
+                for i in $(seq 1 60); do
+                  state="$(gke_pool_state)" || return 1
+                  if [[ "${state}" == "absent" ]]; then
+                    echo "GKE node pool gone."
+                    return 0
+                  fi
+                  echo "  waiting for GKE pool delete (${i})..."
+                  sleep 10
+                done
+                echo "ERROR: GKE node pool ${NODE_POOL_NAME} still exists after deletion wait" >&2
+                return 1
+              }
+
+              read_secret_license
 
               for NODE_POOL_NAME in ${NODE_POOL_NAMES}; do
                 echo "PreSync licence check: ${NODE_POOL_NAME}"
-                if ! kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" >/dev/null 2>&1; then
-                  if gcloud container node-pools describe "${NODE_POOL_NAME}" \
-                      --cluster="${CLUSTER_NAME}" \
-                      --location="${LOCATION}" \
-                      --project="${PROJECT_ID}" >/dev/null 2>&1; then
+                cr="$(cr_state)" || exit 1
+                if [[ "${cr}" == "absent" ]]; then
+                  pool="$(gke_pool_state)" || exit 1
+                  if [[ "${pool}" == "present" ]]; then
                     echo "CR absent but GKE pool exists — clearing orphan before sync create."
                     delete_cr_and_gcp_pool
                   else
                     echo "ContainerNodePool ${NODE_POOL_NAME} absent — sync will create it."
                   fi
+                  continue
+                fi
+
+                # Upgrade from a release that wrote "projects/.../clusters/<name>" into clusterRef.external:
+                # KCC reads a wrong pool through that CR ("already exists", no delete of the GKE pool) and
+                # clusterRef is immutable, so the sync could not change it. Replace CR and pool once; the
+                # CR created by this sync has the cluster name only and does not match this branch again.
+                ref="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" -o jsonpath='{.spec.clusterRef.external}')" \
+                  || die "cannot read clusterRef of ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME} — nothing deleted"
+                if [[ "${ref}" == */* ]]; then
+                  pool="$(gke_pool_state)" || exit 1
+                  echo "CR ${NODE_POOL_NAME} has clusterRef.external=${ref} (full cluster path, written by an earlier release; GKE pool ${pool}) — deleting CR + pool once so Sync can recreate them."
+                  delete_cr_and_gcp_pool
                   continue
                 fi
 
@@ -154,7 +244,20 @@ spec:
                   -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].reason}' 2>/dev/null || true)"
 
                 if [[ "${ready}" == "UpdateFailed" ]]; then
-                  echo "CR ${NODE_POOL_NAME} is UpdateFailed — deleting so Sync can recreate."
+                  # UpdateFailed says that KCC could not apply the CR, not that the pool is wrong. If the running GKE pool
+                  # already carries the Secret licence it is correct: keep it (deleting it would kill abfs-server
+                  # and the uploaders for nothing). Delete only when the licence on GKE was read and is wrong.
+                  pool="$(gke_pool_state)" || exit 1
+                  if [[ "${pool}" == "present" ]]; then
+                    gke_live="$(gke_metadata)" || die "cannot read the licence metadata of GKE pool ${NODE_POOL_NAME} — nothing deleted"
+                    if [[ "${gke_live}" == "${desired}" ]]; then
+                      echo "CR ${NODE_POOL_NAME} is UpdateFailed but the GKE pool already has the Secret licence (length=${#desired}) — keeping the pool, no PreSync delete."
+                      continue
+                    fi
+                    echo "CR ${NODE_POOL_NAME} is UpdateFailed and the GKE licence differs from the Secret — deleting CR + pool so Sync can recreate."
+                  else
+                    echo "CR ${NODE_POOL_NAME} is UpdateFailed and the GKE pool does not exist — deleting the CR so Sync can recreate."
+                  fi
                   delete_cr_and_gcp_pool
                   continue
                 fi
@@ -202,6 +305,9 @@ spec:
               value: {{ .Values.location | quote }}
             - name: NODE_POOL_NAMES
               value: {{ printf "%s %s" .Values.serverNodePool.name .Values.uploaderNodePool.name | quote }}
+            # workloadLabel each pool must carry before it is deleted, in the order of NODE_POOL_NAMES.
+            - name: NODE_POOL_LABELS
+              value: {{ printf "%s %s" (required "serverNodePool.workloadLabel" .Values.serverNodePool.workloadLabel) (required "uploaderNodePool.workloadLabel" .Values.uploaderNodePool.workloadLabel) | quote }}
             - name: HORIZON_NS
               value: {{ .Values.license.secretNamespace | quote }}
             - name: LICENSE_SECRET_NAME
@@ -228,6 +334,7 @@ spec:
                 echo "Installing kubectl (gcloud components)..."
                 gcloud components install kubectl --quiet
               fi
+              command -v kubectl >/dev/null 2>&1 || { echo "ERROR: kubectl is not available — nothing changed, nothing deleted" >&2; exit 1; }
 
               write_status() {
                 local status="$1"
@@ -249,6 +356,82 @@ spec:
               ' | kubectl apply -f -
               }
 
+              die() { echo "ERROR: $*" >&2; exit 1; }
+              G=(--cluster="${CLUSTER_NAME}" --location="${LOCATION}" --project="${PROJECT_ID}")
+
+              # Every read below gives a definite answer or stops the hook. A node pool is deleted
+              # only when every read the decision rests on succeeded.
+
+              # GKE pool: present | absent. Only NOT_FOUND counts as absent; any other gcloud error fails.
+              gke_pool_state() {
+                local err
+                if err="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(name)' 2>&1 >/dev/null)"; then
+                  echo present
+                  return 0
+                fi
+                if grep -qE 'code=404|NOT_FOUND|No node pool named' <<<"${err}"; then
+                  echo absent
+                  return 0
+                fi
+                echo "ERROR: cannot read GKE node pool ${NODE_POOL_NAME}: ${err}" >&2
+                return 1
+              }
+
+              # Licence stamp of the GKE pool ("" when the key is not set). Fails when the pool cannot be read.
+              gke_metadata() {
+                local json
+                json="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format=json 2>/dev/null)" || return 1
+                python3 -c "import json,sys; m=(json.load(sys.stdin).get('config') or {}).get('metadata') or {}; print(m.get('${METADATA_KEY}',''))" <<<"${json}"
+              }
+
+              # 0 only for the Kubernetes NotFound of this ContainerNodePool (kubectl output in $1).
+              # Forbidden, a missing namespace ('namespaces "x" not found') and every other error return 1.
+              cr_not_found() {
+                grep -qxF "Error from server (NotFound): containernodepools.container.cnrm.cloud.google.com \"${NODE_POOL_NAME}\" not found" <<<"$1"
+              }
+
+              # workloadLabel the pool must carry before it is deleted (NODE_POOL_LABELS, same order as
+              # NODE_POOL_NAMES). 0 when the GKE pool carries it; 1 when not or when it cannot be read.
+              pool_is_ours() {
+                local names labels want="" label i
+                read -r -a names <<<"${NODE_POOL_NAMES}"
+                read -r -a labels <<<"${NODE_POOL_LABELS}"
+                for i in "${!names[@]}"; do
+                  if [[ "${names[$i]}" == "${NODE_POOL_NAME}" ]]; then want="${labels[$i]:-}"; fi
+                done
+                label="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(config.labels.workloadLabel)' 2>/dev/null)" || return 1
+                [[ -n "${want}" && "${label}" == "${want}" ]]
+              }
+
+              # ContainerNodePool CR: present | absent. Any kubectl error other than NotFound fails.
+              cr_state() {
+                local err
+                if err="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" -o name 2>&1 >/dev/null)"; then
+                  echo present
+                  return 0
+                fi
+                if cr_not_found "${err}"; then
+                  echo absent
+                  return 0
+                fi
+                echo "ERROR: cannot read ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME}: ${err}" >&2
+                return 1
+              }
+
+              # Licence from the Secret into ${desired}. "The Secret has no licence" (no Secret, or an
+              # empty key) and "the Secret could not be read" are different: the second stops the hook.
+              read_secret_license() {
+                if desired="$(kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" -o jsonpath='{.data.license}' 2>/tmp/secret.err)"; then
+                  return 0
+                fi
+                desired=""
+                if grep -qxF "Error from server (NotFound): secrets \"${LICENSE_SECRET_NAME}\" not found" /tmp/secret.err; then
+                  echo "Secret ${HORIZON_NS}/${LICENSE_SECRET_NAME} does not exist — no licence."
+                  return 0
+                fi
+                die "cannot read Secret ${HORIZON_NS}/${LICENSE_SECRET_NAME}: $(cat /tmp/secret.err) — nothing changed, nothing deleted"
+              }
+
               wait_pool_running() {
                 echo "Waiting for GKE node pool ${NODE_POOL_NAME}..."
                 for i in $(seq 1 90); do
@@ -266,38 +449,44 @@ spec:
                 return 1
               }
 
+              # Licence stamp in the CR spec ("" when the CR or the key is absent). A CR that cannot be
+              # read stops the hook: a recreate must never be decided on a failed read.
               cr_metadata() {
-                if ! kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" >/dev/null 2>&1; then
-                  echo ""
-                  return 0
+                local json
+                if ! json="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" -o json 2>/tmp/cr.err)"; then
+                  if cr_not_found "$(cat /tmp/cr.err)"; then
+                    echo ""
+                    return 0
+                  fi
+                  echo "ERROR: cannot read ContainerNodePool ${ABFS_NS}/${NODE_POOL_NAME}: $(cat /tmp/cr.err)" >&2
+                  return 1
                 fi
-                kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" -o json 2>/dev/null \
-                  | python3 -c "import json,sys; m=(((json.load(sys.stdin).get('spec') or {}).get('nodeConfig') or {}).get('metadata') or {}); print(m.get('${METADATA_KEY}',''))" \
-                  2>/dev/null || true
+                python3 -c "import json,sys; m=(((json.load(sys.stdin).get('spec') or {}).get('nodeConfig') or {}).get('metadata') or {}); print(m.get('${METADATA_KEY}',''))" <<<"${json}"
               }
 
               delete_cr_and_gcp_pool() {
-                kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
-                  --ignore-not-found=true --wait=true --timeout=45m || true
-                if gcloud container node-pools describe "${NODE_POOL_NAME}" \
-                    --cluster="${CLUSTER_NAME}" \
-                    --location="${LOCATION}" \
-                    --project="${PROJECT_ID}" >/dev/null 2>&1; then
-                  gcloud container node-pools delete "${NODE_POOL_NAME}" \
-                    --cluster="${CLUSTER_NAME}" \
-                    --location="${LOCATION}" \
-                    --project="${PROJECT_ID}" \
-                    --quiet || true
-                  for i in $(seq 1 60); do
-                    if ! gcloud container node-pools describe "${NODE_POOL_NAME}" \
-                        --cluster="${CLUSTER_NAME}" \
-                        --location="${LOCATION}" \
-                        --project="${PROJECT_ID}" >/dev/null 2>&1; then
-                      return 0
-                    fi
-                    sleep 10
-                  done
+                local state
+                state="$(gke_pool_state)" || return 1
+                if [[ "${state}" == "present" ]] && ! pool_is_ours; then
+                  echo "ERROR: GKE node pool ${NODE_POOL_NAME} does not carry the workloadLabel of this module (or its labels could not be read) — nothing deleted; remove or rename it by hand." >&2
+                  return 1
                 fi
+                kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
+                  --ignore-not-found=true --wait=true --timeout=45m
+                state="$(gke_pool_state)" || return 1
+                if [[ "${state}" == "absent" ]]; then
+                  return 0
+                fi
+                gcloud container node-pools delete "${NODE_POOL_NAME}" "${G[@]}" --quiet || true
+                for i in $(seq 1 60); do
+                  state="$(gke_pool_state)" || return 1
+                  if [[ "${state}" == "absent" ]]; then
+                    return 0
+                  fi
+                  sleep 10
+                done
+                echo "ERROR: GKE node pool ${NODE_POOL_NAME} still exists after deletion wait" >&2
+                return 1
               }
 
               wait_for_cr() {
@@ -369,11 +558,7 @@ spec:
                 kubectl apply -f "${out}"
               }
 
-              desired=""
-              if kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" >/dev/null 2>&1; then
-                desired="$(kubectl get secret "${LICENSE_SECRET_NAME}" -n "${HORIZON_NS}" \
-                  -o jsonpath='{.data.license}' 2>/dev/null || true)"
-              fi
+              read_secret_license
 
               for NODE_POOL_NAME in ${NODE_POOL_NAMES}; do
                 echo "PostSync licence inject: ${NODE_POOL_NAME}"
@@ -388,8 +573,27 @@ spec:
                 ready_message="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${ABFS_NS}" \
                   -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || true)"
 
+                # GKE is the source of truth for the running pool (a CR can be UpdateFailed while the
+                # pool is fine). If GKE already carries the Secret licence, do not recreate:
+                # recreate_cr_with_license deletes the GKE pool.
+                if [[ -n "${desired}" ]]; then
+                  pool="$(gke_pool_state)" || { write_status "error" "cannot read GKE pool ${NODE_POOL_NAME}; nothing recreated"; exit 1; }
+                  if [[ "${pool}" == "present" ]]; then
+                    if ! live_gke_now="$(gke_metadata)"; then
+                      echo "ERROR: cannot read the licence metadata of GKE pool ${NODE_POOL_NAME} — nothing recreated" >&2
+                      write_status "error" "cannot read licence metadata of GKE pool ${NODE_POOL_NAME}; nothing recreated"
+                      exit 1
+                    fi
+                    if [[ "${live_gke_now}" == "${desired}" ]]; then
+                      echo "GKE pool ${NODE_POOL_NAME} already has the Secret licence (length=${#desired}; CR state '${ready_reason}') — no recreate."
+                      echo "Licence metadata applied on pool ${NODE_POOL_NAME}."
+                      continue
+                    fi
+                  fi
+                fi
+
                 if [[ "${ready_reason}" == "UpdateFailed" && "${ready_message}" == *"already exists"* ]]; then
-                  echo "${NODE_POOL_NAME} CR points at an existing GKE pool — recreating to clear the stale KCC state."
+                  echo "${NODE_POOL_NAME} CR points at an existing GKE pool whose licence differs — recreating CR + pool."
                   recreate_cr_with_license "${desired}"
                   live_cr="$(cr_metadata)"
                 fi

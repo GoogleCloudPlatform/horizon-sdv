@@ -1,0 +1,238 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Orphan GKE node pool cleanup for the ABFS build pool.
+#
+# Earlier releases wrote the full cluster path ("projects/.../clusters/<name>") into
+# clusterRef.external of the ContainerNodePool. Config Connector then read a wrong pool: a few minutes
+# after create the CR reported "already exists", and when the CR was deleted KCC logged "underlying
+# resource does not exist; no API call necessary" and left the GKE pool behind, so the next enable
+# failed with "already exists". The CR now carries the cluster name only (containernodepool.yaml) and
+# KCC deletes the pool itself. These hooks cover what that change alone cannot:
+#   PreSync    – CR with the full cluster path (upgrade from an earlier release): clusterRef is
+#                immutable, so the CR and its GKE pool are deleted once and the sync creates both again.
+#              – CR absent but GKE pool present (left over from an earlier disable) → delete the pool,
+#                so the sync creates a fresh one.
+#                A pool whose CR carries the cluster name is never touched.
+#   PostDelete – after the module is disabled and Argo CD pruned the CR → delete the GKE pool if it
+#                is still there. Never fails the deletion (logs a warning instead) and stops waiting
+#                well before the Job deadline.
+# Safety rules of both hooks:
+#   - only NOT_FOUND from gcloud means "the pool does not exist"; any other error is an error;
+#   - only a Kubernetes NotFound of this ContainerNodePool means "the CR does not exist"; Forbidden, a
+#     missing namespace, a missing kubectl or any other kubectl error never leads to a delete;
+#   - a pool is deleted only when it carries this module's workloadLabel, so a pool of the same name
+#     that this module did not create is never removed;
+#   - PostDelete skips the delete while the ContainerNodePool still exists.
+# Same identity as the abfs-service-module licence jobs: workflow-executor-elevated in the workflows
+# namespace (Workload Identity → gke-argo-workflows-elevated-sa, roles/container.admin).
+{{- $c := .Values.cleanup }}
+{{- if $c.enabled }}
+{{- $image := required "cleanup.cloudSdkImage is set by the parent Application" $c.cloudSdkImage }}
+{{- $pool := .Values.nodePool.name }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ printf "%s-orphan-cleanup" $pool | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+    app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-5"
+rules:
+  - apiGroups: ["container.cnrm.cloud.google.com"]
+    resources: ["containernodepools"]
+    # delete, watch: PreSync replaces a CR written by an earlier release (full cluster path in
+    # clusterRef) and waits until it is gone.
+    verbs: ["get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-orphan-cleanup" $pool | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    horizon-sdv.io/module: {{ .Values.parentModuleName | quote }}
+    app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-5"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ printf "%s-orphan-cleanup" $pool | trunc 63 | trimSuffix "-" }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $c.jobServiceAccountName | quote }}
+    namespace: {{ $c.workflowsNamespace | quote }}
+{{- range $phase := list "PreSync" "PostDelete" }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-orphan-%s" $pool (lower $phase) | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $c.workflowsNamespace }}
+  labels:
+    horizon-sdv.io/module: {{ $.Values.parentModuleName | quote }}
+    app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+  annotations:
+    argocd.argoproj.io/hook: {{ $phase }}
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 1500
+  template:
+    metadata:
+      labels:
+        horizon-sdv.io/module: {{ $.Values.parentModuleName | quote }}
+        app.kubernetes.io/name: abfs-nodepool-orphan-cleanup
+    spec:
+      serviceAccountName: {{ $c.jobServiceAccountName | quote }}
+      restartPolicy: Never
+      containers:
+        - name: cleanup
+          image: {{ $image | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PHASE
+              value: {{ $phase | quote }}
+            - name: PROJECT_ID
+              value: {{ $.Values.gcpProjectId | quote }}
+            - name: CLUSTER_NAME
+              value: {{ $.Values.clusterName | quote }}
+            - name: LOCATION
+              value: {{ $.Values.location | quote }}
+            - name: CR_NS
+              value: {{ $.Values.namespace | quote }}
+            - name: NODE_POOL_NAME
+              value: {{ $pool | quote }}
+            - name: WORKLOAD_LABEL
+              value: {{ $.Values.nodePool.workloadLabel | quote }}
+          command: [bash, -uo, pipefail, -c]
+          args:
+            - |
+              G=(--cluster="${CLUSTER_NAME}" --location="${LOCATION}" --project="${PROJECT_ID}")
+              BUDGET=900   # seconds to wait for the delete; the Job deadline is 1500
+
+              # present | absent; any gcloud error other than NOT_FOUND returns 1.
+              pool_state() {
+                local err
+                if err="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(name)' 2>&1 >/dev/null)"; then echo present; return 0; fi
+                if grep -qE 'code=404|NOT_FOUND|No node pool named' <<<"${err}"; then echo absent; return 0; fi
+                echo "ERROR: cannot read GKE node pool ${NODE_POOL_NAME}: ${err}" >&2
+                return 1
+              }
+
+              # 0 only when the kubectl output is the Kubernetes NotFound of this ContainerNodePool.
+              # Forbidden, a missing namespace ('namespaces "x" not found'), 'command not found' and
+              # every other error return 1.
+              cr_not_found() {
+                grep -qxF "Error from server (NotFound): containernodepools.container.cnrm.cloud.google.com \"${NODE_POOL_NAME}\" not found" <<<"$1"
+              }
+
+              # 0 when the pool carries this module's workloadLabel, 1 when not or when it cannot be read.
+              pool_is_ours() {
+                local label
+                label="$(gcloud container node-pools describe "${NODE_POOL_NAME}" "${G[@]}" --format='value(config.labels.workloadLabel)' 2>/dev/null)" || return 1
+                [[ -n "${WORKLOAD_LABEL}" && "${label}" == "${WORKLOAD_LABEL}" ]]
+              }
+
+              # Ask GKE to delete without waiting for the operation (--async), then poll within the budget.
+              # GKE refuses a delete while another operation runs on the cluster, so the request is repeated.
+              delete_pool() {
+                local state
+                echo "${PHASE}: deleting GKE node pool ${NODE_POOL_NAME} (no ContainerNodePool owns it)..."
+                while (( SECONDS < BUDGET )); do
+                  state="$(pool_state)" || return 1
+                  if [[ "${state}" == "absent" ]]; then echo "${PHASE}: GKE node pool ${NODE_POOL_NAME} deleted."; return 0; fi
+                  gcloud container node-pools delete "${NODE_POOL_NAME}" "${G[@]}" --async --quiet >/dev/null 2>&1 || true
+                  echo "  waiting for the delete (${SECONDS}s)..."; sleep 15
+                done
+                return 1
+              }
+
+              if ! command -v kubectl >/dev/null 2>&1; then
+                if [[ "${PHASE}" == "PreSync" ]]; then echo "ERROR: kubectl is not available; nothing is deleted." >&2; exit 1; fi
+                echo "WARNING: kubectl is not available; nothing is deleted. The next enable removes an orphan (PreSync)." >&2
+                exit 0
+              fi
+
+              if [[ "${PHASE}" == "PreSync" ]]; then
+                if out="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" -o name 2>&1)"; then
+                  if ! ref="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" -o jsonpath='{.spec.clusterRef.external}' 2>&1)"; then
+                    echo "ERROR: cannot read clusterRef of ContainerNodePool ${CR_NS}/${NODE_POOL_NAME}: ${ref}" >&2
+                    exit 1
+                  fi
+                  if [[ "${ref}" != */* ]]; then
+                    echo "PreSync: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} exists – the pool is managed, nothing to do."
+                    exit 0
+                  fi
+                  # Upgrade from a release that wrote the full cluster path. KCC cannot manage the pool through
+                  # that CR and clusterRef is immutable, so the sync could not change it: delete the CR (KCC
+                  # leaves the GKE pool) and then the pool, below. This runs once; the new CR has the name only.
+                  echo "PreSync: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} has clusterRef.external=${ref} (full cluster path, written by an earlier release) – replacing the CR and the GKE pool once."
+                  state="$(pool_state)" || exit 1
+                  if [[ "${state}" == "present" ]] && ! pool_is_ours; then
+                    echo "ERROR: GKE node pool ${NODE_POOL_NAME} does not carry workloadLabel=${WORKLOAD_LABEL} (or its labels could not be read). Nothing is deleted; the ContainerNodePool has to be replaced by hand (delete the CR, then remove or rename the pool)." >&2
+                    exit 1
+                  fi
+                  if ! kubectl delete containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" --ignore-not-found=true --wait=true --timeout=300s; then
+                    echo "ERROR: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} could not be deleted; the GKE pool is not deleted." >&2
+                    exit 1
+                  fi
+                elif ! cr_not_found "${out}"; then
+                  echo "ERROR: cannot read ContainerNodePool ${CR_NS}/${NODE_POOL_NAME}: ${out}" >&2
+                  exit 1
+                fi
+                state="$(pool_state)" || exit 1
+                if [[ "${state}" == "absent" ]]; then
+                  echo "PreSync: no CR and no GKE pool – the sync creates ${NODE_POOL_NAME}."
+                  exit 0
+                fi
+                if ! pool_is_ours; then
+                  echo "ERROR: GKE node pool ${NODE_POOL_NAME} exists without a ContainerNodePool, but it does not carry workloadLabel=${WORKLOAD_LABEL} (or its labels could not be read). It is not deleted; remove or rename it by hand, the sync would fail with 'already exists'." >&2
+                  exit 1
+                fi
+                delete_pool || { echo "ERROR: ${NODE_POOL_NAME} still exists or cannot be read; the sync would fail with 'already exists'" >&2; exit 1; }
+                exit 0
+              fi
+
+              # PostDelete. Never block the module disable: every path below ends with exit 0.
+              if out="$(kubectl get containernodepool "${NODE_POOL_NAME}" -n "${CR_NS}" -o name 2>&1)"; then
+                echo "WARNING: ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} still exists — the pool is managed, not deleted." >&2
+                exit 0
+              elif ! cr_not_found "${out}"; then
+                # Includes Forbidden (e.g. the hook Role is gone) and a missing namespace: the CR may still
+                # exist, so nothing is deleted.
+                echo "WARNING: cannot read ContainerNodePool ${CR_NS}/${NODE_POOL_NAME} (${out}) — pool not deleted; the next enable removes an orphan (PreSync)." >&2
+                exit 0
+              fi
+              state="$(pool_state)" || { echo "WARNING: ${NODE_POOL_NAME} not deleted; the next enable removes an orphan (PreSync)." >&2; exit 0; }
+              if [[ "${state}" == "absent" ]]; then
+                echo "PostDelete: GKE node pool ${NODE_POOL_NAME} is already gone."
+                exit 0
+              fi
+              if ! pool_is_ours; then
+                echo "WARNING: ${NODE_POOL_NAME} does not carry workloadLabel=${WORKLOAD_LABEL} (or its labels could not be read) — not deleted." >&2
+                exit 0
+              fi
+              delete_pool || echo "WARNING: ${NODE_POOL_NAME} is not confirmed deleted after ${BUDGET}s; the delete may still be running. The next enable removes an orphan (PreSync)." >&2
+              exit 0
+{{- end }}
+{{- end }}
