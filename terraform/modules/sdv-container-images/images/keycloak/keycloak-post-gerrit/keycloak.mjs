@@ -136,19 +136,22 @@ async function createUserIfRequired()  {
   }
 }
 
-async function generateSecretFiles()  {
-  try {
-    let clients = await keycloakAdmin.clients.find();
-    let client = _.find(clients, {clientId: config.keycloak.client.clientId});
-
-    if (client) {
-      console.info('dumping %s client data into json file', config.keycloak.client.clientId);
-      fs.writeFile('client-gerrit.json', JSON.stringify(client));
-    }
-
-  } catch (err) {
-    throw err
+async function generateSecretFiles() {
+  const clientId = config.keycloak.client.clientId;
+  const client = (await keycloakAdmin.clients.find({ clientId }))[0];
+  if (!client) {
+    throw new Error(`client ${clientId} not found, cannot dump secret file`);
   }
+  let cred = await keycloakAdmin.clients.getClientSecret({ id: client.id });
+  if (!cred?.value) {
+    cred = await keycloakAdmin.clients.generateNewClientSecret({ id: client.id });
+  }
+  if (!cred?.value) {
+    throw new Error(`client ${clientId} has no client secret after get/regenerate`);
+  }
+  const payload = { ...client, secret: cred.value };
+  console.info('dumping %s client data into json file', clientId);
+  await fs.writeFile('client-gerrit.json', JSON.stringify(payload));
 }
 
 async function configureKeycloak()  {
@@ -166,5 +169,6 @@ async function configureKeycloak()  {
 configureKeycloak()
   .catch((err) => {
     console.error(err.message);
+    process.exit(1);
   });
 
