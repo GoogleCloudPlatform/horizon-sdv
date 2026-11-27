@@ -62,7 +62,7 @@ buildctl build \
   --opt build-arg:PACKER_VERSION="${PACKER_VERSION}" \
   --opt build-arg:ENABLE_GEMINI_AI_ASSISTANT="${ENABLE_GEMINI_AI_ASSISTANT}" \
   --opt build-arg:GEMINI_CLI_VERSION="${GEMINI_CLI_VERSION}" \
-  --opt build-arg:GOOGLE_ADK_VERSION="${GOOGLE_ADK_VERSION}" \
+  --opt build-arg:ANTIGRAVITY_SDK_VERSION="${ANTIGRAVITY_SDK_VERSION}" \
   --opt platform=linux/amd64 \
   --registry-auth-tlscontext "host=${REGISTRY},insecure=true" \
   --output="type=image,name=${DESTINATION}:${EFFECTIVE_IMAGE_TAG},push=${PUSH}"

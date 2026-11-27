@@ -154,6 +154,10 @@ currentBuild.currentResult.
           stage "AI Review"
           (
             export PIPELINE_REPO_ROOT="${REPO}"
+            # Job name and build id of the Antigravity review traces. Set for the
+            # review only: the build and storage scripts read the same variables.
+            export JOB_NAME='{{ "{{" }}workflow.name{{ "}}" }}'
+            export BUILD_NUMBER='{{ "{{" }}workflow.uid{{ "}}" }}'
             export GEMINI_PROMPT_FILE="${GEMINI_PROMPT_FILE/#\/workspace/${REPO}}"
             export GEMINI_PROMPT_FILE_2="${GEMINI_PROMPT_FILE_2/#\/workspace/${REPO}}"
             export GEMINI_PROMPT_FILE_3="${GEMINI_PROMPT_FILE_3/#\/workspace/${REPO}}"
