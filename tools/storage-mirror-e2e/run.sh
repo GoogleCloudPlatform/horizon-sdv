@@ -120,9 +120,11 @@ create_cluster() {
 
 build_images() {
   if [[ "${SKIP_BUILD}" == 0 ]]; then
-    log "building images"
-    docker build -t storage-mirror-module-app:e2e "${IMAGES}/storage-mirror-module-app"
-    docker build -t storage-mirror-sync:e2e "${IMAGES}/storage-mirror-sync"
+    local go_version
+    go_version="$(python3 -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1]))["tools"]["go"]["version"])' "${REPO_ROOT}/versions.yaml")"
+    log "building images (GO_VERSION=${go_version})"
+    docker build --build-arg GO_VERSION="${go_version}" -t storage-mirror-module-app:e2e "${IMAGES}/storage-mirror-module-app"
+    docker build --build-arg GO_VERSION="${go_version}" -t storage-mirror-sync:e2e "${IMAGES}/storage-mirror-sync"
   fi
   "${KIND}" load docker-image storage-mirror-module-app:e2e storage-mirror-sync:e2e --name "${CLUSTER_NAME}"
 }

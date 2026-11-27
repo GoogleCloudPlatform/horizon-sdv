@@ -37,9 +37,9 @@ touches GKE, Filestore, Config Connector or any existing kubectl context.
 ## Prerequisites
 
 ```bash
-GOBIN=/tmp/cs-tools go install sigs.k8s.io/kind@v0.27.0
-GOBIN=/tmp/cs-tools go install helm.sh/helm/v3/cmd/helm@v3.16.4
-GOBIN=/tmp/cs-tools go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.23   # --apiserver-only
+GOBIN=/tmp/storage-mirror-e2e-tools go install sigs.k8s.io/kind@v0.27.0
+GOBIN=/tmp/storage-mirror-e2e-tools go install helm.sh/helm/v3/cmd/helm@v3.16.4
+GOBIN=/tmp/storage-mirror-e2e-tools go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.23   # --apiserver-only
 ```
 
 `kubectl`, `jq`, `curl`, `python3` with PyYAML. For the kind mode: `docker info` must work for your user (member of

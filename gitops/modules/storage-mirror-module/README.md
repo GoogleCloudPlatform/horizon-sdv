@@ -31,7 +31,7 @@ limitations under the License. -->
 ## Overview
 
 Helm chart: `gitops/modules/storage-mirror-module`. Argo CD parent Application `mod-storage-mirror`, catalog name
-`storage-mirror`. Design: [docs/design/TAA-1593-storage-mirror-CleanSlate.md](../../../docs/design/TAA-1593-storage-mirror-CleanSlate.md).
+`storage-mirror`. Design: [docs/design/TAA-1593-storage-mirror-design.md](../../../docs/design/TAA-1593-storage-mirror-design.md).
 
 The module keeps AOSP `repo` manifest mirrors (`repo init --mirror` + `repo sync`) and single-repository mirrors
 (`git clone --mirror` + `git remote update`) on one shared Filestore volume. It replaces the Jenkins jobs under

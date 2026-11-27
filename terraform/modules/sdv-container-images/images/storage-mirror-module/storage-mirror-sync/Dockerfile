@@ -14,7 +14,8 @@
 
 # Storage Mirror workflow image: mirror-agent plus git, git-lfs and repo. No cloud CLIs.
 
-FROM --platform=linux/amd64 golang:1.27.2-bookworm AS build
+ARG GO_VERSION
+FROM --platform=linux/amd64 golang:${GO_VERSION}-bookworm AS build
 
 WORKDIR /src
 

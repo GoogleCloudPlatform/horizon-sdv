@@ -14,8 +14,8 @@ limitations under the License. -->
 
 # TAA-1593 Storage Mirror module: Low Level Design (as built)
 
-This document describes the Storage Mirror module as implemented on branch `feature/TAA1593-StorageMirrorModule__CleanSlate`
-(`git diff d494456..HEAD`, excluding `docs/`). Every statement is taken from that code, its charts, CRDs, Terraform,
+This document describes the Storage Mirror module as implemented by the TAA-1593 change set (`git diff main...HEAD` on
+the TAA-1593 branch, excluding `docs/`). Every statement is taken from that code, its charts, CRDs, Terraform,
 scripts, tests and test harness, or from baseline code they integrate with. It is not a statement of intent.
 
 Verification markers:
@@ -49,7 +49,7 @@ The module adds, as a Module Manager module named `storage-mirror`:
   mirror status from Argo Workflows and serves a REST API (`CTL/cmd/manager/main.go:46-165`).
 - A workflow image (`storage-mirror-sync`) with `mirror-agent`, `git`, `git-lfs` and `repo` that runs create, sync,
   delete and volume initialisation inside Argo workflow pods (`AGT/cmd/mirror-agent/main.go:15-75`,
-  `AGT/Dockerfile:28-53`).
+  `AGT/Dockerfile:29-54`).
 - Four WorkflowTemplates, none exposed to the Horizon API catalog, and four Sensors
   (`WF/templates/workflowtemplates.yaml:14-18`, `WF/templates/sensors.yaml:14-98`).
 - Two mirror kinds: `repo` (AOSP `repo init --mirror` / `repo sync`) and `git` (one bare repository), each with
@@ -144,17 +144,19 @@ The API Secrets are not chart templates; the controller creates them (section 11
 
 | Image | Version in Terraform | Build | Runtime | Source |
 |---|---|---|---|---|
-| `storage-mirror-module-app` | 0.1.0 | `golang:1.27.2-bookworm`, `go build ./cmd/manager` | `gcr.io/distroless/static-debian12:nonroot` | `terraform/modules/base/locals.tf:47-51`, `CTL/Dockerfile:15-33` |
-| `storage-mirror-sync` | 0.1.0 | `golang:1.27.2-bookworm`, `go build ./cmd/mirror-agent` | `debian:12-slim` + `git git-lfs python3 gnupg curl ca-certificates`, `repo` launcher verified with GPG key `8BB9AD79…5C65`, user `horizon-sdv-mirror-ops` (UID 1000) | `terraform/modules/base/locals.tf:52-56`, `AGT/Dockerfile:17-53` |
-| `horizon-api-app` | 1.1.1 → 1.2.0 | baseline | baseline | `terraform/modules/base/locals.tf:151-155` |
-| `keycloak-post-horizon-api` | 1.0.0 → 1.1.0 | adds `storage-mirror-role.mjs` | baseline | `terraform/modules/base/locals.tf:127-131`, `KC/Dockerfile:20` |
+| `storage-mirror-module-app` | 0.1.0 | `golang:${GO_VERSION}-bookworm`, `go build ./cmd/manager` | `gcr.io/distroless/static-debian12:nonroot` | `terraform/modules/base/locals.tf:51-55`, `CTL/Dockerfile:15-34` |
+| `storage-mirror-sync` | 0.1.0 | `golang:${GO_VERSION}-bookworm`, `go build ./cmd/mirror-agent` | `debian:12-slim` + `git git-lfs python3 gnupg curl ca-certificates`, `repo` launcher verified with GPG key `8BB9AD79…5C65`, user `horizon-sdv-mirror-ops` (UID 1000) | `terraform/modules/base/locals.tf:56-60`, `AGT/Dockerfile:17-54` |
+| `horizon-api-app` | 1.1.2 → 1.2.0 | baseline | baseline | `terraform/modules/base/locals.tf:155-159` |
+| `keycloak-post-horizon-api` | 1.0.0 → 1.1.0 | adds `storage-mirror-role.mjs` | baseline | `terraform/modules/base/locals.tf:131-135`, `KC/Dockerfile:20` |
 
 Go modules: controller `storage-mirror-module` (go 1.27.0, controller-runtime v0.23.3, k8s.io/api v0.35.5,
 robfig/cron v3.0.1, sigs.k8s.io/yaml v1.6.0) (`CTL/go.mod:15-28`); agent `storage-mirror-sync` (go 1.27.0,
-creack/pty v1.1.24, gopkg.in/yaml.v3 v3.0.1) (`AGT/go.mod:15-23`).
+creack/pty v1.1.24, gopkg.in/yaml.v3 v3.0.1) (`AGT/go.mod:15-23`). Both Dockerfiles take the Go image patch from the
+`GO_VERSION` build argument (`CTL/Dockerfile:15-16`, `AGT/Dockerfile:17-18`), which Terraform passes to every image from
+`tools.go.version` in `versions.yaml` (`terraform/modules/base/locals.tf:34`, `terraform/modules/base/main.tf:215-221`).
 
 Image references reach the charts through MODULE_CONFIG `containerImages.storageMirrorModule` and
-`containerImages.storageMirrorSync` (`terraform/modules/sdv-gke-apps/main.tf:557-558`).
+`containerImages.storageMirrorSync` (`terraform/modules/sdv-gke-apps/main.tf:558-559`).
 
 ## 4. CRDs
 
@@ -776,7 +778,7 @@ after cancel`.
 `lfs` (`AGT/internal/mirror/agent.go:548-590`): `disabled` → skip. `auto` → per project, LFS is used if any `refs/heads`
 tip has a `.gitattributes` containing `filter=lfs`. When used (or `enabled`), `Reporter.SetLFSDetected` is called and
 `git lfs fetch origin <refs…>` runs in batches of 50 branch refs per project. The image runs
-`git lfs install --system --skip-smudge` (`AGT/Dockerfile:41-46`). For `repo` with `lfs=enabled`, `repo init` also gets
+`git lfs install --system --skip-smudge` (`AGT/Dockerfile:42-47`). For `repo` with `lfs=enabled`, `repo init` also gets
 `--git-lfs` (`AGT/internal/mirror/agent.go:323-326`).
 
 **Verified by test** `TestGitLFSAutoDetectAndFetch` (git-lfs 3.6.1, file remote); kind `git-lfs auto detected`,
@@ -996,8 +998,8 @@ percent, elapsed, ETA, state, `(stale)`, run name, current project and the `hori
 | | Role in `jenkins` (only when the Jenkins consumer is enabled): PVCs get/list/watch/create; delete on the configured claim name only | `CH/templates/rbac.yaml:152-187` |
 | | ClusterRole: PersistentVolumes all verbs | `CH/templates/rbac.yaml:188-215` |
 | SA `workflows/storage-mirror-sync` | RoleBinding to `argo-workflowtaskresults`; Workload Identity annotation to `gke-argo-workflows-sa` | `WF/templates/workflowtemplates.yaml:253-285` |
-| GSA `gke-argo-workflows-sa` (Terraform `sa9`) | gains the KSA binding `workflows/storage-mirror-sync`; existing roles unchanged | `terraform/env/main.tf:393-424` |
-| Config Connector GSA `gke-config-connector-sa` (`sa11`) | baseline `roles/editor`, `roles/iam.serviceAccountTokenCreator`; no change | `terraform/env/main.tf:457-502` |
+| GSA `gke-argo-workflows-sa` (Terraform `sa9`) | gains the KSA binding `workflows/storage-mirror-sync`; existing roles unchanged | `terraform/env/main.tf:394-425` |
+| Config Connector GSA `gke-config-connector-sa` (`sa11`) | baseline `roles/editor`, `roles/iam.serviceAccountTokenCreator`; no change | `terraform/env/main.tf:458-503` |
 
 RBAC cannot restrict `create` by name, so Secrets `create` is namespace-wide in those three namespaces
 (`CH/templates/rbac.yaml:54-61`). The controller does not create Workflows; runs start through the Sensors' SA
@@ -1041,7 +1043,7 @@ TLS Secrets`. Behaviour across an Argo CD disable and re-enable: **not verified 
 
 DNS for the controller comes from the platform `allow-dns` policy in `horizon` (baseline
 `gitops/templates/namespaces.yaml`). **Verified by test**: the kind run applies the platform policies rendered from the
-root chart plus kind-only additions (`E2E/run.sh:186-197`, `E2E/manifests/harness-policies.yaml:21-75`) and every kind
+root chart plus kind-only additions (`E2E/run.sh:188-199`, `E2E/manifests/harness-policies.yaml:21-75`) and every kind
 scenario passes under them.
 
 ### 11.4 ValidatingAdmissionPolicy
@@ -1069,7 +1071,7 @@ client). Against Keycloak: **not verified at runtime**.
 ## 12. Config Connector and Terraform
 
 Mirror volume: the controller creates the `FilestoreInstance` (section 5.6); Terraform creates no Filestore resource.
-Config Connector's GSA permissions are unchanged (`terraform/env/main.tf:499-502`).
+Config Connector's GSA permissions are unchanged (`terraform/env/main.tf:500-503`).
 
 storage-gcs buckets:
 
@@ -1081,8 +1083,8 @@ storage-gcs buckets:
 - `storageLocation` comes from MODULE_CONFIG `storageLocation: ${var.gcp_storage_location}`
   (`terraform/modules/sdv-gke-apps/main.tf:521`, baseline).
 - Terraform `module.sdv_gcs` and `module.sdv_gcs_openbsw` replaced by `removed { lifecycle { destroy = false } }` and
-  dropped from the `sdv_gke_cluster` `depends_on` (`terraform/modules/base/main.tf:222-238`,
-  `terraform/modules/base/main.tf:256-263`).
+  dropped from the `sdv_gke_cluster` `depends_on` (`terraform/modules/base/main.tf:229-245`,
+  `terraform/modules/base/main.tf:263-270`).
 - The storage-gcs chart version is 1.1.0 (`gitops/modules/storage-gcs-module/Chart.yaml:18`; `appVersion` unchanged at
   1.0.0, `gitops/modules/storage-gcs-module/Chart.yaml:20`), and its README opens with the Module Metadata table
   (`gitops/modules/storage-gcs-module/README.md:15-29`).
@@ -1091,9 +1093,9 @@ Terraform additions:
 
 | Change | Source |
 |---|---|
-| `sa9` gains KSA `workflows/storage-mirror-sync` | `terraform/env/main.tf:413-416` |
-| Image entries `storage-mirror-module-app` 0.1.0, `storage-mirror-sync` 0.1.0; `horizon-api-app` 1.2.0; `keycloak-post-horizon-api` 1.1.0 | `terraform/modules/base/locals.tf:47-56`, `terraform/modules/base/locals.tf:127-131`, `terraform/modules/base/locals.tf:151-155` |
-| MODULE_CONFIG `storageMirror.network`, `containerImages.storageMirrorModule`, `containerImages.storageMirrorSync` | `terraform/modules/sdv-gke-apps/main.tf:526-527`, `terraform/modules/sdv-gke-apps/main.tf:557-558` |
+| `sa9` gains KSA `workflows/storage-mirror-sync` | `terraform/env/main.tf:414-417` |
+| Image entries `storage-mirror-module-app` 0.1.0, `storage-mirror-sync` 0.1.0; `horizon-api-app` 1.2.0; `keycloak-post-horizon-api` 1.1.0 | `terraform/modules/base/locals.tf:51-60`, `terraform/modules/base/locals.tf:131-135`, `terraform/modules/base/locals.tf:155-159` |
+| MODULE_CONFIG `storageMirror.network`, `containerImages.storageMirrorModule`, `containerImages.storageMirrorSync` | `terraform/modules/sdv-gke-apps/main.tf:526-527`, `terraform/modules/sdv-gke-apps/main.tf:558-559` |
 
 Bucket and Filestore behaviour against GCP: **not verified at runtime**.
 
@@ -1293,17 +1295,18 @@ the kind cluster API binds to `127.0.0.1` (`E2E/kind-config.yaml:20`); the clust
 Modes (`E2E/run.sh:31-46`): default (kind), `--apiserver-only`, `--render-only`, `--keep`, `--reuse`, `--skip-build`,
 `--only <scenario>`.
 
-kind mode: builds both images and loads them with `kind load` (`E2E/run.sh:121-128`); NFS server
+kind mode: builds both images with `GO_VERSION` read from `versions.yaml` and loads them with `kind load`
+(`E2E/run.sh:121-130`); NFS server
 `registry.k8s.io/e2e-test-images/volume/nfs:1.4` and Gitea `1.22.6-rootless` over HTTPS with LFS
 (`E2E/manifests/infra.yaml:39`, `E2E/manifests/infra.yaml:82`); seed of a three-project manifest, an LFS repository and
 a private repository (`E2E/manifests/seed.sh:17-99`); Argo Workflows chart 0.47.4 and Argo Events chart 2.3.2
-(`E2E/run.sh:50-51`); platform NetworkPolicies rendered from `gitops/` (`E2E/run.sh:186-197`); test-only patches
+(`E2E/run.sh:50-51`); platform NetworkPolicies rendered from `gitops/` (`E2E/run.sh:188-199`); test-only patches
 (`E2E/render.py:34-62`: drop Applications, `TEST_NFS_SERVER`, `IfNotPresent`, `GIT_SSL_NO_VERIFY=true`).
 
 kind scenarios (`E2E/scenarios.sh:307-326`): `cel`, `volume`, `vap`, `flock`, `create-repo`, `create-git-lfs`,
 `create-git-credentials`, `sync`, `batch`, `mutex`, `cancel`, `restart`, `retain`, `purge`.
 
-API-server mode (`E2E/run.sh:249-305`, `E2E/apiserver/main.go`, `E2E/fake-webhook.py`, `E2E/scenarios.sh:328-461`):
+API-server mode (`E2E/run.sh:251-307`, `E2E/apiserver/main.go`, `E2E/fake-webhook.py`, `E2E/scenarios.sh:328-461`):
 envtest control plane with the module, Argo Workflows full-schema and Argo Events CRDs; strict apply of the rendered
 manifests; the controller as a local process, which creates its API Secrets in the envtest server; Workflows simulated.
 
