@@ -2,4 +2,11 @@ node_modules
 dist
 proxy/dist
 .git
+public/bundled-docs
+public/docs-images
 *.md
+# Terraform stages the docs tree here before the image build. The Markdown
+# exclusion above would otherwise drop it.
+!doc-src/
+!doc-src/**
+!doc-src/**/*.md

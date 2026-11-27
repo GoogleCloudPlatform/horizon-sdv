@@ -35,8 +35,6 @@ import { authService } from '../utils/auth';
 import BuildIcon from '@mui/icons-material/Build';
 
 const HORIZON_SDV_REPO = 'https://github.com/GoogleCloudPlatform/horizon-sdv';
-const DEPLOYMENT_GUIDE_URL =
-  'https://github.com/GoogleCloudPlatform/horizon-sdv/blob/main/docs/deployment_guide.md';
 
 type ConceptCard = {
   icon: ReactNode;
@@ -189,15 +187,15 @@ export function WelcomePage() {
             Learn more
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            New to the program? The public repo has the full story, contribution guide, and
-            deployment walkthrough.
+            Guides for this deployment — install, upgrades, workloads, and modules — are in
+            Documentation. They are the copies bundled with the Horizon version you are running.
           </Typography>
           <Stack direction="row" flexWrap="wrap" gap={2} sx={{ pt: 0.5 }}>
+            <MuiLink component={Link} to="/documentation/docs/deployment_guide.md">
+              Deployment guide
+            </MuiLink>
             <MuiLink href={HORIZON_SDV_REPO} target="_blank" rel="noopener noreferrer">
               Horizon SDV on GitHub
-            </MuiLink>
-            <MuiLink href={DEPLOYMENT_GUIDE_URL} target="_blank" rel="noopener noreferrer">
-              Deployment guide
             </MuiLink>
           </Stack>
         </Stack>

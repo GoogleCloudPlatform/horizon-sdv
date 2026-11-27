@@ -66,6 +66,13 @@ export async function apiCli(path: string, init: RequestInit = {}): Promise<Resp
   return fetchWithAuth(url, init);
 }
 
+/** Bundled documentation via proxy (user JWT required, same as apiMm). */
+export async function apiDocs(path: string, init: RequestInit = {}): Promise<Response> {
+  const originBase = getAppOriginBase();
+  const url = `${originBase}/api/docs${path.startsWith('/') ? path : `/${path}`}`;
+  return fetchWithAuth(url, init);
+}
+
 /**
  * Parse a CLI API JSON body. Vite's SPA fallback can return HTML with HTTP 200 when
  * `/api/cli` is not handled; that used to surface as `Unexpected token '<'`.

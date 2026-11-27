@@ -24,12 +24,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -115,6 +117,11 @@ func main() {
 	var cliVer bearerVerifier = oidcBearerVerifier{inner: verifier}
 	mux.Handle("/api/horizon/", newHorizonProxy(haURL, ci, verifier))
 	registerCLIRoutes(mux, env("CLI_DIST_DIR", "/cli-dist"), cliVer)
+	spaFS, err := fs.Sub(staticFS, staticRoot)
+	if err != nil {
+		log.Fatalf("embedded spa: %v", err)
+	}
+	registerDocsRoutes(mux, spaFS, cliVer)
 	mux.Handle("/", spaHandler(htmlBaseTagHref(normalizePublicPath(env("PUBLIC_PATH", "")))))
 
 	ln, err := net.Listen("tcp", addr)
@@ -520,6 +527,10 @@ func spaHandler(baseHref string) http.Handler {
 		p := strings.TrimPrefix(r.URL.Path, "/")
 		if p == "" {
 			p = "index.html"
+		}
+		if isDocsStaticPath(path.Clean(p)) {
+			http.NotFound(w, r)
+			return
 		}
 		b, err := staticFS.ReadFile(staticRoot + "/" + p)
 		if err != nil {
