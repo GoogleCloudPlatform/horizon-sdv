@@ -161,7 +161,7 @@ pipelineJob('Android/Tests/CTS Execution') {
     stringParam {
       name('CTS_DOWNLOAD_URL')
       defaultValue('')
-      description("""<p>Optional CTS test harness download URL.<br/>Use official CTS test harness (empty field) or one built from AAOS (SDV) Builder job and stored in GCS Bucket,<br/><br/>
+      description("""<p>Optional CTS test harness download URL.<br/>Use official CTS test harness (empty field) or one built from AAOS Builder job and stored in GCS Bucket,<br/><br/>
         Example for AAOS:<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;/android-cts.zip<br/><br/>
         <b>Note:</b>
           <ul><li>if build number is less than 2 digits, then zero pad , i.e. 1 to 9 must be 01 to 09.</li></ul)</p>""")
