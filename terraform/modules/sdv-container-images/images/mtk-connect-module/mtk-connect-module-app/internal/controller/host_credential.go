@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"mtk-connect-module/internal/mtk"
 )
@@ -50,7 +51,12 @@ const (
 	// jenkinsCredentialLabel marks the copy the controller is allowed to delete. The Jenkins Role cannot
 	// name every Secret in advance, so admission allows delete only when this label is already set.
 	jenkinsCredentialLabel = "mtkconnect.horizon-sdv.io/jenkins-credential"
+
+	hostKeyLookupAttempts = 3
 )
+
+// hostKeyLookupBackoff is a var so tests can shorten it.
+var hostKeyLookupBackoff = 2 * time.Second
 
 func hostCredentialSecretName(testbench string) string { return testbench + "-agent" }
 
@@ -118,23 +124,31 @@ func (r *TestbenchReconciler) ensureHostCredential(ctx context.Context, tb *unst
 	}
 
 	expiry := now.Add(ttl)
-	value, err := api.CreateKey(ctx, userID, expiry)
+	value, keyID, err := api.CreateKey(ctx, userID, expiry)
 	if err != nil {
 		return "", fmt.Errorf("create host key: %w", err)
 	}
-	keys, err := api.Keys(ctx, userID)
-	if err != nil {
-		return "", fmt.Errorf("list host keys: %w", err)
+	if keyID == "" {
+		// The create response had no id. The list shows only a prefix of the value, so that is the only way
+		// to learn the id. A key that still cannot be named is revoked when the list does name it, and is
+		// never written down.
+		created, idErr := identifyCreatedHostKey(ctx, api, userID, value)
+		if idErr != nil {
+			if revErr := revokeHostKeyByValue(ctx, api, userID, value); revErr != nil {
+				log.FromContext(ctx).Error(revErr, "created host key could not be identified or revoked",
+					"testbench", tb.GetNamespace()+"/"+tb.GetName(), "expiry", expiry.UTC().Format(time.RFC3339))
+				return "", fmt.Errorf("host key was created but cannot be identified or revoked (not handed out, expires %s): %w",
+					expiry.UTC().Format(time.RFC3339), idErr)
+			}
+			return "", fmt.Errorf("host key was created but could not be identified; it was revoked and not handed out: %w", idErr)
+		}
+		keyID = created.ID
 	}
-	created, ok := findCurrentKey(keys, value)
-	if !ok || created.ID == "" {
-		return "", fmt.Errorf("host key was created but cannot be identified for later revocation")
-	}
-	st.HostKeyID, st.HostKeyExpiry = created.ID, expiry
+	st.HostKeyID, st.HostKeyExpiry = keyID, expiry
 	if err := r.writeStatus(ctx, tb, st); err != nil {
 		// Without the record the key could not be revoked later, so it is not handed out.
 		st.HostKeyID, st.HostKeyExpiry, st.RetiredHostKeys = prevID, prevExpiry, prevRetired
-		if delErr := deleteHostKey(ctx, api, userID, created.ID); delErr != nil {
+		if delErr := deleteHostKey(ctx, api, userID, keyID); delErr != nil {
 			return "", fmt.Errorf("record host key: %w (also failed to revoke the unrecorded key: %v)", err, delErr)
 		}
 		return "", fmt.Errorf("record host key: %w", err)
@@ -145,7 +159,7 @@ func (r *TestbenchReconciler) ensureHostCredential(ctx context.Context, tb *unst
 		secretKeyPassword:      []byte(value),
 		hostSecretRegistration: []byte(registration),
 		hostSecretToken:        []byte(token),
-		hostSecretKeyID:        []byte(created.ID),
+		hostSecretKeyID:        []byte(keyID),
 		hostSecretExpiry:       []byte(expiry.UTC().Format(time.RFC3339)),
 	}
 	if _, err := applySecret(ctx, r.Direct, desiredSecret{Namespace: tb.GetNamespace(), Name: name, Data: data}); err != nil {
@@ -162,6 +176,46 @@ func (r *TestbenchReconciler) ensureHostCredential(ctx context.Context, tb *unst
 		return "", err
 	}
 	return ref, nil
+}
+
+// identifyCreatedHostKey finds the id of a key that was just created. The list is read more than once,
+// because a key that cannot be identified cannot be revoked before it expires.
+func identifyCreatedHostKey(ctx context.Context, api TestbenchAPI, userID, value string) (mtk.Key, error) {
+	var lastErr error
+	for attempt := 0; attempt < hostKeyLookupAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return mtk.Key{}, ctx.Err()
+			case <-time.After(hostKeyLookupBackoff):
+			}
+		}
+		keys, err := api.Keys(ctx, userID)
+		if err != nil {
+			lastErr = fmt.Errorf("list host keys: %w", err)
+			continue
+		}
+		if k, ok := findCurrentKey(keys, value); ok && k.ID != "" {
+			return k, nil
+		}
+		lastErr = errors.New("the new key is not in the key list or its prefix is ambiguous")
+	}
+	return mtk.Key{}, lastErr
+}
+
+// revokeHostKeyByValue deletes the key with this value. It is the last attempt after the id could not be
+// learned from the create response or the earlier lists. An ambiguous prefix is left in place: deleting
+// every match could revoke another testbench's key.
+func revokeHostKeyByValue(ctx context.Context, api TestbenchAPI, userID, value string) error {
+	keys, err := api.Keys(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("list host keys: %w", err)
+	}
+	k, ok := findCurrentKey(keys, value)
+	if !ok || k.ID == "" {
+		return errors.New("unstored host key cannot be identified for revocation")
+	}
+	return deleteHostKey(ctx, api, userID, k.ID)
 }
 
 // publishJenkinsCredential writes the credential the Jenkins provider can see. That provider only lists

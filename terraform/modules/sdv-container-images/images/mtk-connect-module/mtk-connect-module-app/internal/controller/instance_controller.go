@@ -87,7 +87,7 @@ type MTKAPI interface {
 	Version(ctx context.Context) (string, error)
 	FindUserID(ctx context.Context, username string) (string, error)
 	Keys(ctx context.Context, userID string) ([]mtk.Key, error)
-	CreateKey(ctx context.Context, userID string, expiry time.Time) (string, error)
+	CreateKey(ctx context.Context, userID string, expiry time.Time) (value, id string, err error)
 	DeleteKey(ctx context.Context, userID, keyID string) error
 }
 
@@ -540,7 +540,7 @@ func lastLine(s string) string {
 // truth. The other Secrets are written by distribute, which also runs on every reconcile, so a partial
 // failure heals itself. The previous key stays valid until cleanupKeys removes it after the overlap.
 func (r *InstanceReconciler) rotate(ctx context.Context, ns string, spec *InstanceSpec, t Timings, sa *serviceAccount, st *instanceStatus, now time.Time) error {
-	newKey, err := sa.api.CreateKey(ctx, sa.userID, now.Add(t.KeyLifetime))
+	newKey, _, err := sa.api.CreateKey(ctx, sa.userID, now.Add(t.KeyLifetime))
 	if err != nil {
 		return fmt.Errorf("create new API key: %w", err)
 	}

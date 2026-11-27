@@ -13,7 +13,8 @@
 # limitations under the License.
 
 # Build the host-side mtkc-agent binary.
-FROM --platform=linux/amd64 golang:1.27.2-alpine AS builder
+ARG GO_VERSION
+FROM --platform=linux/amd64 golang:${GO_VERSION}-alpine AS builder
 
 WORKDIR /src
 

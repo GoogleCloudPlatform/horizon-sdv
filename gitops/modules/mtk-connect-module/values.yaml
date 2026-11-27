@@ -24,22 +24,10 @@ repo:
 # overviewNamespace is overridden by Module Manager with the catalog value (<prefix>mtk-connect-overview).
 overviewServiceName: mod-mtk-connect-overview
 overviewNamespace: mtk-connect-overview
-# Module Manager replaces this entire map with MODULE_CONFIG (namespacePrefix, domain, isSubEnvironment,
-# enableNetworkPolicies, probeSourceCIDRs, nginx, modules, ...); it does not merge.
-# The values here only let `helm template` render the chart on its own.
-config:
-  namespacePrefix: ""
-  nginx:
-    image: nginx
-    tag: 1.31.2-alpine3.23
-  domain: ""
-  isSubEnvironment: false
-  enableNetworkPolicies: true
-  probeSourceCIDRs: []
-  # Module-specific MODULE_CONFIG (docs/architecture/06_interfaces.md); containerImage is a full image ref.
-  modules:
-    mtk-connect:
-      containerImage: ""
+# From MODULE_CONFIG: namespacePrefix, domain, isSubEnvironment, enableNetworkPolicies,
+# probeSourceCIDRs, nginx, modules.mtk-connect.containerImage. Module Manager replaces this
+# whole map; it does not merge.
+config: {}
 
 softFeaturesEnabled: {}
 

@@ -59,6 +59,8 @@ type fakeMTK struct {
 	keys          []mtk.Key
 	revoked       []string
 	keySeq        int
+	keysFailures  int  // the next calls of Keys that fail
+	omitKeyID     bool // CreateKey returns no id, so the controller must find the key in the list
 }
 
 func newFakeMTK() *fakeMTK { return &fakeMTK{agents: map[string]*mtk.Agent{}, nextID: 1} }
@@ -121,14 +123,22 @@ func (f *fakeMTK) GrantUserByName(_ context.Context, agentID, username, permissi
 
 func (f *fakeMTK) EnsureUser(context.Context, string) (string, error) { return "user-agent", nil }
 
-func (f *fakeMTK) CreateKey(_ context.Context, _ string, expiry time.Time) (string, error) {
+func (f *fakeMTK) CreateKey(_ context.Context, _ string, expiry time.Time) (string, string, error) {
 	f.keySeq++
+	id := fmt.Sprintf("k%d", f.keySeq)
 	val := fmt.Sprintf("%08d-agent-key", f.keySeq)
-	f.keys = append(f.keys, mtk.Key{ID: fmt.Sprintf("k%d", f.keySeq), Value: val, Created: expiry.Add(-time.Hour), Expires: expiry})
-	return val, nil
+	f.keys = append(f.keys, mtk.Key{ID: id, Value: val, Created: expiry.Add(-time.Hour), Expires: expiry})
+	if f.omitKeyID {
+		return val, "", nil
+	}
+	return val, id, nil
 }
 
 func (f *fakeMTK) Keys(context.Context, string) ([]mtk.Key, error) {
+	if f.keysFailures > 0 {
+		f.keysFailures--
+		return nil, errors.New("key list unavailable")
+	}
 	out := make([]mtk.Key, len(f.keys))
 	copy(out, f.keys)
 	return out, nil
@@ -804,6 +814,37 @@ func TestDeleteRevokesRecordedHostKeysWithoutTheSecret(t *testing.T) {
 	}
 	if !got["k1"] || !got["k2"] {
 		t.Fatalf("delete must revoke the current and the retired key from the record, revoked=%v", e.api.revoked)
+	}
+}
+
+func TestHostKeyIsIdentifiedAfterAFailedKeyList(t *testing.T) {
+	hostKeyLookupBackoff = 0
+	e := newTbEnv(t, instanceObject(), apiKeySecret(), testbenchObject(publicSpec()))
+	e.api.omitKeyID = true
+	e.api.keysFailures = hostKeyLookupAttempts - 1
+	e.reconcile(t)
+	if statusString(e.get(t), "hostKeyId") != "k1" {
+		t.Fatalf("hostKeyId %q, want the key found on a later list", statusString(e.get(t), "hostKeyId"))
+	}
+}
+
+func TestUnidentifiedHostKeyIsRevokedAndNotHandedOut(t *testing.T) {
+	hostKeyLookupBackoff = 0
+	e := newTbEnv(t, instanceObject(), apiKeySecret(), testbenchObject(publicSpec()))
+	e.api.omitKeyID = true
+	e.api.keysFailures = hostKeyLookupAttempts
+	_, _ = e.r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: tbNS, Name: tbName}})
+	if e.api.keySeq != 1 {
+		t.Fatalf("keys created %d", e.api.keySeq)
+	}
+	if statusString(e.get(t), "hostKeyId") != "" {
+		t.Fatalf("hostKeyId %q, an unidentified key must not be recorded", statusString(e.get(t), "hostKeyId"))
+	}
+	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: tbNS, Name: tbName + "-agent"}, &corev1.Secret{}); err == nil {
+		t.Fatal("an unidentified key must not be written to the host Secret")
+	}
+	if len(e.api.revoked) != 1 || e.api.revoked[0] != "k1" {
+		t.Fatalf("the unidentified key must be revoked once the list names it, revoked=%v", e.api.revoked)
 	}
 }
 

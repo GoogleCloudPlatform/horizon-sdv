@@ -48,6 +48,10 @@ var (
 	userPattern   = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 	hostPattern   = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,253}$`)
 	tunnelPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,63}$`)
+	// launchPattern is one program and its arguments, separated by single spaces. The command runs through
+	// eval, so it allows no character the shell treats specially, and no NAME=value prefix on the program.
+	// Keep it in step with the launchApplication pattern in crd-mtkconnectdevice.yaml.
+	launchPattern = regexp.MustCompile(`^[A-Za-z0-9_./:+@%,-]+( [A-Za-z0-9_./:=+@%,-]+)*$`)
 )
 
 // Tunnel is one raw TCP tunnel to the device host (an entry of MTK_CONNECT_TUNNEL_LIST).
@@ -110,8 +114,8 @@ func (d Device) Validate() error {
 	if d.TerminalUser != "" && !userPattern.MatchString(d.TerminalUser) {
 		return fmt.Errorf("host.terminalUser %q is not a valid user name", d.TerminalUser)
 	}
-	if strings.ContainsRune(d.LaunchApplication, 0) || len(d.LaunchApplication) > 1024 {
-		return fmt.Errorf("host.launchApplication must be at most 1024 characters and contain no NUL")
+	if d.LaunchApplication != "" && (len(d.LaunchApplication) > 1024 || !launchPattern.MatchString(d.LaunchApplication)) {
+		return fmt.Errorf("host.launchApplication must be at most 1024 characters: a program and its arguments separated by single spaces, using only letters, digits and _ . / : = + @ %% , -")
 	}
 
 	if d.Profile == ProfileTunnelCarrier && len(d.Tunnels) == 0 {
@@ -173,8 +177,8 @@ func (d Device) adbTerminalArgs() []interface{} {
 }
 
 // launchArgs runs the application as builder. The script passes the application through an environment
-// variable that the shell expands inside double quotes; quoting it here gives the same command line for any
-// application text.
+// variable that the shell expands inside double quotes; quoting it here gives the same command line.
+// Validate limits the text to launchPattern, so eval runs exactly one program.
 func (d Device) launchArgs() []interface{} {
 	return []interface{}{"-c", `cd /home/builder; su builder -c "eval ` + quoteForDoubleQuotes(d.LaunchApplication) + `"`, ""}
 }

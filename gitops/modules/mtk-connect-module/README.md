@@ -23,7 +23,7 @@ Packages MTK Connect as a Horizon module so it can be enabled and disabled from 
 
 | Metadata Field | Value |
 | :--- | :--- |
-| **STATUS** | proposed |
+| **STATUS** | experimental |
 | **OWNER** | Accenture |
 | **CONTACT** | module: [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com) |
 | **CHART VERSION** | 0.2.0 |

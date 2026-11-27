@@ -43,20 +43,21 @@ sed -i "s/##NAMESPACE##/${NAMESPACE_PREFIX}mtk-connect/g" ./secret-mtk-connect.j
 sed -i "s/##MTKC_APIKEY##/${MTKC_APIKEY}/g" ./secret-workflows.json
 sed -i "s/##NAMESPACE##/${NAMESPACE_PREFIX}workflows/g" ./secret-workflows.json
 
+# -o /dev/null on every call: a DELETE returns the deleted Secret and a POST the created one, and both contain the key.
 # The admin key is not a Jenkins credential. Remove one left by an older image. DELETE may 404.
 log "Removing admin API key from namespace=${NAMESPACE_PREFIX}jenkins"
-curl -sf --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets/jenkins-mtk-connect-apikey || true
+curl -sf -o /dev/null --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}jenkins/secrets/jenkins-mtk-connect-apikey" || true
 log "Jenkins admin secret removed"
 
 log "Creating mtk-connect secret in namespace=${NAMESPACE_PREFIX}mtk-connect"
-curl -sf --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mtk-connect/secrets/mtk-connect-apikey || true
-# -f fails the script when the write is rejected. -o /dev/null keeps the Secret body, which contains the key, out of the log.
-curl -sf -o /dev/null --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mtk-connect/secrets -d @secret-mtk-connect.json
+curl -sf -o /dev/null --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mtk-connect/secrets/mtk-connect-apikey" || true
+# -f fails the script when the write is rejected.
+curl -sf -o /dev/null --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}mtk-connect/secrets" -d @secret-mtk-connect.json
 log "mtk-connect secret created"
 
 log "Creating workflows secret in namespace=${NAMESPACE_PREFIX}workflows"
-curl -sf --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X DELETE ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}workflows/secrets/workflow-mtk-connect-apikey || true
-curl -sf -o /dev/null --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST ${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}workflows/secrets -d @secret-workflows.json
+curl -sf -o /dev/null --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X DELETE "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}workflows/secrets/workflow-mtk-connect-apikey" || true
+curl -sf -o /dev/null --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST "${APISERVER}/api/v1/namespaces/${NAMESPACE_PREFIX}workflows/secrets" -d @secret-workflows.json
 log "Workflows secret created"
 
 log "Script end"

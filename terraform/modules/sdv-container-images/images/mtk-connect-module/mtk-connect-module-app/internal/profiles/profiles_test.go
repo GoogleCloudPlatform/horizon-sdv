@@ -172,16 +172,27 @@ func TestCoveredBehaviours(t *testing.T) {
 	}
 }
 
-func TestLaunchApplicationIsQuotedForTheShell(t *testing.T) {
-	d := Device{Profile: ProfileHostOnly, LaunchApplication: `echo "$HOME" \ ` + "`id`"}
+func TestLaunchApplicationRunsOneProgram(t *testing.T) {
+	d := Device{Profile: ProfileHostOnly, LaunchApplication: "/opt/app/run.sh --port=8080 -v"}
 	p, err := d.Payload()
 	if err != nil {
 		t.Fatal(err)
 	}
 	args := p["interface"].(map[string]interface{})["terminal"].(map[string]interface{})["types"].([]interface{})[0].(map[string]interface{})["args"].([]interface{})
-	want := `cd /home/builder; su builder -c "eval echo \"\$HOME\" \\ \` + "`id\\`" + `"`
+	want := `cd /home/builder; su builder -c "eval /opt/app/run.sh --port=8080 -v"`
 	if args[1] != want {
 		t.Fatalf("args[1] = %q, want %q", args[1], want)
+	}
+
+	for _, app := range []string{
+		"app; id", "app | id", "app & id", "app && id", "app || id", "app > /tmp/x", "app < /etc/passwd",
+		"app $(id)", "app `id`", `app "x"`, "app 'x'", `app \x`, "app\nid", "app (x)", "app {x}", "app *",
+		"app ~", "app #x", "app !x", "LD_PRELOAD=/tmp/x.so app", " app", "app ", "app  x",
+	} {
+		d := Device{Profile: ProfileHostOnly, LaunchApplication: app}
+		if err := d.Validate(); err == nil {
+			t.Errorf("launchApplication %q: want an error", app)
+		}
 	}
 }
 

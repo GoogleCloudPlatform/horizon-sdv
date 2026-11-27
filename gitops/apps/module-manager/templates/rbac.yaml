@@ -168,6 +168,35 @@ subjects:
     name: module-manager
     namespace: {{ .Values.namespace }}
 ---
+# mtk-connect disable: DrainMTKConnectModule deletes devices and testbenches in the workflows and
+# jenkins namespaces, then the MTKConnectInstance. List is already covered by module-manager-kcc-drain;
+# delete is not, so the drain returns Forbidden, the module stays enabled, and the operator resumes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: module-manager-mtk-connect
+  labels:
+    app.kubernetes.io/name: module-manager
+rules:
+  - apiGroups: ["mtkconnect.horizon-sdv.io"]
+    resources: ["mtkconnectdevices", "mtkconnecttestbenches", "mtkconnectinstances"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: module-manager-mtk-connect
+  labels:
+    app.kubernetes.io/name: module-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: module-manager-mtk-connect
+subjects:
+  - kind: ServiceAccount
+    name: module-manager
+    namespace: {{ .Values.namespace }}
+---
 # KCC finalizer stripper: Module Manager needs to list and patch KCC-managed resources in module
 # destination namespaces during platform drain so that cnrm.cloud.google.com/finalizers on
 # objects stuck in DeleteFailed do not block namespace termination.

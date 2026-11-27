@@ -62,7 +62,7 @@ type TestbenchAPI interface {
 	GrantGroupByName(ctx context.Context, agentID, group, permission string) error
 	GrantUserByName(ctx context.Context, agentID, username, permission string) error
 	EnsureUser(ctx context.Context, username string) (string, error)
-	CreateKey(ctx context.Context, userID string, expiry time.Time) (string, error)
+	CreateKey(ctx context.Context, userID string, expiry time.Time) (value, id string, err error)
 	Keys(ctx context.Context, userID string) ([]mtk.Key, error)
 	DeleteKey(ctx context.Context, userID, keyID string) error
 }
