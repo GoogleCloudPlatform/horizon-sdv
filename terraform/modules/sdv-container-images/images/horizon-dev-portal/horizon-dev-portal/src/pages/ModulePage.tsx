@@ -963,6 +963,13 @@ function isCustomChoice(choice: string): boolean {
 }
 
 const PREDEFINED_TEMPLATE_MARKER = '# predefined-template';
+const GERRIT_ENABLED_TEMPLATE_MARKER = '# gerrit-enabled-template';
+const ANDROID_CUSTOM_NOTE_MARKER = '# android-custom-note';
+const DESCRIPTION_MARKERS = [
+  ANDROID_CUSTOM_NOTE_MARKER,
+  PREDEFINED_TEMPLATE_MARKER,
+  GERRIT_ENABLED_TEMPLATE_MARKER,
+];
 
 function replaceYamlScalar(text: string, key: string, next: string): string {
   return text.replace(
@@ -971,19 +978,58 @@ function replaceYamlScalar(text: string, key: string, next: string): string {
   );
 }
 
-/** Returns only the help sentence before # predefined-template in workflow parameter description.*/
-function visibleParamDescription(description?: string): string | undefined {
-  const text = description?.split(PREDEFINED_TEMPLATE_MARKER)[0]?.trim();
-  return text || undefined;
-}
-
-/** Predefined repo block rendered into the workflow parameter from uploader values. */
-function predefinedTemplate(description?: string): string {
-  const at = description?.indexOf(PREDEFINED_TEMPLATE_MARKER) ?? -1;
+/** Text between one description marker and the next marker, if that marker is present. */
+function markedSection(description: string | undefined, marker: string): string {
+  if (!description) {
+    return '';
+  }
+  const at = description.indexOf(marker);
   if (at < 0) {
     return '';
   }
-  return description!.slice(at + PREDEFINED_TEMPLATE_MARKER.length).trim();
+  const rest = description.slice(at + marker.length);
+  let end = rest.length;
+  for (const other of DESCRIPTION_MARKERS) {
+    if (other === marker) {
+      continue;
+    }
+    const found = rest.indexOf(other);
+    if (found >= 0 && found < end) {
+      end = found;
+    }
+  }
+  return rest.slice(0, end).trim();
+}
+
+/** Returns only the help sentence before the uploader-config description markers. */
+function visibleParamDescription(description?: string): string | undefined {
+  if (!description) {
+    return undefined;
+  }
+  let cut = description.length;
+  for (const marker of DESCRIPTION_MARKERS) {
+    const at = description.indexOf(marker);
+    if (at >= 0 && at < cut) {
+      cut = at;
+    }
+  }
+  const text = description.slice(0, cut).trim();
+  return text || undefined;
+}
+
+/** Predefined repo block with Gerrit changes skipped. */
+function predefinedTemplate(description?: string): string {
+  return markedSection(description, PREDEFINED_TEMPLATE_MARKER);
+}
+
+/** Same repo block with Gerrit change refs fetched, excluding meta and robot-comments. */
+function gerritEnabledTemplate(description?: string): string {
+  return markedSection(description, GERRIT_ENABLED_TEMPLATE_MARKER);
+}
+
+/** Guidance shown under Configuration when AndroidCustom is selected. */
+function androidCustomNote(description?: string): string {
+  return markedSection(description, ANDROID_CUSTOM_NOTE_MARKER);
 }
 
 /** Fill `name` and `branch` in the predefined template. url, file, and fetch-ref-spec stay as rendered. */
@@ -997,6 +1043,17 @@ function configForChoice(template: string, choice: string): string {
     'branch',
     parsed.detail
   );
+}
+
+function gerritSupportEnabled(
+  params: Record<string, string>,
+  parameters: WorkflowFormParam[],
+): boolean {
+  const flag = parameters.find((item) => item.name === 'enableGerritSupport');
+  if (!flag) {
+    return false;
+  }
+  return (params[flag.name] ?? flag.default ?? 'false').trim().toLowerCase() === 'true';
 }
 
 function workflowParamHelperText(p: { description?: string }): string | undefined {
@@ -1048,7 +1105,11 @@ function submittedWorkflowParamValue(
   if (!readOnly) {
     return { value: stored, readOnly: false };
   }
-  const filled = configForChoice(predefinedTemplate(p.description), chosen);
+  const gerritOn = gerritSupportEnabled(params, parameters);
+  const template = gerritOn
+    ? gerritEnabledTemplate(p.description) || predefinedTemplate(p.description)
+    : predefinedTemplate(p.description);
+  const filled = configForChoice(template, chosen);
   return { value: filled || (p.default ?? stored), readOnly: true };
 }
 
@@ -1130,6 +1191,13 @@ function SubmitDialog({
     (p) => p.name !== 'submittedBy' && isYamlWorkflowParam(params[p.name] ?? p.default ?? '')
   );
   const submitWarning = cfInstanceTemplateSubmitWarning(entry.templateName);
+  const versionParam = entry.parameters.find((item) =>
+    dropdownOptions(item).some((option) => isCustomChoice(option)),
+  );
+  const versionOptions = versionParam ? dropdownOptions(versionParam) : [];
+  const versionRaw = versionParam ? (params[versionParam.name] ?? '') : '';
+  const versionChosen = versionOptions.includes(versionRaw) ? versionRaw : (versionOptions[0] ?? '');
+  const customSelected = isCustomChoice(versionChosen);
 
   return (
     <Dialog open onClose={onClose} maxWidth={hasYamlField ? 'md' : 'sm'} fullWidth>
@@ -1143,6 +1211,9 @@ function SubmitDialog({
         {entry.parameters
           .filter((p) => p.name !== 'submittedBy')
           .map((p) => {
+            if (p.name === 'enableGerritSupport' && customSelected) {
+              return null;
+            }
             const value = params[p.name] ?? '';
             const options = dropdownOptions(p);
             if (options.length > 0) {
@@ -1174,35 +1245,46 @@ function SubmitDialog({
               entry.parameters,
             );
             const yaml = isYamlWorkflowParam(shown || (p.default ?? ''));
+            const customNote = customSelected ? androidCustomNote(p.description) : '';
             return (
-              <TextField
-                key={p.name}
-                margin="dense"
-                label={p.name}
-                helperText={workflowParamHelperText(p)}
-                fullWidth
-                required={!p.default}
-                multiline={yaml}
-                minRows={yaml ? Math.max(8, shown.split('\n').length) : undefined}
-                spellCheck={yaml ? false : undefined}
-                value={shown}
-                onChange={(e) => {
-                  if (!readOnlyConfig) {
-                    setParams((prev) => ({ ...prev, [p.name]: e.target.value }));
-                  }
-                }}
-                InputProps={{
-                  ...workflowParamInputProps(p, shown, entry.templateName),
-                  readOnly: readOnlyConfig,
-                  sx: yaml
-                    ? {
-                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                        fontSize: 13,
-                        lineHeight: 1.5,
-                      }
-                    : undefined,
-                }}
-              />
+              <Box key={p.name}>
+                <TextField
+                  margin="dense"
+                  label={p.name}
+                  helperText={workflowParamHelperText(p)}
+                  fullWidth
+                  required={!p.default}
+                  multiline={yaml}
+                  minRows={yaml ? Math.max(8, shown.split('\n').length) : undefined}
+                  spellCheck={yaml ? false : undefined}
+                  value={shown}
+                  onChange={(e) => {
+                    if (!readOnlyConfig) {
+                      setParams((prev) => ({ ...prev, [p.name]: e.target.value }));
+                    }
+                  }}
+                  InputProps={{
+                    ...workflowParamInputProps(p, shown, entry.templateName),
+                    readOnly: readOnlyConfig,
+                    sx: yaml
+                      ? {
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                          fontSize: 13,
+                          lineHeight: 1.5,
+                        }
+                      : undefined,
+                  }}
+                />
+                {customNote ? (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ whiteSpace: 'pre-wrap', mt: 1, mb: 1 }}
+                  >
+                    {customNote}
+                  </Typography>
+                ) : null}
+              </Box>
             );
           })}
         {err && (

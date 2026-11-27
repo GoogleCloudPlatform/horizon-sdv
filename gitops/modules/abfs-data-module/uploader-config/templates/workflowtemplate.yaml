@@ -17,12 +17,25 @@
 # so the portal can show it; the selection script keeps only the name.
 #
 # Configuration is the one form box. AndroidCustom can edit it, and the saved
-# repo is shown the next time that row is opened. A predefined version shows
-# the same box read-only: its own branch, and the shared manifest url, file,
-# and fetch-ref-spec from uploader values.
-# enableGerritSupport rewrites only that predefined fetch-ref-spec on submit.
-# false skips refs/changes. true fetches Gerrit changes except meta and robot-comments.
-# AndroidCustom ignores the flag. The read-only box stays the default spec.
+# repo is shown the next time that row is opened. With no saved repo that box
+# is the Android15 predefined row and does not fetch Gerrit changes.
+# A predefined version shows the same box read-only. enableGerritSupport
+# rewrites that box immediately: false skips refs/changes, true fetches Gerrit
+# changes except meta and robot-comments. AndroidCustom hides the flag.
+# The portal reads these description markers: # android-custom-note,
+# predefined-template, # gerrit-enabled-template.
+
+{{- define "uploaderConfig.formRepo" -}}
+- name: {{ .name }}
+  repo:
+    url: {{ .url }}
+    branch: {{ .branch }}
+    file: {{ .file }}
+    fetch-ref-spec:
+{{- range .spec }}
+    - {{ . }}
+{{- end }}
+{{- end }}
 
 {{- $customBranch := "" }}
 {{- $activeName := "" }}
@@ -49,6 +62,14 @@
 {{- if not .Values.uploaderConfig.fetchRefSpecWithGerrit }}
 {{- fail "uploaderConfig.fetchRefSpecWithGerrit is required" }}
 {{- end }}
+{{- $presetName := "AndroidCustom" }}
+{{- $presetBranch := $customBranch }}
+{{- range .Values.uploaderConfig.entries }}
+{{- if hasPrefix "Android15" .name }}
+{{- $presetName = .name }}
+{{- $presetBranch = .branch }}
+{{- end }}
+{{- end }}
 {{- $savedRepo := dict }}
 {{- $found := lookup "v1" "ConfigMap" .Values.horizonNamespace .Values.uploaderConfigMapName }}
 {{- $tableText := "" }}
@@ -65,16 +86,22 @@
 {{- end }}
 {{- end }}
 {{- end }}
+{{- $shownName := $presetName }}
 {{- $showURL := .Values.uploaderConfig.manifestUrl }}
-{{- $showBranch := $customBranch }}
+{{- $showBranch := $presetBranch }}
 {{- $showFile := .Values.uploaderConfig.manifestFile }}
 {{- $showSpec := .Values.uploaderConfig.fetchRefSpec }}
 {{- if index $savedRepo "url" }}
+{{- $shownName = "AndroidCustom" }}
 {{- $showURL = index $savedRepo "url" }}
 {{- $showBranch = index $savedRepo "branch" }}
 {{- $showFile = index $savedRepo "file" }}
 {{- $showSpec = index $savedRepo "fetch-ref-spec" }}
 {{- end }}
+{{- $formRepo := dict "name" $shownName "url" $showURL "branch" $showBranch "file" $showFile "spec" $showSpec }}
+{{- $presetRepo := dict "name" $presetName "url" .Values.uploaderConfig.manifestUrl "branch" $presetBranch "file" .Values.uploaderConfig.manifestFile "spec" .Values.uploaderConfig.fetchRefSpec }}
+{{- $disabledRepo := dict "name" "AndroidCustom" "url" .Values.uploaderConfig.manifestUrl "branch" $customBranch "file" .Values.uploaderConfig.manifestFile "spec" .Values.uploaderConfig.fetchRefSpec }}
+{{- $enabledRepo := dict "name" "AndroidCustom" "url" .Values.uploaderConfig.manifestUrl "branch" $customBranch "file" .Values.uploaderConfig.manifestFile "spec" .Values.uploaderConfig.fetchRefSpecWithGerrit }}
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -111,26 +138,22 @@ spec:
       - name: Configuration
         description: |
           Read-only unless Android_Versions is AndroidCustom.
+          # android-custom-note
+          Default configuration does not fetch gerrit changes during seed,
+          due to significant impact on the workflow execution time.
+          Depending on the actual demand for gerrit support,
+          use one of the below recommendations in the config.
+          Recommended options to fetch gerrit changes during seed:
+          ^refs/changes/*/meta
+          ^refs/changes/*/robot-comments
+          Recommended options to skip gerrit changes during seed:
+          ^refs/changes/*
           # predefined-template
-          - name: AndroidCustom
-            repo:
-              url: {{ .Values.uploaderConfig.manifestUrl }}
-              branch: {{ $customBranch }}
-              file: {{ .Values.uploaderConfig.manifestFile }}
-              fetch-ref-spec:
-{{- range .Values.uploaderConfig.fetchRefSpec }}
-              - {{ . }}
-{{- end }}
+{{ include "uploaderConfig.formRepo" $disabledRepo | indent 10 }}
+          # gerrit-enabled-template
+{{ include "uploaderConfig.formRepo" $enabledRepo | indent 10 }}
         value: |
-          - name: AndroidCustom
-            repo:
-              url: {{ $showURL }}
-              branch: {{ $showBranch }}
-              file: {{ $showFile }}
-              fetch-ref-spec:
-{{- range $showSpec }}
-                - {{ . }}
-{{- end }}
+{{ include "uploaderConfig.formRepo" $formRepo | indent 10 }}
   templates:
     - name: select-uploader-config
       inputs:
@@ -161,15 +184,7 @@ spec:
             value: {{ .Values.uploaderConfig.fetchRefSpecWithGerrit | toJson | quote }}
           - name: DEFAULT_CUSTOM_CONFIG
             value: |
-              - name: AndroidCustom
-                repo:
-                  url: {{ .Values.uploaderConfig.manifestUrl }}
-                  branch: {{ $customBranch }}
-                  file: {{ .Values.uploaderConfig.manifestFile }}
-                  fetch-ref-spec:
-{{- range .Values.uploaderConfig.fetchRefSpec }}
-                    - {{ . }}
-{{- end }}
+{{ include "uploaderConfig.formRepo" $presetRepo | indent 14 }}
           - name: WORKFLOW_TEMPLATE
             value: abfs-uploader-config-select
           - name: ABFS_NAMESPACE
