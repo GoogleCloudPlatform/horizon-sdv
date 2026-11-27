@@ -37,6 +37,7 @@ This pipeline/scripts supports builds for:
 - [Android Virtual Devices](https://source.android.com/docs/automotive/start/avd/android_virtual_device) for use with [Android Studio](https://source.android.com/docs/automotive/start/avd/android_virtual_device#share-an-avd-image-with-android-studio-users)
 - [Cuttlefish Virtual Devices](https://source.android.com/docs/devices/cuttlefish) for use with [CTS](https://source.android.com/docs/compatibility/cts) and emulators.
 - Reference hardware platforms such as [RPi](https://github.com/raspberry-vanilla/android_local_manifest) and [Pixel Tablets](https://source.android.com/docs/automotive/start/pixelxl).
+- [AAOS SDV](https://source.android.com/docs/automotive/sdv/getting-started/build) Cuttlefish images (`sdv_*_cf*`). See [Targets](#targets).
 
 The following provides examples of the environment variables and Jenkins build parameters that are required.
 It also demonstrates how to run the scripts standalone on build instances.
@@ -47,7 +48,6 @@ One-time setup requirements.
 
 - Before running this pipeline job, ensure that the following template has been created by running the corresponding job:
   - Docker image template: `Android Workflows/Environment/Docker Image Template`
-- For **AAOS SDV Builder**, paste **base64** of **`.gitcookies`** into the non-stored build parameter **`GERRIT_GITCOOKIES_BASE64`** (partner `*.googlesource.com`); **AAOS Builder** uses **Horizon Gerrit** HTTP credentials instead. See [`workloads/android/pipelines/builds/aaos_sdv_builder/README.md`](../../../../workloads/android/pipelines/builds/aaos_sdv_builder/README.md).
 
 ## Environment Variables/Parameters <a name="environment-variables"></a>
 
@@ -68,18 +68,20 @@ Manifest XML filename inside the manifest repository. Defaults to `default.xml` 
 
 ### `AAOS_REVISION`
 
-The Android revision, i.e. branch or tag to build. Tested versions are below:
+The Android revision, i.e. branch or tag to build. Configured revisions include:
 
 - `horizon/android-14.0.0_r30` (ap1a)
 - `horizon/android-15.0.0_r36` (bp1a)
-- `horizon/android-16.0.0_r3` (bp3a - default)
+- `horizon/android-16.0.0_r3` (bp3a)
+- `horizon/android-17.0.0_r1` (cp2a - default)
 - `android-14.0.0_r30` (ap1a)
 - `android-15.0.0_r36` (bp1a)
 - `android-16.0.0_r3` (bp3a)
+- `android-17.0.0_r1` (cp2a)
 
 ### `AAOS_LUNCH_TARGET` <a name="targets"></a>
 
-The Android target to build Android cuttlefish, virtual devices, Pixel and RPi targets.
+The Android target to build Android cuttlefish virtual devices, Pixel, RPi targets. The Jenkins job default is `aosp_cf_x86_64_auto-cp2a-userdebug`.
 
 Reference: [Codenames, tags, and build numbers](https://source.android.com/docs/setup/reference/build-numbers)
 
@@ -89,18 +91,23 @@ Examples:
     -   `sdk_car_x86_64-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `sdk_car_x86_64-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `sdk_car_x86_64-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `sdk_car_x86_64-cp2a-userdebug` (`android-17.0.0_r1`)
     -   `sdk_car_arm64-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `sdk_car_arm64-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `sdk_car_arm64-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `sdk_car_arm64-cp2a-userdebug` (`android-17.0.0_r1`)
     -   `aosp_cf_x86_64_auto-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_cf_x86_64_auto-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `aosp_cf_x86_64_auto-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_cf_x86_64_auto-cp2a-userdebug` (`android-17.0.0_r1`)
     -   `aosp_cf_arm64_auto-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_cf_arm64_auto-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `aosp_cf_arm64_auto-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_cf_arm64_auto-cp2a-userdebug` (`android-17.0.0_r1`)
 -   Pixel Devices:
     -   `aosp_tangorpro_car-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_tangorpro_car-bp1a-userdebug` (`android-15.0.0_r36` )
+    -   Tangor Pro is not supported for Android 17 (cp2a); the Jenkins stage is skipped.
 -   Raspberry Pi:
     -   `aosp_rpi4_car-ap1a-userdebug` (`android-14.0.0_r30`)
     -   `aosp_rpi5_car-ap1a-userdebug` (`android-14.0.0_r30`)
@@ -108,14 +115,22 @@ Examples:
     -   `aosp_rpi5_car-bp1a-userdebug` (`android-15.0.0_r36` )
     -   `aosp_rpi4_car-bp3a-userdebug` (`android-16.0.0_r3`)
     -   `aosp_rpi5_car-bp3a-userdebug` (`android-16.0.0_r3`)
+    -   `aosp_rpi4_car-cp2a-userdebug` (`android-17.0.0_r1`)
+    -   `aosp_rpi5_car-cp2a-userdebug` (`android-17.0.0_r1`)
+-   AAOS SDV Cuttlefish
+    -   `sdv_core_cf-trunk_staging-userdebug` (`android-17.0.0_r1`) — AAOS SDV Core (`sdv_core`) on Cuttlefish (`cf`).
+    -   `sdv_media_cf-trunk_staging-userdebug` (`android-17.0.0_r1`) — AAOS SDV Core with virtIO-virtualized media APIs (`sdv_media`).
+    -   `sdv_media_har_cf-trunk_staging-userdebug` (`android-17.0.0_r1`) — Extends `sdv_media_cf` with the high-availability renderer (HAR). HAR runs automatically on boot.
+    -   `sdv_ivi_cf-trunk_staging-userdebug` (`android-17.0.0_r1`) — In-Vehicle Infotainment (IVI) with the SDV Gateway and Java sample apps.
+    -   `sdv_ivi_cf_ds-trunk_staging-userdebug` (`android-17.0.0_r1`) — Extends `sdv_ivi_cf` with Display Safety's DriverUI and Instrument Cluster.
 
 ### `AAOS_BUILD_CTS`
 
-This builds the Android Automotive Compatibility Test Suite ([CTS](https://source.android.com/docs/compatibility/cts)) test harness from the specified code base, if the `AAOS_LUNCH_TARGET` is that of Cuttlefish, i.e `aosp_cf`.
+This builds the Android Automotive Compatibility Test Suite ([CTS](https://source.android.com/docs/compatibility/cts)) test harness from the specified code base, if the `AAOS_LUNCH_TARGET` is a Cuttlefish target (`aosp_cf*` or `sdv_*_cf*`).
 
 ### `ANDROID_VERSION`
 
-This specifies which build disk pool to use for build cache. If `default` then the job will determine the pool based on `AAOS_REVISION` and target. For sdk AVD targets, this is also used to derive the Android API version for the SDK addons and device files.
+This specifies which build disk pool to use for build cache. If `default` then the job will determine the pool based on `AAOS_REVISION` and target. For sdk AVD targets, this is also used to derive the Android API version for the SDK addons and device files; Android 17 maps to API level 37.
 
 ### `POST_REPO_INITIALISE_COMMAND`
 
@@ -134,6 +149,8 @@ Some build targets already define this command, so if user updates this then the
 Useful for installing additional code, tools etc, prior to build.
 
 e.g: [Pixel Devices](https://source.android.com/docs/automotive/start/pixelxl) where you need to download and extract vendor device images.
+
+Note: For Android 17 builds, the Soong incremental analysis stores provider cache entries in pogreb, and a payload can exceed pogreb's hardcoded `MaxValueLength` of 512 MiB, which crashes `soong_build`. So for android-17 builds, `aaos_environment.sh` appends a post-repo command that raises `MaxValueLength` in `external/pogreb/db.go` from 512 MiB to 2 GiB if that file exists. Other revisions are left unchanged. This is applied in addition to any `POST_REPO_COMMAND` set by the user.
 
 ### `OVERRIDE_MAKE_COMMAND`
 
@@ -228,13 +245,9 @@ This defines the directory name on the Filestore volume where the Mirror is loca
 
 These are optional but allow the user to fetch a specific Gerrit patchset if required.
 
-### Partner `*.googlesource.com` and `.gitcookies`
-
-For partner Android manifests over HTTPS, **Git** needs a valid **Netscape-format** `.gitcookies` file (tab-separated fields). **AAOS SDV Builder** uses build parameter **`GERRIT_GITCOOKIES_BASE64`** (non-stored password) whose value is **base64** of the raw `.gitcookies` bytes (see [AAOS SDV Builder — Jenkins and `.gitcookies`](../../../../workloads/android/pipelines/builds/aaos_sdv_builder/README.md) for encoding and how the **Initialise** step writes **`~/.gitcookies`** and sets **`git config --global http.cookiefile`**).
-
 ### `GERRIT_AUTH_MODE` (optional)
 
-For Gerrit REST (topic queries), set **`username_password`**, **`gitcookies`**, **`none`**, or **`auto`** / leave unset to infer (username+password if both set, else cookie file if present, else unauthenticated). See the header comment in [`aaos_initialise.sh`](../../../../workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh) and [AAOS SDV Builder — Jenkins and `.gitcookies`](../../../../workloads/android/pipelines/builds/aaos_sdv_builder/README.md).
+For Gerrit REST (topic queries), set **`username_password`**, **`gitcookies`**, **`none`**, or **`auto`** / leave unset to infer (username+password if both set, else cookie file if present, else unauthenticated). See the header comment in [`aaos_initialise.sh`](../../../../workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh).
 
 ## Example Usage <a name="examples"></a>
 

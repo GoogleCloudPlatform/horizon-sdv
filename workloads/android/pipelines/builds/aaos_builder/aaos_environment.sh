@@ -32,7 +32,8 @@
 #  - AAOS_ARTIFACT_ROOT_NAME: the name of the bucket to store artifacts.
 #  - AAOS_BUILD_STAGE_FAILED: when "true", OUT_DIR artifacts are not added to
 #        AAOS_ARTIFACT_LIST (used by storage when build failed but AI Review ran).
-#  - ANDROID_VERSION: the Android version (default: 14).
+#  - ANDROID_VERSION: the Android version. Unset or "default" follows AAOS_REVISION
+#        (e.g. android-17 -> 17). An unrecognised revision falls back to 14.
 #  - REPO_SYNC_JOBS: the number of parallel repo sync jobs to use Default: 3).
 #  - MAX_REPO_SYNC_JOBS: the maximum number of parallel repo sync jobs
 #        supported. (Default: 14).
@@ -80,7 +81,7 @@ unset BUILD_NUMBER
 # hostname: jenkins-aaos-build-pod
 
 AAOS_DEFAULT_REVISION=$(echo "${AAOS_DEFAULT_REVISION}" | xargs)
-AAOS_DEFAULT_REVISION=${AAOS_DEFAULT_REVISION:-android-16.0.0_r3}
+AAOS_DEFAULT_REVISION=${AAOS_DEFAULT_REVISION:-android-17.0.0_r1}
 
 # Android branch/tag:
 AAOS_REVISION=${AAOS_REVISION:-${AAOS_DEFAULT_REVISION}}
@@ -122,16 +123,27 @@ AOSP_MIRROR_DIR_NAME=${AOSP_MIRROR_DIR_NAME:-}
 
 # Check we have a target defined.
 AAOS_LUNCH_TARGET=$(echo "${AAOS_LUNCH_TARGET}" | xargs)
-# Default if not defined (important for initial pipeline build)
-AAOS_LUNCH_TARGET=${AAOS_LUNCH_TARGET:-sdk_car_x86_64-ap1a-userdebug}
+# Default if not defined (important for initial pipeline build).
+AAOS_LUNCH_TARGET=${AAOS_LUNCH_TARGET:-aosp_cf_x86_64_auto-cp2a-userdebug}
 if [ -z "${AAOS_LUNCH_TARGET}" ]; then
     echo -e "\033[1;31mError: please define AAOS_LUNCH_TARGET\033[0m"
     exit 1
 fi
 
-# Android Version
-ANDROID_VERSION=${ANDROID_VERSION:-14}
+# Android version follows the revision when unset or left as "default".
+# Jenkins resolves "default" before calling this script; standalone runs do not.
+if [ -z "${ANDROID_VERSION}" ] || [ "${ANDROID_VERSION}" = "default" ]; then
+    case "${AAOS_REVISION}" in
+        *android-17*) ANDROID_VERSION=17 ;;
+        *android-16*) ANDROID_VERSION=16 ;;
+        *android-15*) ANDROID_VERSION=15 ;;
+        *) ANDROID_VERSION=14 ;;
+    esac
+fi
 case "${ANDROID_VERSION}" in
+    17)
+        ANDROID_API_LEVEL=37
+        ;;
     16)
         ANDROID_API_LEVEL=36
         ;;
@@ -415,6 +427,14 @@ case "${AAOS_LUNCH_TARGET}" in
                     "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-16.0/manifest_brcm_rpi.xml --create-dirs"
                     "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-16.0/remove_projects.xml"
                 )
+                ;;
+            *cp2a*)
+                # cp2a fallthrough: android-17.0.0_r1
+                POST_REPO_INITIALISE_COMMANDS_LIST=(
+                    "curl -o .repo/local_manifests/manifest_brcm_rpi.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-17.0/manifest_brcm_rpi.xml --create-dirs"
+                    "curl -o .repo/local_manifests/remove_projects.xml -L ${AAOS_GERRIT_RPI_MANIFEST_URL}/android-17.0/remove_projects.xml"
+                )
+                ;;
         esac
 
         # Clean up the manifests to avoid issues when versions change.
@@ -523,7 +543,11 @@ case "${AAOS_LUNCH_TARGET}" in
                     "tail -n +315 extract-google_devices-tangorpro.sh | tar -zxvf -"
                 )
                 ;;
-            *bp3a*)
+            *cp2a*)
+                echo -e "\033[1;31m${AAOS_LUNCH_TARGET} is not currently supported on ${AAOS_REVISION}!\033[0m"
+                exit 1
+                ;;
+            *bp2a*|*bp3a*)
                 echo -e "\033[1;31mTAA-1094: ${AAOS_LUNCH_TARGET} is not currently supported on ${AAOS_REVISION}!\033[0m"
                 exit 1
                 ;;
@@ -591,7 +615,14 @@ fi
 #     "open /abfs/out/soong/.temp/rawN: read-only file system" (seen on
 #     aosp_cf_arm64_auto and sdk_car_x86_64 at android-15.0.0_r36).
 #   - Android 16: pass TOP and LOG_DIR through sandboxPath in
-#     ui/build/soong.go; without it soong_build panics the same way.
+#     ui/build/soong.go.
+#   - Android 17: make LOG_DIR relative to the source root in
+#     ui/build/soong.go, and the siso --log_dir arguments in
+#     ui/build/ninja.go. Android 17 has no sandboxPath. soong_build
+#     rebases the relative LOG_DIR onto --top (/src inside nsjail).
+#     siso resolves a relative --log_dir against that same cwd, so
+#     siso_crash is created under /src/out instead of read-only /abfs.
+#     Android 17 also raises pogreb MaxValueLength (for all builders).
 # Branch names (android-latest-release, main, custom) carry no version, so
 # nothing is applied for them; use POST_REPO_COMMAND to add the fix by hand.
 #
@@ -631,6 +662,7 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
     ABFS_SOONG_CHERRY_PICK="false"
     ABFS_SOONG_SED="false"
     ABFS_ANDROID16_RELEASE_FIX="false"
+    ABFS_SOONG_RELATIVE_LOG_DIR="false"
     case "${AAOS_REVISION}" in
         android-14*|android-15.0.0_r4)
             ;;
@@ -641,6 +673,9 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
         android-16*)
             ABFS_SOONG_SED="true"
             ABFS_ANDROID16_RELEASE_FIX="true"
+            ;;
+        *android-17*)
+            ABFS_SOONG_RELATIVE_LOG_DIR="true"
             ;;
         *)
             echo "ABFS: AAOS_REVISION ${AAOS_REVISION} carries no Android version, no build/soong fix applied automatically; add it with POST_REPO_COMMAND if the build needs it"
@@ -659,7 +694,28 @@ if [[ "${ABFS_BUILDER}" == "true" ]]; then
     if [[ "${ABFS_ANDROID16_RELEASE_FIX}" == "true" ]]; then
         POST_REPO_COMMAND_LIST+=("abfs_android16_release_fix")
     fi
+    if [[ "${ABFS_SOONG_RELATIVE_LOG_DIR}" == "true" ]]; then
+        # soong_build joins a relative LOG_DIR with --top (/src inside nsjail).
+        # siso's --log_dir is an argv, not an environment variable, so
+        # envForSandbox does not rewrite it. Pass that relative to the
+        # source root as well; nsjail's cwd is /src.
+        POST_REPO_COMMAND_LIST+=(
+            "cd build/soong && sed -i 's|soongBuildEnv.Set(\"LOG_DIR\", config\\.LogsDir())|logsDir := config.LogsDir(); if rel, err := filepath.Rel(absPath(ctx, \".\"), logsDir); err == nil \\&\\& !strings.HasPrefix(rel, \"..\") { logsDir = rel }; soongBuildEnv.Set(\"LOG_DIR\", logsDir)|' ui/build/soong.go && grep -q 'logsDir := config.LogsDir()' ui/build/soong.go && sed -i 's|\"--log_dir\", config\\.LogsDir()|\"--log_dir\", func() string { d := config.LogsDir(); if rel, err := filepath.Rel(absPath(ctx, \".\"), d); err == nil \\&\\& !strings.HasPrefix(rel, \"..\") { return rel }; return d }()|g' ui/build/ninja.go && grep -q 'func() string { d := config.LogsDir()' ui/build/ninja.go; cd -"
+        )
+    fi
 fi
+
+# Android 17 turns on Soong incremental analysis. Blueprint then stores provider
+# cache entries in pogreb, and a payload can exceed the hardcoded MaxValueLength
+# of 512 MiB, which panics soong_build. Raise the limit to 2 GiB on android-17
+# only. Revisions that do not contain android-17 are left unchanged.
+case "${AAOS_REVISION}" in
+    *android-17*)
+        POST_REPO_COMMAND_LIST+=(
+            "if [ -f external/pogreb/db.go ]; then sed -i 's/MaxValueLength = 512 << 20/MaxValueLength = 2 << 30/' external/pogreb/db.go; fi"
+        )
+        ;;
+esac
 
 if [ -n "${POST_REPO_COMMAND}" ]; then
     POST_REPO_COMMAND_LIST+=("${POST_REPO_COMMAND}")

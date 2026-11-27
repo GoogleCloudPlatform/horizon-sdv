@@ -108,7 +108,7 @@ pipelineJob('Android/Environment/Mirror/Sync Mirror') {
 
     stringParam {
       name('MIRROR_MANIFEST_REF')
-      defaultValue('android-16.0.0_r3')
+      defaultValue('android-17.0.0_r1')
       description('''The manifest branch or tag to be used for the Mirror.<br/>
         <b>Note:</b> This value can be updated in subsequent syncs to point to a different branch or tag.
       ''')

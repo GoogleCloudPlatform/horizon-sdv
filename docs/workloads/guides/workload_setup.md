@@ -247,7 +247,7 @@ The following Android projects will be forked from upstream [Google AOSP](https:
 
 | Source Projects | Branches |
 | --- | --- |
-| `platform/manifest`<br>`platform/frameworks/native`<br>`platform/packages/services/Car`<br>`platform/platform_testing`<br>`platform/hardware/interfaces`<br>`platform/packages/apps/Car/Launcher` | `android-14.0.0_r30`<br>`android-15.0.0_r36`<br>`android-16.0.0_r3` |
+| `platform/manifest`<br>`platform/frameworks/native`<br>`platform/packages/services/Car`<br>`platform/platform_testing`<br>`platform/hardware/interfaces`<br>`platform/packages/apps/Car/Launcher` | `android-14.0.0_r30`<br>`android-15.0.0_r36`<br>`android-16.0.0_r3`<br>`android-17.0.0_r1` |
 
 For clarity, project names in Gerrit are prefixed with `android/` and branch names with `horizon/`. (e.g. `platform/manifest` becomes `android/platform/manifest` and `android-14.0.0_r30` becomes `horizon/android-14.0.0_r30`)
 
@@ -294,6 +294,8 @@ git checkout -b horizon/android-15.0.0_r36 android-15.0.0_r36
 git push -o skip-validation horizon horizon/android-15.0.0_r36
 git checkout -b horizon/android-16.0.0_r3 android-16.0.0_r3
 git push -o skip-validation horizon horizon/android-16.0.0_r3
+git checkout -b horizon/android-17.0.0_r1 android-17.0.0_r1
+git push -o skip-validation horizon horizon/android-17.0.0_r1
 </pre>
 
 <hr width="50%"></details> 
@@ -360,7 +362,7 @@ git push -o skip-validation horizon horizon/android-16.0.0_r3
 
 <details id="gerrit-job-additional-branches"><summary>Optional: Android Workflow - Gerrit Build job with Additional Branches/Tags</summary><hr width="50%">
 
-If more than the default set of forked branches/tags listed earlier is required for Android builds, the Gerrit Build job [Jenkinsfile](../../../workloads/android/pipelines/builds/gerrit/Jenkinsfile) must be updated to add logic to determine the build version (e.g. `ap1a`, `ap2a` …. `bp1a`, `bp3a`); this logic is vital for determining the lunch target name vs android revision.
+If more than the default set of forked branches/tags listed earlier is required for Android builds, the Gerrit Build job [Jenkinsfile](../../../workloads/android/pipelines/builds/gerrit/Jenkinsfile) must be updated to add logic to determine the build version (e.g. `ap1a`, `ap2a` …. `bp1a`, `bp3a`, `cp2a`); this logic is vital for determining the lunch target name vs android revision.
 
 <hr width="50%"></details> 
 
@@ -503,7 +505,7 @@ Build times are improved by pre-warming the build caches (i.e. the persistent vo
 Perform the following actions for each branch that is required for building:
   - Click on `Build with Parameters`
   - Accept default `AAOS_GERRIT_MANIFEST_URL` (i.e. gerrit manifest URL)
-  - Set `AAOS_REVISION` as required (e.g. `horizon/android-16.0.0_r2`)
+  - Set `AAOS_REVISION` as required (e.g. `horizon/android-17.0.0_r1`)
   - Select `Build`
   - Repeat job N times (max 20 due to kubernetes cap):
     - N is the number of persistent volumes you want warmed - set it to max allowed number of parallel builds plus 25%

@@ -41,12 +41,15 @@ uploaderConfig:
     - name: Android14_r30
       branch: android-14.0.0_r30
       active: false
-    - name: Android15_r36  # current active branch
+    - name: Android15_r36
       branch: android-15.0.0_r36
-      active: true
+      active: false
     - name: Android16_r3
       branch: android-16.0.0_r3
       active: false
+    - name: Android17_r1  # current active branch
+      branch: android-17.0.0_r1
+      active: true
     - name: AndroidLatest
       branch: android-latest-release
       active: false

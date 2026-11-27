@@ -14,13 +14,14 @@
 #
 # Argo Events Sensor for this chart's WorkflowTemplate (same EventSource `webhook` / `workflow-dispatch`).
 {{- /*
-ABFS variant: its extra parameters follow parallelSyncJobs (index 10), in the same order as in
-workflowtemplates.yaml, so each one maps to spec.arguments.parameters.<11 + position>.
-aiReviewRuntime is appended after that list (index 11 + len of the ABFS list; 11 when the list is empty).
+Parameters after parallelSyncJobs (index 10), in the same order as
+workflowtemplates.yaml. Each maps to spec.arguments.parameters.<11 + position>.
+The standard job adds postRepoCommand. The ABFS variant adds its own list, which
+already includes postRepoCommand. aiReviewRuntime follows that list.
 */}}
-{{- $abfsParams := list }}
+{{- $tailParams := list "postRepoCommand" }}
 {{- if eq (include "aaos-builder.isAbfs" .) "true" }}
-{{- $abfsParams = list "abfsServer" "abfsCachedBuild" "abfsVersion" "abfsCasfsVersion" "abfsRepository" "uploaderManifestServer" "gerritTopic" "overrideMakeCommand" "abfsCleanCache" "abfsCachemanTimeout" "postRepoCommand" "aaosParallelBuildJobs" }}
+{{- $tailParams = list "abfsServer" "abfsCachedBuild" "abfsVersion" "abfsCasfsVersion" "abfsRepository" "uploaderManifestServer" "gerritTopic" "overrideMakeCommand" "abfsCleanCache" "abfsCachemanTimeout" "postRepoCommand" "aaosParallelBuildJobs" }}
 {{- end }}
 apiVersion: argoproj.io/v1alpha1
 kind: Sensor
@@ -74,7 +75,7 @@ spec:
                     - name: storageLabels
                     - name: enableGeminiAiAssistant
                     - name: parallelSyncJobs
-{{- range $abfsParams }}
+{{- range $tailParams }}
                     - name: {{ . }}
 {{- end }}
                     - name: aiReviewRuntime
@@ -132,7 +133,7 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.parallelSyncJobs
               dest: spec.arguments.parameters.10.value
-{{- range $i, $p := $abfsParams }}
+{{- range $i, $p := $tailParams }}
             - src:
                 dependencyName: webhook-dep
                 dataKey: body.{{ $p }}
@@ -142,4 +143,4 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.aiReviewRuntime
                 value: {{ .Values.spec.aiReviewRuntime | default "agy" | quote }}
-              dest: spec.arguments.parameters.{{ add 11 (len $abfsParams) }}.value
+              dest: spec.arguments.parameters.{{ add 11 (len $tailParams) }}.value

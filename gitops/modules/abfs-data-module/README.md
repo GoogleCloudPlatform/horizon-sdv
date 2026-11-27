@@ -137,7 +137,7 @@ GCP Console hides Secret values; use `kubectl` to decode `data.license`.
 
 ConfigMap `horizon/abfs-uploader-config`, key `table`, is a YAML list of rows; exactly one row is `active` (and `synced`). The uploaders of `abfs-service-module` seed the manifest of the active row. The table lives here so it survives a disable of the service module.
 
-Default rows (`uploader-config/values.yaml`, `uploaderConfig.entries`): `Android14_r30`, `Android15_r36` (active), `Android16_r3`, `AndroidLatest` (`android-latest-release`), `AndroidCustom` (no stored repo until a custom config is submitted). Shared settings: manifest URL `https://android.googlesource.com/platform/manifest`, file `default.xml`, `fetch-ref-spec` `refs/*:refs/*` minus Gerrit meta refs.
+Default rows (`uploader-config/values.yaml`, `uploaderConfig.entries`): `Android14_r30`, `Android15_r36`, `Android16_r3`, `Android17_r1` (active), `AndroidLatest` (`android-latest-release`), `AndroidCustom` (no stored repo until a custom config is submitted). Shared settings: manifest URL `https://android.googlesource.com/platform/manifest`, file `default.xml`, `fetch-ref-spec` `refs/*:refs/*` minus Gerrit meta refs.
 
 WorkflowTemplate **`abfs-uploader-config-select`** (portal: **abfs-data** → Workflow Templates):
 
@@ -151,7 +151,8 @@ The workflow (`uploader-config/scripts/set_active_uploader_config.py`) marks the
 ```bash
 kubectl get configmap abfs-uploader-config -n horizon -o jsonpath='{.data.table}'
 argo submit -n workflows --from workflowtemplate/abfs-uploader-config-select \
-  -p Android_Versions='Android16_r3 (android-16.0.0_r3)' --watch
+  -p Android_Versions='Android17_r1 (android-17.0.0_r1)' --watch
+# The same command selects Android 17 with Android_Versions='Android17_r1 (android-17.0.0_r1)'.
 ```
 
 The predefined rows are fixed at install time: the parent Application ignores `/data` of the ConfigMap (a row made active from the portal is not reverted by a sync), so a row appended to `uploaderConfig.entries` later never reaches the live ConfigMap of a running installation. For a custom manifest definition use the `AndroidCustom` row and edit its `Configuration`.

@@ -141,9 +141,10 @@ When set, the archive is unpacked under **`/opt/android-cts`**, replacing that d
 
 Mandatory.
 
-This defines the CTS test plan that will be run. Default is: `cts-system-virtual` which is only available in Android 15 and 16.
+This defines the CTS test plan that will be run. Default is: `cts-virtual-device-stable`
 
-Android 14 users should pick a test plan that is compatible with their version of Cuttlefish, e.g `cts-virtual-device-stable`.
+The plan `cts-system-virtual` can also be run on Android 15 and later.
+
 
 ### `CTS_MODULE`
 
@@ -220,6 +221,20 @@ Optional `cvd` flags are **not** a separate parameter: add them **inside** the `
 - `--display0=width=1920,height=1080,dpi=160`
 - `--verbosity=DEBUG`
 
+For an AAOS SDV image, replace the default with one of the same two options as [CVD Launcher](cvd_launcher.md#cvd_command_line):
+
+**Option 1. Single instance, default configuration.** Launches one guest named `instance1` with `sdv-cf`. This option ignores `NUM_INSTANCES`, `VM_CPUS`, and `VM_MEMORY_MB`.
+
+```text
+./sdv-cf create --instance_name=instance1
+```
+
+**Option 2. Multiple instances, or an explicit CPU and memory demand.** Launches with `/usr/bin/cvd create`. `${NUM_INSTANCES}`, `${VM_CPUS}`, and `${VM_MEMORY_MB}` expand from the job parameters. The line also enables guest security enforcement, anonymous usage reporting, a sandbox, the preprovisioned VVM trust store `vvmtruststore_preprovisioned_1.img`, and SDV bootconfig for `instance1` (locked boot, virt address, Open DICE handover, factory trust, KeyMint HBK, authorization, ignored AVB state, and SOME/IP).
+
+```text
+/usr/bin/cvd create -guest_enforce_security="true" -report_anonymous_usage_stats=y -extra_bootconfig_args="androidboot.sdv.instance_name=instance1 androidboot.sdv.boot_mode=locked androidboot.virt.address=3 androidboot.sdv.init_open_dice.sample_file=dice_handover_instance1 androidboot.sdv.vvmfactorytrust=c779a73d0595a6814ba0414a419e99ad4026ad0feb603f2ad80ee6a9e4d1adb7 androidboot.sdv.keymint.rpc.hbk=799da7577efd41d5b27810c5952fcec0291cbcfd687e77ac9a6cec8370651b1d androidboot.sdv.authz.enable=true androidboot.sdv.preprovisioned_vvmtruststore=img androidboot.sdv.ignore_avb_state=true androidboot.sdv.someip.enable=true" -default_vvmtruststore_file_name="vvmtruststore_preprovisioned_1.img" --enable_sandbox="true" --num_instances="${NUM_INSTANCES}" --cpus="${VM_CPUS}" --memory_mb="${VM_MEMORY_MB}"
+```
+
 ### `ENABLE_GEMINI_AI_ASSISTANT` <a name="enable_gemini_ai_assistant"></a>
 
 Enable Gemini **AI Review** in the shared `cvd-pipeline-shared-library` **Diagnostics** stage (`cvdPipeline`). The **AI Review** sub-stage runs only when **all** of these are true (see `cvdPipeline.groovy`): **`ENABLE_GEMINI_AI_ASSISTANT`** is **`true`**, the overall pipeline result is **`FAILURE`**, **`MTK_CONNECT_STAGE_FAILED`** is not **`true`**, and—because this job’s **`Jenkinsfile`** passes **`aiReview`** with **`requireCtsNotListOnly: true`**—**`CTS_TEST_LISTS_ONLY`** is **`false`** (list-only / plan-discovery runs skip AI Review).
@@ -269,7 +284,7 @@ Refer to `docs/workloads/android/tests/cvd_launcher.md` for an example of how to
 ANDROID_VERSION=14 \
 ./workloads/android/pipelines/tests/cts_execution/cts_initialise.sh
 # CTS is always under /opt/android-cts (symlink to /opt/android-cts_${ANDROID_VERSION} when using baked CF images).
-CTS_TESTPLAN="cts-system-virtual" \
+CTS_TESTPLAN="cts-virtual-device-stable" \
 CTS_MODULE="CtsDeqpTestCases" \
 CTS_TIMEOUT=600 \
 SHARD_COUNT=1 \

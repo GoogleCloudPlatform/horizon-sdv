@@ -145,7 +145,6 @@ spec:
 | AAOS Builder, CTS Execution, CVD Launcher | Jenkins **AI Review runtime** = `agy`. Helm `aiReviewRuntime: agy`. CTS Execution and CVD Launcher run AI Review from `cvd-pipeline-shared-library`. |
 | AAOS ABFS Builder, OpenBSW BSW Builder | Jenkins **AI Review runtime** = `agy`. These jobs have no Argo workflow. |
 | Utilities / Gemini AI Assistant | **AI Review runtime** = `agy`. `GEMINI_ARTIFACTS_COMMAND` is required. Uploaded prompts and `GEMINI_SKILLS_YAML` are not. |
-| AAOS SDV Builder | Timeout parameter only. This job has no `AI_REVIEW_RUNTIME` parameter. |
 
 The utility and CTS/CVD stages set `GEMINI_ANALYSIS_PATH` to the Jenkins workspace and do not move artifacts afterward. The trace file must be at `${WORKSPACE}/traces/*.json` for the build page to show it. The bucket upload uses the same `traces/` directory when `gemini_storage.sh` runs. `headless_output*.json` is archived only when the runtime is not `agy`.
 

@@ -313,6 +313,12 @@ function cuttlefish_install_cts() {
     echo -e "${GREEN}Installing CTS test harness under /opt/android-cts_<ver> ... ${NC}"
     local start=$SECONDS
 
+    if [ ! -z "${CTS_ANDROID_17_URL}" ]; then
+        cuttlefish_install_cts_version 17 "${CTS_ANDROID_17_URL}"
+    else
+        echo -e "${ORANGE} Skipped Android 17 CTS, nothing to install.${NC}"
+    fi
+
     if [ ! -z "${CTS_ANDROID_16_URL}" ]; then
         cuttlefish_install_cts_version 16 "${CTS_ANDROID_16_URL}"
     else

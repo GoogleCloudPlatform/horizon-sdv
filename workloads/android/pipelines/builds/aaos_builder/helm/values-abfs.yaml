@@ -29,8 +29,8 @@ workflowTemplateName: aaos-builder-abfs
 aaosBuilderImageWorkflowTemplateName: abfs-builder-runtime-image
 
 spec:
-  lunchTarget: aosp_cf_x86_64_auto-bp1a-userdebug
-  androidRevision: android-15.0.0_r36
+  lunchTarget: aosp_cf_x86_64_auto-cp2a-userdebug
+  androidRevision: android-17.0.0_r1
   # ABFS uses one dedicated cache StorageClass and size, matching
   # ABFS_STORAGE_CLASS_SUFFIX and ABFS_STORAGE_SIZE in the Jenkins job. It does
   # not pick a class per Android revision the way the AAOS builder does.
@@ -47,7 +47,9 @@ spec:
   # Optional commands run after the sources are mounted and before the build,
   # as the Jenkins job's POST_REPO_COMMAND. The build/soong sandbox fix ABFS
   # needs is applied automatically per Android version by aaos_environment.sh
-  # (Android 15 cherry-picks plus soong.go sed, Android 16 soong.go sed), so this stays empty
+  # (Android 15 cherry-picks plus soong.go sed, Android 16 soong.go sed,
+  # Android 17 relative LOG_DIR sed; Android 17 also raises pogreb
+  # MaxValueLength), so this stays empty
   # unless extra user commands are needed. Single command line.
   postRepoCommand: ""
   # Parallel build jobs (-j) for the ABFS build, passed as AAOS_PARALLEL_BUILD_JOBS.

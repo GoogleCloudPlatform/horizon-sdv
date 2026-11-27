@@ -122,7 +122,6 @@ pipelineJob('Android/Tests/CTS Execution') {
       defaultValue('')
       description("""<p>Mandatory: Storage URL pointing to the location of the Cuttlefish Virtual Device images and host packages,<br/><br/>
         Example for AAOS:<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;<br/><br/>
-        Example for AAOS SDV:<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_SDV_Builder/&lt;BUILD_NUMBER&gt;<br/><br/>
         <b>Note:</b>
           <ul><li>if build number is less than 2 digits, then zero pad , i.e. 1 to 9 must be 01 to 09.</li></ul)</p>""")
       trim(true)
@@ -154,17 +153,16 @@ pipelineJob('Android/Tests/CTS Execution') {
 
     choiceParam {
       name('ANDROID_VERSION')
-      choices(['16', '15', '14'])
-      description('''<p>Select Android version: Android 16, 15 or 14<br/>
+      choices(['17', '16', '15', '14'])
+      description('''<p>Select Android version: Android 17, 16, 15 or 14<br/>
         Essential for picking the correct test hardness</p>''')
     }
 
     stringParam {
       name('CTS_DOWNLOAD_URL')
       defaultValue('')
-      description("""<p>Optional CTS test harness download URL.<br/>Use official CTS test harness (empty field) or one built from AAOS (SDV) Builder job and stored in GCS Bucket,<br/><br/>
+      description("""<p>Optional CTS test harness download URL.<br/>Use official CTS test harness (empty field) or one built from AAOS Builder job and stored in GCS Bucket,<br/><br/>
         Example for AAOS:<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;/android-cts.zip<br/><br/>
-        Example for AAOS SDV:<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_SDV_Builder/&lt;BUILD_NUMBER&gt;/android-cts.zip<br/><br/>
         <b>Note:</b>
           <ul><li>if build number is less than 2 digits, then zero pad , i.e. 1 to 9 must be 01 to 09.</li></ul)</p>""")
       trim(true)
@@ -172,10 +170,9 @@ pipelineJob('Android/Tests/CTS Execution') {
 
     stringParam {
       name('CTS_TESTPLAN')
-      defaultValue('cts-system-virtual')
+      defaultValue('cts-virtual-device-stable')
       description('''<p>CTS Test plan to execute, e.g.</p>
-        <ul><li>Android 15 and later: <code>cts-system-virtual</code></li>
-            <li>Android 14: <code>cts-virtual-device-stable</code></li></ul>''')
+        Android 15 and later can also use: <code>cts-system-virtual</code>''')
       trim(true)
     }
 

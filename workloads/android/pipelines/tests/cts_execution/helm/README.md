@@ -93,7 +93,7 @@ argo submit --from workflowtemplate/cts-execution-on-gce -n <prefix>workflows \
   -p instanceTemplateName=instance-template-cuttlefish-vm-main \
   -p cuttlefishDownloadUrl='gs://<bucket>/path/to/cvd-artifacts/' \
   -p androidVersion=15 \
-  -p ctsTestplan=cts-system-virtual \
+  -p ctsTestplan=cts-virtual-device-stable \
   -p enableGeminiAiAssistant=false
 ```
 

@@ -80,7 +80,7 @@ Note: The value provided must correspond to a cloud instance or the job will han
 
 ### `CUTTLEFISH_DOWNLOAD_URL`
 
-This is the Cuttlefish Virtual Device image that is to be tested. It is built from `AAOS Builder` (or an SDV Cuttlefish build) for `aosp_cf*` or `sdv_*_cf*` lunch targets.
+This is the Cuttlefish Virtual Device image that is to be tested. It is built from `AAOS Builder` for `aosp_cf*` or `sdv_*_cf*` lunch targets.
 
 The URL must point to the bucket (or HTTP directory) where the host package and **device image zip(s)** are stored:
 
@@ -89,7 +89,7 @@ The URL must point to the bucket (or HTTP directory) where the host package and 
 
 For **`gs://`** URLs, the launcher runs `gcloud storage cp` with remote wildcard `*img*.zip` into the working directory (original object basenames). For non-gs URLs, `wget` uses the same `*img*.zip` accept pattern. After `cvd-host_package.tar.gz` is unpacked, every local `*img*.zip` is unzipped and then removed.
 
-URL is of the form `gs://<ANDROID_BUILD_BUCKET_ROOT_NAME>/Android/Builds/AAOS_Builder/<BUILD_NUMBER>` where `ANDROID_BUILD_BUCKET_ROOT_NAME` is a system environment variable defined in Jenkins CasC `values-jenkins.yaml` and `BUILD_NUMBER` is the Jenkins build number. Alternatively, `<STORAGE_BUCKET_DESTINATION>` if destination was overridden (including paths under `AAOS SDV Builder` or similar jobs).
+URL is of the form `gs://<ANDROID_BUILD_BUCKET_ROOT_NAME>/Android/Builds/AAOS_Builder/<BUILD_NUMBER>` where `ANDROID_BUILD_BUCKET_ROOT_NAME` is a system environment variable defined in Jenkins CasC `values-jenkins.yaml` and `BUILD_NUMBER` is the Jenkins build number. Alternatively, `<STORAGE_BUCKET_DESTINATION>` if the destination was overridden.
 
 ### `CUTTLEFISH_INSTALL_WIFI`
 
@@ -158,10 +158,19 @@ AAOS:
 - `/usr/bin/cvd create --display0=width=1920,height=1080,dpi=160`
 - `/usr/bin/cvd create --verbosity=DEBUG`
 
-AAOS SDV:
+AAOS SDV. For an AAOS SDV image, set `CVD_COMMAND_LINE` to one of the two options below.
 
-- `./sdv-cf create --noresume -config=auto -report_anonymous_usage_stats=no --num_instances=2 --cpus=4 --memory_mb=8192 --console=true`
-- `/usr/bin/cvd create --noresume … --setupwizard_mode DISABLED --gpu_mode guest_swiftshader`
+**Option 1. Single instance, default configuration.** Launches one guest named `instance1` with `sdv-cf` from the downloaded artifacts. This option ignores `NUM_INSTANCES`, `VM_CPUS`, and `VM_MEMORY_MB`.
+
+```text
+./sdv-cf create --instance_name=instance1
+```
+
+**Option 2. Multiple instances, or an explicit CPU and memory demand.** Launches with `/usr/bin/cvd create`. `${NUM_INSTANCES}`, `${VM_CPUS}`, and `${VM_MEMORY_MB}` are shell placeholders expanded from the job parameters of the same names. The rest of the line enables guest security enforcement, anonymous usage reporting, a sandbox, the preprovisioned VVM trust store `vvmtruststore_preprovisioned_1.img`, and SDV bootconfig for `instance1` (locked boot, virt address, Open DICE handover, factory trust, KeyMint HBK, authorization, ignored AVB state, and SOME/IP).
+
+```text
+/usr/bin/cvd create -guest_enforce_security="true" -report_anonymous_usage_stats=y -extra_bootconfig_args="androidboot.sdv.instance_name=instance1 androidboot.sdv.boot_mode=locked androidboot.virt.address=3 androidboot.sdv.init_open_dice.sample_file=dice_handover_instance1 androidboot.sdv.vvmfactorytrust=c779a73d0595a6814ba0414a419e99ad4026ad0feb603f2ad80ee6a9e4d1adb7 androidboot.sdv.keymint.rpc.hbk=799da7577efd41d5b27810c5952fcec0291cbcfd687e77ac9a6cec8370651b1d androidboot.sdv.authz.enable=true androidboot.sdv.preprovisioned_vvmtruststore=img androidboot.sdv.ignore_avb_state=true androidboot.sdv.someip.enable=true" -default_vvmtruststore_file_name="vvmtruststore_preprovisioned_1.img" --enable_sandbox="true" --num_instances="${NUM_INSTANCES}" --cpus="${VM_CPUS}" --memory_mb="${VM_MEMORY_MB}"
+```
 
 ### `ENABLE_GEMINI_AI_ASSISTANT` <a name="enable_gemini_ai_assistant"></a>
 

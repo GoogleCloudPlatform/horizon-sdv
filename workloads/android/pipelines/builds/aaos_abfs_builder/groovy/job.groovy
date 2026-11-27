@@ -50,7 +50,7 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
   parameters {
     stringParam {
       name('AAOS_REVISION')
-      defaultValue('android-15.0.0_r36')
+      defaultValue('android-17.0.0_r1')
       description('''<p>Android revision tag/branch name<br/>
       <b>Note:</b> ensure the ABFS uploader has been run on your branch.</p>''')
       trim(true)
@@ -65,7 +65,7 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
 
     stringParam {
       name('AAOS_LUNCH_TARGET')
-      defaultValue('aosp_cf_x86_64_auto-bp1a-userdebug')
+      defaultValue('aosp_cf_x86_64_auto-cp2a-userdebug')
       description('''<p>Build Android cuttlefish, virtual devices and Pixel target.<br/>
       <b>Note:</b> RPi not supported with ABFS.</p>''')
       trim(true)
@@ -83,7 +83,7 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
     choiceParam {
       name('ANDROID_VERSION')
       description('''<p>Version of Android required for SDK generation of addons and devices.</p>''')
-      choices(['15','16'])
+      choices(['17','16','15'])
     }
 
     booleanParam {
@@ -110,7 +110,7 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
       name('POST_REPO_COMMAND')
       defaultValue('')
       description('''<p>Optional additional commands post repo sync/fetch, git clone and prior to build/make.<br/>
-        The build/soong sandbox fix ABFS needs is applied automatically per Android version (Android 15 cherry-picks plus soong.go sed, Android 16 soong.go patch); leave empty unless extra commands are needed.<br/>
+        The build/soong sandbox fix ABFS needs is applied automatically per Android version (Android 15 cherry-picks plus soong.go sed, Android 16 sandboxPath sed, Android 17 relative LOG_DIR). Android 17 also raises pogreb MaxValueLength. Leave empty unless extra commands are needed.<br/>
         <b>Note: </b>Single command line only, use logical operators to execute subsequent commands.<br/><br/></p>''')
       trim(true)
     }

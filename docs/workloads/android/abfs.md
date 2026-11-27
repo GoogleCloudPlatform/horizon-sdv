@@ -133,7 +133,7 @@ Before you attempt to enable the ABFS modules, ensure `workloads-common` and `wo
    ```
 5. **Check the ABFS workflows are visible**: `abfs-license-import`, `abfs-license-clear`, `abfs-uploader-config-select`, `abfs-spanner-backup-schedule` on the `abfs-data` page, `abfs-smoke-test` on `abfs-service-module`, `aaos-builder-abfs` and `abfs-builder-runtime-image` on `workloads-android`.
 
-Seeding starts as soon as the uploaders are Ready, for the row that is active in the uploader table (default `Android15_r36`, see [Seed Spanner](#seed)). Seeding time depends on what was seeded before (see [Seed Spanner](#seed)); builds for that revision work only after seeding completed.
+Seeding starts as soon as the uploaders are Ready, for the row that is active in the uploader table (default `Android17_r1`, see [Seed Spanner](#seed)). Seeding time depends on what was seeded before (see [Seed Spanner](#seed)); builds for that revision work only after seeding completed.
 
 ### Import the ABFS license <a name="license"></a>
 
@@ -164,8 +164,9 @@ Seeding is driven by the uploader table, ConfigMap `horizon/abfs-uploader-config
 | Row | Manifest branch | Note |
 |-----|-----------------|------|
 | `Android14_r30` | `android-14.0.0_r30` | |
-| `Android15_r36` | `android-15.0.0_r36` | active by default |
+| `Android15_r36` | `android-15.0.0_r36` | |
 | `Android16_r3` | `android-16.0.0_r3` | |
+| `Android17_r1` | `android-17.0.0_r1` | active by default |
 | `AndroidLatest` | `android-latest-release` | moving branch |
 | `AndroidCustom` | editable | any manifest `url`, `branch`, `file`, `fetch-ref-spec` |
 
@@ -203,8 +204,8 @@ Prerequisites: all three ABFS modules enabled, the builder image pushed, and the
 
 | Parameter | Default | Notes |
 |-----------|---------|-------|
-| `androidRevision` | `android-15.0.0_r36` | Tag or branch to mount (`abfs mount -b`). Must be seeded. |
-| `lunchTarget` | `aosp_cf_x86_64_auto-bp1a-userdebug` | Any AOSP target; `sdk_car_*`, `aosp_cf_*`, `aosp_tangorpro_car`. |
+| `androidRevision` | `android-17.0.0_r1` | Tag or branch to mount (`abfs mount -b`). Must be seeded. |
+| `lunchTarget` | `aosp_cf_x86_64_auto-cp2a-userdebug` | Any AOSP target; `sdk_car_*`, `aosp_cf_*`, `aosp_tangorpro_car`. |
 | `postRepoCommand` | empty | Extra commands after mount. The build/soong sandbox fix is applied automatically per revision (table below). |
 | `parallelBuildJobs` | `16` | Lower it if cacheman reports `resource temporarily unavailable`. Clear it to let the build system use as many jobs as it wants (limited by the number of available cores). |
 | `abfs.server` | `abfs-server.abfs.svc.cluster.local:50051` | In-cluster Service of the server. |
@@ -219,6 +220,7 @@ Soong runs `soong_build` in an nsjail sandbox where the ABFS mount is read-only 
 | `android-14*`, `android-15.0.0_r4` | nothing |
 | `android-15*` (tested `android-15.0.0_r36`) | build/soong cherry-picks 3619490–3619492 plus the `ui/build/soong.go` sed |
 | `android-16*` (tested `android-16.0.0_r3`) | `ui/build/soong.go` sed (`TOP`, `LOG_DIR` through `config.sandboxPath`). Also, only when they are missing: the release flag declaration `build/release/flag_declarations/RELEASE_ANOMALY_DETECTOR.textproto` (value `false`) and `prebuilts/build-tools/linux-x86/bin/ckati-wrap`; without the declaration Soong stops with `release_flag("RELEASE_ANOMALY_DETECTOR") had value undefined` |
+| `android-17*` (tested `android-17.0.0_r1`) | `ui/build/soong.go` and `ui/build/ninja.go` sed (ABFS only): `LOG_DIR` and each siso `--log_dir` are made relative to the source root. Android 17 has no `sandboxPath`. `soong_build` rebases the relative `LOG_DIR` onto `--top` (`/src` inside nsjail), and siso resolves a relative `--log_dir` against that working directory, so the crash log is created under `/src/out`. On every Android 17 build, `external/pogreb/db.go` `MaxValueLength` is raised from 512 MiB to 2 GiB when that file exists |
 | branch names (`android-latest-release`, `main`, custom) | nothing; add the fix via `postRepoCommand` if the build needs it |
 
 Each workflow runs as one pod on `abfs-build-node-pool-ubuntu` (one pod per node, pool autoscaling 0–20, so up to 20 builds in parallel). Artifacts go to `gs://<project>-aaos/Android/Builds/AAOS_Builder_ABFS/<date>_<workflow>/`; logs are in the portal/Argo UI and archived to the Argo workflows bucket. A build that is fully served from the ninjago cache finishes in 10–15 minutes; a cold arm64 build takes about 3 hours.

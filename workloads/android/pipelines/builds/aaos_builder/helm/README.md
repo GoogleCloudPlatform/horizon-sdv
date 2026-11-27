@@ -320,6 +320,7 @@ use the local repo mount. Remote git artifact checkouts do not share a PVC, so
 - `spec.buildCtsOnly`: `true` to build CTS only
 - `spec.forceImageBuild`: `true` to always rebuild the builder image
 - `spec.parallelSyncJobs`: Repo sync parallelism
+- `spec.postRepoCommand`: Commands after repo sync and before the build (`POST_REPO_COMMAND`). Single command line. Leave empty unless extra commands are needed. `aaos_environment.sh` raises pogreb `MaxValueLength` when `AAOS_REVISION` contains `android-17`. The ABFS values file leaves this empty.
 - `spec.enableGeminiAiAssistant`: `"true"` / `"false"` — enables **gemini-review** on build failure (WorkflowTemplate default parameter)
 - `spec.geminiSkillsYaml`: path to `skills.yaml` (`GEMINI_SKILLS_YAML`). Required and read only when `spec.aiReviewRuntime` is `gemini-cli`. Omit it when the runtime is `agy`.
 - `spec.manifestUrl`: Manifest URL for repo init

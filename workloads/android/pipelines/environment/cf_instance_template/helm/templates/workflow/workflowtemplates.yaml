@@ -135,6 +135,9 @@ spec:
       - name: packerGooglecomputeVersionMax
         value: {{ $p.defaults.packerGooglecomputeVersionMax | default "1.2.5" | quote }}
         description: "Highest hashicorp/googlecompute Packer plugin version, not included (PACKER_GOOGLECOMPUTE_VERSION_MAX). Capped below 1.2.5 because v1.2.5 crashes with SIGSEGV in StepImportOSLoginSSHKey on Argo; raise it once that is fixed upstream."
+      - name: ctsAndroid17Url
+        value: {{ $p.defaults.ctsAndroid17Url | quote }}
+        description: "CTS Android 17 zip URL (CTS_ANDROID_17_URL)."
       - name: ctsAndroid16Url
         value: {{ $p.defaults.ctsAndroid16Url | quote }}
         description: "CTS Android 16 zip URL (CTS_ANDROID_16_URL)."
@@ -327,6 +330,8 @@ spec:
                   value: '{{ "{{" }}workflow.parameters.packerGooglecomputeVersionMin{{ "}}" }}'
                 - name: packerGooglecomputeVersionMax
                   value: '{{ "{{" }}workflow.parameters.packerGooglecomputeVersionMax{{ "}}" }}'
+                - name: ctsAndroid17Url
+                  value: '{{ "{{" }}workflow.parameters.ctsAndroid17Url{{ "}}" }}'
                 - name: ctsAndroid16Url
                   value: '{{ "{{" }}workflow.parameters.ctsAndroid16Url{{ "}}" }}'
                 - name: ctsAndroid15Url
@@ -382,6 +387,7 @@ spec:
           - name: maxRunDuration
           - name: packerGooglecomputeVersionMin
           - name: packerGooglecomputeVersionMax
+          - name: ctsAndroid17Url
           - name: ctsAndroid16Url
           - name: ctsAndroid15Url
           - name: ctsAndroid14Url
@@ -475,6 +481,8 @@ spec:
             value: '{{ "{{" }}inputs.parameters.packerGooglecomputeVersionMin{{ "}}" }}'
           - name: PACKER_GOOGLECOMPUTE_VERSION_MAX
             value: '{{ "{{" }}inputs.parameters.packerGooglecomputeVersionMax{{ "}}" }}'
+          - name: CTS_ANDROID_17_URL
+            value: '{{ "{{" }}inputs.parameters.ctsAndroid17Url{{ "}}" }}'
           - name: CTS_ANDROID_16_URL
             value: '{{ "{{" }}inputs.parameters.ctsAndroid16Url{{ "}}" }}'
           - name: CTS_ANDROID_15_URL
@@ -531,7 +539,7 @@ spec:
               echo "cuttlefishUrl rejected: must start with ${CUTTLEFISH_URL_ALLOW_PREFIX} (got: ${CUTTLEFISH_URL})" >&2
               exit 1
             fi
-            for _cts_url in "$CTS_ANDROID_16_URL" "$CTS_ANDROID_15_URL" "$CTS_ANDROID_14_URL"; do
+            for _cts_url in "$CTS_ANDROID_17_URL" "$CTS_ANDROID_16_URL" "$CTS_ANDROID_15_URL" "$CTS_ANDROID_14_URL"; do
               if [ -n "$_cts_url" ] && ! [[ "$_cts_url" == "$CTS_URL_ALLOW_PREFIX"* ]]; then
                 echo "ctsAndroid*Url rejected: must start with ${CTS_URL_ALLOW_PREFIX} (got: ${_cts_url})" >&2
                 exit 1

@@ -33,16 +33,18 @@ pipelineJob('Android/Environment/Development Build Instance') {
       name('ANDROID_VOLUME')
       description('''<p>Android disk pool to use for the build cache:</p>
           <ul>
+            <li>17: Use the Android 17 disk pool.</li>
             <li>16: Use the Android 16 disk pool.</li>
             <li>15: Use the Android 15 disk pool.</li>
             <li>14: Use the Android 14 disk pool.</li>
+            <li>17-rpi: Use the Android 17 RPi disk pool.</li>
             <li>16-rpi: Use the Android 16 RPi disk pool.</li>
             <li>15-rpi: Use the Android 15 RPi disk pool.</li>
             <li>14-rpi: Use the Android 14 RPi disk pool.</li>
             <li>abfs: Select when using ABFS builds with persisted cache.</li>
           </ul>
         <p>For ABFS build instances you select the <code>abfs</code> version to mount the ABFS cache persistent volume.</p>''')
-      choices(['16', '15', '14', '16-rpi', '15-rpi', '14-rpi', 'abfs'])
+      choices(['17', '16', '15', '14', '17-rpi', '16-rpi', '15-rpi', '14-rpi', 'abfs'])
     }
 
     stringParam {
