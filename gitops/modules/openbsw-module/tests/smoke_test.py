@@ -60,6 +60,15 @@ DEFAULT_POOL_TEMPLATES = {"openbsw-delete-mtkc-testbench"}
 # MTK Connect session templates: one long-running pod, plus an exit handler that deletes the testbench.
 MTK_SESSIONS = {"openbsw-posix-test": "test", "openbsw-dev-instance": "instance"}
 MTK_SECRET = "workflow-mtk-connect-apikey"
+SUBMITTED_BY_NAME_DEST = r"metadata.annotations.horizon-sdv\.io/submitted-by-name"
+# Jenkins job.groovy for each WorkflowTemplate. Every Jenkins parameter must exist as its camelCase name.
+JENKINS_JOBS = {
+    "openbsw-bsw-builder": "builds/bsw_builder",
+    "openbsw-builder-image": "environment/docker_image_template",
+    "openbsw-posix-test": "tests/posix",
+    "openbsw-dev-instance": "environment/dev_instance",
+    "openbsw-delete-mtkc-testbench": "environment/delete_mtkc_testbench",
+}
 PIPELINE_REPO_SET = [
     "--set", "pipelineRepo.url=https://example.com/horizon-sdv.git",
     "--set", "pipelineRepo.revision=main",
@@ -180,6 +189,12 @@ def check_render():
     )
     if "<h1>openbsw-module</h1>" not in html:
         fail("overview ConfigMap does not contain the portal page")
+
+    nginx = yaml.safe_load(LINT_VALUES.read_text())["config"]["nginx"]
+    overview = next(doc for doc in by_kind(rendered, "Deployment") if doc["metadata"]["name"] == "mod-openbsw-overview")
+    image = overview["spec"]["template"]["spec"]["containers"][0]["image"]
+    if image != f"{nginx['image']}:{nginx['tag']}":
+        fail(f"overview nginx image must come from config.nginx (versions.yaml tools.nginx.tag), got {image}")
 
     if render("openbsw-module", True):
         fail("a sub-environment must render no resources")
@@ -317,6 +332,10 @@ def check_workflows():
             key = mapping["src"]["dataKey"].removeprefix("body.")
             if names[index] != key:
                 fail(f"{sensor_name} maps body.{key} to parameter {names[index]}")
+        # TAA-2457: the Developer Portal shows startedBy from this annotation (display only).
+        name_mapping = [m for m in trigger["parameters"] if m["dest"] == SUBMITTED_BY_NAME_DEST]
+        if len(name_mapping) != 1 or name_mapping[0]["src"].get("dataKey") != "body.submittedBy" or name_mapping[0]["src"].get("value") != "":
+            fail(f"{sensor_name} must map body.submittedBy (default \"\") to {SUBMITTED_BY_NAME_DEST}")
 
     # build-defaults mints {{workflow.uid}}-pipeline-git-creds itself, so the builder's own creds task must
     # run after build-image: no overlapping writes, and a token that is fresh when fetch-pipeline starts.
@@ -379,7 +398,53 @@ def check_workflows():
         if unset.returncode == 0 or f"{missing} is required" not in unset.stderr:
             fail(f"rendering without {missing} must fail with a 'required' error")
     check_mtk(templates, creds=True)
+    check_jenkins_parameters(templates)
+    check_gemini_command_line(steps["ai-review"]["container"])
     print("WorkflowTemplates and Sensors: ok")
+
+
+def jenkins_camel(name):
+    first, *rest = name.lower().split("_")
+    return first + "".join(part.capitalize() for part in rest)
+
+
+def check_jenkins_parameters(templates):
+    for name, job in JENKINS_JOBS.items():
+        groovy = (ROOT / "workloads/openbsw/pipelines" / job / "groovy/job.groovy").read_text()
+        jenkins = [p for kind, p in re.findall(r"(\w+)\s*\{\s*name\('([A-Za-z0-9_]+)'\)", groovy) if kind != "separator"]
+        argo = {p["name"] for p in templates[name]["spec"]["arguments"]["parameters"]}
+        missing = [p for p in jenkins if jenkins_camel(p) not in argo]
+        if not jenkins or missing:
+            fail(f"{name} must expose every Jenkins parameter of {job} in camelCase; missing {missing}")
+    print("Jenkins parameters: all exposed as workflow parameters")
+
+
+def check_gemini_command_line(container):
+    """GEMINI_COMMAND_LINE is eval'd in the elevated ai-review pod, so only plain gemini options pass."""
+    if container_env(container)["GEMINI_COMMAND_LINE"].get("value") != "{{workflow.parameters.geminiCommandLine}}":
+        fail("ai-review GEMINI_COMMAND_LINE must come from the geminiCommandLine parameter")
+    script = container["args"][0].replace('bash "${PIPELINE_REPO_ROOT}/workloads/common/agentic-ai/gemini/run_ai_review.sh"', "echo accepted")
+    cases = [
+        ("gemini-cli", "gemini --yolo --output-format json", True),
+        ("gemini-cli", "gemini --model gemini-3.8-flash --yolo --output-format json --debug", True),
+        ("agy", "gemini; id", True),
+        ("gemini-cli", "gemini --yolo; id", False),
+        ("gemini-cli", "gemini $(id)", False),
+        ("gemini-cli", "gemini `id`", False),
+        ("gemini-cli", "gemini --yolo | sh", False),
+        ("gemini-cli", "gemini --yolo\nid", False),
+        ("gemini-cli", "gemini 'x'", False),
+        ("gemini-cli", "sh -c id", False),
+        ("gemini-cli", "", False),
+    ]
+    for runtime, command_line, accepted in cases:
+        result = subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", script],
+            env={"PATH": os.environ["PATH"], "AI_REVIEW_RUNTIME": runtime, "GEMINI_COMMAND_LINE": command_line},
+            text=True, capture_output=True,
+        )
+        if (result.returncode == 0 and "accepted" in result.stdout) != accepted:
+            fail(f"ai-review with {runtime} and geminiCommandLine={command_line!r} must be {'accepted' if accepted else 'rejected'}")
 
 
 def container_env(container):
@@ -439,10 +504,13 @@ def check_mtk(templates, creds):
     if spec.get("synchronization", {}).get("mutex", {}).get("name") != "openbsw-delete-mtkc-testbench":
         fail("openbsw-delete-mtkc-testbench must run one at a time (Jenkins blockOn)")
     delete = next(t for t in spec["templates"] if t["name"] == "delete")["container"]
-    if "openbsw-builder" in delete["image"] or delete.get("securityContext", {}).get("privileged"):
-        fail("openbsw-delete-mtkc-testbench must use the small unprivileged API image")
-    if "mtk_connect.sh --delete" not in delete["args"][0] or "MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES=true" not in delete["args"][0]:
-        fail("openbsw-delete-mtkc-testbench must only delete offline testbenches")
+    if not delete["image"].endswith("/openbsw-builder:{{workflow.parameters.imageTag}}"):
+        fail(f"openbsw-delete-mtkc-testbench must run the imageTag builder image (Jenkins IMAGE_TAG), got {delete['image']}")
+    if delete.get("securityContext", {}).get("privileged"):
+        fail("openbsw-delete-mtkc-testbench only calls the MTK Connect API and must not be privileged")
+    for needle in ("mtk_connect.sh --delete", "MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES=true", "sudo --preserve-env="):
+        if needle not in delete["args"][0]:
+            fail(f"openbsw-delete-mtkc-testbench delete script is missing {needle!r}")
     check_mtk_secret("openbsw-delete-mtkc-testbench", delete)
 
     none = docs(run(["helm", "template", str(WORKFLOW_CHART), "--set", "cloud.project=p1", *PIPELINE_REPO_SET]))
@@ -528,11 +596,15 @@ def simulate_event(sensor, body):
     workflow = copy.deepcopy(trigger["source"]["resource"])
     for mapping in trigger["parameters"]:
         dest = mapping["dest"]
-        if not dest.startswith("spec.arguments.parameters."):
-            continue
         key = mapping["src"]["dataKey"].removeprefix("body.")
-        value = body.get(key, mapping["src"].get("value", ""))
-        workflow["spec"]["arguments"]["parameters"][int(dest.split(".")[3])]["value"] = str(value)
+        if key not in body and "value" not in mapping["src"]:
+            continue
+        value = str(body.get(key, mapping["src"].get("value", "")))
+        if dest.startswith("spec.arguments.parameters."):
+            workflow["spec"]["arguments"]["parameters"][int(dest.split(".")[3])]["value"] = value
+        elif dest.startswith("metadata.annotations."):
+            annotation = dest.removeprefix("metadata.annotations.").replace("\\.", ".")
+            workflow["metadata"].setdefault("annotations", {})[annotation] = value
     return workflow
 
 
@@ -589,6 +661,12 @@ def check_argo():
                     params = {p["name"]: p["value"] for p in workflow["spec"]["arguments"]["parameters"]}
                     if params["horizonSubmittedFrom"] != "cli":
                         fail(f"{sensor_name} did not pass body.horizonSubmittedFrom")
+                    if workflow["metadata"].get("annotations", {}).get("horizon-sdv.io/submitted-by-name") != "":
+                        fail(f"{sensor_name} must still submit, with an empty submitted-by-name, when body.submittedBy is absent")
+                    named = simulate_event(sensor, {**body, "submittedBy": "dev-alice", "horizonSubmittedBy": "c7eae7a2"})
+                    annotations = named["metadata"].get("annotations", {})
+                    if annotations.get("horizon-sdv.io/submitted-by-name") != "dev-alice" or annotations.get("horizon-sdv.io/submitted-by") != "c7eae7a2":
+                        fail(f"{sensor_name} must map body.submittedBy to submitted-by-name and body.horizonSubmittedBy to submitted-by, got {annotations}")
                     event_path = Path(tmp) / f"event-{name}.yaml"
                     workflow["metadata"].pop("namespace", None)
                     event_path.write_text(yaml.safe_dump(workflow))
@@ -601,6 +679,8 @@ def check_argo():
                         "mtkConnectTestbench": "OpenBSW/Tests/POSIX-x",
                         "mtkConnectEnable": "true",
                         "submittedBy": "dev@example.com",
+                        "geminiCommandLine": "gemini --model m --yolo --output-format json",
+                        "openbswArtifactStorageSolution": "",
                     }.items():
                         if key in params:
                             changed = simulate_event(sensor, {**body, key: value})

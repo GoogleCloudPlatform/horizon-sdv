@@ -47,6 +47,8 @@ Specifies the name of the Docker image to be used when running this job.
 
 The default value is defined by the `Seed Workloads` pipeline job. Users may override to provide a unique tag that describes the Linux distribution and tool chain versions.
 
+The portal workflow `openbsw-delete-mtkc-testbench` uses `imageTag`, default `argowf-latest`.
+
 ## SYSTEM VARIABLES <a name="system-variables"></a>
 
 There are a number of system environment variables that are unique to each platform but required by Jenkins build, test and environment pipelines.

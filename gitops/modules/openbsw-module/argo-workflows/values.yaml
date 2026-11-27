@@ -183,10 +183,9 @@ bswBuilder:
   workspace:
     storageClassName: standard-rwo
     size: 50Gi
-  # AI review. aiReviewRuntime (workflow parameter) picks agy (Antigravity SDK) or gemini-cli.
-  # geminiModel is used by both runtimes (empty: SDK default). geminiCommandLine is gemini-cli only.
+  # AI review. aiReviewRuntime and geminiCommandLine (workflow parameters) pick the runtime and the
+  # gemini-cli invocation. geminiModel is used by both runtimes (empty: SDK default).
   geminiModel: ""
-  geminiCommandLine: gemini --yolo --output-format json
   geminiPreviewFeatures: "true"
   geminiLocationGlobal: "true"
   # check-image runs before the builder image exists, so it uses the Cloud SDK.
@@ -329,7 +328,10 @@ bswBuilder:
       value: "60"
       enum: ["60", "45", "30", "20", "10", "90", "120"]
       description: "Maximum minutes for the AI review before it is stopped."
-    - name: artifactStorageSolution
+    - name: geminiCommandLine
+      value: gemini --yolo --output-format json
+      description: "Headless gemini-cli invocation (gemini-cli runtime only); the prompt is piped on stdin. Plain options only, e.g. gemini --model <model> --yolo --output-format json."
+    - name: openbswArtifactStorageSolution
       value: GCS_BUCKET
       description: "GCS_BUCKET stores artifacts in Cloud Storage. Empty stores nothing."
     - name: storageBucketDestination
@@ -356,9 +358,8 @@ mtkConnect:
   cleanupDelaySeconds: 60
   # Pod termination grace period, so mtk_connect.sh --stop finishes after SIGTERM.
   stopGracePeriodSeconds: 120
-  # Delete only calls the MTK Connect API (Node.js and npm), so it does not need the builder image.
-  # :22-bookworm-slim is the moving Node 22 tag.
-  apiImage: node:22-bookworm-slim
+  # Delete steps (openbsw-delete-mtkc-testbench and the mtk-cleanup exit handlers) run the imageTag
+  # builder image, as Jenkins does, but only call the MTK Connect API.
   resources:
     delete:
       requests: {cpu: "250m", memory: "512Mi"}
@@ -440,3 +441,6 @@ deleteMtkcTestbench:
     - name: mtkConnectTestbench
       value: ""
       description: "Offline testbench to delete, as printed by the test workflow, e.g. OpenBSW/Tests/POSIX-webhook-openbsw-posix-test-abcde. Online testbenches are skipped."
+    - name: imageTag
+      value: argowf-latest
+      description: "openbsw-builder image tag to run."

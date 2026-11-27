@@ -137,7 +137,8 @@ mtk_hold() {
 
 {{/*
 Template that deletes an offline testbench through the MTK Connect API (mtk_connect.sh --delete).
-No agent is started, so a small Node image is enough. An online testbench is skipped.
+It runs the imageTag builder image as user builder, like the Jenkins job, so mtk_connect.sh runs
+through sudo with the API key passed in the environment. An online testbench is skipped.
 Usage: include "openbsw.mtk.deleteTemplate" (dict "root" . "name" <template> "testbench" <value> "delaySeconds" <n>)
 */}}
 {{- define "openbsw.mtk.deleteTemplate" -}}
@@ -149,7 +150,7 @@ Usage: include "openbsw.mtk.deleteTemplate" (dict "root" . "name" <template> "te
         path: {{ include "openbsw.mtk.repoPath" $root | quote }}
 {{- include "openbsw.pipelineRepoGitArtifact" $root | nindent 8 }}
   container:
-    image: {{ $root.Values.mtkConnect.apiImage | quote }}
+    image: {{ include "openbsw.builderImageRef" $root | quote }}
     workingDir: {{ printf "%s/workloads/common/mtk-connect" (include "openbsw.mtk.repoPath" $root) | quote }}
     command: [bash, -euo, pipefail, -c]
 {{- include "openbsw.cloudEnvFrom" $root | nindent 4 }}
@@ -171,7 +172,8 @@ Usage: include "openbsw.mtk.deleteTemplate" (dict "root" . "name" <template> "te
           sleep "${DELETE_DELAY_SECONDS}"
         fi
         echo "===== MTK Connect: delete offline testbench ${MTK_CONNECT_TESTBENCH} ====="
-        MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES=true MTK_CONNECT_CONTAINER_ONLY=true \
+        export MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES=true MTK_CONNECT_CONTAINER_ONLY=true
+        sudo --preserve-env=MTK_CONNECT_DOMAIN,MTK_CONNECT_USERNAME,MTK_CONNECT_PASSWORD,MTK_CONNECT_TESTBENCH,MTK_CONNECT_DEVICE_PREFIX,MTK_CONNECT_DELETE_OFFLINE_TESTBENCHES,MTK_CONNECT_CONTAINER_ONLY \
           timeout 15m bash ./mtk_connect.sh --delete
         echo "An online testbench is left in place: stop the workflow that owns it first."
 {{- end -}}

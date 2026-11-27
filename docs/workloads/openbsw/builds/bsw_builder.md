@@ -236,6 +236,8 @@ Define storage solution used to push artifacts.
 
 Currently `GCS_BUCKET` default pushes to GCS bucket, if empty then nothing will be stored.
 
+The portal workflow `openbsw-bsw-builder` uses `openbswArtifactStorageSolution`, with the same default.
+
 ### `STORAGE_BUCKET_DESTINATION`
 
 Lets you override the default artifact storage destination. If not set, the build derives it automatically, for example:
@@ -263,7 +265,7 @@ Use this to specify settings such as the [Gemini model](https://ai.google.dev/ge
 `--debug` to include debug output.
 Note: Prompts are piped via `stdin` and output is redirected to a JSON file. Antigravity does not read this parameter.
 
-On the portal workflow this setting is chart value `bswBuilder.geminiCommandLine` (`gemini --yolo --output-format json`) in `gitops/modules/openbsw-module/argo-workflows/values.yaml`. The submit form omits it.
+The portal workflow `openbsw-bsw-builder` uses `geminiCommandLine`, default `gemini --yolo --output-format json`; the model comes from `GEMINI_MODEL`. It accepts only `gemini` followed by plain options (letters, digits and `. _ = : / -`), because the AI review step runs with elevated permissions.
 
 ### `AI_REVIEW_RUNTIME`
 
