@@ -30,7 +30,11 @@
 {{- end }}
 {{- if .active }}
 {{- $activeName = .name }}
+{{- if eq .name "AndroidCustom" }}
+{{- $activeChoice = .name }}
+{{- else }}
 {{- $activeChoice = printf "%s (%s)" .name .branch }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- if not $customBranch }}
@@ -86,7 +90,11 @@ spec:
         value: {{ $activeChoice | quote }}
         enum:
 {{- range .Values.uploaderConfig.entries }}
+{{- if eq .name "AndroidCustom" }}
+          - {{ .name | quote }}
+{{- else }}
           - {{ printf "%s (%s)" .name .branch | quote }}
+{{- end }}
 {{- end }}
         
       - name: Configuration

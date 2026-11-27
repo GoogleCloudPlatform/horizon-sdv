@@ -218,7 +218,7 @@ Soong runs `soong_build` in an nsjail sandbox where the ABFS mount is read-only 
 |-----------------|-----------------------|
 | `android-14*`, `android-15.0.0_r4` | nothing |
 | `android-15*` (tested `android-15.0.0_r36`) | build/soong cherry-picks 3619490–3619492 plus the `ui/build/soong.go` sed |
-| `android-16*` (tested `android-16.0.0_r3`) | `ui/build/soong.go` sed (`TOP`, `LOG_DIR` through `config.sandboxPath`) |
+| `android-16*` (tested `android-16.0.0_r3`) | `ui/build/soong.go` sed (`TOP`, `LOG_DIR` through `config.sandboxPath`). Also, only when they are missing: the release flag declaration `build/release/flag_declarations/RELEASE_ANOMALY_DETECTOR.textproto` (value `false`) and `prebuilts/build-tools/linux-x86/bin/ckati-wrap`; without the declaration Soong stops with `release_flag("RELEASE_ANOMALY_DETECTOR") had value undefined` |
 | branch names (`android-latest-release`, `main`, custom) | nothing; add the fix via `postRepoCommand` if the build needs it |
 
 Each workflow runs as one pod on `abfs-build-node-pool-ubuntu` (one pod per node, pool autoscaling 0–20, so up to 20 builds in parallel). Artifacts go to `gs://<project>-aaos/Android/Builds/AAOS_Builder_ABFS/<date>_<workflow>/`; logs are in the portal/Argo UI and archived to the Argo workflows bucket. A build that is fully served from the ninjago cache finishes in 10–15 minutes; a cold arm64 build takes about 3 hours.

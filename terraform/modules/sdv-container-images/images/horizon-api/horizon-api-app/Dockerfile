@@ -18,7 +18,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /horizon-api .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /horizon-api .
 
 FROM --platform=linux/amd64 gcr.io/distroless/static-debian12:nonroot
 COPY --from=builder /horizon-api /horizon-api

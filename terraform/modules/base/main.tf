@@ -205,12 +205,18 @@ module "sdv_container_images" {
   gcp_region      = var.sdv_region
   gcp_registry_id = var.sdv_artifact_registry_repository_id
 
+  container_image_no_cache    = var.sdv_container_image_no_cache
+  container_image_pull_parent = var.sdv_container_image_pull_parent
+
   images = {
     for name, image in local.images : name => {
       directory = image.directory
       version   = image.build_version
       build_args = merge(
-        { GO_VERSION = local.go_version },
+        {
+          GO_VERSION      = local.go_version
+          KUBECTL_VERSION = local.kubectl_version
+        },
         try(image.build_args, {}),
         name == "horizon-dev-portal" ? { HORIZON_CLI_VERSION = local.horizon_core_version } : {}
       )

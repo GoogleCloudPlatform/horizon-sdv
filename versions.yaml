@@ -17,7 +17,8 @@
 #
 # Readers of this file:
 #   - Terraform (yamldecode in terraform/modules/base)
-#   - tools/scripts/container-images/build.sh via PyYAML (components.horizoncore and tools.go.version)
+#   - tools/scripts/container-images/build.sh via PyYAML (components.horizoncore, tools.go.version,
+#     and tools.kubectl.version)
 # Helm charts under gitops/ cannot read files outside their own directory, so they
 # receive the value through the Terraform-injected Argo CD values, not from here.
 #
@@ -53,3 +54,8 @@ tools:
   # Keep it quoted: an unquoted 3.24 is parsed as a number.
   alpine:
     tag: "3.24"
+  # kubectl release used as the Docker build-arg KUBECTL_VERSION.
+  # Keep the leading v: the download URL is https://dl.k8s.io/release/<version>/...
+  # Readers: Terraform (terraform/modules/base) and tools/scripts/container-images/build.sh.
+  kubectl:
+    version: "v1.34.12"

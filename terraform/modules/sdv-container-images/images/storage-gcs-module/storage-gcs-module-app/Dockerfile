@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG GO_VERSION
-FROM --platform=linux/amd64 golang:${GO_VERSION}-bookworm AS build
+FROM --platform=linux/amd64 golang:${GO_VERSION}-alpine AS build
 
 WORKDIR /src
 
