@@ -197,6 +197,8 @@ spec:
         storageClassName: {{ include "aaos-builder.cacheStorageClassName" . }}
         resources:
           requests:
+            # A fixed chart value: Argo checks this quantity before it substitutes
+            # workflow parameters, so it cannot be a submit parameter.
             storage: {{ .Values.spec.aaosCacheStorageSize | default "1000Gi" | quote }}
 {{- if and .Values.sharedPipelineWorkspace (not (or .Values.localRepoHostPath .Values.localRepoPvcName)) }}
     - metadata:
