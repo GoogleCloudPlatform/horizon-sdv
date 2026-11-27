@@ -198,10 +198,19 @@ function GuideRow({ guide, active }: { guide: PortalGuide; active: boolean }) {
 /** Owns the filter text so typing re-renders only the list, not the open guide. */
 function GuideList({ activePath }: { activePath: string | undefined }) {
   const [query, setQuery] = useState('');
-  const visibleGuides = PORTAL_GUIDES.filter(
-    (guide) =>
-      (!isExternalGuide(guide) && guide.path === activePath) || guideMatchesQuery(guide, query)
-  );
+  // The open guide stays listed while filtering, so it must not count as a match:
+  // otherwise a query that matches nothing would still leave one row and hide the empty message.
+  const visibleGuides: PortalGuide[] = [];
+  let matchCount = 0;
+  for (const guide of PORTAL_GUIDES) {
+    const matches = guideMatchesQuery(guide, query);
+    if (matches) {
+      matchCount += 1;
+    }
+    if (matches || (!isExternalGuide(guide) && guide.path === activePath)) {
+      visibleGuides.push(guide);
+    }
+  }
 
   return (
     <Paper
@@ -230,19 +239,18 @@ function GuideList({ activePath }: { activePath: string | undefined }) {
         dense
         sx={{ overflow: 'auto', p: 0, borderTop: 1, borderColor: 'divider' }}
       >
-        {visibleGuides.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ px: 1, py: 2 }}>
+        {matchCount === 0 ? (
+          <Typography role="status" variant="body2" color="text.secondary" sx={{ px: 1.5, py: 2 }}>
             No documents match.
           </Typography>
-        ) : (
-          visibleGuides.map((guide) => (
-            <GuideRow
-              key={guideKey(guide)}
-              guide={guide}
-              active={!isExternalGuide(guide) && activePath === guide.path}
-            />
-          ))
-        )}
+        ) : null}
+        {visibleGuides.map((guide) => (
+          <GuideRow
+            key={guideKey(guide)}
+            guide={guide}
+            active={!isExternalGuide(guide) && activePath === guide.path}
+          />
+        ))}
       </List>
     </Paper>
   );
