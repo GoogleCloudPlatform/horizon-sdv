@@ -53,7 +53,7 @@ A scanner finding falls into one of two categories:
 
 | Kind | What it needs | Why |
 |------|---------------|-----|
-| **Type A - Rebuild / republish only** | A **version bump** (no source edit) | The Dockerfile already runs `apk upgrade` / `apt upgrade`, and Terraform builds with `no_cache = true`. The image was flagged only because the copy in your registry is **stale** (built before the patch was published). A fresh rebuild picks up the latest patched packages automatically. |
+| **Type A - Rebuild / republish only** | A **version bump** (no source edit) | The Dockerfile already runs `apk upgrade` / `apt upgrade`. Terraform rebuilds when the tag or the build-context hash changes. A version bump republishes the image, but the upgrade step runs again only when that instruction or its parent layer changes. `sdv_container_image_no_cache` defaults to `false`: Docker reuses unchanged layers. `sdv_container_image_pull_parent` defaults to `false`: Docker reuses the `FROM` image already on the build host. Before running `deploy.sh` or `container-deploy.sh`, set `TF_VAR_sdv_container_image_no_cache=true` to rebuild every layer for that apply. Set it back to `false` before the next run to reuse the cache again.  Similarly, set `TF_VAR_sdv_container_image_pull_parent=true` to pull each `FROM` image again for that apply when a floating base tag has moved. Set it back to `false` before the next run to keep the local parent. |
 | **Type B - Code change** | Pull the fix from a **newer release** into your fork | The image does not self-heal on a plain rebuild - e.g. a Dockerfile that never runs `apk upgrade`, a **pinned base image** that must move (nginx), or an **interpreter/base bump** (Python). These fixes live in the platform source and ship in a later release. |
 
 > [!IMPORTANT]
@@ -167,7 +167,7 @@ This is the **Type A** path. It can be done on your **current** Horizon version,
    git push origin <your-branch>
    ```
 
-3. Deploy (builds fresh `no_cache` images and pushes them to your registry):
+3. Deploy (rebuilds the bumped images, reusing unchanged layers, and pushes them to your registry):
 
    ```bash
    ./container-deploy.sh --apply      # or: ./deploy.sh --apply
@@ -179,7 +179,7 @@ This is the **Type A** path. It can be done on your **current** Horizon version,
 
 5. **Verify** the running packages - see [Section #4 - Testing](#section-4---testing).
 
-Because these Dockerfiles already `apk`/`apt upgrade` and builds are `no_cache=true`, the rebuilt image contains the latest patched packages automatically - no source edit needed.
+These Dockerfiles already run `apk`/`apt upgrade`. With layer caching on, that step is reused when the parent image is unchanged, so a version bump alone does not pull packages published after the last build. Change the upgrade instruction, or move the parent tag, before deploying if the finding is a new OS package.
 
 ---
 
