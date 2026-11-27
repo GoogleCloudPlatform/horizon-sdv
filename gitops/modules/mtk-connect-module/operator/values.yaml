@@ -1,0 +1,62 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Module name, passed by the parent Application (injected by Module Manager).
+parentModuleName: ""
+
+# Passed by the parent Application (MODULE_CONFIG from Module Manager).
+config:
+  namespacePrefix: ""
+  isSubEnvironment: false
+  enableNetworkPolicies: true
+  probeSourceCIDRs: []
+  # Module-specific MODULE_CONFIG (docs/architecture/06_interfaces.md); containerImage is a full image ref.
+  modules:
+    mtk-connect:
+      containerImage: ""
+
+# Secrets that receive the service-account credentials (same list as the integration chart).
+# namespaceSuffix is appended to config.namespacePrefix.
+credentialDistribution: []
+
+# Address(es) of the Kubernetes API server, reached by the controller (GKE private control plane:
+# master_ipv4_cidr_block in terraform/modules/sdv-gke-cluster/main.tf). Kept outside `config` because
+# MODULE_CONFIG replaces the whole `config` map.
+kubeApiServerCIDRs:
+  - 10.0.0.0/28
+
+# Namespaces (appended to config.namespacePrefix) where MTKConnectTestbench resources are watched. The controller
+# gets a Role in each of them and the admission policy applies to them.
+testbenchNamespaceSuffixes:
+  - workflows
+  - jenkins
+
+# Limits enforced by the ValidatingAdmissionPolicy when a testbench is created.
+# allowedSubmittedFrom is the platform set (docs/architecture/06_interfaces.md).
+testbenchPolicy:
+  allowPublicAccess: true
+  # Highest device index per testbench, and the range tunnel ports must be in.
+  maxDevices: 8
+  tunnelPortMin: 1024
+  tunnelPortMax: 65535
+  allowedPermissions:
+    - book
+  allowedSubmittedFrom:
+    - api
+    - developer-portal
+    - horizon-cli
+    - custom
+
+# Portal path reported in status.url; {id} is replaced by the agent id. Empty uses the portal root /mtk-connect/.
+testbenchURLPath: ""

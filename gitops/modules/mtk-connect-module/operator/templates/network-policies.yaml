@@ -1,0 +1,88 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if .Values.config.enableNetworkPolicies }}
+{{- $ns := include "mtk-connect-operator.namespace" . }}
+# DNS is allowed namespace-wide by the platform's allow-dns policy, and the server accepts ingress on
+# 8081 from any source (allow-mtk-connect-ingress-from-gateway). Keycloak already admits this namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mtk-connect-module-egress
+  namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mtk-connect-operator
+  policyTypes:
+    - Egress
+  egress:
+    # Kubernetes API (secrets, pods/exec, deployments, events, leases). The GKE private control plane is
+    # not a Pod in kube-system, so it is matched by address (terraform sdv-gke-cluster master_ipv4_cidr_block).
+    - to:
+        {{- range .Values.kubeApiServerCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    # Keycloak admin API
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.config.namespacePrefix }}keycloak
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloakx
+      ports:
+        - protocol: TCP
+          port: 8080
+    # MTK Connect router (REST API)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mtk-connect
+      ports:
+        - protocol: TCP
+          port: 8081
+---
+# Kubelet HTTP probes originate from the node IP (primary subnet), not the pod CIDR.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mtk-connect-module-ingress
+  namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mtk-connect-operator
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- range .Values.config.probeSourceCIDRs }}
+    - from:
+        - ipBlock:
+            cidr: {{ . | quote }}
+      ports:
+        - protocol: TCP
+          port: 8081
+    {{- end }}
+{{- end }}

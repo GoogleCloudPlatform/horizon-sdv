@@ -22,7 +22,7 @@ metadata:
   name: {{ .Values.overviewNamespace }}
   labels:
     app.kubernetes.io/name: module-overview
-    horizon-sdv.io/module: {{ .Values.moduleName | default "mtk-connect" | quote }}
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 ---
@@ -34,7 +34,7 @@ metadata:
   labels:
     app.kubernetes.io/name: module-overview
     app.kubernetes.io/component: module-overview-http
-    horizon-sdv.io/module: {{ .Values.moduleName | default "mtk-connect" | quote }}
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 data:
@@ -48,7 +48,7 @@ metadata:
   namespace: {{ .Values.overviewNamespace }}
   labels:
     app.kubernetes.io/name: module-overview
-    horizon-sdv.io/module: {{ .Values.moduleName | default "mtk-connect" | quote }}
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
@@ -56,12 +56,12 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: module-overview
-      horizon-sdv.io/module: {{ .Values.moduleName | default "mtk-connect" | quote }}
+      horizon-sdv.io/module: {{ .Values.moduleName | quote }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: module-overview
-        horizon-sdv.io/module: {{ .Values.moduleName | default "mtk-connect" | quote }}
+        horizon-sdv.io/module: {{ .Values.moduleName | quote }}
     spec:
       containers:
         - name: nginx
@@ -103,14 +103,14 @@ metadata:
   namespace: {{ .Values.overviewNamespace }}
   labels:
     app.kubernetes.io/name: module-overview
-    horizon-sdv.io/module: {{ .Values.moduleName | default "mtk-connect" | quote }}
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   type: ClusterIP
   selector:
     app.kubernetes.io/name: module-overview
-    horizon-sdv.io/module: {{ .Values.moduleName | default "mtk-connect" | quote }}
+    horizon-sdv.io/module: {{ .Values.moduleName | quote }}
   ports:
     - name: http
       port: 80

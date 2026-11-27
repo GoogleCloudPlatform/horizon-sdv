@@ -1,0 +1,211 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if include "mtk-connect-operator.installCRDs" . | eq "true" }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mtkconnectinstances.mtkconnect.horizon-sdv.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+    # CRDs are cluster-wide and shared by every environment: never prune or delete them from Git.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  group: mtkconnect.horizon-sdv.io
+  scope: Namespaced
+  names:
+    plural: mtkconnectinstances
+    singular: mtkconnectinstance
+    kind: MTKConnectInstance
+    shortNames:
+      - mtkci
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Server
+          type: string
+          jsonPath: .status.serverVersion
+        - name: Last Rotation
+          type: string
+          jsonPath: .status.lastRotationTime
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: >-
+            MTKConnectInstance describes the integration of one MTK Connect server with Keycloak and its API
+            consumers. Create the annotation mtkconnect.horizon-sdv.io/rotate-now with a new value to force a key rotation.
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - domain
+                - keycloak
+                - server
+              properties:
+                domain:
+                  type: string
+                  minLength: 1
+                  description: Public host name of the environment (no scheme), used for the SAML consume URL.
+                serviceAccountUser:
+                  type: string
+                  default: mtk-connect-admin
+                  description: MTK Connect service-account user that owns the API keys.
+                keycloak:
+                  type: object
+                  required:
+                    - url
+                    - adminSecretRef
+                  properties:
+                    url:
+                      type: string
+                      description: Keycloak base URL including the relative path, for example http://host:8080/auth.
+                    realm:
+                      type: string
+                      default: horizon
+                    adminUser:
+                      type: string
+                      default: admin
+                    adminSecretRef:
+                      type: object
+                      required:
+                        - namespace
+                        - name
+                      properties:
+                        namespace:
+                          type: string
+                        name:
+                          type: string
+                        key:
+                          type: string
+                          default: password
+                    samlClientId:
+                      type: string
+                      default: mtk-connect
+                server:
+                  type: object
+                  required:
+                    - url
+                  properties:
+                    url:
+                      type: string
+                      description: In-cluster MTK Connect router URL without the public /mtk-connect prefix (the gateway strips it), for example http://mtk-connect-router.ns.svc:8081.
+                    deployment:
+                      type: string
+                      default: mtk-connect
+                      description: Server Deployment. Fixed; the module's Role only allows this name, so any other value is rejected.
+                    podSelector:
+                      type: string
+                      default: app.kubernetes.io/name=mtk-connect
+                    container:
+                      type: string
+                      default: authenticator
+                    keycloakSecret:
+                      type: string
+                      default: mtk-connect-keycloak
+                      description: Secret the server mounts for Keycloak. Fixed; the module's Role only allows this name, so any other value is rejected.
+                    apiKeySecret:
+                      type: string
+                      default: mtk-connect-apikey
+                      description: Secret that holds the service-account API key. Fixed; the module's Role only allows this name, so any other value is rejected.
+                keyRotation:
+                  type: object
+                  properties:
+                    interval:
+                      type: string
+                      default: 24h
+                      description: Go duration; how often the API key is rotated.
+                    keyLifetime:
+                      type: string
+                      default: 720h
+                      description: Go duration; expiry given to each new key. Must be longer than interval.
+                    overlap:
+                      type: string
+                      default: 48h
+                      description: Go duration; a superseded key stays valid this long before it is deleted.
+                credentialDistribution:
+                  type: array
+                  description: Extra Secrets that receive the current service-account credentials (username, password).
+                  items:
+                    type: object
+                    required:
+                      - namespace
+                      - secretName
+                    properties:
+                      namespace:
+                        type: string
+                      secretName:
+                        type: string
+                      jenkinsCredential:
+                        type: boolean
+                        description: Adds the Jenkins credentials-type label and description annotation.
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      annotations:
+                        type: object
+                        additionalProperties:
+                          type: string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - Configuring
+                    - Ready
+                    - Degraded
+                observedGeneration:
+                  type: integer
+                  format: int64
+                currentKeyId:
+                  type: string
+                lastRotationTime:
+                  type: string
+                  format: date-time
+                rotateNowHandled:
+                  type: string
+                serverVersion:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+{{- end }}

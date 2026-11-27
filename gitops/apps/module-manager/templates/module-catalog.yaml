@@ -138,4 +138,4 @@ spec:
       overviewService: mod-mtk-connect-overview
       # Per-environment: the overview namespace carries the environment prefix (empty on the main environment).
       overviewServiceNamespace: {{ printf "%smtk-connect-overview" .Values.config.namespacePrefix | quote }}
-      autoDisableWhenUnused: false # owns MongoDB data; never auto-disable
+      autoDisableWhenUnused: false # MTK Connect data (MongoDB) must never be auto-disabled

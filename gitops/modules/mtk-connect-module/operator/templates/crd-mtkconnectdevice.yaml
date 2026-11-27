@@ -1,0 +1,209 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if include "mtk-connect-operator.installCRDs" . | eq "true" }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mtkconnectdevices.mtkconnect.horizon-sdv.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+    # CRDs are cluster-wide and shared by every environment: never prune or delete them from Git.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  group: mtkconnect.horizon-sdv.io
+  scope: Namespaced
+  names:
+    plural: mtkconnectdevices
+    singular: mtkconnectdevice
+    kind: MTKConnectDevice
+    shortNames:
+      - mtkcd
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Testbench
+          type: string
+          jsonPath: .spec.testbenchRef
+        - name: Index
+          type: integer
+          jsonPath: .spec.index
+        - name: Profile
+          type: string
+          jsonPath: .spec.profile
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: >-
+            MTKConnectDevice is one device of an MTKConnectTestbench in MTK Connect. The controller creates the
+            device and applies its interface (terminal, file system, adb, tunnels) from the profile; a change to
+            the resource is applied again within seconds. Deleting the resource deletes the device. MTK Connect
+            numbers the devices of a testbench itself in creation order, so create the devices of a testbench
+            in index order (1, 2, 3, ...) without gaps.
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              x-kubernetes-validations:
+                - rule: "self.profile == 'Adb' ? has(self.adb) : !has(self.adb)"
+                  message: adb is required for the Adb profile and not allowed for the others
+                - rule: "self.profile != 'TunnelCarrier' || (has(self.tunnels) && size(self.tunnels) > 0)"
+                  message: the TunnelCarrier profile needs at least one tunnel
+                - rule: "!has(self.host) || !has(self.host.launchApplication) || self.profile == 'HostOnly'"
+                  message: host.launchApplication is only used by the HostOnly profile
+                - rule: "!has(self.tunnels) || size(self.tunnels) == 0 || self.profile == 'Adb' || has(self.tunnelHost)"
+                  message: tunnelHost is required for tunnels unless the profile is Adb (which uses adb.host)
+              required:
+                - testbenchRef
+                - index
+                - profile
+              properties:
+                testbenchRef:
+                  type: string
+                  minLength: 1
+                  maxLength: 253
+                  description: Name of the MTKConnectTestbench in the same namespace. Immutable.
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: testbenchRef is immutable
+                index:
+                  type: integer
+                  minimum: 1
+                  maximum: 64
+                  description: >-
+                    Position of the device in the testbench, starting at 1. MTK Connect numbers devices in creation
+                    order, so a device is only created once the one below it exists. Immutable.
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: index is immutable
+                profile:
+                  type: string
+                  enum: [Adb, HostOnly, TunnelCarrier]
+                  description: >-
+                    Adb: terminal, file system and adb on an Android device. HostOnly: terminal and file system on
+                    the host. TunnelCarrier: a device that only carries the tunnels. Immutable.
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: profile is immutable
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 63
+                  description: >-
+                    Name shown in MTK Connect. Defaults to "<testbenchRef> <index>". It is applied when the device
+                    is created and not changed afterwards.
+                adb:
+                  type: object
+                  required:
+                    - host
+                    - port
+                  properties:
+                    host:
+                      type: string
+                      maxLength: 253
+                      pattern: '^[A-Za-z0-9._:-]+$'
+                    port:
+                      type: integer
+                      minimum: 1
+                      maximum: 65535
+                    tunnelCallerPort:
+                      type: integer
+                      minimum: 1
+                      maximum: 65535
+                      description: Port of the tunnel caller on the host. Defaults to 8555.
+                host:
+                  type: object
+                  properties:
+                    terminalUser:
+                      type: string
+                      maxLength: 32
+                      pattern: '^[a-z_][a-z0-9_-]*$'
+                      description: >-
+                        User the terminal opens as. Without it the terminal uses the builder user, falling back to
+                        jenkins. Ignored when launchApplication is set (the application runs as builder).
+                    launchApplication:
+                      type: string
+                      maxLength: 1024
+                      description: Command the terminal runs instead of a shell, as the builder user. HostOnly only.
+                tunnelHost:
+                  type: string
+                  maxLength: 253
+                  pattern: '^[A-Za-z0-9._:-]+$'
+                  description: Host the tunnels connect to. Defaults to adb.host for the Adb profile.
+                tunnels:
+                  type: array
+                  maxItems: 16
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [name]
+                  description: Raw TCP tunnels. Names and ports must be unique.
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - port
+                    properties:
+                      name:
+                        type: string
+                        maxLength: 63
+                        pattern: '^[A-Za-z0-9._-]+$'
+                      port:
+                        type: integer
+                        minimum: 1
+                        maximum: 65535
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+              properties:
+                phase:
+                  type: string
+                  description: Pending, Configured, Deleting or Failed.
+                observedGeneration:
+                  type: integer
+                  format: int64
+                agentId:
+                  type: string
+                deviceId:
+                  type: string
+                index:
+                  type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+{{- end }}

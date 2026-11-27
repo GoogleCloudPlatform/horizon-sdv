@@ -74,6 +74,10 @@ spec:
           containerImages:
             storageGcsModule: {{ .Values.config.containerImages.storageGcsModule | quote }}
             cloudWorkstationsModule: {{ .Values.config.containerImages.cloudWorkstationsModule | quote }}
+          {{- $mtkConnect := index (default dict .Values.config.modules) "mtk-connect" | default dict }}
+          modules:
+            mtk-connect:
+              containerImage: {{ $mtkConnect.containerImage | default "" | quote }}
           scm:
             authMethod: {{ .Values.scm.authMethod | quote }}
           workloads:

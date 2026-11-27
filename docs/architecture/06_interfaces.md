@@ -21,6 +21,7 @@ This page is a reference for the interfaces between the module components: the H
 - [Horizon API endpoints](#horizon-api-endpoints)
 - [Module Manager endpoints](#module-manager-endpoints)
 - [Soft-feature contract](#soft-feature-contract)
+- [Module-specific MODULE_CONFIG](#module-specific-module_config)
 
 ## Horizon API endpoints
 
@@ -71,3 +72,11 @@ A parent module learns which of its soft dependencies are enabled through the ca
 | `HelmValuesAndConfigMap` | Both. |
 
 The ConfigMap has two keys. `features.env` holds one `SOFT_FEATURE_ENABLED_<DEPENDENCY>=true|false` line per soft dependency, with the name upper-cased and `-` and `.` replaced by `_` (so `sample-soft` becomes `SOFT_FEATURE_ENABLED_SAMPLE_SOFT`). `soft-features.json` holds the same flags as JSON. Module Manager updates both whenever a soft dependency is enabled or disabled. The `sample` module mounts the ConfigMap into its hello-world pod; see `gitops/modules/sample-module/hello-world`.
+
+## Module-specific MODULE_CONFIG
+
+Module Manager passes the cluster `MODULE_CONFIG` to every module chart as `config`. It replaces the chart's `config` map as a whole; it doesn't merge. Configuration that only one module reads goes under `config.modules.<module-name>.*`, not into a new top-level key. Terraform sets the values in `terraform/modules/sdv-gke-apps/main.tf`, and `gitops/templates/module-manager.yaml` forwards them. Module names contain hyphens, so templates read them with `index`, for example `index .Values.config.modules "mtk-connect"`.
+
+| Key | Set by | Purpose |
+|---|---|---|
+| `config.modules.mtk-connect.containerImage` | Terraform, from the `mtk-connect-module-app` image | Full image reference of the MTK Connect controller. The `mtk-connect` module's operator chart requires it. |

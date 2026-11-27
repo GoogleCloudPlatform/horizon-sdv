@@ -1,0 +1,183 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- $ns := include "mtk-connect-operator.namespace" . }}
+{{- $prefix := .Values.config.namespacePrefix }}
+# Module namespace: the custom resource, the secrets the controller owns, the server pod and deployment.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mtk-connect-module-role
+  namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: ["mtkconnect.horizon-sdv.io"]
+    resources: ["mtkconnectinstances"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["mtkconnect.horizon-sdv.io"]
+    resources: ["mtkconnectinstances/status"]
+    verbs: ["get", "update", "patch"]
+  # mtk-connect-keycloak, mtk-connect-apikey and mtk-connect-testbench-tokens (create cannot be limited by name).
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["mtk-connect-keycloak", "mtk-connect-apikey", "mtk-connect-testbench-tokens"]
+    verbs: ["get", "update"]
+  # Find the ready server pod and run createServiceAccount.js in it (the websocket upgrade needs get and create).
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["get", "create"]
+  # Roll the server once when the SAML key material changes.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["mtk-connect"]
+    verbs: ["get", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mtk-connect-module-rolebinding
+  namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mtk-connect-module-role
+subjects:
+  - kind: ServiceAccount
+    name: mtk-connect-module-sa
+    namespace: {{ $ns }}
+---
+# Keycloak admin password (read only, one Secret).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mtk-connect-module-keycloak-admin
+  namespace: {{ $prefix }}keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["keycloak-initial-creds"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mtk-connect-module-keycloak-admin
+  namespace: {{ $prefix }}keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mtk-connect-module-keycloak-admin
+subjects:
+  - kind: ServiceAccount
+    name: mtk-connect-module-sa
+    namespace: {{ $ns }}
+{{- range .Values.testbenchNamespaceSuffixes }}
+{{- $tbNS := printf "%s%s" $prefix . }}
+---
+# Testbench namespace: read MTKConnectTestbench, write its status and finalizer, record Events.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mtk-connect-module-testbenches
+  namespace: {{ $tbNS }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: ["mtkconnect.horizon-sdv.io"]
+    resources: ["mtkconnecttestbenches"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["mtkconnect.horizon-sdv.io"]
+    resources: ["mtkconnecttestbenches/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["mtkconnect.horizon-sdv.io"]
+    resources: ["mtkconnectdevices"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["mtkconnect.horizon-sdv.io"]
+    resources: ["mtkconnectdevices/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mtk-connect-module-testbenches
+  namespace: {{ $tbNS }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mtk-connect-module-testbenches
+subjects:
+  - kind: ServiceAccount
+    name: mtk-connect-module-sa
+    namespace: {{ $ns }}
+{{- end }}
+{{- range .Values.credentialDistribution }}
+{{- $target := printf "%s%s" $prefix .namespaceSuffix }}
+---
+# Credential distribution target: {{ $target }}/{{ .secretName }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mtk-connect-module-cred-{{ .secretName }}
+  namespace: {{ $target }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .secretName | quote }}]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mtk-connect-module-cred-{{ .secretName }}
+  namespace: {{ $target }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mtk-connect-module-cred-{{ .secretName }}
+subjects:
+  - kind: ServiceAccount
+    name: mtk-connect-module-sa
+    namespace: {{ $ns }}
+{{- end }}

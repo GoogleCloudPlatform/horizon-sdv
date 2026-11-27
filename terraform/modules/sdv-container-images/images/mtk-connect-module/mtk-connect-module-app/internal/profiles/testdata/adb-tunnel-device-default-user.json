@@ -1,0 +1,235 @@
+{
+  "scenario": "adb-tunnel-device-default-user",
+  "env": {
+    "MTK_CONNECT_DEVICE_PREFIX": "AAOS",
+    "MTK_CONNECT_DEVICE_NAME_LIST": "",
+    "MTK_CONNECT_HOST_LIST": "10.0.0.1,10.0.0.2",
+    "MTK_CONNECT_HOST_PORT_LIST": "6520,6521",
+    "MTK_CONNECT_HOST_ONLY": "false",
+    "MTK_CONNECT_DEVICES": "2",
+    "MTK_CONNECT_TUNNEL_LIST": "someip:30490",
+    "MTK_CONNECT_TUNNEL_DEVICE_NAME": "Tunnels"
+  },
+  "devices": [
+    {
+      "index": 1,
+      "name": "Tunnels",
+      "interface": {
+        "fs": {
+          "types": [
+            {
+              "name": "HOST",
+              "driver": "native",
+              "root": "/root"
+            }
+          ]
+        },
+        "terminal": {
+          "types": [
+            {
+              "name": "HOST",
+              "driver": "spawn",
+              "command": "bash",
+              "args": [
+                "-c",
+                "[ -d /home/builder ] && { cd /home/builder; su builder; bash --login; } || { cd /home/jenkins; su jenkins; bash --login; }",
+                ""
+              ]
+            }
+          ]
+        },
+        "tunnel": {
+          "types": [
+            {
+              "name": "someip",
+              "driver": "tcp",
+              "host": "10.0.0.1",
+              "port": 30490,
+              "caller": {
+                "port": 30490
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "index": 2,
+      "name": "AAOS 2",
+      "interface": {
+        "adb": {
+          "mode": "tcp",
+          "port": 6520,
+          "host": "10.0.0.1"
+        },
+        "button": {
+          "driver": "adb",
+          "skin": "Default Android"
+        },
+        "exec": {
+          "types": [
+            {
+              "name": "device",
+              "driver": "adb",
+              "cwd": "/"
+            }
+          ]
+        },
+        "fs": {
+          "types": [
+            {
+              "name": "adb",
+              "driver": "adb",
+              "root": "/"
+            },
+            {
+              "name": "HOST",
+              "driver": "native",
+              "root": "/root"
+            }
+          ]
+        },
+        "log": {
+          "types": [
+            {
+              "name": "logcat",
+              "driver": "logcat"
+            }
+          ]
+        },
+        "mjpeg": {
+          "types": [
+            {
+              "name": "screen",
+              "driver": "minicap",
+              "scale": 1
+            }
+          ]
+        },
+        "terminal": {
+          "types": [
+            {
+              "name": "adb",
+              "driver": "adb",
+              "icon": "adb"
+            },
+            {
+              "name": "HOST",
+              "driver": "spawn",
+              "command": "bash",
+              "args": [
+                "-c",
+                "cd ~/; bash --login",
+                ""
+              ]
+            }
+          ]
+        },
+        "touch": {
+          "driver": "adb",
+          "native": true
+        },
+        "tunnel": {
+          "types": [
+            {
+              "name": "adb",
+              "driver": "adb",
+              "caller": {
+                "port": 8555
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "index": 3,
+      "name": "AAOS 3",
+      "interface": {
+        "adb": {
+          "mode": "tcp",
+          "port": 6521,
+          "host": "10.0.0.2"
+        },
+        "button": {
+          "driver": "adb",
+          "skin": "Default Android"
+        },
+        "exec": {
+          "types": [
+            {
+              "name": "device",
+              "driver": "adb",
+              "cwd": "/"
+            }
+          ]
+        },
+        "fs": {
+          "types": [
+            {
+              "name": "adb",
+              "driver": "adb",
+              "root": "/"
+            },
+            {
+              "name": "HOST",
+              "driver": "native",
+              "root": "/root"
+            }
+          ]
+        },
+        "log": {
+          "types": [
+            {
+              "name": "logcat",
+              "driver": "logcat"
+            }
+          ]
+        },
+        "mjpeg": {
+          "types": [
+            {
+              "name": "screen",
+              "driver": "minicap",
+              "scale": 1
+            }
+          ]
+        },
+        "terminal": {
+          "types": [
+            {
+              "name": "adb",
+              "driver": "adb",
+              "icon": "adb"
+            },
+            {
+              "name": "HOST",
+              "driver": "spawn",
+              "command": "bash",
+              "args": [
+                "-c",
+                "cd ~/; bash --login",
+                ""
+              ]
+            }
+          ]
+        },
+        "touch": {
+          "driver": "adb",
+          "native": true
+        },
+        "tunnel": {
+          "types": [
+            {
+              "name": "adb",
+              "driver": "adb",
+              "caller": {
+                "port": 8555
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
