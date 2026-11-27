@@ -137,7 +137,7 @@ GCP Console hides Secret values; use `kubectl` to decode `data.license`.
 
 ConfigMap `horizon/abfs-uploader-config`, key `table`, is a YAML list of rows; exactly one row is `active`. `synced: true` on that row means the uploaders have finished seeding it (see [Seed finished](#seed-finished)). The uploaders of `abfs-service-module` seed the manifest of the active row. The table lives here so it survives a disable of the service module.
 
-Default rows (`uploader-config/values.yaml`, `uploaderConfig.entries`): `Android14_r30`, `Android15_r36` (active), `Android16_r3`, `AndroidLatest` (`android-latest-release`), `AndroidCustom` (no stored repo until a custom config is submitted). Shared settings: manifest URL `https://android.googlesource.com/platform/manifest`, file `default.xml`, `fetch-ref-spec` `refs/*:refs/*` minus Gerrit meta refs.
+Default rows (`uploader-config/values.yaml`, `uploaderConfig.entries`): `Android14_r30`, `Android15_r36` (active), `Android16_r3`, `AndroidLatest` (`android-latest-release`), `AndroidCustom` (no stored repo until a custom config is submitted). Shared settings: manifest URL `https://android.googlesource.com/platform/manifest`, file `default.xml`, `fetch-ref-spec` `refs/*:refs/*` without `refs/changes/*` and `refs/cache-automerge/*` (see [Fetch refspec](#fetch-refspec)).
 
 WorkflowTemplate **`abfs-uploader-config-select`** (portal: **abfs-data** → Workflow Templates):
 
@@ -177,6 +177,24 @@ argo submit -n workflows --from workflowtemplate/abfs-uploader-config-select \
 ```
 
 The predefined rows are fixed at install time: the parent Application ignores `/data` of the ConfigMap (a row made active from the portal is not reverted by a sync), so a row appended to `uploaderConfig.entries` later never reaches the live ConfigMap of a running installation. For a custom manifest definition use the `AndroidCustom` row and edit its `Configuration`.
+
+### Fetch refspec
+
+`uploaderConfig.fetchRefSpec` is what the uploaders fetch from every project of the manifest and push to ABFS (a leading `^` excludes):
+
+```yaml
+fetchRefSpec:
+  - refs/*:refs/*
+  - ^refs/changes/*
+  - ^refs/cache-automerge/*
+```
+
+`refs/changes/*` holds every patch set of every Gerrit change. In the busy AOSP projects it is up to 90 % of the refs and about half of the fetched data, it grows all the time, and no build reads it from ABFS: a build mounts a branch or tag, and a build of a Gerrit change fetches its patch set from the Git host. Leaving it out makes the first seed of a release shorter, keeps the uploader disks smaller and reduces what every later fetch has to compare.
+
+- The same list is the fallback of `abfs-service-module` (`pusher.fallbackRepo.fetchRefSpec`); change both together.
+- A running installation keeps the refspec its table was created with. Selecting a predefined row in `abfs-uploader-config-select` rewrites that row from the deployed chart; when the stored repo differs, the uploaders restart even if the row is already active. After an upgrade, submit the workflow once with the active row to apply the new refspec.
+- To seed change refs as well, or any other set, select `AndroidCustom` and put the list in `fetch-ref-spec` of its `Configuration`.
+- Refs that were already pushed to ABFS stay there; a narrower refspec only stops new ones.
 
 ## Spanner backup schedules
 

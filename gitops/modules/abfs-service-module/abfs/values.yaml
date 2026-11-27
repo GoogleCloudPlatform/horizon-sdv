@@ -398,10 +398,11 @@ pusher:
     url: https://android.googlesource.com/platform/manifest
     branch: android-15.0.0_r36
     file: default.xml
+    # Same list as uploaderConfig.fetchRefSpec in abfs-data-module: Gerrit
+    # change refs are not seeded.
     fetchRefSpec:
       - refs/*:refs/*
-      - ^refs/changes/*/meta
-      - ^refs/changes/*/robot-comments
+      - ^refs/changes/*
       - ^refs/cache-automerge/*
   defaults:
     # -- pusher.defaults.port -- uploader/pusher serving port.

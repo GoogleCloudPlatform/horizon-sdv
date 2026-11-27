@@ -147,6 +147,24 @@ spec:
 {{- range .Values.uploaderConfig.fetchRefSpec }}
                     - {{ . }}
 {{- end }}
+          # Predefined rows as this chart defines them. The selected row is
+          # rewritten from here, so a changed default reaches a table that was
+          # written by an earlier chart version.
+          - name: PREDEFINED_CONFIG
+            value: |
+{{- range .Values.uploaderConfig.entries }}
+{{- if not (eq .storeRepo false) }}
+              - name: {{ .name | quote }}
+                repo:
+                  url: {{ $.Values.uploaderConfig.manifestUrl | quote }}
+                  branch: {{ .branch | quote }}
+                  file: {{ $.Values.uploaderConfig.manifestFile | quote }}
+                  fetch-ref-spec:
+{{- range $.Values.uploaderConfig.fetchRefSpec }}
+                    - {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
           - name: WORKFLOW_TEMPLATE
             value: abfs-uploader-config-select
           - name: ABFS_NAMESPACE

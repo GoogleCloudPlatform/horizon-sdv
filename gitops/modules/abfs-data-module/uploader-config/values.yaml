@@ -49,10 +49,15 @@ seedFailLimit: 10
 uploaderConfig:
   manifestUrl: https://android.googlesource.com/platform/manifest
   manifestFile: default.xml
+  # What the uploaders fetch from every project and push to ABFS. A leading ^
+  # excludes. refs/changes/* (every patch set of every Gerrit change) is by far
+  # the largest part of an AOSP project and no build reads it from ABFS: a
+  # build of a Gerrit change fetches its patch set from the Git host. Seed a
+  # manifest that needs other refs through the AndroidCustom row.
+  # Keep in line with pusher.fallbackRepo.fetchRefSpec in abfs-service-module.
   fetchRefSpec:
     - refs/*:refs/*
-    - ^refs/changes/*/meta
-    - ^refs/changes/*/robot-comments
+    - ^refs/changes/*
     - ^refs/cache-automerge/*
   entries:
     - name: Android14_r30

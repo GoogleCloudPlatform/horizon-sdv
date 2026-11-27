@@ -29,6 +29,9 @@
 # submit also writes that entry to /tmp/android-custom-saved.yaml so the form
 # shows it on the next open. The workflow log prints the previously active row
 # and the row just selected, each marked predefined or custom.
+# A predefined row takes its repo from PREDEFINED_CONFIG (the rows as the
+# deployed chart defines them); when that differs from the stored repo, the
+# uploaders restart even if the row is already active.
 
 import copy
 import json
@@ -178,6 +181,34 @@ def custom_repo_changed(entries, new_repo):
     return True
 
 
+def refresh_predefined(entries, selection):
+    """Give the selected predefined row the repo block the chart defines now.
+
+    The table is written once, at install time. PREDEFINED_CONFIG carries the
+    predefined rows as the deployed chart renders them, so a changed default
+    (for example the fetch-ref-spec) reaches a running installation when the
+    row is selected again. Return True when the stored repo changed.
+    """
+    text = os.environ.get("PREDEFINED_CONFIG", "").strip()
+    if not text:
+        return False
+    try:
+        defined = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise SystemExit("ERROR: PREDEFINED_CONFIG is not valid YAML (%s)" % exc)
+    for item in defined if isinstance(defined, list) else []:
+        if not isinstance(item, dict) or item.get("name") != selection:
+            continue
+        new_repo = repo_of(item)
+        for entry in entries:
+            if isinstance(entry, dict) and entry.get("name") == selection:
+                changed = complete_repo(entry) != new_repo
+                entry["repo"] = new_repo
+                print("refresh_predefined: %s repo %s" % (selection, "updated from the chart" if changed else "unchanged"))
+                return changed
+    return False
+
+
 def write_saved_listing(repo):
     """Write the AndroidCustom entry the form shows the next time that row is opened."""
     text = yaml.safe_dump([{"name": "AndroidCustom", "repo": repo}], sort_keys=False)
@@ -234,7 +265,8 @@ def main():
     entries = load_table()
     previous = copy.deepcopy(active_entry(entries))
     same_row = already_active(entries, selection)
-    repo_changed = False
+    # A predefined row is first brought in line with the deployed chart.
+    repo_changed = selection != "AndroidCustom" and refresh_predefined(entries, selection)
     if selection == "AndroidCustom":
         custom_repo_value = custom_repo(custom_text)
         repo_changed = custom_repo_changed(entries, custom_repo_value)
