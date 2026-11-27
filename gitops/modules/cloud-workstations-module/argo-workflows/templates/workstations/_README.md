@@ -48,6 +48,8 @@ Shows the workstation, then deletes it. Set `confirmDelete` to `true`. The form 
 
 Shows one workstation: configuration, name, state, URL, users, and status. It does not change anything.
 
+The state and URL in the first step are the recorded state and can lag a start or stop by a few minutes. The `live-state` step then prints the current state read from the Workstations API. If that read fails, or the workstation has no `status.externalRef` yet, the run fails.
+
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|
 | `workstationId` | Yes | Workstation to show. |
@@ -106,6 +108,8 @@ Lists workstations that include you. It prints the name, configuration, state, a
 
 Shows one workstation you are on: name, configuration, state, URL, users, and status. Fails if you are not on it.
 
+The state and URL in the first step are the recorded state and can lag a start or stop by a few minutes. The `live-state` step then prints the current state read from the Workstations API. If that read fails, or the workstation has no `status.externalRef` yet, the run fails.
+
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|
 | `workstationId` | Yes | Workstation to show. |
@@ -122,7 +126,7 @@ Shows the configuration of a workstation you are on, including the image, machin
 
 Starts a workstation you are on. It waits until the configuration is ready, so the machine does not boot while a configuration change is still applying. Fails if you are not on it, or if the workstation is not ready yet.
 
-The URL printed at the end comes from the recorded state and can lag the real start by a few minutes.
+After the start finishes, the `live-state` step prints the state read from the Workstations API. The URL printed at the end comes from the recorded state and can lag the real start by a few minutes.
 
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|
@@ -132,7 +136,7 @@ The URL printed at the end comes from the recorded state and can lag the real st
 
 Stops a workstation you are on. It does not wait for the configuration to be ready. Fails if you are not on it, or if the workstation is not ready yet.
 
-The state printed at the end can lag the real stop by a few minutes.
+After the stop finishes, the `live-state` step prints the state read from the Workstations API. The state printed at the end comes from the recorded state and can lag the real stop by a few minutes.
 
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|

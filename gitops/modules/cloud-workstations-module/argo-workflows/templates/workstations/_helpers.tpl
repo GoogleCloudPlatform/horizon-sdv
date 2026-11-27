@@ -353,7 +353,8 @@ resolve reads Horizon objects with the read-only Role. Start waits for the paren
 Ready so no workstation boots while a new config may still allow SSH on port 22. Stop does not:
 a config update or failure must not block stopping a running workstation. power runs gcloud as the
 dedicated start and stop Google identity and writes nothing to Kubernetes (LLD D1: power is not a
-spec field, so this is the one workflow that calls GCP).
+spec field, so start and stop are the only workflows that change anything in GCP). live-state then
+prints the state the Workstations API returns.
 */}}
 {{- define "cws-ws.powerTemplates" -}}
 {{- $root := .root -}}
@@ -371,6 +372,7 @@ spec field, so this is the one workflow that calls GCP).
                 - name: {{ . }}
                   value: {{ printf "{{steps.resolve.outputs.parameters.%s}}" . | quote }}
                 {{- end }}
+        {{- include "cws-ws.liveStateStep" (dict "from" "resolve") | nindent 8 }}
         - - name: report
             template: report
     - name: resolve
@@ -389,6 +391,7 @@ spec field, so this is the one workflow that calls GCP).
           - |
             set -euo pipefail
             {{- include "cws-ws.shlib" $root | nindent 12 }}
+            {{- include "cws-ws.externalRefLib" $root | nindent 12 }}
 
             check_timeout "$TIMEOUT_SECONDS"
             name=$(resource_name workstationId "$WORKSTATION_NAME")
@@ -405,59 +408,18 @@ spec field, so this is the one workflow that calls GCP).
             {{- end }}
 
             json=$(require_ws "$name") || exit 1
-            ref=$(jq -r '.status.externalRef // ""' <<<"$json")
-            [[ -n "$ref" ]] || fail "workstation '$name' has no status.externalRef yet; wait until it is Ready and submit again"
-            ref=${ref#//workstations.googleapis.com/}
-            [[ "$ref" =~ ^projects/([^/]+)/locations/([^/]+)/workstationClusters/([^/]+)/workstationConfigs/([^/]+)/workstations/([^/]+)$ ]] \
-              || fail "unexpected status.externalRef format: '$ref'"
-            printf '%s' "${BASH_REMATCH[1]}" > /tmp/project
-            printf '%s' "${BASH_REMATCH[2]}" > /tmp/region
-            printf '%s' "${BASH_REMATCH[3]}" > /tmp/cluster
-            printf '%s' "${BASH_REMATCH[4]}" > /tmp/config
-            printf '%s' "${BASH_REMATCH[5]}" > /tmp/workstation
-            echo "Resolved $ref"
+            [[ -n "$(jq -r '.status.externalRef // ""' <<<"$json")" ]] \
+              || fail "workstation '$name' has no status.externalRef yet; wait until it is Ready and submit again"
+            write_external_ref "$json"
       outputs:
-        parameters:
-          {{- range list "project" "region" "cluster" "config" "workstation" }}
-          - name: {{ . }}
-            valueFrom:
-              path: /tmp/{{ . }}
-          {{- end }}
+        {{- include "cws-ws.externalRefOutputs" $root | nindent 8 }}
     - name: power
       inputs:
-        parameters:
-          {{- range list "project" "region" "cluster" "config" "workstation" }}
-          - name: {{ . }}
-          {{- end }}
+        {{- include "cws-ws.externalRefInputs" $root | nindent 8 }}
       container:
-        # Same image as cws.stepContainer, with more memory for gcloud.
-        image: {{ include "cws.stepImage" $root | quote }}
-        command: [bash, -c]
-        securityContext:
-          runAsNonRoot: true
-          runAsUser: 65534
-          runAsGroup: 65534
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: [ALL]
-          seccompProfile:
-            type: RuntimeDefault
-        resources:
-          requests:
-            cpu: 100m
-            memory: 256Mi
-          limits:
-            memory: 512Mi
+        {{- include "cws-ws.gcloudContainer" $root | nindent 8 }}
         env:
-          # gcloud writes its configuration under CLOUDSDK_CONFIG; the default path is not writable here.
-          - name: CLOUDSDK_CONFIG
-            value: /tmp/gcloud
-          - name: CLOUDSDK_CORE_DISABLE_PROMPTS
-            value: "1"
-          {{- range list "project" "region" "cluster" "config" "workstation" }}
-          - name: {{ upper . }}
-            value: {{ printf "{{inputs.parameters.%s}}" . | quote }}
-          {{- end }}
+          {{- include "cws-ws.gcloudEnv" $root | nindent 10 }}
           - name: TIMEOUT_SECONDS
             value: {{ $root.Values.readyTimeoutSeconds | quote }}
         args:
@@ -465,10 +427,8 @@ spec field, so this is the one workflow that calls GCP).
             set -euo pipefail
             echo "Google identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
 
-            # cws-workstation-power intentionally has no workstations.workstations.get (only start,
-            # stop and operations.get), so the operation is started async and polled by name through
-            # the Workstations API directly: a synchronous gcloud call would describe the resulting
-            # workstation afterwards and fail PERMISSION_DENIED on that describe call.
+            # Started async and polled by name so the timeout and the error message are this step's.
+            # live-state reads the resulting workstation afterwards.
             op=$(gcloud workstations {{ $action }} "$WORKSTATION" \
               --project="$PROJECT" \
               --region="$REGION" \
@@ -502,6 +462,7 @@ spec field, so this is the one workflow that calls GCP).
               sleep 5
             done
             echo "gcloud workstations {{ $action }} finished for $WORKSTATION"
+    {{- include "cws-ws.liveStateTemplate" $root | nindent 4 }}
     - name: report
       container:
         {{- include "cws.stepContainer" $root | nindent 8 }}
@@ -515,7 +476,129 @@ spec field, so this is the one workflow that calls GCP).
             set -euo pipefail
             {{- include "cws-ws.shlib" $root | nindent 12 }}
 
-            echo "state and url come from Config Connector observed state and can lag the {{ $action }} by a few minutes"
+            echo "state and url below come from Config Connector observed state and can lag the {{ $action }} by a few minutes; the live state is printed by live-state above"
             ws=$(require_ws "$(trim "$WORKSTATION_NAME")") || exit 1
             print_workstation "$ws"
+{{- end -}}
+
+{{/* Container fields of the gcloud steps: the cws.stepContainer image with more memory for gcloud. */}}
+{{- define "cws-ws.gcloudContainer" -}}
+image: {{ include "cws.stepImage" . | quote }}
+command: [bash, -c]
+{{ include "cws.nonRootSecurityContext" . }}
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+{{- end -}}
+
+{{/* env entries of the gcloud steps, with the workstation coordinates from cws-ws.externalRefInputs. */}}
+{{- define "cws-ws.gcloudEnv" -}}
+# gcloud writes its configuration under CLOUDSDK_CONFIG; the default path is not writable here.
+- name: CLOUDSDK_CONFIG
+  value: /tmp/gcloud
+- name: CLOUDSDK_CORE_DISABLE_PROMPTS
+  value: "1"
+{{- range list "project" "region" "cluster" "config" "workstation" }}
+- name: {{ upper . }}
+  value: {{ printf "{{inputs.parameters.%s}}" . | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
+write_external_ref, for the steps that feed live-state. Include after cws-ws.shlib (uses fail).
+Kept out of cws-ws.shlib so the templates that do not run live-state render unchanged.
+*/}}
+{{- define "cws-ws.externalRefLib" -}}
+# write_external_ref WORKSTATION_JSON
+# Splits status.externalRef into /tmp/project, region, cluster, config and workstation for the
+# live-state step. With no externalRef yet every file is empty and live-state fails on that.
+write_external_ref() {
+  local ref i fields=(project region cluster config workstation)
+  ref=$(jq -r '.status.externalRef // ""' <<<"$1")
+  if [[ -z "$ref" ]]; then
+    for i in "${fields[@]}"; do : > "/tmp/$i"; done
+    return 0
+  fi
+  ref=${ref#//workstations.googleapis.com/}
+  [[ "$ref" =~ ^projects/([^/]+)/locations/([^/]+)/workstationClusters/([^/]+)/workstationConfigs/([^/]+)/workstations/([^/]+)$ ]] \
+    || fail "unexpected status.externalRef format: '$ref'"
+  for i in 0 1 2 3 4; do printf '%s' "${BASH_REMATCH[i + 1]}" > "/tmp/${fields[i]}"; done
+  echo "Resolved $ref"
+}
+{{- end -}}
+
+{{/* The files write_external_ref writes, as step outputs. */}}
+{{- define "cws-ws.externalRefOutputs" -}}
+parameters:
+  {{- range list "project" "region" "cluster" "config" "workstation" }}
+  - name: {{ . }}
+    valueFrom:
+      path: /tmp/{{ . }}
+  {{- end }}
+{{- end -}}
+
+{{- define "cws-ws.externalRefInputs" -}}
+parameters:
+  {{- range list "project" "region" "cluster" "config" "workstation" }}
+  - name: {{ . }}
+  {{- end }}
+{{- end -}}
+
+{{/* Step that runs live-state on the outputs of step .from, which must call write_external_ref. */}}
+{{- define "cws-ws.liveStateStep" -}}
+{{- $from := .from -}}
+- - name: live-state
+    template: live-state
+    arguments:
+      parameters:
+        {{- range list "project" "region" "cluster" "config" "workstation" }}
+        - name: {{ . }}
+          value: {{ printf "{{steps.%s.outputs.parameters.%s}}" $from . | quote }}
+        {{- end }}
+{{- end -}}
+
+{{/*
+Reads the workstation from the Workstations API, because the Horizon status mirrors Config Connector
+and can lag a start or stop by a few minutes. It runs as the power identity, the only one with
+workstations.workstations.get. Argo sets serviceAccountName per pod, so only this step gets that
+identity: the other steps of a get workflow stay on workflow-executor, which has no Google identity.
+*/}}
+{{- define "cws-ws.liveStateTemplate" -}}
+- name: live-state
+  serviceAccountName: {{ .Values.powerServiceAccount }}
+  inputs:
+    {{- include "cws-ws.externalRefInputs" . | nindent 4 }}
+  container:
+    {{- include "cws-ws.gcloudContainer" . | nindent 4 }}
+    env:
+      {{- include "cws-ws.gcloudEnv" . | nindent 6 }}
+    args:
+      - |
+        set -euo pipefail
+        if [[ -z "$WORKSTATION" ]]; then
+          echo "ERROR: the workstation has no status.externalRef yet, so its live state cannot be read from the Workstations API. Wait until it is Ready and try again." >&2
+          exit 1
+        fi
+        echo "Google identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
+        err=$(mktemp)
+        if ! ws=$(gcloud workstations describe "$WORKSTATION" \
+            --project="$PROJECT" \
+            --region="$REGION" \
+            --cluster="$CLUSTER" \
+            --config="$CONFIG" \
+            --format=json 2>"$err"); then
+          cat "$err" >&2
+          echo "ERROR: could not read the live state of workstation $WORKSTATION from the Workstations API" >&2
+          exit 1
+        fi
+        rm -f "$err"
+        echo "Live state from the Workstations API:"
+        jq -r '
+          "state: \(.state // "-")",
+          "url: \((.host // "") | if . == "" then "-" elif test("^https?://") then . else "https://" + . end)",
+          "reconciling: \(.reconciling // false)",
+          "updateTime: \(.updateTime // "-")"' <<<"$ws"
 {{- end -}}

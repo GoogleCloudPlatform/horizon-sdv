@@ -55,14 +55,16 @@ module "sdv_wi" {
   ]
 }
 
-# Start and stop for the Cloud Workstations start and stop workflows. The controller never holds these.
+# Start and stop for the Cloud Workstations start and stop workflows, and get for their live-state step.
+# The controller never holds these. No create or delete: those stay with Config Connector.
 resource "google_project_iam_custom_role" "cws_workstation_power" {
   project     = data.google_project.project.project_id
   role_id     = "horizonCloudWorkstationsPower"
   title       = "Horizon Cloud Workstations start and stop"
-  description = "Start and stop workstations and poll the resulting long-running operation"
+  description = "Start, stop and read workstations and poll the resulting long-running operation"
   permissions = [
     "workstations.operations.get",
+    "workstations.workstations.get",
     "workstations.workstations.start",
     "workstations.workstations.stop",
   ]
@@ -73,7 +75,7 @@ resource "google_project_iam_member" "cws_workstation_power" {
   role    = google_project_iam_custom_role.cws_workstation_power.id
   member  = "serviceAccount:gke-cws-workstation-power-sa@${data.google_project.project.project_id}.iam.gserviceaccount.com"
 
-  # Start and stop only apply to workstations in the Horizon cluster. Operation names are
+  # Start, stop and get only apply to workstations in the Horizon cluster. Operation names are
   # projects/PROJECT/locations/REGION/operations/ID, so polling cannot be limited to that cluster.
   condition {
     title       = "horizon_workstation_cluster"
