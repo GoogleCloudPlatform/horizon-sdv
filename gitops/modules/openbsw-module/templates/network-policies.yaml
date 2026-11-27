@@ -56,5 +56,28 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
+---
+# Module Manager fetches the overview page over HTTP (Service port 80) from its own namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-overview-from-module-manager
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: module-overview
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ .Values.moduleManagerNamespace }}
+    ports:
+    - protocol: TCP
+      port: 80
 {{- end }}
 {{- end }}

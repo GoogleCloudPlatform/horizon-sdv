@@ -132,8 +132,8 @@ def check_render():
 
     namespaces = {doc["metadata"]["name"]: doc for doc in by_kind(rendered, "Namespace")}
     openbsw = namespaces.get("openbsw")
-    if openbsw is None or "openbsw-overview" not in namespaces:
-        fail(f"expected namespaces openbsw and openbsw-overview, got {sorted(namespaces)}")
+    if openbsw is None or len(namespaces) != 1:
+        fail(f"expected only namespace openbsw (it also holds the overview), got {sorted(namespaces)}")
     labels = openbsw["metadata"]["labels"]
     if labels.get("pod-security.kubernetes.io/enforce") != "privileged":
         fail("openbsw namespace must enforce the privileged Pod Security profile")
@@ -157,15 +157,26 @@ def check_render():
     if len(services) != 1:
         fail("expected one overview Service")
     service = services[0]
-    if service["metadata"]["name"] != "mod-openbsw-module-overview" or service["metadata"]["namespace"] != "openbsw-overview":
+    if service["metadata"]["name"] != "mod-openbsw-overview" or service["metadata"]["namespace"] != "openbsw":
         fail("overview Service name or namespace does not match the catalog")
     if service["spec"]["ports"][0]["port"] != 80:
         fail("overview Service must listen on port 80")
+    policies = {doc["metadata"]["name"]: doc for doc in by_kind(rendered, "NetworkPolicy")}
+    overview_policy = policies.get("allow-overview-from-module-manager")
+    if overview_policy is None:
+        fail("openbsw has default-deny-all, so the overview needs allow-overview-from-module-manager")
+    peer = overview_policy["spec"]["ingress"][0]["from"][0]["namespaceSelector"]["matchLabels"]
+    if peer.get("kubernetes.io/metadata.name") != "module-manager":
+        fail(f"overview ingress must come from the module-manager namespace, got {peer}")
+
+    script = daemonsets[0]["spec"]["template"]["spec"]["containers"][0]["command"][2]
+    if "set -e" in script or "sleep infinity" not in script:
+        fail("CAN DaemonSet must keep running when a module cannot be loaded (no set -e, then sleep infinity)")
 
     html = next(
         doc["data"]["index.html"]
         for doc in by_kind(rendered, "ConfigMap")
-        if doc["metadata"]["name"] == "mod-openbsw-module-overview-html"
+        if doc["metadata"]["name"] == "mod-openbsw-overview-html"
     )
     if "<h1>openbsw-module</h1>" not in html:
         fail("overview ConfigMap does not contain the portal page")
@@ -197,8 +208,8 @@ def check_catalog():
     expected = {
         "path": "gitops/modules/openbsw-module",
         "overviewPath": "portal/overview.html",
-        "overviewService": "mod-openbsw-module-overview",
-        "overviewServiceNamespace": "openbsw-overview",
+        "overviewService": "mod-openbsw-overview",
+        "overviewServiceNamespace": "openbsw",
         "hardDependencies": ["workloads-common"],
     }
     for key, value in expected.items():
@@ -274,8 +285,19 @@ def check_workflows():
         if name in DEFAULT_POOL_TEMPLATES:
             if "templateDefaults" in template["spec"]:
                 fail(f"{name} only calls the MTK Connect API and must not select the OpenBSW node pool")
-        elif template["spec"]["templateDefaults"]["nodeSelector"].get("workloadLabel") != "openbsw":
-            fail(f"{name} pods must select the OpenBSW node pool")
+        else:
+            defaults = template["spec"]["templateDefaults"]
+            if defaults["nodeSelector"].get("workloadLabel") != "openbsw":
+                fail(f"{name} pods must select the OpenBSW node pool")
+            if defaults["metadata"]["labels"].get("openbsw_pod") != "true":
+                fail(f"{name} pods must carry the openbsw_pod label shared with Jenkins")
+            if defaults["metadata"]["annotations"].get("cluster-autoscaler.kubernetes.io/safe-to-evict") != "false":
+                fail(f"{name} pods must not be evicted by a scale-down")
+            term = defaults["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            if term["topologyKey"] != "kubernetes.io/hostname" or term["labelSelector"]["matchExpressions"][0]["key"] != "openbsw_pod":
+                fail(f"{name} pods need required anti-affinity on openbsw_pod per node")
+        if template["spec"].get("serviceAccountName") != "workflow-executor":
+            fail(f"{name} must run as workflow-executor; only ai-review uses the elevated account")
 
         sensor = sensors[sensor_name]
         if sensor["metadata"]["namespace"] != "argo-events":
@@ -335,6 +357,18 @@ def check_workflows():
     params = {p["name"]: p for p in templates["openbsw-bsw-builder"]["spec"]["arguments"]["parameters"]}
     if params["aiReviewRuntime"]["value"] != "agy":
         fail("openbsw-bsw-builder aiReviewRuntime must default to agy")
+    if steps["ai-review"].get("serviceAccountName") != "workflow-executor-elevated":
+        fail("ai-review must run as workflow-executor-elevated (Vertex AI)")
+    image_params = {p["name"]: p["value"] for p in image_spec["arguments"]["parameters"]}
+    if image_params.get("noPush") != "true" or "dryRun" in image_params:
+        fail("openbsw-builder-image must expose noPush, default true (Jenkins NO_PUSH)")
+    for template_name, push in (("build", "{{workflow.parameters.noPush}}"), ("build-defaults", "false")):
+        task = dag_tasks(templates["openbsw-builder-image"], template_name)["build-image"]
+        args = {p["name"]: p["value"] for p in task["arguments"]["parameters"]}
+        if args.get("openbswPool") != "true":
+            fail(f"openbsw-builder-image {template_name} must pass openbswPool=true")
+        if args.get("dryRun") != push:
+            fail(f"openbsw-builder-image {template_name} must pass dryRun={push}, got {args.get('dryRun')}")
     if "ai-review" not in run(["helm", "template", str(CHART / "argo-workflows"), "--set", "cloud.project=p1", *PIPELINE_REPO_SET]):
         fail("openbsw-bsw-builder must render the ai-review step")
     for missing in ("pipelineRepo.url", "pipelineRepo.revision"):
@@ -562,7 +596,7 @@ def check_argo():
                     for key, value in {
                         "imageTag": "custom-tag",
                         "rtosPlatform": "rust",
-                        "dryRun": "true",
+                        "noPush": "false",
                         "openbswDownloadUrl": "gs://p1-openbsw/OpenBSW/Builds/BSW_Builder/x/posix/",
                         "mtkConnectTestbench": "OpenBSW/Tests/POSIX-x",
                         "mtkConnectEnable": "true",

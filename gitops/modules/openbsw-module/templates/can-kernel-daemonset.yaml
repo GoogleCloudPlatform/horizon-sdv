@@ -59,14 +59,20 @@ spec:
             runAsNonRoot: false
             allowPrivilegeEscalation: true
             readOnlyRootFilesystem: true
+          # A module missing from the node image (UBUNTU_CONTAINERD) is logged and the container keeps
+          # running: exiting would crash-loop and mark mod-openbsw-module Degraded while a node is up.
           command:
             - /bin/bash
             - -c
             - |
-              set -euo pipefail
+              set -uo pipefail
 {{- range .Values.canKernel.modules }}
-              nsenter -t 1 -m -p -- modprobe '{{ . }}'
-              nsenter -t 1 -m -p -- grep -q '^{{ . | replace "-" "_" }} ' /proc/modules
+              if nsenter -t 1 -m -p -- modprobe '{{ . }}' &&
+                nsenter -t 1 -m -p -- grep -q '^{{ . | replace "-" "_" }} ' /proc/modules; then
+                echo "Loaded {{ . }}"
+              else
+                echo "WARNING: could not load kernel module {{ . }} on $(nsenter -t 1 -m -p -- uname -r)" >&2
+              fi
 {{- end }}
               sleep infinity
           resources:

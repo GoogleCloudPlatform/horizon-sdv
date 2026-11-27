@@ -314,6 +314,7 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
 {{- $ws := include "openbsw.bswBuilder.workspacePath" . -}}
 {{- $prompts := printf "%s/workloads/openbsw/pipelines/builds/bsw_builder/prompt/sequenced" $ws -}}
 - name: ai-review
+  serviceAccountName: {{ required "aiReviewServiceAccountName is required" .Values.aiReviewServiceAccountName | quote }}
   container:
     image: {{ include "openbsw.bswBuilder.image" . | quote }}
     workingDir: {{ $ws | quote }}

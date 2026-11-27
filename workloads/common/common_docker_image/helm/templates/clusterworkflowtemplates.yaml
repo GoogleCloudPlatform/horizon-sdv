@@ -60,8 +60,12 @@ spec:
           # Default "false" keeps Android / Remotive / other callers on the default pool.
           - name: androidPool
             value: "false"
-      # Applied only when androidPool=true. Empty "{}" leaves scheduling unchanged.
-      podSpecPatch: '{{ "{{=" }}inputs.parameters.androidPool == "true" ? "nodeSelector:\n  workloadLabel: android\ntolerations:\n- key: workloadType\n  operator: Equal\n  value: android\n  effect: NoSchedule" : "{}"{{ "}}" }}'
+          # Optional. When "true", schedule this build on the OpenBSW node pool, one OpenBSW pod per
+          # node (same openbsw_pod anti-affinity as the OpenBSW Jenkins and Argo pods).
+          - name: openbswPool
+            value: "false"
+      # Applied only when androidPool or openbswPool is "true". Empty "{}" leaves scheduling unchanged.
+      podSpecPatch: '{{ "{{=" }}inputs.parameters.androidPool == "true" ? "nodeSelector:\n  workloadLabel: android\ntolerations:\n- key: workloadType\n  operator: Equal\n  value: android\n  effect: NoSchedule" : (inputs.parameters.openbswPool == "true" ? "nodeSelector:\n  workloadLabel: openbsw\ntolerations:\n- key: workloadType\n  operator: Equal\n  value: openbsw\n  effect: NoSchedule\naffinity:\n  podAntiAffinity:\n    requiredDuringSchedulingIgnoredDuringExecution:\n    - labelSelector:\n        matchExpressions:\n        - key: openbsw_pod\n          operator: Exists\n      topologyKey: kubernetes.io/hostname" : "{}"){{ "}}" }}'
       # moby/buildkit defaults start buildkitd as the main process; this template overrides the primary
       # container command for credentials + buildctl, so buildkitd runs in a sidecar with the image default
       # and shares /run/buildkit via emptyDir (no inline buildkitd start or socket polling in the script).
