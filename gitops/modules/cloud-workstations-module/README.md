@@ -14,6 +14,20 @@ limitations under the License. -->
 
 # Cloud Workstations
 
+---
+
+## Module Metadata
+
+| Metadata Field | Value |
+| :--- | :--- |
+| **STATUS** | experimental |
+| **OWNER** | Accenture |
+| **CONTACT** | [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com) |
+| **CHART VERSION** | 0.1.0 |
+| **CONTAINS_COMMERCIAL** | no |
+
+---
+
 Use this module to create and manage Google Cloud Workstations from the Horizon Developer Portal. It replaces the Jenkins jobs for workstation configurations, workstations, and workstation images. It does not replace the Jenkins cluster. Jenkins keeps its own cluster, `sdv-cloud-ws-cluster`.
 
 The module runs on the main environment only. It is not deployed on a sub-environment.
