@@ -43,6 +43,21 @@ func NewOIDC(ctx context.Context, issuerURL, clientID string, skipClientIDCheck 
 type Principal struct {
 	Subject string
 	Kind    string // "oidc"
+	// Roles are the Keycloak realm roles (realm_access.roles) of the token.
+	Roles []string
+}
+
+// HasRole reports whether the principal holds the realm role.
+func (p *Principal) HasRole(role string) bool {
+	if p == nil {
+		return false
+	}
+	for _, r := range p.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *OIDC) Verify(ctx context.Context, raw string) (*Principal, error) {
@@ -51,10 +66,13 @@ func (o *OIDC) Verify(ctx context.Context, raw string) (*Principal, error) {
 		return nil, err
 	}
 	var claims struct {
-		Sub string `json:"sub"`
+		Sub         string `json:"sub"`
+		RealmAccess struct {
+			Roles []string `json:"roles"`
+		} `json:"realm_access"`
 	}
 	if err := tok.Claims(&claims); err != nil {
 		return nil, err
 	}
-	return &Principal{Subject: claims.Sub, Kind: "oidc"}, nil
+	return &Principal{Subject: claims.Sub, Kind: "oidc", Roles: claims.RealmAccess.Roles}, nil
 }

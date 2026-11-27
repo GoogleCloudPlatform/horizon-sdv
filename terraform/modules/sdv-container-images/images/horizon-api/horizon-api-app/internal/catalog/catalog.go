@@ -179,6 +179,18 @@ func (c *Catalog) ingestExposedTemplate(next map[string]Entry, enabledModules ma
 	next[key(mod, name)] = e
 }
 
+// ModuleEnabled reports whether a catalog module is enabled (same rule as the exposed-template catalog).
+func (c *Catalog) ModuleEnabled(ctx context.Context, name string) (bool, error) {
+	if c.cli == nil {
+		return false, fmt.Errorf("catalog has no Kubernetes client")
+	}
+	enabled, err := c.loadEnabledModules(ctx)
+	if err != nil {
+		return false, err
+	}
+	return enabled[name], nil
+}
+
 // loadEnabledModules returns the set of enabled module names, reading ModuleManagerState
 // (runtime enabled IDs + module name-to-ID map) and ModuleCatalog (authoritative list of
 // known module names). A module is considered enabled when its ModuleCatalog entry has a
@@ -1000,6 +1012,9 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 	for k, v := range openapiArtifactsPaths() {
 		paths[k] = v
 	}
+	for k, v := range openapiMirrorPaths() {
+		paths[k] = v
+	}
 	responses := submitResponsesDoc()
 	for _, e := range entries {
 		pathKey := submitPathForEntry(e.Module, e.TemplateName)
@@ -1038,6 +1053,7 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 				"History and terminal status may include `archivedLogs` with `gs://` URIs derived from Workflow status artifacts. " +
 				"Live logs: `GET /v1/workflows/{workflowName}/log` without `podName` for a combined NDJSON stream (Argo workflow log or multiplexed pods); optional `podName` for a single pod. " +
 				"Artifacts: `GET /v1/artifacts/buckets` lists allowed GCS buckets; `GET /v1/artifacts/buckets/{bucket}/objects` lists objects (`prefix`, `pageToken`, `limit`). " +
+				"Storage Mirror: `/v1/storage-mirror/*` creates, lists, syncs and deletes mirrors and reports sync progress (404 when the storage-mirror module is disabled). " +
 				"Argo Server uses `--auth-mode=client` for the service account." + retentionOpenAPIDescription(meta),
 		},
 		// Required when the API is exposed behind a path prefix (e.g. GKE Gateway strips /horizon-api/ before the pod). Without this, Swagger UI calls /v1/catalog on the site origin and hits the wrong backend (404 nginx).

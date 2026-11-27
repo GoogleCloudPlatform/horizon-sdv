@@ -47,6 +47,21 @@ mount (_abfs-build.tpl) instead of the init, build, gemini-review and storage st
 StorageClass for the AAOS cache PVC, quoted. spec.aaosCacheStorageClassName when set (ABFS uses one dedicated
 class); otherwise one class per Android version, with an -rpi suffix for RPi lunch targets.
 */}}
+{{/*
+Storage Mirror (storage-mirror module): read-only mirror claim for repo init --reference. Not for the ABFS variant.
+*/}}
+{{- define "aaos-builder.aospMirrorEnabled" -}}
+{{- and (default false (.Values.aospMirror).enabled) (ne (include "aaos-builder.isAbfs" .) "true") -}}
+{{- end -}}
+
+{{- define "aaos-builder.aospMirrorMount" -}}
+{{- if eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
+- name: aosp-mirror
+  mountPath: {{ .Values.aospMirror.mountPath | quote }}
+  readOnly: true
+{{- end }}
+{{- end -}}
+
 {{- define "aaos-builder.cacheStorageClassName" -}}
 {{- if .Values.spec.aaosCacheStorageClassName -}}
 {{- .Values.spec.aaosCacheStorageClassName | quote -}}

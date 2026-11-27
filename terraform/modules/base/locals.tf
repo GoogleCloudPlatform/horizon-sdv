@@ -48,6 +48,16 @@ locals {
       build_version  = "0.2.2"
       deploy_version = "0.2.2"
     }
+    "storage-mirror-module-app" = {
+      directory      = "storage-mirror-module"
+      build_version  = "0.1.0"
+      deploy_version = "0.1.0"
+    }
+    "storage-mirror-sync" = {
+      directory      = "storage-mirror-module"
+      build_version  = "0.1.0"
+      deploy_version = "0.1.0"
+    }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"
       build_version  = "1.0.2"
@@ -120,8 +130,8 @@ locals {
     }
     "keycloak-post-horizon-api" = {
       directory      = "keycloak"
-      build_version  = "1.0.0"
-      deploy_version = "1.0.0"
+      build_version  = "1.1.0"
+      deploy_version = "1.1.0"
     }
     # Developer portal (Vite + Go proxy). context_path is set so sdv-container-images trigger hashing skips node_modules/dist (same as former external client tree).
     # Image tag (build_version / deploy_version) follows components.horizoncore from the repo-root versions.yaml; do not edit here.
@@ -144,8 +154,8 @@ locals {
     }
     "horizon-api-app" = {
       directory      = "horizon-api"
-      build_version  = "1.1.2"
-      deploy_version = "1.1.2"
+      build_version  = "1.2.0"
+      deploy_version = "1.2.0"
     }
     "kcc-webhook-cert-monitor" = {
       directory      = "kcc-webhook-cert-monitor"

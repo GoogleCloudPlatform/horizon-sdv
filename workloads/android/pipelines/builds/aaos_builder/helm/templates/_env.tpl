@@ -57,6 +57,15 @@ envFrom:
   value: '{{ "{{" }}workflow.parameters.storageLabels{{ "}}" }}'
 - name: ENABLE_GEMINI_AI_ASSISTANT
   value: '{{ "{{" }}workflow.parameters.enableGeminiAiAssistant{{ "}}" }}'
+{{- if eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
+# Same variables as the Jenkins aaos_builder (aaos_initialise.sh checks MIRROR_DIR_FULL_PATH/.repo).
+- name: USE_LOCAL_AOSP_MIRROR
+  value: '{{ "{{" }}workflow.parameters.useLocalAospMirror{{ "}}" }}'
+- name: AOSP_MIRROR_DIR_NAME
+  value: '{{ "{{" }}workflow.parameters.aospMirrorDirName{{ "}}" }}'
+- name: MIRROR_DIR_FULL_PATH
+  value: '{{ .Values.aospMirror.mountPath }}/{{ .Values.aospMirror.rootSubdir }}/{{ "{{" }}workflow.parameters.aospMirrorDirName{{ "}}" }}'
+{{- end }}
 {{- if not .Values.cloudEnvConfigMapName }}
 - name: HORIZON_DOMAIN
   value: {{ .Values.spec.horizonDomain | quote }}

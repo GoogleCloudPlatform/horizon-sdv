@@ -1,0 +1,75 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Harness-only NetworkPolicies for what differs from GKE. Applied next to the platform policies rendered from
+# gitops/templates (default-deny, allow-dns, webhook ingress, workflow egress).
+# Workflow pods reach the e2e Gitea (stands in for internet upstreams on 443).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2e-allow-workflow-pods-to-gitea
+  namespace: workflows
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: e2e
+      ports:
+        - {protocol: TCP, port: 3000}
+---
+# The kind API server listens on the node address, port 6443 (GKE: private endpoint on 443).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2e-allow-kube-api-6443
+  namespace: workflows
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 172.16.0.0/12}
+      ports:
+        - {protocol: TCP, port: 6443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2e-allow-kube-api-6443
+  namespace: argo-events
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 172.16.0.0/12}
+      ports:
+        - {protocol: TCP, port: 6443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2e-allow-kube-api-6443
+  namespace: horizon
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 172.16.0.0/12}
+      ports:
+        - {protocol: TCP, port: 6443}

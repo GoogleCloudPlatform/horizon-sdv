@@ -1,0 +1,56 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Values for gitops/modules/storage-mirror-module and its argo-workflows child chart in the kind harness.
+moduleName: storage-mirror
+config:
+  namespacePrefix: ""
+  projectID: e2e-project
+  zone: e2e-zone
+  isSubEnvironment: false
+  # kindnet does not enforce NetworkPolicy; rendering them still exercises the templates.
+  enableNetworkPolicies: true
+  probeSourceCIDRs: ["172.18.0.0/16"]
+  storageMirror:
+    network: e2e-network
+  containerImages:
+    storageMirrorModule: storage-mirror-module-app:e2e
+    storageMirrorSync: storage-mirror-sync:e2e
+mirror:
+  volume:
+    capacityGb: 1024
+  defaults:
+    repo:
+      manifestUrl: https://gitea.e2e.svc.cluster.local:3000/e2e/manifest
+      manifestRef: main
+      manifestFile: default.xml
+      syncJobs: 2
+      syncTimeout: 30m
+    git:
+      syncTimeout: 30m
+  retention:
+    gc: Auto
+  consumers:
+    jenkins:
+      enabled: true
+      readOnly: true
+workflows:
+  resources:
+    repo: {cpu: "1", memory: 1Gi}
+    git: {cpu: "1", memory: 1Gi}
+    light: {cpu: 200m, memory: 256Mi}
+  activeDeadlineSeconds:
+    repo: 3600
+    git: 3600
+    delete: 1800

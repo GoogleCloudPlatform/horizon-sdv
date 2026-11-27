@@ -74,6 +74,9 @@ Dependencies: requires init and compute-vars output.
     volumeMounts:
       - name: aaos-cache
         mountPath: /aaos-cache
+{{- if eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
+{{- include "aaos-builder.aospMirrorMount" . | nindent 6 }}
+{{- end }}
 {{- if eq (include "aaos-builder.useSharedPipelineWorkspaceVolume" .) "true" }}
       - name: pipeline-workspace
         mountPath: {{ include "aaos-builder.pipelineMonorepoPath" . | quote }}

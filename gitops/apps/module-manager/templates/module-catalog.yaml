@@ -78,6 +78,9 @@ spec:
       overviewServiceNamespace: {{ .Values.namespace | quote }}
       hardDependencies:
         - workloads-common
+      # Storage Mirror: aaos-builder mounts the read-only mirror claim when storage-mirror is enabled.
+      softDependencies:
+        - storage-mirror
     - name: remotive-topology
       path: gitops/modules/remotive-topology
       overviewPath: portal/overview.html
@@ -117,6 +120,13 @@ spec:
 #      hardDependencies:
 #        - workloads-android
 #        - abfs-service-module
+    - name: storage-mirror
+      path: gitops/modules/storage-mirror-module
+      overviewPath: portal/overview.html
+      overviewService: mod-storage-mirror-overview
+      overviewServiceNamespace: storage-mirror-overview
+      # Owns persistent mirror data (Filestore). Never auto-disable.
+      autoDisableWhenUnused: false
     - name: cloud-workstations
       path: gitops/modules/cloud-workstations-module
       overviewPath: portal/overview.html

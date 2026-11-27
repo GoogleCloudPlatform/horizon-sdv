@@ -70,6 +70,16 @@ type Options struct {
 	ArtifactsModuleCAFile         string
 	ArtifactsGCSProjectID         string
 	ArtifactsStaticAllowedBuckets map[string]struct{}
+	// Storage Mirror module proxy (/v1/storage-mirror/*).
+	MirrorModuleURL string
+	// MirrorModuleToken is a static bearer token, used only when MirrorModuleTokenFile is empty.
+	MirrorModuleToken     string
+	MirrorModuleTokenFile string
+	MirrorModuleCAFile    string
+	// MirrorAdminRole, when set, is the Keycloak realm role required for mutating mirror calls.
+	MirrorAdminRole string
+	// MirrorModuleEnabled overrides the Module Manager lookup (tests).
+	MirrorModuleEnabled func(ctx context.Context) (bool, error)
 }
 
 type Server struct {
@@ -97,6 +107,7 @@ func New(opt Options) *Server {
 	mux.HandleFunc("POST /v1/workflows/{workflowName}/abort", s.withAuth(s.handleWorkflowAbort))
 	mux.HandleFunc("GET /v1/artifacts/buckets", s.withAuth(s.handleArtifactsListBuckets))
 	mux.HandleFunc("GET /v1/artifacts/buckets/{bucket}/objects", s.withAuth(s.handleArtifactsListObjects))
+	s.registerMirrorRoutes(mux)
 	s.srv = &http.Server{Addr: opt.HTTPAddr, Handler: mux}
 	return s
 }

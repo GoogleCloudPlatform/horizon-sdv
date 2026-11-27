@@ -1,0 +1,215 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{- if include "storage-mirror-module.mainEnv" . | eq "true" }}
+{{- $horizon := include "storage-mirror-module.horizonNS" . }}
+{{- $workflows := include "storage-mirror-module.workflowsNS" . }}
+{{- $jenkins := include "storage-mirror-module.jenkinsNS" . }}
+{{- $horizonApi := include "storage-mirror-module.horizonApiNS" . }}
+# Controller namespace: own CRDs, the Config Connector Filestore instance, the catalog snapshot ConfigMap, claims,
+# leases and the API Secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: storage-mirror-module
+  namespace: {{ $horizon }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: ["storagemirror.horizon-sdv.io"]
+    resources: ["storagemirrors", "storagemirrorconfigs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["storagemirror.horizon-sdv.io"]
+    resources: ["storagemirrors/status", "storagemirrorconfigs/status", "storagemirrors/finalizers"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["filestore.cnrm.cloud.google.com"]
+    resources: ["filestoreinstances"]
+    # delete is used only by the two-key volume destroy (DELETE /api/v1/volume).
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["storage-mirror-catalog"]
+    # delete: the volume destroy drops the snapshot of the destroyed share.
+    verbs: ["update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # API token and TLS Secrets, created on first start (RBAC cannot restrict create by name).
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.api.tokenSecretName | quote }}, {{ .Values.api.tlsSecretName | quote }}]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: storage-mirror-module
+  namespace: {{ $horizon }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: storage-mirror-module
+subjects:
+  - kind: ServiceAccount
+    name: storage-mirror-module
+    namespace: {{ $horizon }}
+---
+# Workflows namespace: watch module Workflows (runs come from Sensors, so no create) and stop them on cancel;
+# own the static claims.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: storage-mirror-module
+  namespace: {{ $workflows }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Copies of the agent token and the API CA for mirror-agent.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.api.tokenSecretName | quote }}, {{ .Values.api.tlsSecretName | quote }}]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: storage-mirror-module
+  namespace: {{ $workflows }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: storage-mirror-module
+subjects:
+  - kind: ServiceAccount
+    name: storage-mirror-module
+    namespace: {{ $horizon }}
+---
+# Horizon API namespace: copies of the horizon-api token and the API CA for the /v1/storage-mirror proxy.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: storage-mirror-module
+  namespace: {{ $horizonApi }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.api.tokenSecretName | quote }}, {{ .Values.api.tlsSecretName | quote }}]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: storage-mirror-module
+  namespace: {{ $horizonApi }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: storage-mirror-module
+subjects:
+  - kind: ServiceAccount
+    name: storage-mirror-module
+    namespace: {{ $horizon }}
+{{- if .Values.mirror.consumers.jenkins.enabled }}
+---
+# Jenkins namespace: RBAC resourceNames cannot restrict create, so create is namespace-wide; the controller only
+# ever creates the Jenkins mirror claim. get/list/watch are needed for the informer; delete only for that claim.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: storage-mirror-module
+  namespace: {{ $jenkins }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    resourceNames: [{{ .Values.mirror.consumers.jenkins.claimName | quote }}]
+    verbs: ["delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: storage-mirror-module
+  namespace: {{ $jenkins }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: storage-mirror-module
+subjects:
+  - kind: ServiceAccount
+    name: storage-mirror-module
+    namespace: {{ $horizon }}
+{{- end }}
+---
+# PersistentVolumes are cluster-scoped.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Values.config.namespacePrefix }}storage-mirror-module
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Values.config.namespacePrefix }}storage-mirror-module
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Values.config.namespacePrefix }}storage-mirror-module
+subjects:
+  - kind: ServiceAccount
+    name: storage-mirror-module
+    namespace: {{ $horizon }}
+{{- end }}

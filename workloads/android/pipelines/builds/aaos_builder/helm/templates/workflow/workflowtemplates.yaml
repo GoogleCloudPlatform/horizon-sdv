@@ -141,6 +141,18 @@ spec:
           - agy
           - gemini-cli
         description: "AI review runtime: agy (Antigravity SDK, default) or gemini-cli."
+{{- if eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
+      # Appended after aiReviewRuntime (sensors.yaml maps them to the next indexes).
+      - name: useLocalAospMirror
+        value: {{ .Values.spec.useLocalAospMirror | default "false" | quote }}
+        enum:
+          - "true"
+          - "false"
+        description: "Use a Storage Mirror mirror for repo init --reference (Jenkins USE_LOCAL_AOSP_MIRROR)."
+      - name: aospMirrorDirName
+        value: {{ .Values.spec.aospMirrorDirName | quote }}
+        description: "Mirror directory under {{ .Values.aospMirror.mountPath }}/{{ .Values.aospMirror.rootSubdir }} (Jenkins AOSP_MIRROR_DIR_NAME). Required when useLocalAospMirror is true."
+{{- end }}
 {{- if $abfs }}
   templateDefaults:
     metadata:
@@ -216,6 +228,14 @@ spec:
 {{- end }}
   # local-repo is always defined so the gemini-review step can mount /workspace-local (PVC, hostPath, or emptyDir).
   volumes:
+{{- if eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
+    # Storage Mirror read-only claim (storage-mirror module). repo init --reference uses git alternates, so every step
+    # that runs git in the checkout mounts it too.
+    - name: aosp-mirror
+      persistentVolumeClaim:
+        claimName: {{ .Values.aospMirror.claimName | quote }}
+        readOnly: true
+{{- end }}
     - name: local-repo
 {{- if .Values.localRepoHostPath }}
       # hostPath is for local clusters only (Docker Desktop/Kind). Leave localRepoHostPath empty for GKE.

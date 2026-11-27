@@ -66,5 +66,9 @@ artifactsGcsProjectId: ""
 # (storage-gcs-module config.allowedBuckets). Those buckets are not GCSBucket CRs.
 artifactsAllowedBuckets: ""
 
-
-
+# storage-mirror-module REST API (in-cluster HTTPS); /v1/storage-mirror/* returns 404 while the module is disabled.
+mirrorModuleUrl: ""
+# Keycloak realm role required for mutating /v1/storage-mirror/* calls (realm_access.roles of the access token).
+# keycloak-post-horizon-api creates it and grants it to the "administrators" group and the realm_admin composite.
+# Set "" to opt out (any signed-in user may then create, sync and delete mirrors).
+mirrorAdminRole: horizon-storage-mirror-admin

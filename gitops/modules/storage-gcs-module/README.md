@@ -14,9 +14,31 @@ limitations under the License. -->
 
 # Storage GCS Manager
 
+---
+
+## Module Metadata
+
+| Metadata Field | Value |
+| :--- | :--- |
+| **STATUS** | experimental |
+| **OWNER** | Accenture |
+| **CONTACT** | [horizon-sdv@accenture.com](mailto:horizon-sdv@accenture.com) |
+| **CHART VERSION** | 1.1.0 |
+| **CONTAINS_COMMERCIAL** | no |
+
+---
+
 Helm chart path in this repository: `gitops/modules/storage-gcs-module` (synced by Module Manager as Argo CD Application `mod-storage-gcs` when enabled from the Developer Portal as catalog module **`storage-gcs`**).
 
-Project **GCS buckets** `{project_id}-aaos` and `{project_id}-openbsw` are provisioned by **Terraform** (`terraform/modules/base/main.tf`, module `sdv-gcs`). **`{project_id}-sample-workloads-data`** is declared by **`sample-data`** as a **`GCSBucket`** CR reconciled by this operator (enable this module before **sample-data**; see `gitops/modules/sample-data-module`). **`{project_id}-argo-workflows`** is provisioned by platform GitOps KCC (`gitops/templates/argo-workflows-bucket.yaml`, `deletion-policy: abandon`). Terraform no longer manages that bucket: `removed { from = module.sdv_gcs_argo_workflows ... destroy = false }` in `terraform/modules/base/main.tf` drops it from state without deleting GCP objects (or use `terraform state rm` on the old address if needed). **Cluster-mode** `ConfigConnector` is platform GitOps in `gitops/apps/configconnector-operator` (main env only). The GKE Config Connector add-on is disabled.
+Project **GCS buckets** `{project_id}-aaos` and `{project_id}-openbsw` are **Config Connector** `StorageBucket` resources of this module (`templates/kcc-buckets.yaml`, `config.projectBuckets`), with `deletion-policy: abandon` and Argo CD `Delete=false,Prune=false`: disabling the module never deletes them. They were Terraform (`module.sdv_gcs`, `module.sdv_gcs_openbsw` in `terraform/modules/base/main.tf`), which now drops them from state with `removed { lifecycle { destroy = false } }`; Config Connector acquires the existing buckets by name. **On a fresh installation these two buckets exist only once `storage-gcs` has been enabled** (afterwards they survive a disable). Enable `storage-gcs` before running anything that writes build artifacts. Consumers that rely on them:
+
+| Bucket | Consumer | Where |
+|---|---|---|
+| `{project_id}-aaos` | Jenkins Android jobs (`ANDROID_BUILD_BUCKET_ROOT_NAME`, used by the seed job and `aaos_builder` → `aaos_storage.sh`) | `gitops/workloads/values-jenkins.yaml`, `workloads/seed/Jenkinsfile`, `workloads/android/pipelines/builds/aaos_builder/Jenkinsfile` |
+| `{project_id}-aaos` | Argo `aaos-builder` storage step (`STORAGE_BUCKET_BASE`) | `workloads/android/pipelines/builds/aaos_builder/helm/templates/_env.tpl` |
+| `{project_id}-openbsw` | Jenkins OpenBSW jobs (`OPENBSW_BUILD_BUCKET_ROOT_NAME`, seed job, `bsw_builder`, POSIX tests) | `gitops/workloads/values-jenkins.yaml`, `workloads/seed/Jenkinsfile`, `workloads/openbsw/pipelines/` |
+| both | Horizon API artifact listing allowlist (`artifactsAllowedBuckets`) | `gitops/templates/horizon-api.yaml` |
+| both | This module's static allowlist (`config.allowedBuckets`) and `DEFAULT_ARTIFACT_BUCKET` | `values.yaml`, `templates/deployment.yaml` | All IAM of this module (service account `gke-storage-gcs-module-sa`, its Workload Identity and roles, custom role `horizonStorageGcsBucketCreator`) stays in Terraform: Config Connector holds `roles/editor` only and cannot change IAM policies. **`{project_id}-sample-workloads-data`** is declared by **`sample-data`** as a **`GCSBucket`** CR reconciled by this operator (enable this module before **sample-data**; see `gitops/modules/sample-data-module`). **`{project_id}-argo-workflows`** is provisioned by platform GitOps KCC (`gitops/templates/argo-workflows-bucket.yaml`, `deletion-policy: abandon`). Terraform no longer manages that bucket: `removed { from = module.sdv_gcs_argo_workflows ... destroy = false }` in `terraform/modules/base/main.tf` drops it from state without deleting GCP objects (or use `terraform state rm` on the old address if needed). **Cluster-mode** `ConfigConnector` is platform GitOps in `gitops/apps/configconnector-operator` (main env only). The GKE Config Connector add-on is disabled.
 
 Disabling **storage-gcs** is blocked while **sample-data** is enabled (hard dependent). Disable **sample-data** first; that CR uses `deletionPolicy: Delete`, so the operator empties and deletes `{project_id}-sample-workloads-data`. Other CRs default to **Retain** (GCP bucket is kept).
 

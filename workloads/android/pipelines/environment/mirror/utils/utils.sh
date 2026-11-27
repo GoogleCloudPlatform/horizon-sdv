@@ -543,6 +543,7 @@ sync_mirror() {
   local repo_sync_jobs=$5
   local operation_type=${6:-"updated"} # Default to "updated" if no argument is provided
   local repo_sync_timeout=${7:-"20h"} # Max wall time for a single repo sync (GNU timeout duration)
+  local run_garbage_collector=${8:-"false"} # "true": git gc in every project after a successful sync
   check_missing_func_args mirror_path manifest_url manifest_ref manifest_file repo_sync_jobs operation_type repo_sync_timeout
 
   local start_time_in_seconds
@@ -633,8 +634,12 @@ sync_mirror() {
 
   log_success "Repo sync completed at [$(date)].\n Time elapsed: [${formatted_elapsed_time}].\n Local mirror ${operation_type}."
 
-  log_info "Performing aggressive garbage collection..."
-  repo forall -c "git gc --aggressive --prune=all" || log_error "Failed to perform garbage collection post repo sync."
+  if [[ "${run_garbage_collector}" == "true" ]]; then
+    log_info "Performing aggressive garbage collection..."
+    repo forall -c "git gc --aggressive --prune=all" || log_error "Failed to perform garbage collection post repo sync."
+  else
+    log_info "Skipping garbage collection: RUN_GARBAGE_COLLECTOR is not set."
+  fi
 
   return 0
 }
@@ -651,6 +656,7 @@ sync_mirror_with_retries() {
   local metadata_file_path="$7"
   local metadata_root_key="$8"
   local repo_sync_timeout=${9:-"20h"}
+  local run_garbage_collector=${10:-"false"}
   check_missing_func_args mirror_path manifest_url manifest_ref manifest_file repo_sync_jobs operation_type metadata_file_path metadata_root_key repo_sync_timeout
 
   local mirror_dir_name
@@ -673,7 +679,7 @@ sync_mirror_with_retries() {
     # Tee the output to the log file for post-mortem analysis; use PIPESTATUS to
     # distinguish timeout (124) from other failures so retries are skipped on timeout.
     set +e
-    sync_mirror "${mirror_path}" "${manifest_url}" "${manifest_ref}" "${manifest_file}" "${repo_sync_jobs}" "${operation_type}" "${repo_sync_timeout}" | tee "${log_file}"
+    sync_mirror "${mirror_path}" "${manifest_url}" "${manifest_ref}" "${manifest_file}" "${repo_sync_jobs}" "${operation_type}" "${repo_sync_timeout}" "${run_garbage_collector}" | tee "${log_file}"
     sync_exit=${PIPESTATUS[0]}
     set -e
 

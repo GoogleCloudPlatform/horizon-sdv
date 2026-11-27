@@ -1,0 +1,123 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Test infrastructure: an in-cluster NFS server (stands in for Filestore) and a Gitea git server with HTTPS and LFS
+# (stands in for android.googlesource.com and other upstreams). Namespace e2e.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e
+---
+# Kernel NFS server from the Kubernetes e2e images: exports /exports (NFSv4 root, mount path "/").
+# Needs the nfsd kernel module on the host (kind nodes share the host kernel).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server
+  namespace: e2e
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: nfs-server}
+  template:
+    metadata:
+      labels: {app: nfs-server}
+    spec:
+      containers:
+        - name: nfs
+          image: registry.k8s.io/e2e-test-images/volume/nfs:1.4
+          securityContext:
+            privileged: true
+          ports:
+            - {name: nfs, containerPort: 2049}
+            - {name: mountd, containerPort: 20048}
+            - {name: rpcbind, containerPort: 111}
+          volumeMounts:
+            - {name: exports, mountPath: /exports}
+      volumes:
+        - name: exports
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-server
+  namespace: e2e
+spec:
+  selector: {app: nfs-server}
+  ports:
+    - {name: nfs, port: 2049}
+    - {name: mountd, port: 20048}
+    - {name: rpcbind, port: 111}
+---
+# Gitea (rootless) over HTTPS with LFS. Repositories are created by push (seed job).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: e2e
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: gitea}
+  template:
+    metadata:
+      labels: {app: gitea}
+    spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        - name: cert
+          image: docker.io/gitea/gitea:1.22.6-rootless
+          command: [sh, -c]
+          args:
+            - cd /var/lib/gitea && [ -f cert.pem ] || gitea cert --host gitea.e2e.svc.cluster.local,gitea.e2e.svc,gitea
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/gitea}
+      containers:
+        - name: gitea
+          image: docker.io/gitea/gitea:1.22.6-rootless
+          env:
+            - {name: GITEA__security__INSTALL_LOCK, value: "true"}
+            - {name: GITEA__database__DB_TYPE, value: sqlite3}
+            - {name: GITEA__server__PROTOCOL, value: https}
+            - {name: GITEA__server__HTTP_PORT, value: "3000"}
+            - {name: GITEA__server__DOMAIN, value: gitea.e2e.svc.cluster.local}
+            - {name: GITEA__server__ROOT_URL, value: "https://gitea.e2e.svc.cluster.local:3000/"}
+            - {name: GITEA__server__CERT_FILE, value: /var/lib/gitea/cert.pem}
+            - {name: GITEA__server__KEY_FILE, value: /var/lib/gitea/key.pem}
+            - {name: GITEA__server__LFS_START_SERVER, value: "true"}
+            - {name: GITEA__repository__ENABLE_PUSH_CREATE_USER, value: "true"}
+            - {name: GITEA__repository__DEFAULT_PUSH_CREATE_PRIVATE, value: "false"}
+            - {name: GITEA__service__DISABLE_REGISTRATION, value: "true"}
+          ports:
+            - {name: https, containerPort: 3000}
+          readinessProbe:
+            tcpSocket: {port: 3000}
+            periodSeconds: 5
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/gitea}
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+  namespace: e2e
+spec:
+  selector: {app: gitea}
+  ports:
+    - {name: https, port: 3000}

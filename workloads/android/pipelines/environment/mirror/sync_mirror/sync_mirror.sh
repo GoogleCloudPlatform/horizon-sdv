@@ -26,6 +26,7 @@ MIRROR_MANIFEST_FILE="$6"
 REPO_SYNC_JOBS="$7"
 BUILD_USER="$8"
 REPO_SYNC_TIMEOUT="${9:-20h}"
+RUN_GARBAGE_COLLECTOR="${10:-false}" # true: git gc after a successful sync (Jenkins parameter RUN_GARBAGE_COLLECTOR)
 
 METADATA_FILE_NAME="metadata.yaml"
 METADATA_FILE_FULL_PATH="${MIRROR_ROOT_SUBDIR_PATH}/${METADATA_FILE_NAME}"
@@ -49,6 +50,7 @@ process_single_mirror() {
   local metadata_file_path="$7"
   local metadata_root_key="$8"
   local repo_sync_timeout="${9:-20h}"
+  local run_garbage_collector="${10:-false}"
 
   local sync_type="created"
   local mirror_dir_name
@@ -110,7 +112,8 @@ process_single_mirror() {
     "${sync_type}" \
     "${metadata_file_path}" \
     "${metadata_root_key}" \
-    "${repo_sync_timeout}"
+    "${repo_sync_timeout}" \
+    "${run_garbage_collector}"
 
   local sync_status=$?
 
@@ -157,6 +160,13 @@ if [[ "${SYNC_ALL_EXISTING_MIRRORS}" == "true" ]]; then
 
   # Loop through each mirror and process sync
   for mirror_name in $mirror_list; do
+    # Entries of other kinds (for example type: git from the storage-mirror module) are not repo mirrors.
+    mirror_type=$(get_value_from_metadata "${METADATA_FILE_FULL_PATH}" "${METADATA_FILE_ROOT_KEY}" "${mirror_name}" "type")
+    if [[ "${mirror_type}" != "repo" && "${mirror_type}" != "null" ]]; then
+      log_info "Skipping mirror '${mirror_name}' of type '${mirror_type}'; only repo mirrors are synced by this job."
+      total_mirrors=$((total_mirrors - 1))
+      continue
+    fi
     mirror_dir_path="${MIRROR_ROOT_SUBDIR_PATH}/${mirror_name}"
     manifest_url=$(get_value_from_metadata "${METADATA_FILE_FULL_PATH}" "${METADATA_FILE_ROOT_KEY}" "${mirror_name}" "manifest_url")
     manifest_ref=$(get_value_from_metadata "${METADATA_FILE_FULL_PATH}" "${METADATA_FILE_ROOT_KEY}" "${mirror_name}" "manifest_ref")
@@ -173,7 +183,8 @@ if [[ "${SYNC_ALL_EXISTING_MIRRORS}" == "true" ]]; then
       "${build_user}" \
       "${METADATA_FILE_FULL_PATH}" \
       "${METADATA_FILE_ROOT_KEY}" \
-      "${REPO_SYNC_TIMEOUT}" ; then
+      "${REPO_SYNC_TIMEOUT}" \
+      "${RUN_GARBAGE_COLLECTOR}" ; then
       log_success "Successfully synced mirror: '${mirror_name}'"
 
       succeeded_mirrors_list+=("${mirror_name}") || log_error "Failed to add mirror to succeeded list: '${mirror_name}'"
@@ -214,7 +225,8 @@ else
     "${BUILD_USER}" \
     "${METADATA_FILE_FULL_PATH}" \
     "${METADATA_FILE_ROOT_KEY}" \
-    "${REPO_SYNC_TIMEOUT}" ; then
+    "${REPO_SYNC_TIMEOUT}" \
+    "${RUN_GARBAGE_COLLECTOR}" ; then
     log_success "Sync completed successfully for mirror: '${MIRROR_DIR}'"
   else
     log_error "Sync failed for mirror: '${MIRROR_DIR}'"

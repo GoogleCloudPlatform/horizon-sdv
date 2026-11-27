@@ -331,7 +331,7 @@ There are two ways to sign in:
 
 ## Command reference
 
-The `workflow`, `catalog`, `auth`, `artifacts` and `api` commands accept `--domain HOST` and `--api URL` to target a cluster other than the configured one (`config`, `history` and `version` don't take them). `horizon ci ...` is an alias for `horizon workflow ...`, kept for existing pipelines.
+The `workflow`, `catalog`, `auth`, `artifacts`, `mirror` and `api` commands accept `--domain HOST` and `--api URL` to target a cluster other than the configured one (`config`, `history` and `version` don't take them). `horizon ci ...` is an alias for `horizon workflow ...`, kept for existing pipelines.
 
 The following global flags work on any command: `--debug`/`-d` turns on verbose diagnostic output, `--json`/`-j` asks for JSON output where the command supports it, `--no-banner`/`-b` suppresses the ASCII logo and banner, and `--insecure`/`-i` accepts self-signed TLS certificates (development only).
 
@@ -432,6 +432,25 @@ Lists the GCS buckets and objects that the Horizon API exposes, for finding arti
 |---|---|
 | `artifacts buckets` | Lists the GCS buckets reachable through the Horizon API. Only buckets in the API's allowlist or matching a `GCSBucket` resource are returned. |
 | `artifacts objects BUCKET` | Lists objects in `BUCKET`. Narrow the results with `--prefix`, cap them with `--limit`, and page through them with `--page-token`. |
+
+### `horizon mirror`
+
+Manages mirrors of the `storage-mirror` module (alias `horizon storage-mirror`). The module must be enabled; otherwise every
+command fails with `404`. Runs are ordinary workflows, so `horizon workflow logs <run>` shows their logs.
+
+| Command | What it does |
+|---|---|
+| `mirror list` | Lists managed mirrors and catalog-only entries of `metadata.yaml` (`--kind`, `--phase`). |
+| `mirror get NAME` | Prints one mirror: spec, status and catalog entry. |
+| `mirror create NAME --kind repo\|git` | Creates a mirror and starts its first sync. repo: `--manifest-url`, `--manifest-ref`, `--manifest-file`, `--sync-jobs`. git: `--url`, `--branches`, `--credentials-secret`. Both: `--lfs`, `--schedule`, `--sync-timeout`, `--watch`. |
+| `mirror update NAME` | Changes mutable settings (`--manifest-ref`, `--manifest-file`, `--sync-jobs`, `--branches`, `--lfs`, `--schedule`, `--suspend`, `--resume`). |
+| `mirror sync NAME... \| --all` | Requests a sync; `--watch` follows the named mirrors until done. |
+| `mirror status NAME [--watch]` | Shows phase and live progress (projects or objects done, refs updated, percentage, time left); `--watch` polls until no run is active and exits non-zero if it failed. |
+| `mirror runs NAME` | Lists recent runs. |
+| `mirror cancel NAME` | Stops the active run. |
+| `mirror delete NAME [--purge [--yes]]` | Unregisters the mirror and keeps its data; `--purge` also deletes the data after you type the name. |
+| `mirror import [DIR...]` | Manages catalog-only mirrors, for example those created by the Jenkins jobs. |
+| `mirror volume`, `mirror config` | Show the mirror volume and the effective configuration. |
 
 ### `horizon history`
 

@@ -1,0 +1,285 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Storage Mirror WorkflowTemplates. Runs start through Argo Events (templates/sensors.yaml), posted by the
+# storage-mirror-module controller. No template is exposed to the Horizon API catalog (horizon-sdv.io/expose "false"):
+# mirror changes go through /v1/storage-mirror/*, where the admin role is enforced. Argo enforces concurrency:
+# semaphore storage-mirror-semaphores/sync bounds runs on the volume, a mutex per directory serialises one mirror.
+{{- $d := .Values.defaults }}
+{{- range $op := list "create" "sync" }}
+{{- $create := eq $op "create" }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: storage-mirror-{{ $op }}
+  namespace: {{ $.Values.workflowNamespace }}
+  labels:
+    {{- include "smw.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: storage-mirror-{{ $op }}
+    horizon-sdv.io/expose: "false"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: main
+  {{- include "smw.workflowMetadata" (dict "mirror" true) | nindent 2 }}
+  {{- include "smw.common" $ | nindent 2 }}
+  synchronization:
+    semaphores:
+      - configMapKeyRef:
+          name: storage-mirror-semaphores
+          key: sync
+    mutexes:
+      - name: "storage-mirror-{{ "{{workflow.parameters.directory}}" }}"
+  arguments:
+    parameters:
+      - name: horizonSubmittedFrom
+        value: ""
+      - name: requestId
+        value: ""
+        description: "Set by the storage-mirror controller; leave empty."
+      - name: mirror
+        value: ""
+        description: "Mirror name (DNS-1123 label). Required."
+      - name: directory
+        value: ""
+        description: "Directory under {{ $.Values.mountPath }}/{{ $.Values.rootSubdir }}; empty means the mirror name."
+      - name: kind
+        value: {{ if $create }}"repo"{{ else }}""{{ end }}
+        description: "repo (AOSP manifest mirror) or git (single repository).{{ if not $create }} Empty: from the catalog.{{ end }}"
+      - name: manifestUrl
+        value: {{ if $create }}{{ $d.repo.manifestUrl | quote }}{{ else }}""{{ end }}
+        description: "repo: manifest repository URL. Immutable once the mirror exists."
+      - name: manifestRef
+        value: {{ if $create }}{{ $d.repo.manifestRef | quote }}{{ else }}""{{ end }}
+        description: "repo: manifest branch or tag.{{ if not $create }} Empty: the last value in the catalog.{{ end }}"
+      - name: manifestFile
+        value: {{ if $create }}{{ $d.repo.manifestFile | quote }}{{ else }}""{{ end }}
+        description: "repo: manifest file."
+      - name: syncJobs
+        value: {{ if $create }}{{ $d.repo.syncJobs | toString | quote }}{{ else }}""{{ end }}
+        description: "repo: parallel repo sync jobs (4 is the recommended maximum against Google)."
+      - name: gitUrl
+        value: ""
+        description: "git: https URL of the repository. Immutable once the mirror exists."
+      - name: gitBranches
+        value: {{ if $create }}{{ join "," $d.git.branches | quote }}{{ else }}""{{ end }}
+        description: "git: comma-separated branch patterns (* = all). Tags are always mirrored."
+      - name: gitCredentialsSecret
+        value: ""
+        description: "git: optional basic-auth Secret (username, password) in this namespace."
+      - name: lfs
+        value: {{ if $create }}{{ $d.lfs | lower | quote }}{{ else }}""{{ end }}
+        description: "git-lfs: disabled, enabled or auto."
+      - name: syncTimeout
+        value: ""
+        description: "Maximum fetch time (GNU timeout format, e.g. 20h). Empty: 20h for repo, 6h for git."
+      - name: pruneRefs
+        value: {{ join "," $.Values.retention.pruneRefs | quote }}
+        description: "Comma-separated ref patterns deleted after each sync."
+      - name: excludeRefs
+        value: {{ join "," $d.git.excludeRefs | quote }}
+        description: "git: comma-separated ref patterns deleted after each fetch."
+      - name: gc
+        value: {{ $.Values.retention.gc | lower | quote }}
+        description: "Repository gc after sync: aggressive, auto or none."
+      - name: submittedBy
+        value: ""
+        description: "Recorded as created_by in the catalog; empty means the Horizon submitter."
+  templates:
+    - name: main
+      steps:
+        - - name: repo
+            template: run-repo
+            when: "'{{ "{{workflow.parameters.kind}}" }}' != 'git'"
+          - name: git
+            template: run-git
+            when: "'{{ "{{workflow.parameters.kind}}" }}' == 'git' && '{{ "{{workflow.parameters.gitCredentialsSecret}}" }}' == ''"
+          - name: git-with-credentials
+            template: run-git-credentials
+            when: "'{{ "{{workflow.parameters.kind}}" }}' == 'git' && '{{ "{{workflow.parameters.gitCredentialsSecret}}" }}' != ''"
+    - name: run-repo
+      activeDeadlineSeconds: {{ $.Values.activeDeadlineSeconds.repo }}
+      {{- include "smw.android.scheduling" $ | nindent 6 }}
+      container:
+        {{- include "smw.agentContainer" (dict "root" $ "command" $op "resources" $.Values.resources.repo "params" (include "smw.params.mirror" $)) | nindent 8 }}
+    - name: run-git
+      activeDeadlineSeconds: {{ $.Values.activeDeadlineSeconds.git }}
+      container:
+        {{- include "smw.agentContainer" (dict "root" $ "command" $op "resources" $.Values.resources.git "params" (include "smw.params.mirror" $)) | nindent 8 }}
+    - name: run-git-credentials
+      activeDeadlineSeconds: {{ $.Values.activeDeadlineSeconds.git }}
+      volumes:
+        - name: git-credentials
+          secret:
+            secretName: "{{ "{{workflow.parameters.gitCredentialsSecret}}" }}"
+      container:
+        {{- include "smw.agentContainer" (dict "root" $ "command" $op "resources" $.Values.resources.git "params" (include "smw.params.mirror" $)) | nindent 8 }}
+          - name: git-credentials
+            mountPath: /etc/storage-mirror/git-credentials
+            readOnly: true
+{{- end }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: storage-mirror-delete
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "smw.labels" . | nindent 4 }}
+    app.kubernetes.io/name: storage-mirror-delete
+    horizon-sdv.io/expose: "false"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: main
+  {{- include "smw.workflowMetadata" (dict "mirror" true) | nindent 2 }}
+  {{- include "smw.common" . | nindent 2 }}
+  synchronization:
+    semaphores:
+      - configMapKeyRef:
+          name: storage-mirror-semaphores
+          key: sync
+    mutexes:
+      - name: "storage-mirror-{{ "{{workflow.parameters.directory}}" }}"
+  arguments:
+    parameters:
+      - name: horizonSubmittedFrom
+        value: ""
+      - name: requestId
+        value: ""
+      - name: mirror
+        value: ""
+        description: "Mirror name. Required."
+      - name: directory
+        value: ""
+        description: "Mirror directory; empty means the mirror name."
+      - name: confirm
+        value: ""
+        description: "Type the mirror directory again to confirm. Deletes the mirror data permanently."
+  templates:
+    - name: main
+      activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds.delete }}
+      container:
+        {{- include "smw.agentContainer" (dict "root" . "command" "delete" "resources" .Values.resources.light "params" (include "smw.params.delete" .)) | nindent 8 }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: storage-mirror-volume-init
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "smw.labels" . | nindent 4 }}
+    app.kubernetes.io/name: storage-mirror-volume-init
+    horizon-sdv.io/expose: "false"
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+spec:
+  entrypoint: main
+  {{- include "smw.workflowMetadata" (dict "mirror" false) | nindent 2 }}
+  {{- include "smw.common" . | nindent 2 }}
+  synchronization:
+    mutexes:
+      - name: storage-mirror-volume
+  arguments:
+    parameters:
+      - name: horizonSubmittedFrom
+        value: ""
+      - name: requestId
+        value: ""
+  templates:
+    - name: main
+      steps:
+        - - name: permissions
+            template: permissions
+        - - name: catalog
+            template: catalog
+    # Root step, parity with the Jenkins init container (sync_mirror/Jenkinsfile): group 1000 owns the share root with
+    # setgid so new files inherit it.
+    - name: permissions
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      container:
+        image: {{ .Values.busyboxImage | quote }}
+        command: [/bin/sh, -c]
+        args:
+          - |
+            set -eu
+            ROOT={{ .Values.mountPath | quote }}
+            chown :1000 "$ROOT"
+            chmod g+ws "$ROOT"
+            mkdir -p "$ROOT/{{ .Values.rootSubdir }}/.storage-mirror/progress"
+            chown -R :1000 "$ROOT/{{ .Values.rootSubdir }}"
+            chmod -R g+ws "$ROOT/{{ .Values.rootSubdir }}/.storage-mirror"
+            chmod g+ws "$ROOT/{{ .Values.rootSubdir }}"
+            ls -ld "$ROOT" "$ROOT/{{ .Values.rootSubdir }}"
+        securityContext:
+          runAsUser: 0
+          allowPrivilegeEscalation: false
+        resources:
+          requests: {cpu: 100m, memory: 64Mi}
+          limits: {cpu: 500m, memory: 128Mi}
+        volumeMounts:
+          - name: mirror
+            mountPath: {{ .Values.mountPath | quote }}
+    - name: catalog
+      container:
+        {{- include "smw.agentContainer" (dict "root" . "command" "init-volume" "resources" .Values.resources.light "params" (include "smw.params.volume-init" .)) | nindent 8 }}
+---
+# Argo semaphore for runs on the shared volume (same Helm value as StorageMirrorConfig.spec.concurrency).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storage-mirror-semaphores
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "smw.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+data:
+  sync: {{ .Values.maxParallelSyncs | toString | quote }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: storage-mirror-sync
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "smw.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+    {{- if .Values.projectID }}
+    # Terraform sa9 binds workflows/storage-mirror-sync to this GSA (archiving step logs to the Argo bucket).
+    iam.gke.io/gcp-service-account: {{ .Values.gcpServiceAccount }}@{{ .Values.projectID }}.iam.gserviceaccount.com
+    {{- end }}
+---
+# Argo writes a WorkflowTaskResult with the pod identity; without this the steps hang near the end.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: storage-mirror-sync-workflowtaskresults
+  namespace: {{ .Values.workflowNamespace }}
+  labels:
+    {{- include "smw.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-workflowtaskresults
+subjects:
+  - kind: ServiceAccount
+    name: storage-mirror-sync
+    namespace: {{ .Values.workflowNamespace }}

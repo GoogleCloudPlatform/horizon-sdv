@@ -17,7 +17,9 @@
 ABFS variant: its extra parameters follow parallelSyncJobs (index 10), in the same order as in
 workflowtemplates.yaml, so each one maps to spec.arguments.parameters.<11 + position>.
 aiReviewRuntime is appended after that list (index 11 + len of the ABFS list; 11 when the list is empty).
+With the Storage Mirror (aospMirror.enabled, non-ABFS only) useLocalAospMirror and aospMirrorDirName follow at 12 and 13.
 */}}
+{{- $mirror := eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
 {{- $abfsParams := list }}
 {{- if eq (include "aaos-builder.isAbfs" .) "true" }}
 {{- $abfsParams = list "abfsServer" "abfsCachedBuild" "abfsVersion" "abfsCasfsVersion" "abfsRepository" "uploaderManifestServer" "gerritTopic" "overrideMakeCommand" "abfsCleanCache" "abfsCachemanTimeout" "postRepoCommand" "aaosParallelBuildJobs" }}
@@ -79,6 +81,12 @@ spec:
 {{- end }}
                     - name: aiReviewRuntime
                       value: {{ .Values.spec.aiReviewRuntime | default "agy" | quote }}
+{{- if $mirror }}
+                    - name: useLocalAospMirror
+                      value: {{ .Values.spec.useLocalAospMirror | default "false" | quote }}
+                    - name: aospMirrorDirName
+                      value: {{ .Values.spec.aospMirrorDirName | quote }}
+{{- end }}
           parameters:
             - src:
                 dependencyName: webhook-dep
@@ -143,3 +151,15 @@ spec:
                 dataKey: body.aiReviewRuntime
                 value: {{ .Values.spec.aiReviewRuntime | default "agy" | quote }}
               dest: spec.arguments.parameters.{{ add 11 (len $abfsParams) }}.value
+{{- if $mirror }}
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.useLocalAospMirror
+                value: {{ .Values.spec.useLocalAospMirror | default "false" | quote }}
+              dest: spec.arguments.parameters.{{ add 12 (len $abfsParams) }}.value
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.aospMirrorDirName
+                value: {{ .Values.spec.aospMirrorDirName | quote }}
+              dest: spec.arguments.parameters.{{ add 13 (len $abfsParams) }}.value
+{{- end }}

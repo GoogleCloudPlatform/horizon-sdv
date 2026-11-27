@@ -51,6 +51,14 @@ config:
     key: storage-gcs-internal
   storage:
     location: ""
+  # Region or multi-region of the project buckets (MODULE_CONFIG storageLocation, Terraform gcp_storage_location).
+  storageLocation: ""
+  # Project buckets {projectID}-<name> owned by this module through Config Connector (formerly Terraform module sdv-gcs).
+  projectBuckets:
+    manage: true
+    names:
+      - aaos
+      - openbsw
   # GCS V4 signed URLs (see POST /api/v1/buckets/{bucket}/signed-urls). Durations: Go format (e.g. 48h, 168h). Max 7d per GCS.
   signedUrl:
     defaultExpiry: "48h"

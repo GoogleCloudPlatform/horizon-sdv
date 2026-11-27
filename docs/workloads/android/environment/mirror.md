@@ -28,6 +28,15 @@ limitations under the License. -->
 
 This document describes the Jenkins pipelines for managing an NFS-based mirror in Google Cloud Platform (GCP), particularly the AOSP (Android Open Source Project) mirror. These pipelines automate the creation, synchronization, and deletion of the mirror infrastructure, which can be used to accelerate `repo sync` operations in Android builds.
 
+> **Storage Mirror module.** The `storage-mirror` module (`gitops/modules/storage-mirror-module`) replaces these jobs
+> with Argo workflows, a controller, `horizon mirror ...` and `/v1/storage-mirror/*` in the Horizon API, and adds
+> single-repository git mirrors and live sync progress. It keeps the same volume layout
+> (`/mnt/mirror-filestore-pvc/horizon-mirrors/<dir>`) and `metadata.yaml`, and provides the claim
+> `sdv-mirror-filestore-pvc` in the `jenkins` namespace (read-only by default), so the Jenkins build jobs keep working
+> with `USE_LOCAL_AOSP_MIRROR` / `AOSP_MIRROR_DIR_NAME`. While the module is enabled, do not run the Jenkins
+> *Create Mirror Infra*, *Sync Mirror* or *Delete Mirror* jobs against its volume. *Sync Mirror* with
+> `SYNC_ALL_EXISTING_MIRRORS` skips catalog entries that are not `type: repo`. See the module README.
+
 ## Prerequisites<a name="prerequisites"></a>
 
 - Before running any mirror pipeline, ensure that the `Android Workflows/Environment/Mirror/Docker Image Template` pipeline has been run to build the necessary container image.
@@ -70,6 +79,9 @@ The tag of the Docker image to use for the build environment. Defaults to `lates
 
 #### `SYNC_ALL_EXISTING_MIRRORS`
 If true, all existing mirrors will be synced, and other mirror-specific parameters will be ignored. Ideal for scheduled periodic updates of all managed mirrors.
+
+#### `RUN_GARBAGE_COLLECTOR`
+If true, runs `git gc --aggressive --prune=all` in every project of the mirror after a successful sync. Defaults to `false`. This is slow on large mirrors; when `SYNC_ALL_EXISTING_MIRRORS` is selected it applies to every mirror that is synced.
 
 #### `MIRROR_DIR`
 The directory name for the mirror. Required if not syncing all existing mirrors. Note: If you provide 'my-mirror' as value, the absolute container path of the mirror will be '/mnt/mirror-filestore-pvc/horizon-mirrors/my-mirror', where 'horizon-mirrors.' is the root subdirectory for all mirrors.

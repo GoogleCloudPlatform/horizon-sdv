@@ -12,6 +12,798 @@
     }
   ],
   "paths": {
+    "/v1/storage-mirror/config": {
+      "get": {
+        "description": "Read-only; Git is the only writer.",
+        "operationId": "getMirrorConfig",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Effective StorageMirrorConfig",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
+    "/v1/storage-mirror/import": {
+      "post": {
+        "description": "Creates Retain StorageMirror resources for metadata.yaml entries without one. Body `{}` or `{\"mirrors\":[...]}`.",
+        "operationId": "importMirrors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Manage catalog-only mirrors",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
+    "/v1/storage-mirror/mirrors": {
+      "get": {
+        "description": "Managed mirrors (StorageMirror resources) and catalog-only entries of metadata.yaml (`managed: false`).",
+        "operationId": "listMirrors",
+        "parameters": [
+          {
+            "description": "repo or git",
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Pending, Initializing, Syncing, Ready, Error, Deleting",
+            "in": "query",
+            "name": "phase",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "List mirrors",
+        "tags": [
+          "Storage Mirror"
+        ]
+      },
+      "post": {
+        "description": "Body: `{\"name\",\"kind\":\"repo|git\",\"directory\",\"repo\":{\"manifestUrl\",\"manifestRef\",\"manifestFile\",\"syncJobs\"},\"git\":{\"url\",\"branches\",\"credentialsSecretName\"},\"lfs\":\"inherit|disabled|enabled|auto\",\"schedule\":\"inherit|none|<cron>\",\"syncTimeout\"}`. Starts the create run.",
+        "operationId": "createMirror",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "Mirror definition",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Create a mirror",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
+    "/v1/storage-mirror/mirrors/{name}": {
+      "delete": {
+        "description": "Unregisters the mirror and keeps its data. `purge=true&confirm=<name>` deletes the data too.",
+        "operationId": "deleteMirror",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "true deletes the mirror directory",
+            "in": "query",
+            "name": "purge",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "mirror name, required with purge",
+            "in": "query",
+            "name": "confirm",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Delete a mirror",
+        "tags": [
+          "Storage Mirror"
+        ]
+      },
+      "get": {
+        "description": "Spec, status and catalog entry.",
+        "operationId": "getMirror",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Get a mirror",
+        "tags": [
+          "Storage Mirror"
+        ]
+      },
+      "patch": {
+        "description": "manifestRef, manifestFile, syncJobs, branches, lfs, schedule, suspend, syncTimeout. kind, directory, manifestUrl and url are immutable.",
+        "operationId": "updateMirror",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "Fields to change",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Update mutable fields",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
+    "/v1/storage-mirror/mirrors/{name}/runs": {
+      "get": {
+        "description": "Run IDs are Workflow names; use /v1/workflows/{workflowName}/log for logs.",
+        "operationId": "listMirrorRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Run history",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
+    "/v1/storage-mirror/mirrors/{name}/status": {
+      "get": {
+        "description": "phase, currentRun.progress (projects/refs done, percentages, state), lastRun.",
+        "operationId": "getMirrorStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Sync status and live progress",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
+    "/v1/storage-mirror/mirrors/{name}/sync": {
+      "post": {
+        "description": "Requests a sync through the storage-mirror-sync WorkflowTemplate (Argo Events). Returns `requestId`, or `runId` when a run is already active.",
+        "operationId": "syncMirror",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Sync a mirror",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
+    "/v1/storage-mirror/mirrors/{name}/sync/cancel": {
+      "post": {
+        "description": "",
+        "operationId": "cancelMirrorSync",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Stop the active run",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
+    "/v1/storage-mirror/syncs": {
+      "post": {
+        "description": "Body `{\"all\":true}` or `{\"mirrors\":[...]}`.",
+        "operationId": "syncMirrors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "Selection",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Sync several mirrors",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
+    "/v1/storage-mirror/volume": {
+      "delete": {
+        "description": "Two-key: needs mirror.volume.allowDestroy=true in Git and `confirm=<instance>`. Deletes every mirror's data.",
+        "operationId": "destroyMirrorVolume",
+        "parameters": [
+          {
+            "description": "Filestore instance name",
+            "in": "query",
+            "name": "confirm",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "true also when mirrors exist",
+            "in": "query",
+            "name": "force",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Destroy the volume",
+        "tags": [
+          "Storage Mirror"
+        ]
+      },
+      "get": {
+        "description": "Filestore instance, capacity, usage and conditions.",
+        "operationId": "getMirrorVolume",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted (run requested; see requestId / runId)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (admin role, or volume destroy not allowed in Git)"
+          },
+          "404": {
+            "description": "Not found, or the storage-mirror module is not enabled"
+          },
+          "409": {
+            "description": "Conflict (directory in use, run active, mirrors still exist)"
+          },
+          "422": {
+            "description": "Validation failed (immutable field, bad kind)"
+          },
+          "502": {
+            "description": "storage-mirror module error"
+          },
+          "503": {
+            "description": "storage-mirror module URL, token or CA not configured"
+          }
+        },
+        "summary": "Volume state",
+        "tags": [
+          "Storage Mirror"
+        ]
+      }
+    },
     "/v1/catalog": {
       "get": {
         "tags": ["Catalog"],

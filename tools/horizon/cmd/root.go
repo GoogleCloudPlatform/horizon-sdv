@@ -25,6 +25,7 @@ import (
 	"github.com/horizon-sdv/horizon/cmd/catalog"
 	"github.com/horizon-sdv/horizon/cmd/config"
 	"github.com/horizon-sdv/horizon/cmd/history"
+	"github.com/horizon-sdv/horizon/cmd/mirror"
 	"github.com/horizon-sdv/horizon/cmd/template"
 	"github.com/horizon-sdv/horizon/cmd/version"
 	"github.com/horizon-sdv/horizon/cmd/workflow"
@@ -94,6 +95,7 @@ func setupParentCommands() {
 	rootCmd.AddCommand(config.NewConfigCmd())
 	rootCmd.AddCommand(artifacts.NewArtifactsCmd())
 	rootCmd.AddCommand(history.NewHistoryCmd())
+	rootCmd.AddCommand(mirror.NewMirrorCmd())
 	rootCmd.AddCommand(workflow.NewWorkflowCmd())
 	rootCmd.AddCommand(version.NewVersionCmd())
 }

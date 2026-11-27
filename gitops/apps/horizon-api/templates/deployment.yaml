@@ -77,6 +77,9 @@ spec:
             {{- if .Values.artifactsAllowedBuckets }}
             - "--artifacts-allowed-buckets={{ .Values.artifactsAllowedBuckets }}"
             {{- end }}
+            {{- if .Values.mirrorModuleUrl }}
+            - "--mirror-module-url={{ .Values.mirrorModuleUrl }}"
+            {{- end }}
           env:
             # File, not secretKeyRef. An env value is fixed when the container
             # starts: this Deployment syncs before storage-gcs-module creates
@@ -86,6 +89,15 @@ spec:
               value: /etc/storage-gcs-token/horizon-api
             - name: ARTIFACTS_MODULE_CA_FILE
               value: /etc/storage-gcs/ca.crt
+            # storage-mirror-module token and CA, same file pattern (the module may be enabled later).
+            - name: MIRROR_MODULE_TOKEN_FILE
+              value: /etc/storage-mirror-token/horizon-api
+            - name: MIRROR_MODULE_CA_FILE
+              value: /etc/storage-mirror/ca.crt
+            {{- if .Values.mirrorAdminRole }}
+            - name: MIRROR_ADMIN_ROLE
+              value: {{ .Values.mirrorAdminRole | quote }}
+            {{- end }}
             {{- if .Values.gceMetadataHost }}
             - name: GCE_METADATA_HOST
               value: {{ .Values.gceMetadataHost | quote }}
@@ -98,6 +110,12 @@ spec:
             # after the secret is created or rotated.
             - name: storage-gcs-api-token
               mountPath: /etc/storage-gcs-token
+              readOnly: true
+            - name: storage-mirror-api-ca
+              mountPath: /etc/storage-mirror
+              readOnly: true
+            - name: storage-mirror-api-token
+              mountPath: /etc/storage-mirror-token
               readOnly: true
           ports:
             - name: metrics
@@ -130,6 +148,21 @@ spec:
         - name: storage-gcs-api-token
           secret:
             secretName: storage-gcs-module-api-token
+            optional: true
+            items:
+              - key: horizon-api
+                path: horizon-api
+        # Optional: storage-mirror-module may be enabled after horizon-api.
+        - name: storage-mirror-api-ca
+          secret:
+            secretName: storage-mirror-module-api-tls
+            optional: true
+            items:
+              - key: ca.crt
+                path: ca.crt
+        - name: storage-mirror-api-token
+          secret:
+            secretName: storage-mirror-module-api-token
             optional: true
             items:
               - key: horizon-api

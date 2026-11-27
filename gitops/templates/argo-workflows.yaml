@@ -388,6 +388,35 @@ spec:
 
 {{- end }}
 ---
+# Allow workflow pods to reach storage-mirror-module REST API in horizon (8443 TLS): mirror-agent progress reports.
+{{- if .Values.config.enableNetworkPolicies }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-workflow-pods-to-storage-mirror-module
+  namespace: {{ .Values.config.namespacePrefix }}workflows
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchExpressions:
+      - key: workflows.argoproj.io/workflow
+        operator: Exists
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ .Values.config.namespacePrefix }}horizon
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: storage-mirror-module
+    ports:
+    - protocol: TCP
+      port: 8443
+{{- end }}
+---
 # Allow workflow pods SSH to Cuttlefish VMs (parity with allow-jenkins-agent-egress-ssh-to-cuttlefish)
 {{- if .Values.config.enableNetworkPolicies }}
 apiVersion: networking.k8s.io/v1

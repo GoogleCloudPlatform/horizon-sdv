@@ -139,7 +139,7 @@ spec:
       ports:
         - protocol: TCP
           port: 2746
-    # storage-gcs-module object listing (HTTPS API)
+    # storage-gcs-module object listing and storage-mirror-module API (HTTPS, both in horizon)
     - to:
         - namespaceSelector:
             matchLabels:

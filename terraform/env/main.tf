@@ -410,6 +410,11 @@ module "base" {
             gke_ns = "horizon-api"
             gke_sa = "horizon-api"
           },
+          # Storage Mirror sync workflows (storage-mirror-module): archive step logs to the Argo Workflows bucket.
+          {
+            gke_ns = "workflows"
+            gke_sa = "storage-mirror-sync"
+          },
         ]
         roles = toset([
           "roles/storage.objectUser",

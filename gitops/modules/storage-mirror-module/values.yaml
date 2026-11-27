@@ -1,0 +1,129 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Module name (injected by Module Manager when enabling).
+moduleName: ""
+
+moduleManagerNamespace: module-manager
+
+argocd:
+  namespace: argocd
+  project: horizon-sdv
+
+repo:
+  url: ""
+  revision: HEAD
+
+# Developer Portal overview (Module Manager GET /modules/{name}/overview).
+overviewServiceName: mod-storage-mirror-overview
+overviewNamespace: storage-mirror-overview
+
+# Cluster MODULE_CONFIG (merged by Module Manager). Defaults are for helm template only.
+config:
+  namespacePrefix: ""
+  projectID: ""
+  zone: ""
+  isSubEnvironment: false
+  enableNetworkPolicies: true
+  # Node primary subnets (kubelet probe source IPs); production values come from MODULE_CONFIG.
+  probeSourceCIDRs:
+    - "10.1.0.0/24"
+    - "10.2.0.0/24"
+  storageMirror:
+    network: sdv-network
+  containerImages:
+    storageMirrorModule: ""
+    storageMirrorSync: ""
+  nginx:
+    image: nginx
+    tag: "1.29"
+
+# Source of StorageMirrorConfig/default (section 6.2 of the design). Git is the only writer.
+mirror:
+  volume:
+    resourceID: sdv-storage-mirror
+    # Adopt an existing instance (for example the CSI-created pvc-<uid> of the Jenkins mirror) instead of creating one.
+    existingInstance: ""
+    # Increase only (1024..102400 GiB; multiples of 256 up to 9984, multiples of 2560 from 10240).
+    capacityGb: 2048
+    tier: ZONAL
+    # Empty: config.zone.
+    zone: ""
+    reservedIpRange: ""
+    shareName: mirror
+    # Git half of the two-key volume destroy (DELETE /api/v1/volume?confirm=<instance>).
+    allowDestroy: false
+  layout:
+    # Mount path in the workflow pods (WorkflowTemplates only; not part of StorageMirrorConfig).
+    mountPath: /mnt/mirror-filestore-pvc
+    rootSubdir: horizon-mirrors
+  defaults:
+    repo:
+      manifestUrl: https://android.googlesource.com/platform/manifest
+      manifestRef: android-16.0.0_r3
+      manifestFile: default.xml
+      syncJobs: 3
+      syncTimeout: 20h
+    git:
+      branches: ["*"]
+      excludeRefs: ["refs/pull/*", "refs/changes/*", "refs/merge-requests/*"]
+      syncTimeout: 6h
+    lfs: Disabled
+  schedules: []
+  #  - name: nightly
+  #    cron: "0 1 * * *"
+  #    timeZone: UTC
+  concurrency:
+    # Argo semaphore storage-mirror-semaphores/sync (WorkflowTemplates only; not part of StorageMirrorConfig).
+    maxParallelSyncs: 1
+  retention:
+    syncHistoryLimit: 10
+    pruneRefs: ["refs/changes/*"]
+    gc: Aggressive
+    staleAfterDays: 14
+  consumers:
+    jenkins:
+      enabled: true
+      claimName: sdv-mirror-filestore-pvc
+      # The module is the only writer; legacy Jenkins Sync and Delete jobs fail instead of racing it.
+      readOnly: true
+    workflows:
+      rwClaimName: storage-mirror-rw
+      roClaimName: storage-mirror-ro
+  adoptExisting: false
+
+# Argo workflow settings (child Application mod-storage-mirror-argo-workflows).
+workflows:
+  # Parity with sync_mirror/Jenkinsfile (98 CPU / 180000 Mi on the android pool).
+  resources:
+    repo:
+      cpu: "98"
+      memory: 180000Mi
+    git:
+      cpu: "4"
+      memory: 16Gi
+    light:
+      cpu: "1"
+      memory: 2Gi
+  activeDeadlineSeconds:
+    repo: 93600
+    git: 28800
+    delete: 21600
+  ttlSecondsAfterSuccess: 86400
+  ttlSecondsAfterFailure: 259200
+  busyboxImage: busybox:stable
+
+api:
+  tokenSecretName: storage-mirror-module-api-token
+  tlsSecretName: storage-mirror-module-api-tls

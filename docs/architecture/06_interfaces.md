@@ -39,6 +39,11 @@ The Horizon API is served at `https://<your-horizon-domain>/horizon-api`. Every 
 | `DELETE /v1/workflows/{workflowName}` | Delete a finished run. Argo Workflows garbage-collects its artifacts in GCS. The call waits until the workflow's finalizers are gone. |
 | `GET /v1/artifacts/buckets` | The GCS buckets reachable through the API: the static `ARTIFACTS_ALLOWED_BUCKETS` allowlist plus `GCSBucket` resources, filtered by bucket-name rules and an optional project-id prefix. |
 | `GET /v1/artifacts/buckets/{bucket}/objects` | Objects in a bucket by name. Takes `prefix`, `pageToken` and `limit` (1–1000). Proxied in-cluster to the storage-gcs module. |
+| `GET`, `POST /v1/storage-mirror/mirrors` | List mirrors (managed and catalog-only), or create one. Proxied in-cluster to the storage-mirror module; `404` while it is disabled. |
+| `GET`, `PATCH`, `DELETE /v1/storage-mirror/mirrors/{name}` | One mirror: get, change mutable fields, unregister (`purge=true&confirm=<name>` deletes its data). |
+| `POST /v1/storage-mirror/mirrors/{name}/sync`, `POST .../sync/cancel`, `POST /v1/storage-mirror/syncs` | Request a sync (returns `requestId`, or `runId` of an active run), stop it, or sync several (`{"all":true}`). |
+| `GET /v1/storage-mirror/mirrors/{name}/status`, `.../runs` | Live sync progress and run history. |
+| `POST /v1/storage-mirror/import`, `GET`/`DELETE /v1/storage-mirror/volume`, `GET /v1/storage-mirror/config` | Manage catalog-only mirrors, volume state and two-key destroy, effective configuration. Mutating calls need the realm role `horizon-storage-mirror-admin` (horizon-api value `mirrorAdminRole`; `""` opts out). Keycloak grants it to the `administrators` group and `realm_admin`. |
 
 Submissions record where they came from in the `horizon-sdv.io/submitted-from` label on the workflow. Set it with the `X-Horizon-Submitted-From` header: `api` (the default), `developer-portal`, `horizon-cli`, or `custom` together with your integration ID in `X-Horizon-Submitted-From-Detail`. A `horizonSubmittedFrom` parameter in the body overrides the header. The **Workflows visibility** setting in the portal filters runs by this label.
 

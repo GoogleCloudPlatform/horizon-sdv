@@ -104,6 +104,9 @@ Same pod volume wiring as build; env matches Jenkins AAOS Gemini review.
     volumeMounts:
       - name: aaos-cache
         mountPath: /aaos-cache
+{{- if eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
+{{- include "aaos-builder.aospMirrorMount" . | nindent 6 }}
+{{- end }}
 {{- if or .Values.localRepoHostPath .Values.localRepoPvcName }}
       - name: local-repo
         mountPath: {{ .Values.localRepoMountPath | quote }}

@@ -1,0 +1,60 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Set by the parent chart (gitops/modules/storage-mirror-module/templates/application-argo-workflows.yaml).
+workflowNamespace: workflows
+eventsNamespace: argo-events
+projectID: ""
+syncImage: ""
+controllerUrl: https://storage-mirror-module.horizon.svc.cluster.local:8443
+apiTokenSecretName: storage-mirror-module-api-token
+apiTlsSecretName: storage-mirror-module-api-tls
+rwClaimName: storage-mirror-rw
+mountPath: /mnt/mirror-filestore-pvc
+rootSubdir: horizon-mirrors
+maxParallelSyncs: 1
+# Google service account of the sync pods (Terraform sa9 Workload Identity entry workflows/storage-mirror-sync).
+gcpServiceAccount: gke-argo-workflows-sa
+defaults:
+  repo:
+    manifestUrl: https://android.googlesource.com/platform/manifest
+    manifestRef: android-16.0.0_r3
+    manifestFile: default.xml
+    syncJobs: 3
+    syncTimeout: 20h
+  git:
+    branches: ["*"]
+    excludeRefs: ["refs/pull/*", "refs/changes/*", "refs/merge-requests/*"]
+    syncTimeout: 6h
+  lfs: Disabled
+retention:
+  pruneRefs: ["refs/changes/*"]
+  gc: Aggressive
+resources:
+  repo:
+    cpu: "98"
+    memory: 180000Mi
+  git:
+    cpu: "4"
+    memory: 16Gi
+  light:
+    cpu: "1"
+    memory: 2Gi
+activeDeadlineSeconds:
+  repo: 93600
+  git: 28800
+  delete: 21600
+ttlSecondsAfterSuccess: 86400
+ttlSecondsAfterFailure: 259200
+busyboxImage: busybox:stable

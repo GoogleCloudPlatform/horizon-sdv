@@ -1,0 +1,2 @@
+# Local build output of the envtest helper (go build in apiserver/)
+apiserver/storage-mirror-e2e-apiserver

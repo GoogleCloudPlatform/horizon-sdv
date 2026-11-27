@@ -261,7 +261,9 @@ resource "helm_release" "workflow_namespace_drain" {
   ]
 }
 
-# GCS project buckets and cluster Config Connector are GitOps-managed in gitops/modules/storage-gcs-module (KCC + GCSBucket CRs).
+# GCS project buckets {project}-aaos and {project}-openbsw are Config Connector StorageBuckets in
+# gitops/modules/storage-gcs-module (templates/kcc-buckets.yaml). Cluster-mode Config Connector is platform GitOps
+# (gitops/apps/configconnector-operator). IAM for storage-gcs stays in Terraform.
 
 # Create SecretStore for each environment
 resource "kubectl_manifest" "argocd_secret_store" {
@@ -521,6 +523,8 @@ resource "kubectl_manifest" "argocd_application" {
                 clusterId: horizon-sdv-ws-cluster
                 network: ${var.sdv_network}
                 subnetwork: ${var.primary_subnetwork}
+              storageMirror:
+                network: ${var.sdv_network}
               probeSourceCIDRs:
                 - ${var.nodes_range}
 %{if var.enable_arm64_dedicated_subnet~}
@@ -551,6 +555,8 @@ resource "kubectl_manifest" "argocd_application" {
                 moduleManager: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/module-manager-app:${var.images["module-manager-app"].version}
                 storageGcsModule: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/storage-gcs-module-app:${var.images["storage-gcs-module-app"].version}
                 cloudWorkstationsModule: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/cloud-workstations-module-app:${var.images["cloud-workstations-module-app"].version}
+                storageMirrorModule: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/storage-mirror-module-app:${var.images["storage-mirror-module-app"].version}
+                storageMirrorSync: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/storage-mirror-sync:${var.images["storage-mirror-sync"].version}
                 horizonApi: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/horizon-api-app:${var.images["horizon-api-app"].version}
               apps:
                 kccWebhookCertMonitor: ${var.gcp_cloud_region}-docker.pkg.dev/${var.gcp_project_id}/${var.gcp_registry_id}/kcc-webhook-cert-monitor:${var.images["kcc-webhook-cert-monitor"].version}

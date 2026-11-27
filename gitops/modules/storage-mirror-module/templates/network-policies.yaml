@@ -1,0 +1,86 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# The workflows-side egress (allow-workflow-pods-to-storage-mirror-module) and the argo-events webhook ingress are
+# platform policies in gitops/templates/argo-workflows.yaml and gitops/templates/argo-events.yaml.
+{{- if and (include "storage-mirror-module.mainEnv" . | eq "true") .Values.config.enableNetworkPolicies }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-storage-mirror-module-egress
+  namespace: {{ include "storage-mirror-module.horizonNS" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: storage-mirror-module
+  policyTypes:
+    - Egress
+  egress:
+    # Kubernetes API (private control plane endpoint is outside the pod ranges).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32
+      ports:
+        - protocol: TCP
+          port: 443
+    # Argo Events webhook EventSource (run dispatch).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ include "storage-mirror-module.eventsNS" . }}
+      ports:
+        - protocol: TCP
+          port: 12000
+---
+# Kubelet probes (node subnet), Horizon API and labelled mirror workflow pods. No ports-only rule (default deny).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-storage-mirror-module-ingress
+  namespace: {{ include "storage-mirror-module.horizonNS" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: storage-mirror-module
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- range (.Values.config.probeSourceCIDRs | default (list "10.1.0.0/24" "10.2.0.0/24")) }}
+    - from:
+        - ipBlock:
+            cidr: {{ . | quote }}
+      ports:
+        - protocol: TCP
+          port: 8080
+    {{- end }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ include "storage-mirror-module.workflowsNS" . }}
+          podSelector:
+            matchLabels:
+              horizon-sdv.io/storage-mirror-api-client: "true"
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ include "storage-mirror-module.horizonApiNS" . }}
+      ports:
+        - protocol: TCP
+          port: 8443
+{{- end }}

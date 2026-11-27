@@ -71,6 +71,7 @@ func main() {
 		gcsSigningSA            string
 		workflowDeleteWait      time.Duration
 		artifactsModuleURL      string
+		mirrorModuleURL         string
 		artifactsGCSProjectID   string
 		artifactsAllowedBuckets string
 	)
@@ -99,6 +100,7 @@ func main() {
 	flag.StringVar(&artifactsModuleURL, "artifacts-module-url", "", "Storage GCS module HTTP endpoint for bucket/object listing proxy; ARTIFACTS_MODULE_URL")
 	flag.StringVar(&artifactsGCSProjectID, "artifacts-gcs-project-id", "", "GCS project ID for bucket prefix filtering; ARTIFACTS_GCS_PROJECT_ID")
 	flag.StringVar(&artifactsAllowedBuckets, "artifacts-allowed-buckets", "", "Comma-separated static bucket allowlist; ARTIFACTS_ALLOWED_BUCKETS")
+	flag.StringVar(&mirrorModuleURL, "mirror-module-url", "", "Storage Mirror module HTTPS endpoint for /v1/storage-mirror/*; MIRROR_MODULE_URL")
 	flag.Parse()
 
 	crlog.SetLogger(zap.New(zap.UseDevMode(false)))
@@ -157,6 +159,9 @@ func main() {
 	}
 	if strings.TrimSpace(artifactsModuleURL) == "" {
 		artifactsModuleURL = strings.TrimSpace(os.Getenv("ARTIFACTS_MODULE_URL"))
+	}
+	if mirrorModuleURL == "" {
+		mirrorModuleURL = strings.TrimSpace(os.Getenv("MIRROR_MODULE_URL"))
 	}
 	if strings.TrimSpace(artifactsGCSProjectID) == "" {
 		artifactsGCSProjectID = strings.TrimSpace(os.Getenv("ARTIFACTS_GCS_PROJECT_ID"))
@@ -263,6 +268,11 @@ func main() {
 		ArtifactsModuleCAFile:         strings.TrimSpace(os.Getenv("ARTIFACTS_MODULE_CA_FILE")),
 		ArtifactsGCSProjectID:         artifactsGCSProjectID,
 		ArtifactsStaticAllowedBuckets: staticAllowedBuckets,
+		MirrorModuleURL:               mirrorModuleURL,
+		MirrorModuleToken:             strings.TrimSpace(os.Getenv("MIRROR_MODULE_TOKEN")),
+		MirrorModuleTokenFile:         strings.TrimSpace(os.Getenv("MIRROR_MODULE_TOKEN_FILE")),
+		MirrorModuleCAFile:            strings.TrimSpace(os.Getenv("MIRROR_MODULE_CA_FILE")),
+		MirrorAdminRole:               strings.TrimSpace(os.Getenv("MIRROR_ADMIN_ROLE")),
 	})
 	if err := mgr.Add(handler); err != nil {
 		log.Fatalf("http: %v", err)

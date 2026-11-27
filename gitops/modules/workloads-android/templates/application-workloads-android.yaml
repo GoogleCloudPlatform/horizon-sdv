@@ -52,6 +52,9 @@ spec:
       helm:
         values: |
           namespacePrefix: {{ .Values.config.namespacePrefix | quote }}
+          # Storage Mirror soft dependency: mount the read-only mirror claim and add useLocalAospMirror / aospMirrorDirName.
+          aospMirror:
+            enabled: {{ index .Values.softFeaturesEnabled "storage-mirror" | default false }}
           scm:
             authMethod: {{ .Values.config.scm.authMethod | quote }}
           spec:

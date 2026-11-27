@@ -320,6 +320,7 @@ use the local repo mount. Remote git artifact checkouts do not share a PVC, so
 - `spec.buildCtsOnly`: `true` to build CTS only
 - `spec.forceImageBuild`: `true` to always rebuild the builder image
 - `spec.parallelSyncJobs`: Repo sync parallelism
+- `aospMirror.enabled`: mount the Storage Mirror read-only claim (`aospMirror.claimName`, default `storage-mirror-ro`) at `aospMirror.mountPath` in init, build, storage and gemini-review, and add the parameters `useLocalAospMirror` and `aospMirrorDirName` (appended after `aiReviewRuntime`). `workloads-android` sets it when the `storage-mirror` module is enabled. Same behaviour as the Jenkins `USE_LOCAL_AOSP_MIRROR` / `AOSP_MIRROR_DIR_NAME`; not used by the ABFS variant.
 - `spec.enableGeminiAiAssistant`: `"true"` / `"false"` — enables **gemini-review** on build failure (WorkflowTemplate default parameter)
 - `spec.geminiSkillsYaml`: path to `skills.yaml` (`GEMINI_SKILLS_YAML`). Required and read only when `spec.aiReviewRuntime` is `gemini-cli`. Omit it when the runtime is `agy`.
 - `spec.manifestUrl`: Manifest URL for repo init

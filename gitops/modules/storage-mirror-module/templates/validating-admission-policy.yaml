@@ -1,0 +1,53 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Only the mirror workflow identity may mount the read-write mirror claim; build workflows use the read-only claim.
+{{- if include "storage-mirror-module.mainEnv" . | eq "true" }}
+{{- $rw := .Values.mirror.consumers.workflows.rwClaimName }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ .Values.config.namespacePrefix }}storage-mirror-rw-claim
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+  validations:
+    - expression: >-
+        !has(object.spec.volumes) ||
+        !object.spec.volumes.exists(v, has(v.persistentVolumeClaim) && v.persistentVolumeClaim.claimName == '{{ $rw }}') ||
+        (has(object.spec.serviceAccountName) && object.spec.serviceAccountName == 'storage-mirror-sync')
+      message: >-
+        only the storage-mirror-sync service account may mount claim {{ $rw }}; mount storage-mirror-ro read-only instead
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ .Values.config.namespacePrefix }}storage-mirror-rw-claim
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  policyName: {{ .Values.config.namespacePrefix }}storage-mirror-rw-claim
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ include "storage-mirror-module.workflowsNS" . | quote }}
+{{- end }}

@@ -17,6 +17,8 @@ import _ from 'lodash';
 import KcAdminClient from '@keycloak/keycloak-admin-client';
 import retry from 'async-retry';
 
+import { ensureStorageMirrorAdminRole } from './storage-mirror-role.mjs';
+
 const REALM = 'horizon';
 
 const keycloakAdmin = new KcAdminClient({
@@ -171,6 +173,7 @@ async function configureKeycloak() {
   await upsertClient(horizonDevPortalClient(domain));
   await upsertClient(horizonCiClient());
   await writeHorizonCiClientSecretForJenkins();
+  await ensureStorageMirrorAdminRole(keycloakAdmin);
   console.info('Horizon API Keycloak post-job finished.');
 }
 

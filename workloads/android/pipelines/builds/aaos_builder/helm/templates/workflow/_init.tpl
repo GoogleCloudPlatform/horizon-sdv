@@ -54,6 +54,9 @@ Dependencies: requires compute-vars output and clean completion.
     volumeMounts:
       - name: aaos-cache
         mountPath: /aaos-cache
+{{- if eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
+{{- include "aaos-builder.aospMirrorMount" . | nindent 6 }}
+{{- end }}
 {{- if eq (include "aaos-builder.useSharedPipelineWorkspaceVolume" .) "true" }}
       - name: pipeline-workspace
         mountPath: {{ include "aaos-builder.pipelineMonorepoPath" . | quote }}
@@ -69,5 +72,12 @@ Dependencies: requires compute-vars output and clean completion.
         export WORKSPACE="${WORKDIR}"
         # manifestUrl must match the operator allowlist before repo sync.
 {{- include "aaos-builder.manifestUrlCheck" . | nindent 8 }}
+{{- if eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
+        if [ "${USE_LOCAL_AOSP_MIRROR}" = "true" ]; then
+          case "${AOSP_MIRROR_DIR_NAME}" in
+            ""|*/*|.*) echo "ERROR: aospMirrorDirName must name a mirror directory when useLocalAospMirror is true." >&2; exit 1 ;;
+          esac
+        fi
+{{- end }}
         "${WORKDIR}"/workloads/android/pipelines/builds/aaos_builder/aaos_initialise.sh
 {{- end }}

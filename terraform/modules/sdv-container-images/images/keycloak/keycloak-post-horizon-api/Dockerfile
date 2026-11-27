@@ -17,6 +17,7 @@ RUN apk update && apk upgrade && apk add --no-cache bash vim curl jq openssl
 WORKDIR /home/node
 ADD --chown=node:node package.json ./
 ADD --chown=node:node keycloak.mjs ./
+ADD --chown=node:node storage-mirror-role.mjs ./
 ADD --chown=node:node configure.sh ./
 RUN chmod +x configure.sh
 USER node

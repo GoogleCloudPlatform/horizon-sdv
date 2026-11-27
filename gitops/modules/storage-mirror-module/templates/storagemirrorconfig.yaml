@@ -1,0 +1,66 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Top-level Storage Mirror configuration. It carries no finalizer, so module disable can delete it; the controller
+# never puts an ownerReference from it onto the Filestore instance, PVs or claims, so nothing else goes with it.
+{{- if include "storage-mirror-module.mainEnv" . | eq "true" }}
+{{- $m := .Values.mirror }}
+apiVersion: storagemirror.horizon-sdv.io/v1alpha1
+kind: StorageMirrorConfig
+metadata:
+  name: default
+  namespace: {{ include "storage-mirror-module.horizonNS" . }}
+  labels:
+    app.kubernetes.io/name: storage-mirror-module
+    horizon-sdv.io/module: {{ .Values.moduleName | default "storage-mirror" | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  volume:
+    resourceID: {{ $m.volume.resourceID | quote }}
+    {{- if $m.volume.existingInstance }}
+    existingInstance: {{ $m.volume.existingInstance | quote }}
+    {{- end }}
+    capacityGb: {{ int64 $m.volume.capacityGb }}
+    tier: {{ $m.volume.tier | quote }}
+    zone: {{ $m.volume.zone | default .Values.config.zone | required "mirror.volume.zone or config.zone is required" | quote }}
+    network: {{ .Values.config.storageMirror.network | quote }}
+    {{- if $m.volume.reservedIpRange }}
+    reservedIpRange: {{ $m.volume.reservedIpRange | quote }}
+    {{- end }}
+    shareName: {{ $m.volume.shareName | quote }}
+    allowDestroy: {{ $m.volume.allowDestroy }}
+  layout:
+    rootSubdir: {{ $m.layout.rootSubdir | quote }}
+  defaults:
+    {{- toYaml $m.defaults | nindent 4 }}
+  {{- with $m.schedules }}
+  schedules:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  retention:
+    {{- toYaml $m.retention | nindent 4 }}
+  consumers:
+    jenkins:
+      enabled: {{ $m.consumers.jenkins.enabled }}
+      namespace: {{ include "storage-mirror-module.jenkinsNS" . }}
+      claimName: {{ $m.consumers.jenkins.claimName | quote }}
+      readOnly: {{ $m.consumers.jenkins.readOnly }}
+    workflows:
+      namespace: {{ include "storage-mirror-module.workflowsNS" . }}
+      rwClaimName: {{ $m.consumers.workflows.rwClaimName | quote }}
+      roClaimName: {{ $m.consumers.workflows.roClaimName | quote }}
+  adoptExisting: {{ $m.adoptExisting }}
+{{- end }}

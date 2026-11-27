@@ -227,18 +227,23 @@ module "sdv_container_images" {
   }
 }
 
-module "sdv_gcs" {
-  source = "../sdv-gcs"
+# Former module.sdv_gcs ({project}-aaos) and module.sdv_gcs_openbsw ({project}-openbsw) moved to Config Connector
+# StorageBuckets in gitops/modules/storage-gcs-module/templates/kcc-buckets.yaml (deletion-policy abandon). Drop them
+# from state without deleting the buckets; Config Connector acquires them by name when storage-gcs is enabled.
+removed {
+  from = module.sdv_gcs
 
-  bucket_name = "${data.google_project.project.project_id}-aaos"
-  location    = var.sdv_location
+  lifecycle {
+    destroy = false
+  }
 }
 
-module "sdv_gcs_openbsw" {
-  source = "../sdv-gcs"
+removed {
+  from = module.sdv_gcs_openbsw
 
-  bucket_name = "${data.google_project.project.project_id}-openbsw"
-  location    = var.sdv_location
+  lifecycle {
+    destroy = false
+  }
 }
 
 # Former module.sdv_gcs_argo_workflows ({project}-argo-workflows) was moved to KCC
@@ -258,8 +263,6 @@ module "sdv_gke_cluster" {
   depends_on = [
     module.sdv_apis,
     module.sdv_network,
-    module.sdv_gcs,
-    module.sdv_gcs_openbsw,
     module.sdv_container_images,
     module.sdv_certificate_manager,
     module.sdv_ssl_policy,

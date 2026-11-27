@@ -77,6 +77,9 @@ Storage maps workflow.parameters.enableGeminiAiAssistant → ENABLE_GEMINI_AI_AS
     volumeMounts:
       - name: aaos-cache
         mountPath: /aaos-cache
+{{- if eq (include "aaos-builder.aospMirrorEnabled" .) "true" }}
+{{- include "aaos-builder.aospMirrorMount" . | nindent 6 }}
+{{- end }}
 {{- if eq (include "aaos-builder.useSharedPipelineWorkspaceVolume" .) "true" }}
       - name: pipeline-workspace
         mountPath: {{ include "aaos-builder.pipelineMonorepoPath" . | quote }}

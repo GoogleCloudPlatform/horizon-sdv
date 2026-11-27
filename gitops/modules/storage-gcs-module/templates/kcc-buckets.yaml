@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Accenture, All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Project buckets {project}-aaos and {project}-openbsw, moved from Terraform (terraform/modules/base/main.tf
+# module.sdv_gcs / module.sdv_gcs_openbsw, now `removed` with destroy = false). Config Connector (roles/editor) acquires
+# the existing buckets by resourceID. deletion-policy abandon and Delete=false keep the buckets and their data when the
+# CR or the module goes away. IAM for these buckets stays in Terraform.
+{{- if and (include "storage-gcs-module.mainEnv" . | eq "true") .Values.config.projectBuckets.manage }}
+{{- range .Values.config.projectBuckets.names }}
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  name: {{ . }}
+  namespace: {{ $.Values.config.namespacePrefix }}horizon
+  labels:
+    app.kubernetes.io/name: storage-gcs-module
+    app.kubernetes.io/component: project-bucket
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Delete=false,Prune=false,SkipDryRunOnMissingResource=true
+    cnrm.cloud.google.com/project-id: {{ $.Values.config.projectID | quote }}
+    cnrm.cloud.google.com/deletion-policy: "abandon"
+spec:
+  resourceID: {{ $.Values.config.projectID }}-{{ . }}
+  location: {{ required "config.storageLocation is required for the project buckets" $.Values.config.storageLocation | quote }}
+  uniformBucketLevelAccess: true
+{{- end }}
+{{- end }}

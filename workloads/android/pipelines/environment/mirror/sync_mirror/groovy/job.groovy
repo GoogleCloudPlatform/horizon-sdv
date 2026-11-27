@@ -80,6 +80,18 @@ pipelineJob('Android/Environment/Mirror/Sync Mirror') {
       ''')
     }
 
+    booleanParam {
+      name('RUN_GARBAGE_COLLECTOR')
+      defaultValue(false)
+      description('''Optional: If checked, runs <i><code>git gc --aggressive --prune=all</code></i> in every project of the mirror after a successful sync.<br/>
+        <b>Note:</b>
+        <ul>
+          <li>This is slow on large mirrors and prolongs the job considerably.</li>
+          <li>When '<i><code>SYNC_ALL_EXISTING_MIRRORS</code></i>' is selected, it applies to every mirror that is synced.</li>
+        </ul>
+      ''')
+    }
+
     separator {
       name('SINGLE_MIRROR_PARAMETERS')
       sectionHeader("Single Mirror Parameters (Required if 'SYNC_ALL_EXISTING_MIRRORS' is NOT selected)")
