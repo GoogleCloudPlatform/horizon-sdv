@@ -122,7 +122,6 @@ pipelineJob('Android/Tests/CTS Execution') {
       defaultValue('')
       description("""<p>Mandatory: Storage URL pointing to the location of the Cuttlefish Virtual Device images and host packages,<br/><br/>
         Example for AAOS:<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;<br/><br/>
-        Example for AAOS SDV:<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_SDV_Builder/&lt;BUILD_NUMBER&gt;<br/><br/>
         <b>Note:</b>
           <ul><li>if build number is less than 2 digits, then zero pad , i.e. 1 to 9 must be 01 to 09.</li></ul)</p>""")
       trim(true)
@@ -164,7 +163,6 @@ pipelineJob('Android/Tests/CTS Execution') {
       defaultValue('')
       description("""<p>Optional CTS test harness download URL.<br/>Use official CTS test harness (empty field) or one built from AAOS (SDV) Builder job and stored in GCS Bucket,<br/><br/>
         Example for AAOS:<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_Builder/&lt;BUILD_NUMBER&gt;/android-cts.zip<br/><br/>
-        Example for AAOS SDV:<br/>gs://${ANDROID_BUILD_BUCKET_ROOT_NAME}/Android/Builds/AAOS_SDV_Builder/&lt;BUILD_NUMBER&gt;/android-cts.zip<br/><br/>
         <b>Note:</b>
           <ul><li>if build number is less than 2 digits, then zero pad , i.e. 1 to 9 must be 01 to 09.</li></ul)</p>""")
       trim(true)

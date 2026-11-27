@@ -155,9 +155,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
@@ -169,9 +170,10 @@ metadata:
   annotations:
     reclaimable-pv-releaser.kubernetes.io/controller-id: dynamic-reclaimable-pvc-controllers
     argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Retain
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: pd-balanced
   csi.storage.k8s.io/fstype: ext4
