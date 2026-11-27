@@ -27,6 +27,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "admin" }}
     workflows.argoproj.io/description: "Create a Cloud Workstation from an existing WorkstationConfig and wait until it is Ready. Waits for a config that is still being created, and fails at once if the config does not exist, is being deleted or has failed."
 spec:
   entrypoint: main
@@ -132,6 +133,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "admin" }}
     workflows.argoproj.io/description: "Fetch a Cloud Workstation by workstationId and delete it after confirmDelete is set to true. Waits until it is gone from GCP."
 spec:
   entrypoint: main
@@ -198,6 +200,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "admin" }}
     workflows.argoproj.io/description: "Show a Cloud Workstation with its Horizon status, state, URL and users."
 spec:
   entrypoint: main
@@ -244,6 +247,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "admin" }}
     workflows.argoproj.io/description: "List Cloud Workstations, optionally filtered by name, user or config."
 spec:
   entrypoint: main
@@ -294,6 +298,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "admin" }}
     workflows.argoproj.io/description: "Add users to a Cloud Workstation (spec.users) and wait until the IAM binding is applied."
 spec:
   entrypoint: main
@@ -358,6 +363,7 @@ metadata:
     {{- include "cws-ws.templateLabels" (dict "root" . "family" "admin") | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "7"
+    horizon-sdv.io/required-role: {{ include "cws-ws.requiredRole" "admin" }}
     workflows.argoproj.io/description: "Remove users from a Cloud Workstation (spec.users) and wait until the IAM binding is removed."
 spec:
   entrypoint: main

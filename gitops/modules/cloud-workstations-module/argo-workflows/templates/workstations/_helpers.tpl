@@ -26,6 +26,16 @@ horizon-sdv.io/family: {{ .family }}
 {{- end -}}
 
 {{/*
+Value of horizon-sdv.io/required-role for a family. Call with "admin" or "user". Horizon API only
+enforces it when its platform role check is turned on.
+*/}}
+{{- define "cws-ws.requiredRole" -}}
+{{- $roles := dict "admin" "admin" "user" "developer" -}}
+{{- if not (hasKey $roles .) }}{{ fail (printf "cws-ws.requiredRole: unknown family %q" .) }}{{ end -}}
+{{- get $roles . -}}
+{{- end -}}
+
+{{/*
 One workflow at a time for a given workstation. Create, delete, user changes, start, and stop share
 this lock. Argo trims workstationId when the workflow is submitted, so " ws1" and "ws1" take the
 same lock. Different workstations do not block each other. Read-only templates do not take the lock.
