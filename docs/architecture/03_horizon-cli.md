@@ -399,7 +399,7 @@ The lists include runs from every source (portal, API and CLI) that carry a `sub
 
 ### `horizon workflow abort` and `delete`
 
-`abort` stops a running workflow. If the workflow has already finished, it does nothing and exits successfully, so it's safe to call at the end of a CI job.
+`abort` stops a running workflow. If the workflow has already finished, it does nothing and exits successfully, so it's safe to call at the end of a CI job. If the server refuses the abort, for example because the run isn't yours and you aren't an admin, the command prints the reason and exits with an error.
 
 `delete` removes a finished workflow from the cluster. The server waits until the workflow and its finalizers are gone, which can take several minutes.
 

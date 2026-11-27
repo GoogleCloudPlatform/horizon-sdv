@@ -759,8 +759,14 @@ func CmdAbortWorkflowName(c *Client, wf string) error {
 	}
 	fmt.Fprintf(os.Stderr, "Aborting workflow %s via Horizon API …\n", wf)
 	path := "/v1/workflows/" + url.PathEscape(wf) + "/abort"
-	_, _ = c.DoJSON(ctx, "POST", path, []byte("{}"))
-	return nil
+	_, err = c.DoJSON(ctx, "POST", path, []byte("{}"))
+	if err != nil {
+		// The run can finish between the phase check and the abort call; that is still a success.
+		if ph, perr := workflowPhase(ctx, c, wf); perr == nil && terminalPhase(ph) {
+			return nil
+		}
+	}
+	return err
 }
 
 func CmdDeleteWorkflowName(ctx context.Context, c *Client, wf string) error {

@@ -371,9 +371,91 @@ func submitResponsesDoc() map[string]interface{} {
 		"202": map[string]interface{}{"description": "Dispatched to Argo Events"},
 		"400": map[string]interface{}{"description": "Bad request"},
 		"401": map[string]interface{}{"description": "Unauthorized"},
+		"403": forbiddenResponseDoc("developer", ""),
 		"404": map[string]interface{}{"description": "Unknown module/template"},
 		"502": map[string]interface{}{"description": "Argo Events webhook error"},
 		"503": map[string]interface{}{"description": "Webhook URL not configured"},
+	}
+}
+
+// forbiddenResponseDoc documents the 403 that a caller below an endpoint's minimum role gets
+// while role checks are on. also is appended to the description for an endpoint with a further
+// rule. TestOpenAPIDocumentsEndpointRoles in package api checks every operation's 403 role.
+func forbiddenResponseDoc(role, also string) map[string]interface{} {
+	return map[string]interface{}{
+		"description": "Forbidden: role checks are on and the caller ranks below `" + role + "`" + also,
+		"content": map[string]interface{}{
+			"application/json": map[string]interface{}{
+				"schema": map[string]interface{}{"$ref": "#/components/schemas/Forbidden"},
+			},
+		},
+	}
+}
+
+// forbiddenOrPlainTextResponseDoc documents endpoints where the role check returns the shared
+// JSON body, but a later resource-level authorization check returns a plain-text 403.
+func forbiddenOrPlainTextResponseDoc(role, also string) map[string]interface{} {
+	response := forbiddenResponseDoc(role, also)
+	response["content"].(map[string]interface{})["text/plain"] = map[string]interface{}{
+		"schema": map[string]interface{}{"type": "string"},
+	}
+	return response
+}
+
+func accessOpenAPIComponentSchemas() map[string]interface{} {
+	str := func(description string) map[string]interface{} {
+		return map[string]interface{}{"type": "string", "description": description}
+	}
+	return map[string]interface{}{
+		"Forbidden": map[string]interface{}{
+			"type":        "object",
+			"description": "Body of a 403 for a caller whose role is below what the call needs. Clients show it as it is.",
+			"properties": map[string]interface{}{
+				"error":        map[string]interface{}{"type": "string", "enum": []interface{}{"forbidden"}},
+				"requiredRole": str("Minimum role for the call."),
+				"currentRole":  str("The caller's role."),
+				"reason":       str("Why the role is needed, or why this caller may not act on this workflow."),
+			},
+			"required": []interface{}{"error", "requiredRole", "currentRole", "reason"},
+		},
+		"MeCapability": map[string]interface{}{
+			"type":        "object",
+			"description": "One row of the permission matrix with the decision for the caller.",
+			"properties": map[string]interface{}{
+				"id":           str("Stable identifier, e.g. `workflows.abortOwn`."),
+				"group":        str("Section the capability belongs to: `platform` or `workflows`."),
+				"label":        str("Text to display."),
+				"requiredRole": str("Minimum role. A role in `roles` at or after it has the capability."),
+				"allowed": map[string]interface{}{
+					"type":        "boolean",
+					"description": "Whether the caller has the capability. Always true while role checks are off.",
+				},
+				"reason": str("Why the role is needed. Omitted when no reason is given."),
+			},
+			"required": []interface{}{"id", "group", "label", "requiredRole", "allowed"},
+		},
+		"MeResponse": map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"name":    str("The caller's username (`preferred_username`), or the token subject when the token has none."),
+				"subject": str("Token subject (`sub`). A workflow whose `owner` equals it is the caller's own."),
+				"role":    str("The caller's role: the highest ranked `horizon-api` client role in the token, else the lowest role. Reported whether or not role checks are on."),
+				"roles": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]interface{}{"type": "string"},
+					"description": "The role order, lowest first. Each role includes the roles before it.",
+				},
+				"roleChecks": map[string]interface{}{
+					"type":        "boolean",
+					"description": "Whether minimum roles are enforced. When false, every signed-in caller may make every call.",
+				},
+				"capabilities": map[string]interface{}{
+					"type":  "array",
+					"items": map[string]interface{}{"$ref": "#/components/schemas/MeCapability"},
+				},
+			},
+			"required": []interface{}{"name", "subject", "role", "roles", "roleChecks", "capabilities"},
+		},
 	}
 }
 
@@ -691,6 +773,7 @@ func openapiArtifactsPaths() map[string]interface{} {
 						},
 					},
 					"401": map[string]interface{}{"description": "Unauthorized - missing or invalid bearer token"},
+					"403": forbiddenResponseDoc("viewer", ""),
 					"500": map[string]interface{}{"description": "Failed to list buckets"},
 				},
 			},
@@ -733,7 +816,7 @@ func openapiArtifactsPaths() map[string]interface{} {
 					},
 					"400": map[string]interface{}{"description": "Invalid bucket name or limit"},
 					"401": map[string]interface{}{"description": "Unauthorized - missing or invalid bearer token"},
-					"403": map[string]interface{}{"description": "Forbidden - bucket not in allowlist"},
+					"403": forbiddenOrPlainTextResponseDoc("viewer", ", or the bucket is not in the allowlist (plain text body)"),
 					"404": map[string]interface{}{"description": "Not found - bucket does not exist or is not accessible"},
 					"502": map[string]interface{}{"description": "Artifacts module error"},
 					"503": map[string]interface{}{"description": "Artifacts module URL, bearer token, or CA is not configured"},
@@ -776,7 +859,7 @@ func openapiWorkflowPaths() map[string]interface{} {
 				"description": "Lists workflows labelled as Horizon-originated (portal, CLI, or API). Paginates cluster List internally so the first page is not only completed runs (which would yield an empty running list).",
 				"operationId": "listWorkflowsRunning",
 				"parameters":  runningParams,
-				"responses":   map[string]interface{}{"200": listOK, "401": map[string]interface{}{"description": "Unauthorized"}, "503": map[string]interface{}{"description": "Workflow store not configured"}},
+				"responses":   map[string]interface{}{"200": listOK, "401": map[string]interface{}{"description": "Unauthorized"}, "403": forbiddenResponseDoc("viewer", ""), "503": map[string]interface{}{"description": "Workflow store not configured"}},
 			},
 		},
 		"/v1/workflows/history": map[string]interface{}{
@@ -790,6 +873,7 @@ func openapiWorkflowPaths() map[string]interface{} {
 					"200": listOK,
 					"400": map[string]interface{}{"description": "Invalid filter parameters or continue combined with filters"},
 					"401": map[string]interface{}{"description": "Unauthorized"},
+					"403": forbiddenResponseDoc("viewer", ""),
 					"503": map[string]interface{}{"description": "Workflow store not configured"},
 				},
 			},
@@ -811,6 +895,7 @@ func openapiWorkflowPaths() map[string]interface{} {
 						},
 					},
 					"401": map[string]interface{}{"description": "Unauthorized"},
+					"403": forbiddenResponseDoc("viewer", ""),
 					"404": map[string]interface{}{"description": "Workflow not found"},
 					"503": map[string]interface{}{"description": "Workflow store not configured"},
 				},
@@ -819,7 +904,7 @@ func openapiWorkflowPaths() map[string]interface{} {
 				"tags":        []interface{}{"Workflows"},
 				"operationId": "deleteWorkflow",
 				"summary":     "Delete a terminal workflow CR (must be Succeeded, Failed, Error, or Aborted)",
-				"description": "Deletes the Workflow and **blocks** until the object is no longer returned by the API (finalizers and artifact cleanup may take minutes). Configure max wait via server flag `--workflow-delete-wait-timeout` or `WORKFLOW_DELETE_WAIT_TIMEOUT`.",
+				"description": "Deletes the Workflow and **blocks** until the object is no longer returned by the API (finalizers and artifact cleanup may take minutes). Configure max wait via server flag `--workflow-delete-wait-timeout` or `WORKFLOW_DELETE_WAIT_TIMEOUT`. With role checks on, needs `admin`, also for the caller's own workflows.",
 				"parameters": []interface{}{
 					map[string]interface{}{"name": "workflowName", "in": "path", "required": true, "schema": map[string]interface{}{"type": "string"}},
 				},
@@ -833,6 +918,7 @@ func openapiWorkflowPaths() map[string]interface{} {
 						},
 					},
 					"401": map[string]interface{}{"description": "Unauthorized"},
+					"403": forbiddenResponseDoc("admin", ""),
 					"404": map[string]interface{}{"description": "Workflow not found"},
 					"409": map[string]interface{}{"description": "Workflow is not in a terminal phase"},
 					"504": map[string]interface{}{
@@ -854,8 +940,9 @@ func openapiWorkflowPaths() map[string]interface{} {
 		},
 		"/v1/workflows/{workflowName}/abort": map[string]interface{}{
 			"post": map[string]interface{}{
-				"tags":    []interface{}{"Workflows"},
-				"summary": "Request graceful shutdown (spec.shutdown Stop) for a running workflow",
+				"tags":        []interface{}{"Workflows"},
+				"summary":     "Request graceful shutdown (spec.shutdown Stop) for a running workflow",
+				"description": "With role checks on, a `developer` may abort only their own workflow: one whose `owner` equals the caller's token subject. Any other workflow needs `admin`, including one with no recorded owner and one submitted before the owner was taken from the token.",
 				"parameters": []interface{}{
 					map[string]interface{}{"name": "workflowName", "in": "path", "required": true, "schema": map[string]interface{}{"type": "string"}},
 				},
@@ -869,6 +956,7 @@ func openapiWorkflowPaths() map[string]interface{} {
 						},
 					},
 					"401": map[string]interface{}{"description": "Unauthorized"},
+					"403": forbiddenResponseDoc("developer", ", or the workflow is not the caller's own and the caller ranks below `admin`"),
 					"404": map[string]interface{}{"description": "Workflow not found"},
 					"409": map[string]interface{}{"description": "Workflow is not running (terminal phase)"},
 					"503": map[string]interface{}{"description": "Workflow store not configured"},
@@ -902,6 +990,7 @@ func openapiWorkflowPaths() map[string]interface{} {
 					},
 					"400": map[string]interface{}{"description": "Bad request"},
 					"401": map[string]interface{}{"description": "Unauthorized"},
+					"403": forbiddenResponseDoc("viewer", ""),
 					"404": map[string]interface{}{"description": "Workflow not found"},
 					"503": map[string]interface{}{"description": "Log streaming not configured"},
 				},
@@ -951,6 +1040,7 @@ func openapiWorkflowPaths() map[string]interface{} {
 					},
 					"400": map[string]interface{}{"description": "Invalid query or path"},
 					"401": map[string]interface{}{"description": "Unauthorized"},
+					"403": forbiddenResponseDoc("viewer", ""),
 					"404": map[string]interface{}{"description": "Workflow or artifact not found, or artifact has no gs:// URI"},
 					"409": map[string]interface{}{
 						"description": "Ambiguous artifact name",
@@ -990,6 +1080,28 @@ func retentionOpenAPIDescription(meta RetentionOpenAPI) string {
 // OpenAPISpec builds OpenAPI 3: catalog, workflow lifecycle, live logs, artifacts listing, and one POST submit path per catalog entry.
 func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 	paths := map[string]interface{}{
+		"/v1/me": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []interface{}{"Access"},
+				"operationId": "getMe",
+				"summary":     "The caller's name, role and capabilities",
+				"description": "Computed from the access token and the role settings only, with no call to Keycloak, Kubernetes or Module Manager. `capabilities` is the permission matrix with the decision for the caller: an endpoint that needs a capability answers 403 exactly when its `allowed` is false. " +
+					"Abort also depends on the workflow: `workflows.abortOwn` covers a workflow whose `owner` equals `subject`, and any other workflow needs `workflows.abortOthers`. " +
+					"The `platform.modules`, `platform.settings`, `platform.adminApplications` and `platform.openArgoWorkflows` capabilities are enforced by Module Manager and by the applications, not by this API.",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "The caller",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{"$ref": "#/components/schemas/MeResponse"},
+							},
+						},
+					},
+					"401": map[string]interface{}{"description": "Unauthorized"},
+					"403": forbiddenResponseDoc("viewer", ""),
+				},
+			},
+		},
 		"/v1/catalog": map[string]interface{}{
 			"get": map[string]interface{}{
 				"summary": "List exposed workflow templates",
@@ -1002,6 +1114,8 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 							},
 						},
 					},
+					"401": map[string]interface{}{"description": "Unauthorized"},
+					"403": forbiddenResponseDoc("viewer", ""),
 				},
 			},
 		},
@@ -1047,6 +1161,7 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 				"Endpoints: `{issuer}/protocol/openid-connect/auth/device` (device), `{issuer}/protocol/openid-connect/token` (code + device token + client_credentials). " +
 				"Submit runs a template via `POST /v1/modules/{module}/workflowTemplates/{template}/submit` with body `{\"parameters\":{...}}` and optional header `X-Horizon-Submitted-From` (`api` default, `developer-portal`, `horizon-cli`); OpenAPI lists one such operation per catalog entry with named parameters. " +
 				"The submitter comes from the access token: the `submittedBy` parameter is the caller's `preferred_username` and the workflow `owner` is the token subject. A `submittedBy` parameter or `X-Horizon-Submitted-By` header sent by the client is ignored, unless the caller holds the `horizon-api` client role `impersonate`; the owner is still that caller. " +
+				"Roles: the caller's role is the highest ranked `horizon-api` client role in the token, and a caller with none has the lowest role. When role checks are on, reads need `viewer`, submit needs `developer`, abort needs `developer` for the caller's own workflow (its `owner` is the caller's token subject) and `admin` for any other, and delete needs `admin`. A caller below that gets 403 with a `Forbidden` body. When role checks are off, every signed-in caller may make every call. `GET /v1/me` returns the caller's role, whether role checks are on, and what the caller may do. " +
 				"Workflow lifecycle: `GET /v1/workflows/running`, `GET /v1/workflows/history`, `GET /v1/workflows/{workflowName}`, `DELETE /v1/workflows/{workflowName}` (terminal only), `GET /v1/workflows/{workflowName}/log`, `POST /v1/workflows/{workflowName}/abort`, `GET /v1/workflows/{workflowName}/downloadArtifact/{artifactName}` (JSON signed URL by default; `inline` streams bytes for browsers). " +
 				"History and terminal status may include `archivedLogs` with `gs://` URIs derived from Workflow status artifacts. " +
 				"Live logs: `GET /v1/workflows/{workflowName}/log` without `podName` for a combined NDJSON stream (Argo workflow log or multiplexed pods); optional `podName` for a single pod. " +
@@ -1070,7 +1185,7 @@ func OpenAPISpec(entries []Entry, meta RetentionOpenAPI) ([]byte, error) {
 					"description":  "Keycloak access_token for realm horizon (see info.description).",
 				},
 			},
-			"schemas": mergeSchemaMaps(mergeSchemaMaps(openapiComponentSchemas(), workflowOpenAPIComponentSchemas()), artifactsOpenAPIComponentSchemas()),
+			"schemas": mergeSchemaMaps(mergeSchemaMaps(mergeSchemaMaps(openapiComponentSchemas(), workflowOpenAPIComponentSchemas()), artifactsOpenAPIComponentSchemas()), accessOpenAPIComponentSchemas()),
 		},
 		"security": []interface{}{
 			map[string]interface{}{"bearerAuth": []interface{}{}},

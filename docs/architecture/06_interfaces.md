@@ -26,19 +26,37 @@ This page is a reference for the interfaces between the module components: the H
 
 The Horizon API is served at `https://<your-horizon-domain>/horizon-api`. Every `/v1` call needs a Keycloak bearer token for the `horizon` realm. The Swagger page (`/swagger`) and the OpenAPI document (`/openapi.json`) don't.
 
-| Method and path | Purpose |
-|---|---|
-| `GET /v1/catalog` | Exposed templates of enabled modules, with their parameters. |
-| `POST /v1/modules/{module}/workflowTemplates/{template}/submit` | Start a run. Body: `{"parameters": {"<name>": "<value>"}}`. Returns `202` once the event is dispatched to Argo Events. |
-| `GET /v1/workflows/running` | Runs in progress. `limit` defaults to 50, maximum 500. |
-| `GET /v1/workflows/history` | Finished runs. Takes `limit`, `continue` and filters such as `phase`; `continue` can't be combined with filters. |
-| `GET /v1/workflows/{workflowName}` | Detail of one run, including archived log and artifact locations. |
-| `GET /v1/workflows/{workflowName}/log` | Log stream as newline-delimited JSON. Takes `follow` (default `true`), `container` (default `main`) and `podName`. |
-| `GET /v1/workflows/{workflowName}/downloadArtifact/{artifactName}` | Signed URL for an artifact (`durationSeconds`, default 600), or the bytes with `inline=true`. `nodeId` or `templateName` choose between steps that produced the same name. |
-| `POST /v1/workflows/{workflowName}/abort` | Stop a running workflow. |
-| `DELETE /v1/workflows/{workflowName}` | Delete a finished run. Argo Workflows garbage-collects its artifacts in GCS. The call waits until the workflow's finalizers are gone. |
-| `GET /v1/artifacts/buckets` | The GCS buckets reachable through the API: the static `ARTIFACTS_ALLOWED_BUCKETS` allowlist plus `GCSBucket` resources, filtered by bucket-name rules and an optional project-id prefix. |
-| `GET /v1/artifacts/buckets/{bucket}/objects` | Objects in a bucket by name. Takes `prefix`, `pageToken` and `limit` (1–1000). Proxied in-cluster to the storage-gcs module. |
+| Method and path | Minimum role | Purpose |
+|---|---|---|
+| `GET /v1/me` | viewer | The caller's name, role and capabilities. |
+| `GET /v1/catalog` | viewer | Exposed templates of enabled modules, with their parameters. |
+| `POST /v1/modules/{module}/workflowTemplates/{template}/submit` | developer for a non-destructive workflow, admin otherwise | Start a run. Body: `{"parameters": {"<name>": "<value>"}}`. Returns `202` once the event is dispatched to Argo Events. |
+| `GET /v1/workflows/running` | viewer | Runs in progress. `limit` defaults to 50, maximum 500. |
+| `GET /v1/workflows/history` | viewer | Finished runs. Takes `limit`, `continue` and filters such as `phase`; `continue` can't be combined with filters. |
+| `GET /v1/workflows/{workflowName}` | viewer | Detail of one run, including archived log and artifact locations. |
+| `GET /v1/workflows/{workflowName}/log` | viewer | Log stream as newline-delimited JSON. Takes `follow` (default `true`), `container` (default `main`) and `podName`. |
+| `GET /v1/workflows/{workflowName}/downloadArtifact/{artifactName}` | viewer | Signed URL for an artifact (`durationSeconds`, default 600), or the bytes with `inline=true`. `nodeId` or `templateName` choose between steps that produced the same name. |
+| `POST /v1/workflows/{workflowName}/abort` | developer for your own run, admin for any other | Stop a running workflow. |
+| `DELETE /v1/workflows/{workflowName}` | admin | Delete a finished run. Argo Workflows garbage-collects its artifacts in GCS. The call waits until the workflow's finalizers are gone. |
+| `GET /v1/artifacts/buckets` | viewer | The GCS buckets reachable through the API: the static `ARTIFACTS_ALLOWED_BUCKETS` allowlist plus `GCSBucket` resources, filtered by bucket-name rules and an optional project-id prefix. |
+| `GET /v1/artifacts/buckets/{bucket}/objects` | viewer | Objects in a bucket by name. Takes `prefix`, `pageToken` and `limit` (1–1000). Proxied in-cluster to the storage-gcs module. |
+
+The minimum roles apply when role checks are on. Set `config.roleChecks: true` in the GitOps values to turn them on; they are off by default, and then every signed-in caller can make every call. A caller's role is the highest ranked `horizon-api` client role in the token, `developer` or `admin`, and a signed-in caller with neither is a `viewer`. Each role includes the roles below it.
+
+A caller below the minimum role gets `403` with this body, which the portal and the CLI show as it is:
+
+```json
+{
+  "error": "forbidden",
+  "requiredRole": "admin",
+  "currentRole": "developer",
+  "reason": "Deleting removes the workflow record and its logs for everyone, including workflows you started."
+}
+```
+
+Abort also depends on who owns the run. A run is yours when its `owner` is your token subject, and a developer can abort only their own runs. Every other run needs `admin`: another user's run, a run with no recorded owner, a run that a service account submitted in your name, and a run submitted before Horizon API took the owner from the token.
+
+`GET /v1/me` returns the caller's `name`, `subject`, `role`, the role order (`roles`), whether role checks are on (`roleChecks`), and `capabilities`. Each capability is a row of the permission matrix with its `requiredRole` and whether the caller is `allowed`. The portal's **Your access** panel and the CLI read this list, so they show the same decisions that the endpoints enforce. The answer is computed from the token alone, with no call to Keycloak, Kubernetes or Module Manager.
 
 Submissions record where they came from in the `horizon-sdv.io/submitted-from` label on the workflow. Set it with the `X-Horizon-Submitted-From` header: `api` (the default), `developer-portal`, `horizon-cli`, or `custom` together with your integration ID in `X-Horizon-Submitted-From-Detail`. A `horizonSubmittedFrom` parameter in the body overrides the header. The **Workflows visibility** setting in the portal filters runs by this label.
 
