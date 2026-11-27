@@ -16,8 +16,6 @@ limitations under the License. -->
 
 `cws-image-build` builds the container images used by workstation configurations. Run it from the Developer Portal. Only one image build runs at a time.
 
-You may see `horizonSubmittedFrom`. Leave it blank. The Portal already records that the run came from the Developer Portal. If you set it, the only accepted values are `developer-portal`, `api`, and `horizon-cli`.
-
 `true` and `false` must be those words.
 
 ## What each image is

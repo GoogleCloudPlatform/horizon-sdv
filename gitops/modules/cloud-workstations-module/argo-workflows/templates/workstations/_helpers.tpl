@@ -45,8 +45,6 @@ with false that must be changed to true. List filters default to .* so they stay
 */}}
 {{- define "cws-ws.parameters" -}}
 cws-admin-create-workstation:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: workstationId
     value: ""
     description: "Required. Workstation ID: lowercase letters, digits and hyphens, starting with a letter, at most 63 characters."
@@ -60,8 +58,6 @@ cws-admin-create-workstation:
     value: ""
     description: "Optional. Comma-separated emails, or user:, group: or serviceAccount: members, granted Workstation User. Bare emails become user:<email>. Empty means no users."
 cws-admin-delete-workstation:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: workstationId
     value: ""
     description: "Required. Workstation ID to fetch and delete."
@@ -69,14 +65,10 @@ cws-admin-delete-workstation:
     value: "false"
     description: "Required. Change from false to true to confirm. Deletion cannot be undone."
 cws-admin-get-workstation:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: workstationId
     value: ""
     description: "Required. Workstation to show."
 cws-admin-list-workstations:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: nameRegex
     value: ".*"
     description: "Optional. Regular expression on the workstation ID. Default .* lists all. Example: ^dev-"
@@ -87,8 +79,6 @@ cws-admin-list-workstations:
     value: ".*"
     description: "Optional. Regular expression on the config name. Default .* lists all."
 cws-admin-add-workstation-users:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: workstationId
     value: ""
     description: "Required. Workstation to add users to."
@@ -96,8 +86,6 @@ cws-admin-add-workstation-users:
     value: ""
     description: "Required. Comma-separated emails, or user:, group: or serviceAccount: members, to grant Workstation User. Bare emails become user:<email>."
 cws-admin-remove-workstation-users:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: workstationId
     value: ""
     description: "Required. Workstation to remove users from."
@@ -105,14 +93,10 @@ cws-admin-remove-workstation-users:
     value: ""
     description: "Required. Comma-separated emails, or user:, group: or serviceAccount: members, to remove. Bare emails become user:<email>."
 cws-user-list-usable-workstations:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: submittedBy
     value: ""
     description: "Required. One email, or one user:, group: or serviceAccount: member. Bare emails become user:<email>. Lists workstations that include it in spec.users. This is a filter, not access control."
 cws-user-get-workstation:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: workstationId
     value: ""
     description: "Required. Workstation to show."
@@ -120,8 +104,6 @@ cws-user-get-workstation:
     value: ""
     description: "Required. One email, or one user:, group: or serviceAccount: member. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
 cws-user-get-workstation-configuration:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: workstationId
     value: ""
     description: "Required. Workstation whose configuration to show."
@@ -129,8 +111,6 @@ cws-user-get-workstation-configuration:
     value: ""
     description: "Required. One email, or one user:, group: or serviceAccount: member. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
 cws-user-start-workstation:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: workstationId
     value: ""
     description: "Required. Workstation to start."
@@ -138,8 +118,6 @@ cws-user-start-workstation:
     value: ""
     description: "Required. One email, or one user:, group: or serviceAccount: member. Bare emails become user:<email>. Must be in spec.users. This is a filter, not access control."
 cws-user-stop-workstation:
-  - name: horizonSubmittedFrom
-    value: ""
   - name: workstationId
     value: ""
     description: "Required. Workstation to stop."

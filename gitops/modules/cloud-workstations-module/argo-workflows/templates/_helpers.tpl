@@ -37,7 +37,7 @@ src.value is the template default so omitted API fields still submit a Workflow.
 - src:
     dependencyName: webhook-dep
     dataKey: body.horizonSubmittedFrom
-    value: {{ (index .Values.imageBuild.parameters 0).value | quote }}
+    value: ""
   dest: metadata.labels.horizon-sdv\.io/submitted-from
 {{- range $i, $p := .Values.imageBuild.parameters }}
 - src:
@@ -103,7 +103,7 @@ passwordSecret:
 
 {{- define "cws.commonBuildParams" -}}
 - name: horizonSubmittedFrom
-  value: '{{ "{{" }}workflow.parameters.horizonSubmittedFrom{{ "}}" }}'
+  value: ""
 - name: cloudProject
   value: {{ include "cws.cloudProject" . | quote }}
 - name: cloudRegion
@@ -374,11 +374,8 @@ Usage: include "cws.configParamList" (dict "root" . "mode" "create") | fromJsonA
 
 {{/*
 WorkflowTemplate spec.arguments.parameters from a list of {name, value?, description?}.
-horizonSubmittedFrom comes first, as the Sensor maps it to index 0.
 */}}
 {{- define "cws.arguments" -}}
-- name: horizonSubmittedFrom
-  value: ""
 {{- range . }}
 - name: {{ .name }}
   {{- if hasKey . "value" }}
@@ -447,7 +444,6 @@ spec:
                   name: {{ .template }}
                 arguments:
                   parameters:
-                    - name: horizonSubmittedFrom
                     {{- range .params }}
                     - name: {{ .name }}
                     {{- end }}
@@ -460,10 +456,6 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedFrom
               dest: metadata.labels.horizon-sdv\.io/submitted-from
-            - src:
-                dependencyName: webhook-dep
-                dataKey: body.horizonSubmittedFrom
-              dest: spec.arguments.parameters.0.value
             {{- range $i, $p := .params }}
             - src:
                 dependencyName: webhook-dep
@@ -471,7 +463,7 @@ spec:
                 {{- if hasKey $p "value" }}
                 value: {{ $p.value | quote }}
                 {{- end }}
-              dest: spec.arguments.parameters.{{ add1 $i }}.value
+              dest: spec.arguments.parameters.{{ $i }}.value
             {{- end }}
 {{- end -}}
 

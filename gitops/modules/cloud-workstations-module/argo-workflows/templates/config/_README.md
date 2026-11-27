@@ -18,8 +18,6 @@ These workflows create and manage a workstation configuration. A configuration i
 
 Run them from the Developer Portal. The module cluster must already exist. Enabling the module creates it.
 
-You may see `horizonSubmittedFrom`. Leave it blank. The Portal already records that the run came from the Developer Portal. If you set it, the only accepted values are `developer-portal`, `api`, and `horizon-cli`.
-
 Create, update, and delete of the same configuration wait for each other. Different configurations do not.
 
 ## cws-create-config

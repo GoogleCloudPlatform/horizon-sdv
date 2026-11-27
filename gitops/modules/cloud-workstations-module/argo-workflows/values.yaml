@@ -171,9 +171,6 @@ workflowTemplateName: cws-image-build
 # fallback when the Horizon API omits a field that has a non-empty default.
 imageBuild:
   parameters:
-    - name: horizonSubmittedFrom
-      value: ""
-      description: "Source of this run, e.g. portal. Shown as a label on the workflow."
     - name: imageTag
       value: ""
       description: "Tag applied to every image built in this run."
