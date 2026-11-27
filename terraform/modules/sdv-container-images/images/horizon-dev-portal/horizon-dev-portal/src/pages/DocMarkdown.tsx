@@ -411,6 +411,8 @@ export const DocMarkdown = memo(function DocMarkdown({
         color: 'text.primary',
         fontSize: 15,
         lineHeight: 1.65,
+        // Long unbroken strings (URLs, file paths) must wrap instead of widening the reader on phones.
+        overflowWrap: 'anywhere',
         '& h1, & h2, & h3, & h4': { scrollMarginTop: '88px', fontWeight: 600, lineHeight: 1.3 },
         '& h1': { fontSize: '1.75rem', mt: 0, mb: 2 },
         '& h2': { fontSize: '1.35rem', mt: 3, mb: 1 },
