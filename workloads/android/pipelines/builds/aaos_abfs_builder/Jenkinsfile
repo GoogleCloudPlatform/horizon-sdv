@@ -23,7 +23,7 @@ pipeline {
     GERRIT_API_URL="https://${env.HORIZON_DOMAIN}/gerrit"
     POD_TEMPLATE = "${ABFS_CACHED_BUILD == "true" ? kubernetesPVPodTemplate : kubernetesBasicPodTemplate}"
     ABFS_STORAGE_CLASS_SUFFIX="android-abfs"
-    ABFS_STORAGE_SIZE="250Gi"
+    ABFS_STORAGE_SIZE="375Gi"
 
     def kubernetesBasicPodTemplate = """
       apiVersion: v1

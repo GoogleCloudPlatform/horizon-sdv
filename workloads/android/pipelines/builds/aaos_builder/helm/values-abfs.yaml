@@ -38,13 +38,14 @@ spec:
   # Size of the per-workflow cache PVC (a chart value, not a submit parameter:
   # Argo validates the PVC size before it substitutes parameters). ABFS streams the source tree, so
   # the cache holds only the build output (objects, intermediates, images).
-  # Measured peak of a full ABFS build is about 175 GiB; 250Gi leaves ~40 %
-  # headroom. The class has reclaimPolicy Retain, so every PVC leaves a billed
+  # Measured peak of a full ABFS build is about 175 GiB; 375Gi holds the caches
+  # of two builds (2 x ABFS_CACHE_MIN_FREE_GB = 360 GB) plus spare.
+  # The class has reclaimPolicy Retain, so every PVC leaves a billed
   # disk behind: an oversized default costs money on every new disk.
   # A reused disk can hold the cache of another Android revision (cached builds);
   # aaos_environment.sh removes it at build start when less than
-  # ABFS_CACHE_MIN_FREE_GB (180) is free, so the default fits one revision.
-  aaosCacheStorageSize: "250Gi"
+  # ABFS_CACHE_MIN_FREE_GB (180) is free, so the default keeps two revisions.
+  aaosCacheStorageSize: "375Gi"
   # Folder under gs://<project>-aaos/Android/Builds/ for the build artifacts (STORAGE_BUCKET_BASE).
   storageBuildsDir: AAOS_Builder_ABFS
   # Optional Gerrit topic; when set, aaos_initialise.sh fetches every change
