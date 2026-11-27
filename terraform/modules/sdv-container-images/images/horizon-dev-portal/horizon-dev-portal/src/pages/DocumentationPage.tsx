@@ -24,7 +24,7 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useHref, useLocation, useParams } from 'react-router-dom';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { config } from '../utils/config';
 import {
@@ -248,7 +248,11 @@ function GuideList({ activePath }: { activePath: string | undefined }) {
   );
 }
 
-function ContentsList({ headings }: { headings: DocHeading[] }) {
+/**
+ * `pageHref` is this guide's own URL (basename included). A bare "#id" would resolve
+ * against the proxy's <base href> and leave the guide for the landing page.
+ */
+function ContentsList({ headings, pageHref }: { headings: DocHeading[]; pageHref: string }) {
   const visible = headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
   const dark = useTheme().palette.mode === 'dark';
   if (visible.length === 0) {
@@ -287,7 +291,7 @@ function ContentsList({ headings }: { headings: DocHeading[] }) {
           <Box component="li" key={`${heading.depth}-${heading.id}`} sx={{ my: 0.5 }}>
             <Typography
               component="a"
-              href={`#${heading.id}`}
+              href={`${pageHref}#${encodeURIComponent(heading.id)}`}
               variant="body2"
               sx={{
                 display: 'block',
@@ -311,6 +315,9 @@ function ContentsList({ headings }: { headings: DocHeading[] }) {
 export function DocumentationPage() {
   const params = useParams();
   const docPath = normalizeRepoPath(decodeDocPath(params['*']));
+  // Current URL without the hash, with the router basename. Same-page anchors are built from it.
+  const { pathname, search } = useLocation();
+  const pageHref = useHref({ pathname, search });
   const [load, setLoad] = useState<LoadState | null>(null);
   const horizonVersion = config.getString('horizonVersion', '');
   const gitRef = horizonGitRef(horizonVersion);
@@ -448,7 +455,7 @@ export function DocumentationPage() {
                   </Typography>
                 ) : null}
                 <Box sx={{ display: { xs: 'block', lg: 'none' }, mt: 2 }}>
-                  <ContentsList headings={headings} />
+                  <ContentsList headings={headings} pageHref={pageHref} />
                 </Box>
                 <Box sx={{ mt: 2 }}>
                   <DocMarkdown
@@ -456,6 +463,7 @@ export function DocumentationPage() {
                     markdown={current.markdown}
                     bundled={current.bundled}
                     gitRef={gitRef}
+                    pageHref={pageHref}
                   />
                 </Box>
               </Box>
@@ -468,7 +476,7 @@ export function DocumentationPage() {
                   overflow: 'auto',
                 }}
               >
-                <ContentsList headings={headings} />
+                <ContentsList headings={headings} pageHref={pageHref} />
               </Box>
             </Box>
           )}

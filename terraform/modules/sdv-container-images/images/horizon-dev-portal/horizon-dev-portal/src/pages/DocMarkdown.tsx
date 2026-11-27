@@ -301,10 +301,16 @@ async function openDocsImage(imagePath: string): Promise<void> {
   }
 }
 
+/**
+ * `pageHref` is the URL of the guide being shown (basename included, no hash). Same-page
+ * links must start from it: the proxy adds <base href="/developer-portal/">, so a bare
+ * "#section" would resolve to the landing page instead of the current guide.
+ */
 function markdownComponents(
   docPath: string,
   bundled: ReadonlySet<string>,
-  gitRef: string
+  gitRef: string,
+  pageHref: string
 ): Components {
   return {
     a: ({ href, children }) => {
@@ -316,13 +322,13 @@ function markdownComponents(
         return <Link to={documentationHref(resolved.path, resolved.hash)}>{children}</Link>;
       }
       if (resolved.kind === 'hash') {
-        return <a href={resolved.hash}>{children}</a>;
+        return <a href={`${pageHref}${resolved.hash}`}>{children}</a>;
       }
       if (resolved.kind === 'asset') {
         const { imagePath } = resolved;
         return (
           <a
-            href={`#${encodeURIComponent(imagePath)}`}
+            href={`${pageHref}#${encodeURIComponent(imagePath)}`}
             onClick={(event) => {
               event.preventDefault();
               void openDocsImage(imagePath);
@@ -385,16 +391,18 @@ export const DocMarkdown = memo(function DocMarkdown({
   markdown,
   bundled,
   gitRef,
+  pageHref,
 }: {
   docPath: string;
   markdown: string;
   bundled: readonly string[];
   gitRef: string;
+  pageHref: string;
 }) {
   const bundledSet = useMemo(() => new Set(bundled), [bundled]);
   const components = useMemo(
-    () => markdownComponents(docPath, bundledSet, gitRef),
-    [docPath, bundledSet, gitRef]
+    () => markdownComponents(docPath, bundledSet, gitRef, pageHref),
+    [docPath, bundledSet, gitRef, pageHref]
   );
 
   return (
