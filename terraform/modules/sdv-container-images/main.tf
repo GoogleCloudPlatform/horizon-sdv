@@ -103,7 +103,7 @@ resource "terraform_data" "horizon_portal_doc_images" {
     command     = <<-EOT
       set -euo pipefail
       src='${replace(local.horizon_docs_root, "\\", "/")}'
-      dest='${replace(local.docker_context[local.portal_image_key], "\\", "/")}/doc-src/docs'
+      dest='${replace(abspath(local.docker_context[local.portal_image_key]), "\\", "/")}/doc-src/docs'
       mkdir -p "$dest"
       find "$dest" -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.svg' -o -name '*.webp' \) -delete
       cd "$src"
@@ -111,6 +111,12 @@ resource "terraform_data" "horizon_portal_doc_images" {
         mkdir -p "$dest/$(dirname "$f")"
         cp -a "$f" "$dest/$f"
       done
+      expected=$(find . -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.svg' -o -name '*.webp' \) | wc -l)
+      staged=$(find "$dest" -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.svg' -o -name '*.webp' \) | wc -l)
+      if [ "$staged" -ne "$expected" ] || [ "$expected" -eq 0 ]; then
+        echo "Staged $staged of $expected docs images into $dest" >&2
+        exit 1
+      fi
     EOT
   }
 }
