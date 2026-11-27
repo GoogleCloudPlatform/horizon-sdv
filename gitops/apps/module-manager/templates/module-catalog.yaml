@@ -127,7 +127,7 @@ spec:
     - name: openbsw-module
       path: gitops/modules/openbsw-module
       overviewPath: portal/overview.html
-      overviewService: mod-openbsw-module-overview
-      overviewServiceNamespace: openbsw-overview
+      overviewService: mod-openbsw-overview
+      overviewServiceNamespace: openbsw
       hardDependencies:
         - workloads-common

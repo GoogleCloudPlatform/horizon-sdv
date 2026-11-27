@@ -56,13 +56,19 @@ Usage: include "openbsw.builderImage.tasks" (dict "root" . "fromWorkflow" true|f
         value: {{ $root.Values.builderImage.dockerfileDir | quote }}
       - name: platform
         value: linux/amd64
+      - name: openbswPool
+        value: "true"
 {{- if $fromWorkflow }}
       - name: dockerArtifactPathName
         value: '{{ "{{" }}workflow.parameters.dockerArtifactPathName{{ "}}" }}'
       - name: imageTag
         value: '{{ "{{" }}workflow.parameters.imageTag{{ "}}" }}'
       - name: dryRun
-        value: '{{ "{{" }}workflow.parameters.dryRun{{ "}}" }}'
+        value: '{{ "{{" }}workflow.parameters.noPush{{ "}}" }}'
+      - name: buildkitReleaseTag
+        value: '{{ "{{" }}workflow.parameters.buildkitReleaseTag{{ "}}" }}'
+      - name: dockerCredentialsUrl
+        value: '{{ "{{" }}workflow.parameters.dockerCredentialsUrl{{ "}}" }}'
       - name: buildArgs
         value: |
 {{- range $params }}
@@ -78,6 +84,10 @@ Usage: include "openbsw.builderImage.tasks" (dict "root" . "fromWorkflow" true|f
       # The calling build needs the image, so always push.
       - name: dryRun
         value: "false"
+      - name: buildkitReleaseTag
+        value: {{ include "openbsw.paramDefault" (dict "params" $params "name" "buildkitReleaseTag") | quote }}
+      - name: dockerCredentialsUrl
+        value: {{ include "openbsw.paramDefault" (dict "params" $params "name" "dockerCredentialsUrl") | quote }}
       - name: buildArgs
         value: |
 {{- range $params }}

@@ -40,7 +40,7 @@ spec:
   workflowMetadata:
     annotations:
       workflows.argoproj.io/title: 'OpenBSW Docker Image Template ({{ "{{" }}workflow.parameters.imageTag{{ "}}" }})'
-      workflows.argoproj.io/description: 'dryRun={{ "{{" }}workflow.parameters.dryRun{{ "}}" }}'
+      workflows.argoproj.io/description: 'noPush={{ "{{" }}workflow.parameters.noPush{{ "}}" }}'
   templateDefaults:
 {{- include "openbsw.templateDefaults" . | nindent 4 }}
   arguments:

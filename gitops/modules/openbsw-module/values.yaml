@@ -26,8 +26,8 @@ repo:
   revision: HEAD
 
 # Developer Portal overview (Module Manager GET /modules/{name}/overview).
-overviewServiceName: mod-openbsw-module-overview
-overviewNamespace: openbsw-overview
+overviewServiceName: mod-openbsw-overview
+overviewNamespace: openbsw
 
 # Module-owned namespace. WorkflowTemplates stay in the platform workflows namespace
 # (that is the namespace Horizon API and Argo watch). Their pods schedule onto the pool below.
@@ -50,7 +50,9 @@ tolerations:
     effect: NoSchedule
 
 # Privileged DaemonSet that loads these modules into the host kernel.
-# It does not install packages and it does not call the Kubernetes API.
+# It does not install packages and it does not call the Kubernetes API. The image only provides
+# bash and nsenter; modprobe runs from the host. The Jenkins DaemonSet in jenkins also runs on every
+# OpenBSW node and loads the same modules; modprobe of a loaded module succeeds, so both coexist.
 canKernel:
   image: ubuntu:22.04
   modules:

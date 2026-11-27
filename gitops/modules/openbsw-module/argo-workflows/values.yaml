@@ -52,9 +52,11 @@ pipelineRepo:
 # Steps read CLOUD_PROJECT, CLOUD_REGION, CLOUD_ZONE and HORIZON_DOMAIN from this ConfigMap
 # (gitops/templates/argo-workflows-init.yaml).
 cloudEnvConfigMapName: horizon-workflow-cloud-env
-# true: pods run as workflow-executor-elevated (Artifact Registry push, GCS upload, Vertex AI).
-useElevatedWorkflowIam: true
+# Workflow pods: GCS objects and Artifact Registry read/write (gke-argo-workflows-sa).
 serviceAccountName: workflow-executor
+# openbsw-bsw-builder ai-review step only: Vertex AI (roles/aiplatform.user). That account also holds
+# broad project roles, so no other step uses it.
+aiReviewServiceAccountName: workflow-executor-elevated
 # OnWorkflowCompletion keeps completed step pods until the workflow ends, so their logs
 # stay live in the portal. The RWO workspace reattaches to whichever node the next step lands on.
 podGcStrategy: OnWorkflowCompletion
@@ -75,14 +77,22 @@ builderImage:
     - name: dockerArtifactPathName
       value: horizon-sdv/openbsw-builder
       description: "Artifact Registry image path (repository/name)."
-    - name: dryRun
-      value: "false"
+    # Jenkins NO_PUSH, same default: build only. Passed to common-docker-image-build as dryRun.
+    - name: noPush
+      value: "true"
       enum: ["true", "false"]
-      description: "When true, build only and do not push to the registry."
+      description: "When true (default), build only and do not push to the registry. Set false to push."
     - name: imageTag
       # argowf-latest keeps Argo builds from overwriting the Jenkins tag (ubuntu.noble-20251001).
       value: argowf-latest
       description: "Image tag to build and push. Allowed characters: a-z 0-9 _ - . /"
+    # Jenkins BUILDKIT_RELEASE_TAG and DOCKER_CREDENTIALS_URL, passed to common-docker-image-build.
+    - name: buildkitReleaseTag
+      value: v0.24.0
+      description: "moby/buildkit image tag used for the build."
+    - name: dockerCredentialsUrl
+      value: ""
+      description: "docker-credential-gcr release archive URL. Empty uses the workloads-common default."
     - name: openbswGitUrl
       buildArg: OPENBSW_GIT_URL
       value: https://github.com/eclipse-openbsw/openbsw.git
@@ -173,10 +183,9 @@ bswBuilder:
   workspace:
     storageClassName: standard-rwo
     size: 50Gi
-  # AI review. aiReviewRuntime (workflow parameter) picks agy (Antigravity SDK) or gemini-cli.
-  # geminiModel is used by both runtimes (empty: SDK default). geminiCommandLine is gemini-cli only.
+  # AI review. aiReviewRuntime and geminiCommandLine (workflow parameters) pick the runtime and the
+  # gemini-cli invocation. geminiModel is used by both runtimes (empty: SDK default).
   geminiModel: ""
-  geminiCommandLine: gemini --yolo --output-format json
   geminiPreviewFeatures: "true"
   geminiLocationGlobal: "true"
   # check-image runs before the builder image exists, so it uses the Cloud SDK.
@@ -319,7 +328,10 @@ bswBuilder:
       value: "60"
       enum: ["60", "45", "30", "20", "10", "90", "120"]
       description: "Maximum minutes for the AI review before it is stopped."
-    - name: artifactStorageSolution
+    - name: geminiCommandLine
+      value: gemini --yolo --output-format json
+      description: "Headless gemini-cli invocation (gemini-cli runtime only); the prompt is piped on stdin. Plain options only, e.g. gemini --model <model> --yolo --output-format json."
+    - name: openbswArtifactStorageSolution
       value: GCS_BUCKET
       description: "GCS_BUCKET stores artifacts in Cloud Storage. Empty stores nothing."
     - name: storageBucketDestination
@@ -346,9 +358,8 @@ mtkConnect:
   cleanupDelaySeconds: 60
   # Pod termination grace period, so mtk_connect.sh --stop finishes after SIGTERM.
   stopGracePeriodSeconds: 120
-  # Delete only calls the MTK Connect API (Node.js and npm), so it does not need the builder image.
-  # :22-bookworm-slim is the moving Node 22 tag.
-  apiImage: node:22-bookworm-slim
+  # Delete steps (openbsw-delete-mtkc-testbench and the mtk-cleanup exit handlers) run the imageTag
+  # builder image, as Jenkins does, but only call the MTK Connect API.
   resources:
     delete:
       requests: {cpu: "250m", memory: "512Mi"}
@@ -393,8 +404,7 @@ posixTest:
 devInstance:
   workflowTemplateName: openbsw-dev-instance
   testbenchPrefix: OpenBSW/Environment/Development_Instance
-  # Sized like the build step so a development instance gets a node of its own, as the Jenkins
-  # pod anti-affinity did.
+  # Capacity only. The openbsw_pod anti-affinity in openbsw.templateDefaults gives the instance its node.
   resources:
     instance:
       requests: {cpu: "6000m", memory: "8Gi"}
@@ -431,3 +441,6 @@ deleteMtkcTestbench:
     - name: mtkConnectTestbench
       value: ""
       description: "Offline testbench to delete, as printed by the test workflow, e.g. OpenBSW/Tests/POSIX-webhook-openbsw-posix-test-abcde. Online testbenches are skipped."
+    - name: imageTag
+      value: argowf-latest
+      description: "openbsw-builder image tag to run."

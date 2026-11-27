@@ -40,7 +40,7 @@ func TestEnableOpenBSW_CreatesParentApplication(t *testing.T) {
 		"main",
 		"gitops/modules/openbsw-module",
 		"isSubEnvironment: false\nnamespacePrefix: \"\"\n",
-		"openbsw-overview",
+		"openbsw",
 	)
 	if err := createApplicationIdempotentWithBackoff(context.Background(), c, app, wait.Backoff{Duration: time.Millisecond, Factor: 1, Steps: 2}); err != nil {
 		t.Fatalf("create parent Application: %v", err)
@@ -70,7 +70,7 @@ func TestEnableOpenBSW_CreatesParentApplication(t *testing.T) {
 		t.Fatalf("parent prune = %v found=%v err=%v", prune, found, err)
 	}
 	values, _, _ := unstructured.NestedString(got.Object, "spec", "source", "helm", "values")
-	if !strings.Contains(values, `overviewNamespace: "openbsw-overview"`) {
+	if !strings.Contains(values, `overviewNamespace: "openbsw"`) {
 		t.Fatalf("helm values missing overview namespace:\n%s", values)
 	}
 }

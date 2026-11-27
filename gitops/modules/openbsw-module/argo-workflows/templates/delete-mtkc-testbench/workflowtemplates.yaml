@@ -15,8 +15,8 @@
 # Description:
 # Argo WorkflowTemplate that deletes an offline OpenBSW MTK Connect testbench
 # (Jenkins: OpenBSW/Environment/Delete MTK Connect Testbench).
-# It only calls the MTK Connect API, so it has no templateDefaults: the pod runs on the default pool
-# with a small Node image instead of scaling up the OpenBSW pool for the builder image.
+# It runs the imageTag builder image, like Jenkins, but only calls the MTK Connect API, so it has no
+# templateDefaults: the pod runs on the default pool instead of scaling up the OpenBSW pool.
 # Argo Events: Sensor webhook-<workflowTemplateName> (sensors.yaml).
 {{- $creds := eq (include "openbsw.useUmbrellaCreds" .) "true" }}
 apiVersion: argoproj.io/v1alpha1
@@ -42,7 +42,7 @@ spec:
   workflowMetadata:
     annotations:
       workflows.argoproj.io/title: 'OpenBSW Delete MTK Connect Testbench'
-      workflows.argoproj.io/description: '{{ "{{" }}workflow.parameters.mtkConnectTestbench{{ "}}" }}'
+      workflows.argoproj.io/description: '{{ "{{" }}workflow.parameters.mtkConnectTestbench{{ "}}" }} ({{ "{{" }}workflow.parameters.imageTag{{ "}}" }})'
   arguments:
     parameters:
 {{- include "openbsw.workflowParameters" .Values.deleteMtkcTestbench.parameters | nindent 6 }}

@@ -13,8 +13,9 @@
 # limitations under the License.
 
 # In-cluster static overview HTML for the Developer Portal (Module Manager GET /modules/{name}/overview).
-# Deployed in its dedicated openbsw-overview namespace.
+# Deployed in the module namespace openbsw (templates/namespace.yaml), as overviewNamespace from the catalog.
 {{- if not (default false .Values.config.isSubEnvironment) }}
+{{- if ne .Values.overviewNamespace .Values.namespace }}
 ---
 apiVersion: v1
 kind: Namespace
@@ -25,6 +26,7 @@ metadata:
     horizon-sdv.io/module: {{ .Values.moduleName | default "openbsw-module" | quote }}
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -65,7 +67,7 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: nginx:1.23
+          image: {{ .Values.config.nginx.image }}:{{ .Values.config.nginx.tag }}
           ports:
             - containerPort: 80
               name: http

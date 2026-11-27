@@ -39,10 +39,10 @@ The module runs on the main environment only. It is not deployed on a sub-enviro
 | Namespace `openbsw` | — | Module-owned namespace. Annotated with `horizon-sdv.io/node-pool` |
 | ConfigMap `openbsw-workflow-scheduling` | `openbsw` | Node selector and tolerations for OpenBSW workflow pods |
 | Child Application `mod-openbsw-module-argo-workflows` | `workflows` | Syncs the `argo-workflows` chart: WorkflowTemplates `openbsw-bsw-builder`, `openbsw-builder-image`, `openbsw-posix-test`, `openbsw-dev-instance` and `openbsw-delete-mtkc-testbench` (in `workflows`) and their webhook Sensors (in `argo-events`) |
-| NetworkPolicies `default-deny-all`, `allow-dns` | `openbsw` | Baseline perimeter when `config.enableNetworkPolicies` is true |
+| NetworkPolicies `default-deny-all`, `allow-dns`, `allow-overview-from-module-manager` | `openbsw` | Baseline perimeter when `config.enableNetworkPolicies` is true. The last one lets Module Manager reach the overview on port 80 |
 | ServiceAccount `openbsw-can-kernel` | `openbsw` | Identity for the CAN DaemonSet. No Role or binding |
 | DaemonSet `openbsw-can-kernel` | `openbsw` | Loads `can`, `can-raw`, and `vcan` on the OpenBSW node pool |
-| Overview Deployment and Service `mod-openbsw-module-overview` | `openbsw-overview` | Portal overview page served on port 80 |
+| Overview Deployment and Service `mod-openbsw-overview` | `openbsw` | Portal overview page served on port 80. The nginx image is `config.nginx.image:config.nginx.tag`, set from `tools.nginx.tag` in the repo-root `versions.yaml` |
 
 Module Manager injects `moduleName`, `config`, `repo.url`, and `repo.revision` when the module is enabled. `moduleName` stays empty in `values.yaml`.
 
@@ -63,7 +63,7 @@ On a sub-environment (`config.isSubEnvironment` true) the chart renders no resou
 
 ## Workflows
 
-The `argo-workflows/` chart ports the OpenBSW Jenkins jobs. Every WorkflowTemplate carries `horizon-sdv.io/expose: "true"` and `horizon-sdv.io/module: openbsw-module`, so they appear in the Developer Portal and Horizon CLI. Each has a Sensor on EventSource `webhook`, event `workflow-dispatch`, matching `body.workflowTemplateName`.
+The `argo-workflows/` chart ports the OpenBSW Jenkins jobs. Every WorkflowTemplate carries `horizon-sdv.io/expose: "true"` and `horizon-sdv.io/module: openbsw-module`, so they appear in the Developer Portal and Horizon CLI. Each has a Sensor on EventSource `webhook`, event `workflow-dispatch`, matching `body.workflowTemplateName`. Like every Horizon Sensor, it maps `body.horizonSubmittedBy` (token subject, the owner) to annotation `horizon-sdv.io/submitted-by` and `body.submittedBy` (username) to the display-only annotation `horizon-sdv.io/submitted-by-name`, so the Developer Portal lists runs by username.
 
 | WorkflowTemplate | Sensor | Jenkins job | Notes |
 |------------------|--------|-------------|-------|
@@ -80,15 +80,14 @@ The READMEs linked below describe the Jenkins jobs. Portal names and defaults ar
 | Portal parameter | Workflow default | Jenkins |
 |------------------|------------------|---------|
 | `imageTag` | `argowf-latest` | Seed Workloads tag `OPENBSW_IMAGE_TAG` |
-| `dryRun` on `openbsw-builder-image` | `false`, so the image is pushed | `NO_PUSH` defaults to `true`, so the image stays local |
+| `noPush` on `openbsw-builder-image` | `true`, so the image stays local (same as Jenkins). Passed to `common-docker-image-build` as `dryRun`. The image build inside `openbsw-bsw-builder` always pushes | `NO_PUSH`, default `true` |
 | `storageBucketDestination` left empty | `gs://<project>-openbsw/OpenBSW/Builds/BSW_Builder/<date>-<time>_<workflow>` | `gs://<bucket>/OpenBSW/Builds/BSW_Builder/<BUILD_NUMBER>` |
 | `dockerArtifactPathName` | workflow parameter, default `horizon-sdv/openbsw-builder` | system variable `OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME` |
 | `forceImageBuild` | `false`. `true` rebuilds the builder image inside `openbsw-bsw-builder` before the build | the image is built by the Docker Image Template job |
 | `submittedBy` | Horizon API sets the signed-in user | Jenkins records the user who started the job |
-| `geminiCommandLine` | chart value `bswBuilder.geminiCommandLine` (`gemini --yolo --output-format json`). Change it in `argo-workflows/values.yaml`; the submit form omits it | parameter `GEMINI_COMMAND_LINE` |
-| `openbsw-delete-mtkc-testbench` | parameter `mtkConnectTestbench` only; the step runs `node:22-bookworm-slim` | also takes `IMAGE_TAG` and runs the builder image |
+| `geminiCommandLine` | `gemini --yolo --output-format json`. The model comes from chart value `bswBuilder.geminiModel` (`GEMINI_MODEL`). Only `gemini` followed by plain options is accepted, because the command line is evaluated in the elevated `ai-review` pod | `gemini --model <GEMINI_MODEL> --yolo --output-format json`, any command line |
 
-`BUILDKIT_RELEASE_TAG` and `DOCKER_CREDENTIALS_URL` are Jenkins parameters of the Docker Image Template job. `openbsw-builder-image` leaves them to ClusterWorkflowTemplate `common-docker-image-build` (workloads-common), whose defaults are BuildKit `v0.24.0` and that chart's `dockerCredentialsUrl`.
+Jenkins `BUILDKIT_RELEASE_TAG` and `DOCKER_CREDENTIALS_URL` are `buildkitReleaseTag` (default `v0.24.0`) and `dockerCredentialsUrl` on `openbsw-builder-image`. Both pass through to `common-docker-image-build`. An empty `dockerCredentialsUrl` uses the workloads-common default.
 
 Jenkins job details: [BSW Builder](../../../workloads/openbsw/pipelines/builds/bsw_builder/README.md), [Docker Image Template](../../../workloads/openbsw/pipelines/environment/docker_image_template/README.md), [POSIX](../../../workloads/openbsw/pipelines/tests/posix/README.md), [Development Instance](../../../workloads/openbsw/pipelines/environment/dev_instance/README.md), and [Delete MTK Connect Testbench](../../../workloads/openbsw/pipelines/environment/delete_mtkc_testbench/README.md).
 
@@ -103,14 +102,14 @@ Jenkins job details: [BSW Builder](../../../workloads/openbsw/pipelines/builds/b
 7. `retain`: keeps a pod with the workspace for `instanceRetentionTime` minutes.
 8. `fail-if-build-or-storage-failed`: marks the workflow Failed after retain when the build or the storage upload failed. It runs a small image, so a fresh node does not pull the builder image just to exit.
 
-Workflow pods run as `workflow-executor-elevated` (Artifact Registry push, GCS upload, Vertex AI) while `useElevatedWorkflowIam` is `true`, otherwise as `serviceAccountName`. They read the `horizon-workflow-cloud-env` ConfigMap, as in the AAOS builder.
+Workflow pods run as `serviceAccountName` (`workflow-executor`, GCP account `gke-argo-workflows-sa`: GCS objects and Artifact Registry read/write). Only the `ai-review` step runs as `aiReviewServiceAccountName` (`workflow-executor-elevated`), because Vertex AI (`roles/aiplatform.user`) is only on `gke-argo-workflows-elevated-sa`, and that account also holds broad project roles. No AGY key or Secret is mounted. Pods read the `horizon-workflow-cloud-env` ConfigMap, as in the AAOS builder.
 
 `openbsw-posix-test` runs these steps:
 
 1. `prepare-pipeline-git-creds` (when `config.scm.authMethod` is `app` or `userpass`).
 2. `test`: one privileged builder pod, with the host `/lib/modules` mounted read-only for the CAN tools. It checks `openbswDownloadUrl`, runs `bsw_download_artifact.sh`, starts MTK Connect with `numHostInstances` devices, keeps them up for `posixKeepAliveTime` minutes, then stops MTK Connect. An empty or unlisted URL fails the run; Jenkins skipped the download instead.
 
-`openbsw-dev-instance` runs `prepare-pipeline-git-creds`, then `instance`: one builder pod that stays up for `instanceMaxUptime` hours. The log prints the `kubectl exec` command to open a shell in it. With `mtkConnectEnable` set to `true` it also starts MTK Connect. If MTK Connect fails to start, the pod is still kept and the workflow ends Failed, as Jenkins `catchError` did. Its resource request is sized so that each instance gets a node to itself, which replaces the Jenkins pod anti-affinity.
+`openbsw-dev-instance` runs `prepare-pipeline-git-creds`, then `instance`: one builder pod that stays up for `instanceMaxUptime` hours. The log prints the `kubectl exec` command to open a shell in it. With `mtkConnectEnable` set to `true` it also starts MTK Connect. If MTK Connect fails to start, the pod is still kept and the workflow ends Failed, as Jenkins `catchError` did. Each instance gets a node to itself through the `openbsw_pod` anti-affinity (see Scheduling).
 
 `openbsw-delete-mtkc-testbench` runs `prepare-pipeline-git-creds`, then `delete`: `mtk_connect.sh --delete` for `mtkConnectTestbench`, which deletes the testbench only when it is offline. A mutex (`deleteMtkcTestbench.concurrencyMutexName`) runs one deletion at a time, like Jenkins `blockOn`.
 
@@ -128,7 +127,9 @@ The POSIX, development-instance, and delete templates call the same `workloads/c
 
 Start, keep-alive and stop run in one pod, because the MTK Connect agent runs in the background of that pod. The pod traps SIGTERM (workflow stop or terminate) and runs `--stop` within `mtkConnect.stopGracePeriodSeconds`. If the workflow still does not end Succeeded, the `exit-handler` mints fresh git credentials and runs `mtk-cleanup`, which deletes the same testbench once it is offline, after `mtkConnect.cleanupDelaySeconds`.
 
-Testbench names, owners and device counts are checked against a strict character set before `mtk_connect.sh` writes them to its env file. The API key reaches the script only through the environment (`sudo --preserve-env`), never on a command line. `openbsw-delete-mtkc-testbench` only accepts names that contain `mtkConnect.testbenchMustContain` (`OpenBSW`).
+Testbench names, owners and device counts are checked against a strict character set before `mtk_connect.sh` writes them to its env file. The API key reaches the script only through the environment (`sudo --preserve-env`), never on a command line. `openbsw-delete-mtkc-testbench` only accepts names that contain `mtkConnect.testbenchMustContain` (`OpenBSW`), the same guard as the Jenkins job. Either job can therefore delete an offline testbench the other created, for example a Jenkins `OpenBSW/Tests/POSIX-<build number>` from Argo. This is intended: the guard matches Jenkins, a testbench is only deleted when offline, and `remove-testbench.js` deletes an exact name match only.
+
+The delete steps (`openbsw-delete-mtkc-testbench` and `mtk-cleanup`) run the `imageTag` builder image, as the Jenkins job runs `IMAGE_TAG`, and call `mtk_connect.sh --delete` through `sudo --preserve-env`.
 
 `openbswDownloadUrl` must start with one of `posixTest.downloadUrlAllowPrefixes`. The default is the module bucket `gs://<project>-openbsw/`.
 
@@ -136,7 +137,7 @@ Testbench names, owners and device counts are checked against a strict character
 
 WorkflowTemplates stay in the platform `workflows` namespace, which Horizon API and the Argo controller watch. Their pods schedule onto the existing Terraform pool `sdv-openbsw-build-node-pool` (`workloadLabel: openbsw`, taint `workloadType=openbsw:NoSchedule`). This module does not create that pool and does not change its labels or taint.
 
-Each WorkflowTemplate in `argo-workflows/` that runs the builder image sets the block below. `openbsw-delete-mtkc-testbench` only calls the MTK Connect API, so it does not set it and runs a small Node image on the default pool:
+Each WorkflowTemplate in `argo-workflows/` that runs the builder image sets the block below. `openbsw-delete-mtkc-testbench` only calls the MTK Connect API, so it does not set it and runs on the default pool instead of scaling up the OpenBSW pool:
 
 ```yaml
 spec:
@@ -146,6 +147,7 @@ spec:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       labels:
         horizon-sdv.io/openbsw-workflow: "true"
+        openbsw_pod: "true"
     nodeSelector:
       workloadLabel: openbsw
       cloud.google.com/gke-nodepool: sdv-openbsw-build-node-pool
@@ -154,15 +156,37 @@ spec:
         operator: Equal
         value: openbsw
         effect: NoSchedule
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: openbsw_pod
+                  operator: Exists
+            topologyKey: kubernetes.io/hostname
 ```
 
 `argo-workflows/templates/_helpers.tpl` defines `openbsw.templateDefaults` for that block. The same selector and tolerations are in the `openbsw-workflow-scheduling` ConfigMap.
+
+Every pod on the pool carries `openbsw_pod` and refuses a node that already runs an `openbsw_pod` pod. The Jenkins OpenBSW pods use the same label and rule, so an Argo pod and a Jenkins pod do not share a node either. Resource requests and limits are capacity settings and do not reserve the node, so they keep working if the pool machine type changes. `safe-to-evict: "false"` stops a scale-down from killing a build, test or development instance.
+
+`openbsw-builder-image` calls `common-docker-image-build` with `openbswPool=true`, which sets the same node selector, toleration and anti-affinity on the BuildKit pod.
+
+| Workflow | Pool | Privileged | Host `/lib/modules` | Own node |
+|----------|------|------------|---------------------|----------|
+| `openbsw-bsw-builder` | OpenBSW | yes (`build`, `retain`) | read-only | yes |
+| `openbsw-builder-image` | OpenBSW | yes (BuildKit sidecar) | no | yes |
+| `openbsw-posix-test` | OpenBSW | yes | read-only | yes |
+| `openbsw-dev-instance` | OpenBSW | yes | read-only | yes |
+| `openbsw-delete-mtkc-testbench` | default | no | no | no |
+
+The builder needs privileged and the modules mount because `posixPytest` runs in the build pod (`bring-up-ethernet.sh`, then `bring-up-vcan0.sh`).
 
 ## CAN kernel
 
 DaemonSet `openbsw-can-kernel` loads `can`, `can-raw`, and `vcan` on each node of `sdv-openbsw-build-node-pool`. It uses `nsenter` into the host mount and PID namespace and then `modprobe`. It does not install packages.
 
-The container stays up only after `/proc/modules` shows each module (`can-raw` is listed as `can_raw`). A failed `modprobe` restarts the pod.
+The image is `canKernel.image` (`ubuntu:22.04`). It only provides `bash` and `nsenter`; `modprobe` runs from the host (`UBUNTU_CONTAINERD` node image). After each `modprobe` the script checks `/proc/modules` (`can-raw` is listed as `can_raw`). A module that cannot be loaded is logged as `WARNING` and the container keeps running (`sleep infinity`), so a missing module does not crash-loop the pod or mark `mod-openbsw-module` Degraded.
 
 ### Security and RBAC
 
@@ -176,7 +200,7 @@ The container stays up only after `/proc/modules` shows each module (`can-raw` i
 | `hostNetwork` | not set |
 | `hostPath` | none |
 | Root filesystem | read-only |
-| Namespace policy | `openbsw` enforces the privileged Pod Security profile. `openbsw-overview` does not |
+| Namespace policy | `openbsw` enforces the privileged Pod Security profile |
 
 ### Node labeling
 
@@ -188,7 +212,7 @@ Terraform already labels and taints the pool. This module does not change that.
 | Label `cloud.google.com/gke-nodepool=sdv-openbsw-build-node-pool` (set by GKE) | `nodeSelector` on that pool name |
 | Taint `workloadType=openbsw:NoSchedule` | matching toleration |
 
-The pod does not use the Jenkins label `openbsw_pod`.
+The DaemonSet pod does not carry `openbsw_pod`, so the workflow anti-affinity does not count it.
 
 ## Jenkins compatibility
 
@@ -196,7 +220,9 @@ Existing OpenBSW Jenkins jobs stay in place and keep working. This module does n
 
 The jobs live under `workloads/openbsw/pipelines/` and run on Jenkins agents in the `jenkins` namespace. Their CAN DaemonSet stays in `gitops/workloads/openbsw/templates/openbsw-host-module.yaml`, in the `jenkins` namespace, using `jenkins-sa`.
 
-The module DaemonSet is a separate object in `openbsw`. It selects the same pool, so both load `can`, `can-raw`, and `vcan` there. `modprobe` of a module that is already loaded succeeds. The module DaemonSet does not use `jenkins-sa` or the label `openbsw_pod`.
+The module DaemonSet is a separate object in `openbsw`. It selects the same pool, so both DaemonSets run on every OpenBSW node and both load `can`, `can-raw`, and `vcan` there. `modprobe` of a module that is already loaded succeeds. The module DaemonSet does not use `jenkins-sa` or the label `openbsw_pod`. The Jenkins one uses `hostNetwork`, a read-write `hostPath` of `/lib/modules`, installs `kmod` and `can-utils`, and ignores `modprobe` errors.
+
+Argo workflow pods and Jenkins OpenBSW pods share the `openbsw_pod` anti-affinity, so they take separate nodes.
 
 The `openbsw` namespace and its NetworkPolicies apply only to pods in that namespace. Jenkins pods are outside it.
 
@@ -208,8 +234,8 @@ Registered in `gitops/apps/module-manager/templates/module-catalog.yaml`. Enabli
 |---------|-------|
 | Module name | `openbsw-module` |
 | Path | `gitops/modules/openbsw-module` |
-| Overview service | `mod-openbsw-module-overview` |
-| Overview namespace | `openbsw-overview` |
+| Overview service | `mod-openbsw-overview` |
+| Overview namespace | `openbsw` |
 | Hard dependencies | `workloads-common` |
 
 ## Validate after enable
@@ -229,7 +255,7 @@ kubectl get nodes -l cloud.google.com/gke-nodepool=sdv-openbsw-build-node-pool
 # expect: one row per node in the OpenBSW pool
 
 kubectl -n openbsw logs ds/openbsw-can-kernel --tail=20
-# expect: no modprobe error. CrashLoopBackOff means modprobe or the /proc/modules check failed
+# expect: "Loaded can", "Loaded can-raw", "Loaded vcan". A WARNING line names a module the node could not load
 
 kubectl -n openbsw exec ds/openbsw-can-kernel -- nsenter -t 1 -m -p -- lsmod | grep -E '^(can|can_raw|vcan) '
 # expect: can, can_raw and vcan listed
@@ -259,14 +285,14 @@ horizon workflow submit --module openbsw-module --template openbsw-posix-test \
 
 ## After disable
 
-Disabling the module deletes the parent Application `mod-openbsw-module`. Argo CD then prunes the child `mod-openbsw-module-argo-workflows` with its WorkflowTemplates and Sensors, the `openbsw` namespace with the CAN DaemonSet, its ServiceAccount, the workflow-scheduling ConfigMap and the NetworkPolicies, and the `openbsw-overview` namespace.
+Disabling the module deletes the parent Application `mod-openbsw-module`. Argo CD then prunes the child `mod-openbsw-module-argo-workflows` with its WorkflowTemplates and Sensors, and the `openbsw` namespace with the CAN DaemonSet, its ServiceAccount, the workflow-scheduling ConfigMap, the NetworkPolicies and the overview.
 
 ```bash
 kubectl -n argocd get applications -l horizon-sdv.io/module=openbsw-module
 # expect: no results
 
-kubectl get ns openbsw openbsw-overview
-# expect: NotFound for both
+kubectl get ns openbsw
+# expect: NotFound
 ```
 
 - The `can`, `can_raw` and `vcan` kernel modules stay loaded on the nodes. The DaemonSet does not unload them.
@@ -279,13 +305,13 @@ kubectl get ns openbsw openbsw-overview
 python3 gitops/modules/openbsw-module/tests/smoke_test.py
 ```
 
-The smoke test lints both charts, renders them with `helm template`, checks the `openbsw-module` ModuleCatalog fields, and checks that the child Application is rendered with `prune: true` and the Argo CD resources finalizer. For the MTK Connect templates it checks the single session pod (start, stop, SIGTERM trap, API key from the Secret and kept off the command line), the `exit-handler` order and conditions, and that the delete template is unprivileged, uses the mutex and deletes offline testbenches only. It is not part of CI.
+The smoke test lints both charts, renders them with `helm template`, checks the `openbsw-module` ModuleCatalog fields, and checks that the child Application is rendered with `prune: true` and the Argo CD resources finalizer, and that the overview nginx image comes from `config.nginx`. For the MTK Connect templates it checks the single session pod (start, stop, SIGTERM trap, API key from the Secret and kept off the command line), the `exit-handler` order and conditions, and that the delete template runs the `imageTag` builder image unprivileged, uses the mutex and deletes offline testbenches only. It checks that every parameter in the five Jenkins `job.groovy` files exists as a workflow parameter (camelCase name), that every Sensor maps `body.submittedBy` to `horizon-sdv.io/submitted-by-name`, and that `ai-review` rejects a `geminiCommandLine` with shell metacharacters. It is not part of CI.
 
 If the `argo` CLI is installed, the smoke test also covers the workflows, with `git.authMethod` set to `app` and to empty:
 
 - `argo lint --offline` on all five WorkflowTemplates and the ClusterWorkflowTemplates they call (`common-docker-image-build`, `prepare-pipeline-git-creds`).
 - A client-side `argo submit --dry-run --from workflowtemplate/<name>` for each template. It talks to a local fake Kubernetes API that serves the rendered templates, so it needs no cluster and does not touch your kube context.
-- A simulated webhook event per Sensor. Each Sensor must fire on its own `workflowTemplateName` and on no other (including `<name>-extra` and `x<name>`). The Workflow it would create is then dry-run submitted, and body fields must land in the matching parameters.
+- A simulated webhook event per Sensor. Each Sensor must fire on its own `workflowTemplateName` and on no other (including `<name>-extra` and `x<name>`). The Workflow it would create is then dry-run submitted, body fields must land in the matching parameters, and `submittedBy` must land in the `submitted-by-name` annotation (empty when the field is absent).
 
 Without the `argo` CLI those checks print `SKIPPED`.
 
