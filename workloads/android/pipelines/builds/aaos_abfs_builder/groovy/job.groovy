@@ -210,8 +210,10 @@ crucial for correlating <code>ABFS_VERSION</code> and <code>ABFS_CASFS_VERSION</
 
     stringParam {
       name('ABFS_CLIENT_FLAGS')
-      defaultValue('--disable-tls=true --auth-type none')
-      description('''<p>Flags passed to the ABFS client commands. Change this to test session encryption or authentication.</p>''')
+      defaultValue('--disable-tls=true --auth-type gcpsa --auth-audience abfs-user')
+      description('''<p>Flags passed to the ABFS client commands. They must match how the ABFS server runs:<br/>
+        <code>--disable-tls=true --auth-type gcpsa --auth-audience abfs-user</code> (default), or
+        <code>--disable-tls=true --auth-type none</code> when abfs-service-module is deployed with <code>auth.enabled=false</code>.</p>''')
       trim(true)
     }
 

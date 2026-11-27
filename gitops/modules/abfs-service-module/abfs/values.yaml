@@ -115,8 +115,12 @@ extraParams: []
 client:
   # -- client.tls -- when false, pass --disable-tls=true to client commands.
   tls: false
-  # -- client.authType -- --auth-type: none | gcpuser | gcpsa.
+  # -- client.authType -- --auth-type: none | gcpuser | gcpsa. Must not be none
+  # when server.auth.enabled is true (the chart fails to render otherwise).
   authType: none
+  # -- client.authAudience -- --auth-audience; the gcpsa client does not start
+  # without one ("must supply a non-empty audience"). Empty omits the flag.
+  authAudience: ""
 
 # The runtime service account is owned by abfs-data-module. Do not recreate it:
 # the licence is bound to its numeric identity as well as its email.
@@ -238,6 +242,13 @@ terminationGracePeriodSeconds: 60
 server:
   # -- server.enabled -- render the server Deployment + Service.
   enabled: true
+  auth:
+    # -- server.auth.enabled -- start abfs-server with --auth-enabled (client
+    # authentication). Every client must then send a Google service account
+    # identity (client.authType: gcpsa here, and --auth-type gcpsa in the
+    # clientFlags of the builder chart / Jenkins job). The module
+    # (parent chart, auth.enabled) switches it on; this chart alone keeps it off.
+    enabled: false
   # -- server.replicas -- the ABFS server is a singleton; keep 1.
   replicas: 1
   # Sized from measured use: over four days with builds and reseeds the server

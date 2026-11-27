@@ -215,7 +215,7 @@ Prerequisites: all three ABFS modules enabled, the builder image pushed, and the
 | `postRepoCommand` | empty | Extra commands after mount. The build/soong sandbox fix is applied automatically per revision (table below). |
 | `parallelBuildJobs` | `16` | Lower it if cacheman reports `resource temporarily unavailable`. Clear it to let the build system use as many jobs as it wants (limited by the number of available cores). |
 | `abfs.server` | `abfs-server.abfs.svc.cluster.local:50051` | In-cluster Service of the server. |
-| `abfs.clientFlags` | `--disable-tls=true --auth-type none` | Must match how the server listens (no TLS, no auth in this chart). |
+| `abfs.clientFlags` | `--disable-tls=true --auth-type gcpsa --auth-audience abfs-user` | Must match how the server listens: no TLS, client authentication on (`auth.enabled` in `abfs-service-module`, see the module README). With `auth.enabled: false` use `--disable-tls=true --auth-type none`. |
 | `abfs.version` / `abfs.casfsVersion` / `abfs.repository` | `0.1.14` / `0.1.14` / `abfs-apt-alpha-public` | Client package to install. Kernel driver package to install. Apt repository to fetch these packages from. |
 | `abfs.cachedBuild`, `abfs.cleanCache`, `abfs.cachemanTimeout` | `false`, `false`, `180` | Keep the cacheman cache on the per-workflow PVC (`750Gi`, class `reclaimable-storage-class-android-abfs`). |
 

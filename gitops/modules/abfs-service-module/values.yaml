@@ -84,6 +84,17 @@ ui:
   enabled: false
 tests:
   enabled: true
+# Client authentication between ABFS clients and abfs-server (TLS stays off).
+# true: the server starts with --auth-enabled and the uploaders and the
+# pusher-config Job send --auth-type <clientAuthType>. The builds need the same
+# flag in abfs.clientFlags (builder chart) / ABFS_CLIENT_FLAGS (Jenkins).
+# Set enabled to false to run without authentication; the builds then need
+# "--auth-type none" again.
+auth:
+  enabled: true
+  clientAuthType: gcpsa
+  # Audience of the identity token the clients send. The gcpsa client needs one.
+  clientAuthAudience: abfs-user
 
 # Environment config injected dynamically by Module Manager (projectID, region, zone, namespacePrefix, etc.).
 config: {}
