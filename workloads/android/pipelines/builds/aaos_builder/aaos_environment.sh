@@ -216,7 +216,9 @@ if [ -d "${AAOS_CACHE_DIRECTORY}" ]; then
                             ABFS_CACHE_OWNER=$(cat "${ABFS_CACHE_REVISION_FILE}" 2>/dev/null || true)
                             ABFS_CACHE_WANTED="${AAOS_REVISION} ${AAOS_LUNCH_TARGET}"
                             FREE_GB=$(df -BG "${AAOS_CACHE_DIRECTORY}" | tail -1 | awk '{print $4}' | tr -dc '0-9')
-                            if [ "${ABFS_CACHE_OWNER}" != "${ABFS_CACHE_WANTED}" ] &&                                [ "${FREE_GB:-0}" -lt "${ABFS_CACHE_MIN_FREE_GB}" ] &&                                [ -n "$(find "${AAOS_CACHE_DIRECTORY}/cache" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+                            if [ "${ABFS_CACHE_OWNER}" != "${ABFS_CACHE_WANTED}" ] && \
+                               [ "${FREE_GB:-0}" -lt "${ABFS_CACHE_MIN_FREE_GB}" ] && \
+                               [ -n "$(find "${AAOS_CACHE_DIRECTORY}/cache" -mindepth 1 -print -quit 2>/dev/null)" ]; then
                                 echo "WARNING: ${FREE_GB:-0}G free, below ${ABFS_CACHE_MIN_FREE_GB}G, and the cache is from '${ABFS_CACHE_OWNER:-unknown}'"
                                 echo "WARNING: Removing ${AAOS_CACHE_DIRECTORY}/cache ..."
                                 find "${AAOS_CACHE_DIRECTORY}/cache" -mindepth 1 -delete
