@@ -57,6 +57,7 @@ spec:
                 arguments:
                   parameters:
                     - name: Android_Versions
+                    - name: enableGerritSupport
                     - name: Configuration
           parameters:
             - src:
@@ -73,5 +74,9 @@ spec:
               dest: spec.arguments.parameters.0.value
             - src:
                 dependencyName: webhook-dep
-                dataKey: body.Configuration
+                dataKey: body.enableGerritSupport
               dest: spec.arguments.parameters.1.value
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.Configuration
+              dest: spec.arguments.parameters.2.value

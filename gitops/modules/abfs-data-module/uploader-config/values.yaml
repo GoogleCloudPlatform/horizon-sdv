@@ -32,7 +32,13 @@ syncTimeoutSeconds: 5400
 uploaderConfig:
   manifestUrl: https://android.googlesource.com/platform/manifest
   manifestFile: default.xml
+  # Default seed skips every Gerrit change ref. Those refs dominate seed time.
+  # enableGerritSupport=true on a predefined row uses fetchRefSpecWithGerrit.
   fetchRefSpec:
+    - refs/*:refs/*
+    - ^refs/changes/*
+    - ^refs/cache-automerge/*
+  fetchRefSpecWithGerrit:
     - refs/*:refs/*
     - ^refs/changes/*/meta
     - ^refs/changes/*/robot-comments

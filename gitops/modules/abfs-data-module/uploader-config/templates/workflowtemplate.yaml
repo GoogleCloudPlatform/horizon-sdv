@@ -20,6 +20,9 @@
 # repo is shown the next time that row is opened. A predefined version shows
 # the same box read-only: its own branch, and the shared manifest url, file,
 # and fetch-ref-spec from uploader values.
+# enableGerritSupport rewrites only that predefined fetch-ref-spec on submit.
+# false skips refs/changes. true fetches Gerrit changes except meta and robot-comments.
+# AndroidCustom ignores the flag. The read-only box stays the default spec.
 
 {{- $customBranch := "" }}
 {{- $activeName := "" }}
@@ -42,6 +45,9 @@
 {{- end }}
 {{- if not $activeName }}
 {{- fail "uploaderConfig.entries must mark one row active" }}
+{{- end }}
+{{- if not .Values.uploaderConfig.fetchRefSpecWithGerrit }}
+{{- fail "uploaderConfig.fetchRefSpecWithGerrit is required" }}
 {{- end }}
 {{- $savedRepo := dict }}
 {{- $found := lookup "v1" "ConfigMap" .Values.horizonNamespace .Values.uploaderConfigMapName }}
@@ -96,7 +102,12 @@ spec:
           - {{ printf "%s (%s)" .name .branch | quote }}
 {{- end }}
 {{- end }}
-        
+      - name: enableGerritSupport
+        description: "Include Gerrit change refs when seeding this predefined row."
+        value: "false"
+        enum:
+          - "false"
+          - "true"
       - name: Configuration
         description: |
           Read-only unless Android_Versions is AndroidCustom.
@@ -126,6 +137,8 @@ spec:
         parameters:
           - name: Android_Versions
             value: "{{ "{{workflow.parameters.Android_Versions}}" }}"
+          - name: enableGerritSupport
+            value: "{{ "{{workflow.parameters.enableGerritSupport}}" }}"
           - name: Configuration
             value: "{{ "{{workflow.parameters.Configuration}}" }}"
       container:
@@ -140,6 +153,12 @@ spec:
             value: "{{ "{{inputs.parameters.Android_Versions}}" }}"
           - name: CUSTOM_CONFIG
             value: "{{ "{{inputs.parameters.Configuration}}" }}"
+          - name: ENABLE_GERRIT_SUPPORT
+            value: "{{ "{{inputs.parameters.enableGerritSupport}}" }}"
+          - name: FETCH_REF_SPEC
+            value: {{ .Values.uploaderConfig.fetchRefSpec | toJson | quote }}
+          - name: FETCH_REF_SPEC_WITH_GERRIT
+            value: {{ .Values.uploaderConfig.fetchRefSpecWithGerrit | toJson | quote }}
           - name: DEFAULT_CUSTOM_CONFIG
             value: |
               - name: AndroidCustom

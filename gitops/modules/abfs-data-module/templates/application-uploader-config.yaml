@@ -68,7 +68,8 @@ spec:
       name: abfs-uploader-config-select
       namespace: {{ .Values.config.namespacePrefix }}workflows
       jsonPointers:
-        - /spec/arguments/parameters/1/value
+        # Configuration is the third workflow argument, after enableGerritSupport.
+        - /spec/arguments/parameters/2/value
       jqPathExpressions:
         - '.spec.arguments.parameters[] | select(.name == "Configuration") | .value'
 {{- end }}

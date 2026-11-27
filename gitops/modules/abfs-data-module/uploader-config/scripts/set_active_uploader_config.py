@@ -19,6 +19,9 @@
 # CUSTOM_CONFIG is applied only when that name is AndroidCustom; an empty paste uses
 # DEFAULT_CUSTOM_CONFIG. An AndroidCustom row with no repo is an empty slot and
 # counts as a change. Every other row is active false and synced false.
+# A predefined row keeps its url, branch, and file. enableGerritSupport chooses
+# its fetch-ref-spec: false skips Gerrit changes, true fetches them except meta
+# and robot-comments. AndroidCustom ignores that flag.
 # The patch is written to /tmp/uploader-config-patch.json. An AndroidCustom
 # submit also writes that entry to /tmp/android-custom-saved.yaml so the form
 # shows it on the next open. The workflow log prints the previously active row
@@ -101,7 +104,65 @@ def custom_repo(custom_text):
     return repo_of(pasted)
 
 
-def apply_selection(entries, selection, custom_repo_value):
+def gerrit_support_enabled(raw):
+    """true fetches Gerrit changes. false, or an empty value, skips them."""
+    text = (raw or "").strip().lower()
+    if text in ("", "false"):
+        return False
+    if text == "true":
+        return True
+    raise SystemExit("ERROR: enableGerritSupport must be true or false")
+
+
+def spec_list(raw, label):
+    """Parse a fetch-ref-spec JSON list from the workflow environment."""
+    raw = (raw or "").strip()
+    if not raw:
+        raise SystemExit("ERROR: %s is required" % label)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit("ERROR: %s is not valid JSON (%s)" % (label, exc))
+    if not isinstance(parsed, list) or not parsed or not all(isinstance(item, str) and item.strip() for item in parsed):
+        raise SystemExit("ERROR: %s must be a non-empty list of strings" % label)
+    return [item.strip() for item in parsed]
+
+
+def predefined_fetch_spec(enabled):
+    """fetch-ref-spec for a predefined row. Gerrit support swaps the whole list."""
+    if enabled:
+        return spec_list(os.environ.get("FETCH_REF_SPEC_WITH_GERRIT", ""), "FETCH_REF_SPEC_WITH_GERRIT")
+    return spec_list(os.environ.get("FETCH_REF_SPEC", ""), "FETCH_REF_SPEC")
+
+
+def stored_fetch_spec(entry):
+    """fetch-ref-spec already stored on a row, or None when the row has no repo."""
+    if not isinstance(entry, dict):
+        return None
+    repo = entry.get("repo")
+    if not isinstance(repo, dict):
+        return None
+    spec = repo.get("fetch-ref-spec")
+    if not isinstance(spec, list):
+        return None
+    cleaned = []
+    for item in spec:
+        if not isinstance(item, str) or not item.strip():
+            return None
+        cleaned.append(item.strip())
+    return cleaned
+
+
+def set_predefined_spec(entry, spec):
+    """Replace fetch-ref-spec on a predefined row. url, branch, and file stay."""
+    repo = entry.get("repo")
+    if not isinstance(repo, dict):
+        raise SystemExit("ERROR: predefined row %s has no repo" % entry.get("name"))
+    repo["fetch-ref-spec"] = list(spec)
+    print("set_predefined_spec: %s refs=%d" % (entry.get("name"), len(spec)))
+
+
+def apply_selection(entries, selection, custom_repo_value, predefined_spec=None):
     """Set active and synced on the chosen row. Replace that row's repo only for AndroidCustom."""
     names = [entry.get("name") for entry in entries if isinstance(entry, dict)]
     if selection not in names:
@@ -115,6 +176,8 @@ def apply_selection(entries, selection, custom_repo_value):
             chosen = entry
             if custom_repo_value is not None:
                 entry["repo"] = custom_repo_value
+            elif predefined_spec is not None:
+                set_predefined_spec(entry, predefined_spec)
     if chosen is None:
         print("apply_selection: no row matched %r" % selection)
     else:
@@ -217,18 +280,29 @@ def main():
     selection, custom_text = read_inputs()
     entries = load_table()
     previous = copy.deepcopy(active_entry(entries))
+    before_selected = copy.deepcopy(
+        next((entry for entry in entries if isinstance(entry, dict) and entry.get("name") == selection), None)
+    )
     same_row = already_active(entries, selection)
     repo_changed = False
+    spec_changed = False
+    predefined_spec = None
     if selection == "AndroidCustom":
         custom_repo_value = custom_repo(custom_text)
         repo_changed = custom_repo_changed(entries, custom_repo_value)
         write_saved_listing(custom_repo_value)
     else:
         custom_repo_value = None
-        print("main: selection is not AndroidCustom, leaving repo blocks unchanged")
-    chosen = apply_selection(entries, selection, custom_repo_value)
+        enabled = gerrit_support_enabled(os.environ.get("ENABLE_GERRIT_SUPPORT", "false"))
+        predefined_spec = predefined_fetch_spec(enabled)
+        spec_changed = stored_fetch_spec(before_selected) != predefined_spec
+        print(
+            "main: predefined %s enableGerritSupport=%s"
+            % (selection, "true" if enabled else "false")
+        )
+    chosen = apply_selection(entries, selection, custom_repo_value, predefined_spec)
     write_patch(entries)
-    write_restart_flag((not same_row) or repo_changed)
+    write_restart_flag((not same_row) or repo_changed or spec_changed)
     print(
         "config: previous=%s (%s) current=%s (%s)"
         % (
