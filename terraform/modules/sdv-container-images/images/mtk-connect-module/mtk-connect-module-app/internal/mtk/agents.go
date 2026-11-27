@@ -314,3 +314,23 @@ func (c *Client) GrantUserByName(ctx context.Context, agentID, username, permiss
 	body := map[string]interface{}{"user": map[string]interface{}{"id": id}, "permission": permission}
 	return c.do(ctx, http.MethodPut, "/agents/"+url.PathEscape(agentID)+"/permissions/user", body, nil)
 }
+
+// EnsureUser returns the id of username, creating a SAML user when the server has none. The user is not
+// granted any permission here; a host credential is an API key on this user, not the admin key.
+func (c *Client) EnsureUser(ctx context.Context, username string) (string, error) {
+	id, err := c.FindUserID(ctx, username)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, ErrUserNotFound) {
+		return "", err
+	}
+	body := map[string]string{"username": username, "authentication": "saml"}
+	if err := c.do(ctx, http.MethodPost, "/users", body, nil); err != nil {
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) || apiErr.Status != http.StatusConflict {
+			return "", err
+		}
+	}
+	return c.FindUserID(ctx, username)
+}

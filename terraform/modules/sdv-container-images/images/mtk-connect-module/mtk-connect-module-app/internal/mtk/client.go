@@ -240,24 +240,27 @@ func (c *Client) Keys(ctx context.Context, userID string) ([]Key, error) {
 	return keys, nil
 }
 
-// CreateKey creates an API key that expires at expiry and returns its value.
-func (c *Client) CreateKey(ctx context.Context, userID string, expiry time.Time) (string, error) {
+// CreateKey creates an API key that expires at expiry and returns its value and, when the server sends
+// one, its id. The id is what a later delete needs. The list endpoint only returns a prefix of the value,
+// so an id from this response can be revoked without that lookup.
+func (c *Client) CreateKey(ctx context.Context, userID string, expiry time.Time) (string, string, error) {
 	body := map[string]string{
 		"name":       "",
 		"expiryTime": expiry.UTC().Format("2006-01-02T15:04:05Z"),
 	}
 	var out struct {
 		Data struct {
-			Key string `json:"key"`
+			ID  flexString `json:"id"`
+			Key string     `json:"key"`
 		} `json:"data"`
 	}
 	if err := c.do(ctx, http.MethodPost, "/users/"+url.PathEscape(userID)+"/keys", body, &out); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if out.Data.Key == "" {
-		return "", errors.New("mtk-connect create key: response has no key")
+		return "", "", errors.New("mtk-connect create key: response has no key")
 	}
-	return out.Data.Key, nil
+	return out.Data.Key, string(out.Data.ID), nil
 }
 
 // DeleteKey deletes one API key.

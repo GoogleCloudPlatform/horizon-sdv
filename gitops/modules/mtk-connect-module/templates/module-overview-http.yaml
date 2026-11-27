@@ -63,6 +63,7 @@ spec:
         app.kubernetes.io/name: module-overview
         horizon-sdv.io/module: {{ .Values.moduleName | quote }}
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: nginx
           image: {{ .Values.config.nginx.image }}:{{ .Values.config.nginx.tag }}

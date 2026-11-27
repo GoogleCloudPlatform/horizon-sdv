@@ -53,7 +53,7 @@ kubectl get wf <name> -n <prefix>workflows \
 
 ## MTK Connect
 
-Default **`spec.mtkConnectSecretName`**: **`workflow-mtk-connect-apikey`** in the workflows namespace, with Secret keys **`username`** / **`password`** (same shape as Jenkins **`jenkins-mtk-connect-apikey`**). The **`mtk-connect-post-job`** (`configure.sh`) creates it from the same MTK service-account key as the Jenkins secret; **`mtk-connect-api-key-config`** (`configure-key.py`) keeps it in sync when the API key rotates. The run pod maps those keys to **`MTK_CONNECT_USERNAME`** / **`MTK_CONNECT_PASSWORD`** via **`secretKeyRef`** (**`optional: true`** until the first MTK deploy/sync). Override **`mtkConnectUsernameKey`** / **`mtkConnectPasswordKey`** if your Secret uses different field names.
+Default **`spec.mtkConnectSecretName`**: **`workflow-mtk-connect-apikey`** in the workflows namespace, with Secret keys **`username`** / **`password`**. The **`mtk-connect-post-job`** (`configure.sh`) creates it from the MTK admin service-account key; **`mtk-connect-api-key-config`** (`configure-key.py`) keeps it in sync when the API key rotates. Jenkins does not receive that admin key. The run pod maps those keys to **`MTK_CONNECT_USERNAME`** / **`MTK_CONNECT_PASSWORD`** via **`secretKeyRef`** (**`optional: true`** until the first MTK deploy/sync). Override **`mtkConnectUsernameKey`** / **`mtkConnectPasswordKey`** if your Secret uses different field names.
 
 **Testbench user:** Guest script sets **`MTK_CONNECT_TESTBENCH_USER`** to **`everyone`** when **`mtkConnectPublic=true`**, else **`BUILD_USER_ID`** (from **`submittedBy`**). With the default public bench, submitter id does not affect MTK ACL until operators set **`mtkConnectPublic=false`**.
 

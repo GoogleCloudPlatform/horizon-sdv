@@ -64,6 +64,8 @@ spec:
               value: {{ include "mtk-connect-operator.namespace" . | quote }}
             - name: WATCH_NAMESPACES
               value: {{ include "mtk-connect-operator.watchNamespaces" . | quote }}
+            - name: JENKINS_NAMESPACE
+              value: {{ printf "%sjenkins" .Values.config.namespacePrefix | quote }}
             {{- with .Values.testbenchURLPath }}
             - name: TESTBENCH_URL_PATH
               value: {{ . | quote }}

@@ -56,6 +56,11 @@ type fakeMTK struct {
 	createErr     error
 	grantErr      error
 	nextID        int
+	keys          []mtk.Key
+	revoked       []string
+	keySeq        int
+	keysFailures  int  // the next calls of Keys that fail
+	omitKeyID     bool // CreateKey returns no id, so the controller must find the key in the list
 }
 
 func newFakeMTK() *fakeMTK { return &fakeMTK{agents: map[string]*mtk.Agent{}, nextID: 1} }
@@ -113,6 +118,41 @@ func (f *fakeMTK) GrantUserByName(_ context.Context, agentID, username, permissi
 		return f.grantErr
 	}
 	f.grants = append(f.grants, fmt.Sprintf("user:%s:%s:%s", agentID, username, permission))
+	return nil
+}
+
+func (f *fakeMTK) EnsureUser(context.Context, string) (string, error) { return "user-agent", nil }
+
+func (f *fakeMTK) CreateKey(_ context.Context, _ string, expiry time.Time) (string, string, error) {
+	f.keySeq++
+	id := fmt.Sprintf("k%d", f.keySeq)
+	val := fmt.Sprintf("%08d-agent-key", f.keySeq)
+	f.keys = append(f.keys, mtk.Key{ID: id, Value: val, Created: expiry.Add(-time.Hour), Expires: expiry})
+	if f.omitKeyID {
+		return val, "", nil
+	}
+	return val, id, nil
+}
+
+func (f *fakeMTK) Keys(context.Context, string) ([]mtk.Key, error) {
+	if f.keysFailures > 0 {
+		f.keysFailures--
+		return nil, errors.New("key list unavailable")
+	}
+	out := make([]mtk.Key, len(f.keys))
+	copy(out, f.keys)
+	return out, nil
+}
+
+func (f *fakeMTK) DeleteKey(_ context.Context, _, keyID string) error {
+	f.revoked = append(f.revoked, keyID)
+	kept := f.keys[:0]
+	for _, k := range f.keys {
+		if k.ID != keyID {
+			kept = append(kept, k)
+		}
+	}
+	f.keys = kept
 	return nil
 }
 
@@ -182,6 +222,7 @@ func newTbEnv(t *testing.T, objs ...client.Object) *tbEnv {
 			Client:           c,
 			Direct:           c,
 			ManagerNamespace: tbManagerNS,
+			JenkinsNamespace: "jenkins",
 			NewAPI:           func(_, _, _ string) TestbenchAPI { return api },
 			Now:              func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) },
 		},
@@ -376,6 +417,42 @@ func TestTestbenchDeletionBlockedWithoutInstance(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.reconcile(t)
+	if len(e.api.revoked) != 0 {
+		t.Fatalf("the key cannot be revoked without the instance, revoked=%v", e.api.revoked)
+	}
+	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: "jenkins", Name: jenkinsCredentialSecretName(tbNS, tbName)}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("the jenkins credential must be removed even when cleanup is skipped, err=%v", err)
+	}
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(TestbenchGVK)
+	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: tbNS, Name: tbName}, u); !apierrors.IsNotFound(err) {
+		t.Fatalf("testbench should be gone after the skip annotation, err=%v", err)
+	}
+}
+
+func TestSkipCleanupRevokesTheKeyWithoutDeletingTheAgent(t *testing.T) {
+	e := newTbEnv(t, instanceObject(), apiKeySecret(), testbenchObject(publicSpec()))
+	e.reconcile(t)
+
+	if err := e.c.Delete(context.Background(), e.get(t)); err != nil {
+		t.Fatal(err)
+	}
+	got := e.get(t)
+	got.SetAnnotations(map[string]string{AnnotationSkipCleanup: "true"})
+	if err := e.c.Update(context.Background(), got); err != nil {
+		t.Fatal(err)
+	}
+	e.reconcile(t)
+
+	if e.api.deletes != 0 || e.api.regDeletes != 0 {
+		t.Fatalf("skip must leave the agent and registration: deletes=%d registrations=%d", e.api.deletes, e.api.regDeletes)
+	}
+	if len(e.api.revoked) != 1 || e.api.revoked[0] != "k1" {
+		t.Fatalf("skip must still revoke the host key, revoked=%v", e.api.revoked)
+	}
+	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: "jenkins", Name: jenkinsCredentialSecretName(tbNS, tbName)}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("the jenkins credential must be removed, err=%v", err)
+	}
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(TestbenchGVK)
 	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: tbNS, Name: tbName}, u); !apierrors.IsNotFound(err) {
@@ -606,5 +683,175 @@ func TestDeletingTestbenchForgetsItsToken(t *testing.T) {
 	e.reconcile(t)
 	if got := e.storedTokens(t); len(got) != 0 {
 		t.Fatalf("the token must be removed with the registration, got %v", got)
+	}
+}
+
+func TestHostCredentialIsShortLivedAndNotTheAdminKey(t *testing.T) {
+	e := newTbEnv(t, instanceObject(), apiKeySecret(), testbenchObject(publicSpec()))
+	e.reconcile(t)
+
+	var secret corev1.Secret
+	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: tbNS, Name: tbName + "-agent"}, &secret); err != nil {
+		t.Fatal(err)
+	}
+	if string(secret.Data[secretKeyUsername]) != agentUsername {
+		t.Fatalf("username %q", secret.Data[secretKeyUsername])
+	}
+	if string(secret.Data[secretKeyPassword]) == "key" || string(secret.Data[secretKeyPassword]) != "00000001-agent-key" {
+		t.Fatalf("host password %q must be the agent key, not the admin key", secret.Data[secretKeyPassword])
+	}
+	if string(secret.Data[hostSecretExpiry]) != "2026-01-01T06:00:00Z" {
+		t.Fatalf("expiry %q, want the default 6h TTL", secret.Data[hostSecretExpiry])
+	}
+	if len(secret.OwnerReferences) != 1 || secret.OwnerReferences[0].UID != types.UID(tbUID) {
+		t.Fatalf("owner %v", secret.OwnerReferences)
+	}
+	if secret.Labels[jenkinsCredentialsTypeLabel] != "" {
+		t.Fatalf("the host Secret in %s is not visible to Jenkins and must not carry the credentials label", tbNS)
+	}
+	jenkinsName := jenkinsCredentialSecretName(tbNS, tbName)
+	if jenkinsName == tbName+"-agent" || !strings.Contains(jenkinsName, tbNS) {
+		t.Fatalf("jenkins credential name %q must include the testbench namespace", jenkinsName)
+	}
+	var jenkins corev1.Secret
+	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: "jenkins", Name: jenkinsName}, &jenkins); err != nil {
+		t.Fatal(err)
+	}
+	if string(jenkins.Data[secretKeyUsername]) != agentUsername || string(jenkins.Data[secretKeyPassword]) != string(secret.Data[secretKeyPassword]) {
+		t.Fatalf("jenkins credential username %q", jenkins.Data[secretKeyUsername])
+	}
+	if jenkins.Labels[jenkinsCredentialsTypeLabel] != "usernamePassword" || jenkins.Labels[jenkinsCredentialLabel] != "true" {
+		t.Fatalf("jenkins label %v", jenkins.Labels)
+	}
+	if _, ok := jenkins.Data[hostSecretToken]; ok || string(jenkins.Data[secretKeyPassword]) == "key" {
+		t.Fatalf("jenkins credential must be the agent key only, not the token or the admin key")
+	}
+	if statusString(e.get(t), "agentCredentialSecret") != tbNS+"/"+tbName+"-agent" {
+		t.Fatalf("status secret %q", statusString(e.get(t), "agentCredentialSecret"))
+	}
+
+	if statusString(e.get(t), "hostKeyId") != "k1" {
+		t.Fatalf("hostKeyId %q, want the key recorded on the testbench", statusString(e.get(t), "hostKeyId"))
+	}
+
+	e.reconcile(t)
+	if e.api.keySeq != 1 {
+		t.Fatalf("a current key was recreated: seq=%d", e.api.keySeq)
+	}
+
+	if err := e.c.Delete(context.Background(), e.get(t)); err != nil {
+		t.Fatal(err)
+	}
+	e.reconcile(t)
+	if len(e.api.revoked) != 1 || e.api.revoked[0] != "k1" {
+		t.Fatalf("delete must revoke the current key, revoked=%v", e.api.revoked)
+	}
+	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: "jenkins", Name: jenkinsCredentialSecretName(tbNS, tbName)}, &corev1.Secret{}); err == nil {
+		t.Fatal("the jenkins credential must be removed with the testbench")
+	}
+}
+
+func TestHostKeyRotationKeepsThePreviousKeyUntilTheOverlapEnds(t *testing.T) {
+	e := newTbEnv(t, instanceObject(), apiKeySecret(), testbenchObject(publicSpec()))
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	now := start
+	e.r.Now = func() time.Time { return now }
+	e.reconcile(t)
+
+	// Inside the 15 minute renew window of the default 6h TTL.
+	now = start.Add(5*time.Hour + 50*time.Minute)
+	e.reconcile(t)
+	if e.api.keySeq != 2 || len(e.api.revoked) != 0 {
+		t.Fatalf("renewal must not revoke the previous key yet: seq=%d revoked=%v", e.api.keySeq, e.api.revoked)
+	}
+	tb := e.get(t)
+	if statusString(tb, "hostKeyId") != "k2" {
+		t.Fatalf("hostKeyId %q", statusString(tb, "hostKeyId"))
+	}
+	retired, _, _ := unstructured.NestedSlice(tb.Object, "status", "retiredHostKeys")
+	if len(retired) != 1 || retired[0].(map[string]interface{})["id"] != "k1" {
+		t.Fatalf("retiredHostKeys %v", retired)
+	}
+	var jenkins corev1.Secret
+	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: "jenkins", Name: jenkinsCredentialSecretName(tbNS, tbName)}, &jenkins); err != nil {
+		t.Fatal(err)
+	}
+	if string(jenkins.Data[secretKeyPassword]) != "00000002-agent-key" {
+		t.Fatalf("jenkins credential was not updated to the new agent key")
+	}
+
+	// The 48h overlap is longer than the key's own life, so it is revoked when it expires.
+	now = start.Add(6 * time.Hour)
+	e.reconcile(t)
+	if len(e.api.revoked) != 1 || e.api.revoked[0] != "k1" {
+		t.Fatalf("the previous key must be revoked once the overlap ends, revoked=%v", e.api.revoked)
+	}
+	if retired, _, _ := unstructured.NestedSlice(e.get(t).Object, "status", "retiredHostKeys"); len(retired) != 0 {
+		t.Fatalf("retiredHostKeys %v after revocation", retired)
+	}
+}
+
+func TestDeleteRevokesRecordedHostKeysWithoutTheSecret(t *testing.T) {
+	e := newTbEnv(t, instanceObject(), apiKeySecret(), testbenchObject(publicSpec()))
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	now := start
+	e.r.Now = func() time.Time { return now }
+	e.reconcile(t)
+	now = start.Add(5*time.Hour + 50*time.Minute)
+	e.reconcile(t)
+
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: tbNS, Name: tbName + "-agent"}}
+	if err := e.c.Delete(context.Background(), secret); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.c.Delete(context.Background(), e.get(t)); err != nil {
+		t.Fatal(err)
+	}
+	e.reconcile(t)
+	got := map[string]bool{}
+	for _, id := range e.api.revoked {
+		got[id] = true
+	}
+	if !got["k1"] || !got["k2"] {
+		t.Fatalf("delete must revoke the current and the retired key from the record, revoked=%v", e.api.revoked)
+	}
+}
+
+func TestHostKeyIsIdentifiedAfterAFailedKeyList(t *testing.T) {
+	hostKeyLookupBackoff = 0
+	e := newTbEnv(t, instanceObject(), apiKeySecret(), testbenchObject(publicSpec()))
+	e.api.omitKeyID = true
+	e.api.keysFailures = hostKeyLookupAttempts - 1
+	e.reconcile(t)
+	if statusString(e.get(t), "hostKeyId") != "k1" {
+		t.Fatalf("hostKeyId %q, want the key found on a later list", statusString(e.get(t), "hostKeyId"))
+	}
+}
+
+func TestUnidentifiedHostKeyIsRevokedAndNotHandedOut(t *testing.T) {
+	hostKeyLookupBackoff = 0
+	e := newTbEnv(t, instanceObject(), apiKeySecret(), testbenchObject(publicSpec()))
+	e.api.omitKeyID = true
+	e.api.keysFailures = hostKeyLookupAttempts
+	_, _ = e.r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: tbNS, Name: tbName}})
+	if e.api.keySeq != 1 {
+		t.Fatalf("keys created %d", e.api.keySeq)
+	}
+	if statusString(e.get(t), "hostKeyId") != "" {
+		t.Fatalf("hostKeyId %q, an unidentified key must not be recorded", statusString(e.get(t), "hostKeyId"))
+	}
+	if err := e.c.Get(context.Background(), types.NamespacedName{Namespace: tbNS, Name: tbName + "-agent"}, &corev1.Secret{}); err == nil {
+		t.Fatal("an unidentified key must not be written to the host Secret")
+	}
+	if len(e.api.revoked) != 1 || e.api.revoked[0] != "k1" {
+		t.Fatalf("the unidentified key must be revoked once the list names it, revoked=%v", e.api.revoked)
+	}
+}
+
+func TestCredentialTTLIsCapped(t *testing.T) {
+	obj := testbenchObject(publicSpec())
+	_ = unstructured.SetNestedField(obj.Object, "48h", "spec", "credentialTTL")
+	if _, err := parseTestbenchSpec(obj); err == nil {
+		t.Fatal("a credentialTTL above 24h must be rejected")
 	}
 }

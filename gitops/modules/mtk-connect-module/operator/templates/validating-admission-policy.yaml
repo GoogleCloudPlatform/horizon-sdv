@@ -43,6 +43,12 @@ spec:
         object.spec.access.permission in [{{ range $i, $p := $policy.allowedPermissions }}{{ if $i }}, {{ end }}{{ $p | quote }}{{ end }}]
       message: >-
         spec.access.permission must be one of: {{ join ", " $policy.allowedPermissions }}
+    - expression: >-
+        !has(object.spec.credentialTTL) ||
+        (duration(object.spec.credentialTTL) > duration('0s') &&
+         duration(object.spec.credentialTTL) <= duration('{{ $policy.maxCredentialTTL | default "24h" }}'))
+      message: >-
+        spec.credentialTTL must be a positive duration of at most {{ $policy.maxCredentialTTL | default "24h" }}
 {{- if not $policy.allowPublicAccess }}
     - expression: >-
         !has(object.spec.access) || !has(object.spec.access.public) || !object.spec.access.public
@@ -123,3 +129,157 @@ spec:
 {{- range .Values.testbenchNamespaceSuffixes }}
             - {{ printf "%s%s" $prefix . | quote }}
 {{- end }}
+---
+# The testbench Role in the jenkins namespace cannot pin Secret names. This policy limits the module
+# ServiceAccount to two shapes. The credential copy is mtkc-<namespace>-<testbench>-agent and must
+# already carry mtkconnect.horizon-sdv.io/jenkins-credential before it can be changed or deleted, so the
+# label cannot be added to an existing Secret and then used to delete it. The host Secret, when the
+# testbench itself is in this namespace, is <testbench>-agent. It never carries that label or
+# jenkins.io/credentials-type, which is what distinguishes it from the copy: a testbench named
+# mtkc-<name> has a host Secret that also starts with mtkc-. get is not covered: a
+# ValidatingAdmissionPolicy does not apply to it.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}mtk-connect-jenkins-credential
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  failurePolicy: Fail
+  matchConditions:
+    - name: module-service-account
+      expression: >-
+        request.userInfo.username == 'system:serviceaccount:{{ include "mtk-connect-operator.namespace" . }}:mtk-connect-module-sa'
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["secrets"]
+  validations:
+    - expression: >-
+        request.operation == 'CREATE'
+          ? has(object.metadata.name) && object.metadata.name.endsWith('-agent') && has(object.metadata.labels)
+            && object.metadata.labels['app.kubernetes.io/managed-by'] == 'mtk-connect-module'
+            && (
+              (object.metadata.name.startsWith('mtkc-') && object.metadata.labels['mtkconnect.horizon-sdv.io/jenkins-credential'] == 'true')
+              || (!('mtkconnect.horizon-sdv.io/jenkins-credential' in object.metadata.labels)
+                  && !('jenkins.io/credentials-type' in object.metadata.labels))
+            )
+          : request.operation == 'DELETE'
+            ? has(oldObject.metadata.name) && oldObject.metadata.name.endsWith('-agent') && has(oldObject.metadata.labels)
+              && (
+                (oldObject.metadata.name.startsWith('mtkc-') && oldObject.metadata.labels['mtkconnect.horizon-sdv.io/jenkins-credential'] == 'true')
+                || (oldObject.metadata.labels['app.kubernetes.io/managed-by'] == 'mtk-connect-module'
+                    && !('mtkconnect.horizon-sdv.io/jenkins-credential' in oldObject.metadata.labels)
+                    && !('jenkins.io/credentials-type' in oldObject.metadata.labels))
+              )
+            : has(object.metadata.name) && object.metadata.name.endsWith('-agent')
+              && has(oldObject.metadata.labels) && has(object.metadata.labels)
+              && (
+                (object.metadata.name.startsWith('mtkc-')
+                  && oldObject.metadata.labels['mtkconnect.horizon-sdv.io/jenkins-credential'] == 'true'
+                  && object.metadata.labels['mtkconnect.horizon-sdv.io/jenkins-credential'] == 'true')
+                || (oldObject.metadata.labels['app.kubernetes.io/managed-by'] == 'mtk-connect-module'
+                    && object.metadata.labels['app.kubernetes.io/managed-by'] == 'mtk-connect-module'
+                    && !('mtkconnect.horizon-sdv.io/jenkins-credential' in oldObject.metadata.labels)
+                    && !('mtkconnect.horizon-sdv.io/jenkins-credential' in object.metadata.labels)
+                    && !('jenkins.io/credentials-type' in oldObject.metadata.labels)
+                    && !('jenkins.io/credentials-type' in object.metadata.labels))
+              )
+      message: >-
+        mtk-connect-module-sa may only write the Jenkins credential mtkc-<namespace>-<testbench>-agent, which must already be labelled mtkconnect.horizon-sdv.io/jenkins-credential, or the host Secret <testbench>-agent with no such label
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}mtk-connect-jenkins-credential
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  policyName: {{ $prefix }}mtk-connect-jenkins-credential
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ printf "%sjenkins" $prefix | quote }}
+---
+# The testbench Role in the workflows namespace grants create and update on every Secret. This policy
+# limits that ServiceAccount to the host Secret <testbench>-agent and to the admin-key Secret named in
+# credentialDistribution. The host Secret is recognised by its labels, not by a name prefix, so a
+# testbench named mtkc-<name> is included. The admin Secret may already exist without
+# app.kubernetes.io/managed-by (the post job creates it), so an update is allowed by name. It is not
+# deletable here. get is not covered.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}mtk-connect-workflow-secret
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  failurePolicy: Fail
+  matchConditions:
+    - name: module-service-account
+      expression: >-
+        request.userInfo.username == 'system:serviceaccount:{{ include "mtk-connect-operator.namespace" . }}:mtk-connect-module-sa'
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["secrets"]
+  validations:
+    - expression: >-
+        (
+          request.operation != 'DELETE'
+          && has(object.metadata.name) && has(object.metadata.labels)
+          && (
+            false
+{{- range .Values.credentialDistribution }}
+{{- if eq .namespaceSuffix "workflows" }}
+            || (object.metadata.name == {{ .secretName | quote }}
+{{- range $k, $v := .labels }}
+              && {{ $k | quote }} in object.metadata.labels
+              && object.metadata.labels[{{ $k | quote }}] == {{ $v | quote }}
+{{- end }}
+            )
+{{- end }}
+{{- end }}
+          )
+        )
+        || (
+          request.operation == 'CREATE'
+            ? has(object.metadata.name) && object.metadata.name.endsWith('-agent') && has(object.metadata.labels)
+              && object.metadata.labels['app.kubernetes.io/managed-by'] == 'mtk-connect-module'
+              && !('mtkconnect.horizon-sdv.io/jenkins-credential' in object.metadata.labels)
+              && !('jenkins.io/credentials-type' in object.metadata.labels)
+            : request.operation == 'DELETE'
+              ? has(oldObject.metadata.name) && oldObject.metadata.name.endsWith('-agent') && has(oldObject.metadata.labels)
+                && oldObject.metadata.labels['app.kubernetes.io/managed-by'] == 'mtk-connect-module'
+                && !('mtkconnect.horizon-sdv.io/jenkins-credential' in oldObject.metadata.labels)
+                && !('jenkins.io/credentials-type' in oldObject.metadata.labels)
+              : has(object.metadata.name) && object.metadata.name.endsWith('-agent')
+                && has(oldObject.metadata.labels) && has(object.metadata.labels)
+                && oldObject.metadata.labels['app.kubernetes.io/managed-by'] == 'mtk-connect-module'
+                && object.metadata.labels['app.kubernetes.io/managed-by'] == 'mtk-connect-module'
+                && !('mtkconnect.horizon-sdv.io/jenkins-credential' in oldObject.metadata.labels)
+                && !('mtkconnect.horizon-sdv.io/jenkins-credential' in object.metadata.labels)
+                && !('jenkins.io/credentials-type' in oldObject.metadata.labels)
+                && !('jenkins.io/credentials-type' in object.metadata.labels)
+        )
+      message: >-
+        mtk-connect-module-sa may only write the host Secret <testbench>-agent, or the workflow admin Secret named in credentialDistribution
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}mtk-connect-workflow-secret
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  policyName: {{ $prefix }}mtk-connect-workflow-secret
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ printf "%sworkflows" $prefix | quote }}

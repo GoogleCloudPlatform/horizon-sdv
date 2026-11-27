@@ -54,8 +54,8 @@ func (f *fakeInstanceMTK) FindUserID(context.Context, string) (string, error) {
 	return "user-1", nil
 }
 func (f *fakeInstanceMTK) Keys(context.Context, string) ([]mtk.Key, error) { return nil, nil }
-func (f *fakeInstanceMTK) CreateKey(context.Context, string, time.Time) (string, error) {
-	return "", errors.New("not used")
+func (f *fakeInstanceMTK) CreateKey(context.Context, string, time.Time) (string, string, error) {
+	return "", "", errors.New("not used")
 }
 func (f *fakeInstanceMTK) DeleteKey(context.Context, string, string) error { return nil }
 

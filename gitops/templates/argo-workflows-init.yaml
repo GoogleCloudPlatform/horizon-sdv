@@ -447,8 +447,8 @@ spec:
           clusterName: sdv-cluster
           serviceAccountRef:
             name: workflow-executor
-# MTK Connect for CVD/CTS: Secret workflow-mtk-connect-apikey (keys username, password) is created by
-# mtk-connect-post configure.sh (same MTK service account key as jenkins-mtk-connect-apikey).
+# MTK Connect for CVD/CTS: Secret workflow-mtk-connect-apikey (keys username, password) is the admin
+# API key, created by mtk-connect-post configure.sh. Jenkins does not receive that key.
 # Same GSM key and target Secret name as jenkins-init (jenkins-cuttlefish-vm-ssh-private-key).
 ---
 apiVersion: external-secrets.io/v1beta1

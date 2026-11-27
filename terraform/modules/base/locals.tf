@@ -48,8 +48,13 @@ locals {
     }
     "mtk-connect-module-app" = {
       directory      = "mtk-connect-module"
-      build_version  = "0.3.4"
-      deploy_version = "0.3.4"
+      build_version  = "0.3.7"
+      deploy_version = "0.3.7"
+    }
+    "mtk-connect-agent" = {
+      directory      = "mtk-connect-module"
+      build_version  = "0.2.0"
+      deploy_version = "0.2.0"
     }
     "gerrit-mcp-server-app" = {
       directory      = "gerrit-mcp-server"
@@ -63,13 +68,13 @@ locals {
     }
     "mtk-connect-post" = {
       directory      = "mtk-connect"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.3"
+      deploy_version = "1.0.3"
     }
     "mtk-connect-post-key" = {
       directory      = "mtk-connect"
-      build_version  = "1.0.1"
-      deploy_version = "1.0.1"
+      build_version  = "1.0.2"
+      deploy_version = "1.0.2"
     }
     "grafana-post" = {
       directory      = "grafana"

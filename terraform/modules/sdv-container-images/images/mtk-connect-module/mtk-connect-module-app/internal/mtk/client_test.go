@@ -43,7 +43,7 @@ func TestKeyLifecycle(t *testing.T) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"data":{"key":"new-key-value"}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"k9","key":"new-key-value"}}`))
 		case r.Method == http.MethodDelete && r.URL.Path == "/mtk-connect/api/v1/users/u1/keys/k1":
 			deleted = "k1"
 			w.WriteHeader(http.StatusNoContent)
@@ -64,9 +64,9 @@ func TestKeyLifecycle(t *testing.T) {
 	if err != nil || len(keys) != 1 || keys[0].ID != "k1" || keys[0].Created.IsZero() || keys[0].Expires.IsZero() {
 		t.Fatalf("Keys = %+v, %v", keys, err)
 	}
-	key, err := c.CreateKey(ctx, id, time.Now().Add(time.Hour))
-	if err != nil || key != "new-key-value" {
-		t.Fatalf("CreateKey = %q, %v", key, err)
+	key, keyID, err := c.CreateKey(ctx, id, time.Now().Add(time.Hour))
+	if err != nil || key != "new-key-value" || keyID != "k9" {
+		t.Fatalf("CreateKey = %q, %q, %v", key, keyID, err)
 	}
 	if err := c.DeleteKey(ctx, id, "k1"); err != nil || deleted != "k1" {
 		t.Fatalf("DeleteKey: err=%v deleted=%q", err, deleted)
