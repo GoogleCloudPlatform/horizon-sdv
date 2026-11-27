@@ -1282,7 +1282,7 @@ limitations under the License. -->
 <p>There is no separate admin and user permission. Every signed-in user sees every Cloud Workstations workflow, including create, delete, and user-list changes.</p>
 </li>
 <li>
-<p>Inputs are plain text fields. The form does not ask for an email on the user workflows.</p>
+<p>Fixed choices (true/false, container image, disk type, reclaim policy, delete confirmation) are dropdowns. Every other input is a plain text field. The container image choice is <code>C-OSS</code>, <code>AS</code> or <code>ASfP</code> (previously <code>C-OSS (VCS)</code>), and a full image address or digest is no longer accepted. <code>containerImage</code>, <code>pdRequired</code> and <code>edRequired</code> stay text fields on <code>cws-update-config</code>. The form does not ask for an email on the user workflows.</p>
 </li>
 <li>
 <p>The form hides <code>submittedBy</code> and sends the signed-in username (<code>preferred_username</code>, otherwise <code>name</code>, otherwise <code>sub</code>). The user cannot change that value in the form.</p>

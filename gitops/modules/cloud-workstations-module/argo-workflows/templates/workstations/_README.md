@@ -37,7 +37,7 @@ Creates a workstation from an existing configuration and waits until it is ready
 
 ### cws-admin-delete-workstation
 
-Shows the workstation, then deletes it. Set `confirmDelete` to `true`. The form starts at `false`.
+Shows the workstation, then deletes it. Set `confirmDelete` to `true`. It is a dropdown that starts at `false`.
 
 | Parameter | Required | What to enter |
 |-----------|----------|----------------|

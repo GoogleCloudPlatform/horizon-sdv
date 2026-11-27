@@ -562,7 +562,7 @@ spec:
             describe android-studio "$ANDROID_STUDIO_REF" "$BUILD_ANDROID_STUDIO" /tmp/android-studio
             describe asfp "$ASFP_REF" "$BUILD_ASFP" /tmp/asfp
             {
-              echo "=== Image URIs for create-config / update-config containerImage ==="
+              echo "=== Image digests ==="
               echo "environment=$(cat /tmp/environment)"
               echo "preflight=$(cat /tmp/preflight)"
               echo "gnome=$(cat /tmp/gnome)"

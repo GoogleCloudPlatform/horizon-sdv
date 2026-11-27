@@ -50,8 +50,8 @@ synchronization:
 Workflow parameters per template. The WorkflowTemplates and the Sensors both render from this map,
 so a Sensor's index mapping always follows its template's parameter order.
 An empty default makes the key required on Horizon submit (internal/api/server.go validateParams)
-and makes the Portal draw a required asterisk. Delete asks for confirmDelete, a text box pre-filled
-with false that must be changed to true. List filters default to .* so they stay optional.
+and makes the Portal draw a required asterisk. Delete asks for confirmDelete, a true/false dropdown
+that starts at false and must be changed to true. List filters default to .* so they stay optional.
 */}}
 {{- define "cws-ws.parameters" -}}
 cws-admin-create-workstation:
@@ -73,6 +73,7 @@ cws-admin-delete-workstation:
     description: "Required. Workstation ID to fetch and delete."
   - name: confirmDelete
     value: "false"
+    enum: ["true", "false"]
     description: "Required. Change from false to true to confirm. Deletion cannot be undone."
 cws-admin-get-workstation:
   - name: workstationId

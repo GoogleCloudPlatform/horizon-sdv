@@ -14,6 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */}}
 
+{{/*
+Fixed choices of a parameter. The Portal draws a dropdown and Horizon API rejects other values.
+Entries are always quoted: the catalog reads only strings, so an unquoted true would drop the dropdown.
+*/}}
+{{- define "cws.enum" -}}
+enum:
+{{- range .enum }}
+  - {{ . | quote }}
+{{- end }}
+{{- end -}}
+
 {{/* WorkflowTemplate spec.arguments.parameters from values.imageBuild.parameters. */}}
 {{- define "cws.imageArguments" -}}
 {{- range .Values.imageBuild.parameters }}
@@ -21,6 +32,9 @@ limitations under the License.
   value: {{ .value | quote }}
   {{- if .description }}
   description: {{ .description | quote }}
+  {{- end }}
+  {{- if .enum }}
+  {{- include "cws.enum" . | nindent 2 }}
   {{- end }}
 {{- end }}
 {{- end -}}
@@ -359,12 +373,14 @@ Platform values for the config workflows, passed to steps as env. Rendering fail
 {{/*
 Ordered parameter list of cws-create-config ("create") or cws-update-config ("update").
 Usage: include "cws.configParamList" (dict "root" . "mode" "create") | fromJsonArray
+On update, updateRequired parameters have no default and no enum. The Portal preselects the first
+enum entry when there is no default, so an untouched update would replace the image or the disks.
 */}}
 {{- define "cws.configParamList" -}}
 {{- $out := list -}}
 {{- range .root.Values.configParameters -}}
 {{- if and .updateRequired (eq $.mode "update") -}}
-{{- $out = append $out (merge (dict "description" (printf "REQUIRED: %s" .description)) (omit . "value")) -}}
+{{- $out = append $out (merge (dict "description" (printf "REQUIRED: %s" .description)) (omit . "value" "enum")) -}}
 {{- else if not (and .createOnly (eq $.mode "update")) -}}
 {{- $out = append $out . -}}
 {{- end -}}
@@ -383,6 +399,9 @@ WorkflowTemplate spec.arguments.parameters from a list of {name, value?, descrip
   {{- end }}
   {{- with .description }}
   description: {{ . | quote }}
+  {{- end }}
+  {{- if .enum }}
+  {{- include "cws.enum" . | nindent 2 }}
   {{- end }}
 {{- end }}
 {{- end -}}
@@ -589,12 +608,13 @@ param_image() {
   local choice tag path
   choice=$(trim "$containerImage")
   tag=$(param_str containerImageTag latest)
+  [[ "$tag" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]] \
+    || log_error "containerImageTag must be a valid image tag (letters, digits, '_', '.', '-'; up to 128 characters), got '${tag}'."
   case "$choice" in
-    ""|"C-OSS (VCS)") path=$CWS_IMAGE_CODE_OSS ;;
+    ""|C-OSS) path=$CWS_IMAGE_CODE_OSS ;;
     AS) path=$CWS_IMAGE_ANDROID_STUDIO ;;
     ASfP) path=$CWS_IMAGE_ASFP ;;
-    */*) printf '%s' "$choice"; return ;;
-    *) log_error "containerImage must be 'C-OSS (VCS)', 'AS', 'ASfP' or a full image URI, got '${choice}'." ;;
+    *) log_error "containerImage must be 'C-OSS', 'AS' or 'ASfP', got '${choice}'." ;;
   esac
   printf '%s' "${CWS_REGION}-docker.pkg.dev/${CWS_PROJECT_ID}/${path}:${tag}"
 }

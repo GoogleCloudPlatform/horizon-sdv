@@ -38,7 +38,7 @@ The configuration must already exist.
 
 ## cws-delete-config
 
-Deletes one configuration and its admin access. Set `confirmDelete` to `true`. The form starts at `false`.
+Deletes one configuration and its admin access. Set `confirmDelete` to `true`. It is a dropdown that starts at `false`.
 
 Child workstations must be gone first. The workflow fails and lists any that remain. Google Cloud does not cascade this delete. The controller keeps a finalizer on the configuration until those workstations, and their Config Connector objects, are gone.
 
@@ -73,13 +73,13 @@ Lists workstation names that use one configuration. It does not change anything.
 
 ## Create and update fields
 
-`true` and `false` must be those words.
+On create, the image, the true/false fields, the disk types, and `pdReclaimPolicy` are dropdowns, so the "If cleared" value does not apply to them and the API rejects any other value. On update they are dropdowns too, except `containerImage`, `pdRequired`, and `edRequired`. Those three have no default on update, so they stay text boxes and must be typed as `C-OSS`, `AS`, `ASfP`, `true`, or `false`.
 
 | Parameter | Create starts as | If cleared | On update |
 |-----------|------------------|------------|-----------|
 | `cloudWsConfigName` | Empty, required | | Required. The configuration to change. |
-| `containerImage` | `C-OSS (VCS)` | Code OSS | Required. No default. |
-| `containerImageTag` | `latest` | `latest` | Same. Ignored when `containerImage` is a full image address. |
+| `containerImage` | `C-OSS` | Code OSS | Required. No default. |
+| `containerImageTag` | `latest` | `latest` | Same. Letters, digits, `_`, `.`, and `-`, up to 128 characters. |
 | `wsIdleTimeout` | `1200` | `1200` (20 minutes) | Same. Seconds. |
 | `wsRunningTimeout` | `43200` | `43200` (12 hours) | Same. Seconds. |
 | `wsReplicaZones` | Empty | Google Cloud default | Not offered. Create only. |
@@ -116,10 +116,11 @@ Lists workstation names that use one configuration. It does not change anything.
 
 `containerImage` accepts:
 
-- `C-OSS (VCS)` for Code OSS
+- `C-OSS` for Code OSS
 - `AS` for Android Studio
 - `ASfP` for ASfP
-- a full image address, used as written
+
+Each one points at the image in this environment's Artifact Registry, with the tag from `containerImageTag`. A full image address is not accepted.
 
 `wsAdminIamMembers` is the full admin list, not a list of people to add. Anyone left off loses workstation admin access that was granted without an extra condition, including access added outside Horizon. Conditional grants stay as they are. Use comma-separated email addresses. A bare email is stored as `user:email`. `user:`, `group:`, and `serviceAccount:` must be followed by an email. `domain:`, `principal://`, and `principalSet://` are rejected, because they grant a whole domain or principal set. Repeated addresses are kept once.
 

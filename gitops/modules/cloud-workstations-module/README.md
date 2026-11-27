@@ -52,7 +52,7 @@ The Portal does not have a Cloud Workstations API. It lists these workflows from
 
 This module is experimental. Any signed-in Horizon user can run any Cloud Workstations workflow, including the admin ones that create, delete, and change who can use a workstation.
 
-The Portal does not offer separate admin and user permissions. It lists every workflow and shows every other input as a text box. It does not ask for an email on the user workflows. It hides `submittedBy` and sends the signed-in username (`preferred_username`, otherwise `name`, otherwise `sub`). Those workflows only show or start workstations that list that value. The Portal form cannot change it. Horizon API still accepts a different `submittedBy` when the request is not sent by that form.
+The Portal does not offer separate admin and user permissions. It lists every workflow and shows a fixed set of choices (true/false, image, disk type) as a dropdown and every other input as a text box. It does not ask for an email on the user workflows. It hides `submittedBy` and sends the signed-in username (`preferred_username`, otherwise `name`, otherwise `sub`). Those workflows only show or start workstations that list that value. The Portal form cannot change it. Horizon API still accepts a different `submittedBy` when the request is not sent by that form.
 
 Access on the workstation in Google Cloud is still applied. People listed as users get workstation user access. People listed as admins on a configuration get workstation admin access. Do not treat the Portal as a way to keep those actions limited to a role.
 
@@ -68,7 +68,7 @@ Open the module in the Developer Portal and submit a workflow.
 | See and use a workstation you are listed on | `cws-user-list-usable-workstations`, `cws-user-get-workstation`, `cws-user-get-workstation-configuration`, `cws-user-start-workstation`, `cws-user-stop-workstation` |
 | Build workstation container images | `cws-image-build` |
 
-Create a configuration before you create a workstation. The image choices `C-OSS (VCS)`, `AS`, and `ASfP` select the Code OSS, Android Studio, and ASfP images. You can also paste a full image address.
+Create a configuration before you create a workstation. The image choices `C-OSS`, `AS`, and `ASfP` select the Code OSS, Android Studio, and ASfP images, and `containerImageTag` selects the tag. A full image address is not accepted.
 
 Parameter lists are next to the workflows: [configurations](argo-workflows/templates/config/_README.md), [workstations](argo-workflows/templates/workstations/_README.md), and [images](argo-workflows/templates/images/_README.md).
 

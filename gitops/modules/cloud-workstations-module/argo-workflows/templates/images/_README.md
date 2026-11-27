@@ -28,7 +28,7 @@ Images are built in this order. An image that is turned off is skipped.
 4. **Code OSS** (`buildCodeOss`). Built on its own, not on GNOME.
 5. **Android Studio** (`buildAndroidStudio`) and **ASfP** (`buildAsfp`). Built on GNOME. They can run in the same build.
 
-When the run pushes images, the log ends with an `image@sha256:...` address for each image that was built. Paste that address into `containerImage` on [create or update configuration](../config/_README.md). The shortcuts `C-OSS (VCS)`, `AS`, and `ASfP` point at the Code OSS, Android Studio, and ASfP images from this build.
+When the run pushes images, the log ends with an `image@sha256:...` digest for each image that was built. To use a build in [create or update configuration](../config/_README.md), choose `C-OSS`, `AS`, or `ASfP` and set `containerImageTag` to the tag that was built. These choices point at the Code OSS, Android Studio, and ASfP images in this environment's Artifact Registry. A digest or full address is not accepted.
 
 ## Parameters
 
