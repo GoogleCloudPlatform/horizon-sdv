@@ -30,7 +30,7 @@ The Horizon API is served at `https://<your-horizon-domain>/horizon-api`. Every 
 |---|---|---|
 | `GET /v1/me` | viewer | The caller's name, role and capabilities. |
 | `GET /v1/catalog` | viewer | Exposed templates of enabled modules, with their parameters. |
-| `POST /v1/modules/{module}/workflowTemplates/{template}/submit` | developer | Start a run. Body: `{"parameters": {"<name>": "<value>"}}`. Returns `202` once the event is dispatched to Argo Events. |
+| `POST /v1/modules/{module}/workflowTemplates/{template}/submit` | developer for a non-destructive workflow, admin otherwise | Start a run. Body: `{"parameters": {"<name>": "<value>"}}`. Returns `202` once the event is dispatched to Argo Events. |
 | `GET /v1/workflows/running` | viewer | Runs in progress. `limit` defaults to 50, maximum 500. |
 | `GET /v1/workflows/history` | viewer | Finished runs. Takes `limit`, `continue` and filters such as `phase`; `continue` can't be combined with filters. |
 | `GET /v1/workflows/{workflowName}` | viewer | Detail of one run, including archived log and artifact locations. |
