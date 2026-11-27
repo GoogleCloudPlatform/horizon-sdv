@@ -42,7 +42,7 @@ The module runs on the main environment only. It is not deployed on a sub-enviro
 | NetworkPolicies `default-deny-all`, `allow-dns`, `allow-overview-from-module-manager` | `openbsw` | Baseline perimeter when `config.enableNetworkPolicies` is true. The last one lets Module Manager reach the overview on port 80 |
 | ServiceAccount `openbsw-can-kernel` | `openbsw` | Identity for the CAN DaemonSet. No Role or binding |
 | DaemonSet `openbsw-can-kernel` | `openbsw` | Loads `can`, `can-raw`, and `vcan` on the OpenBSW node pool |
-| Overview Deployment and Service `mod-openbsw-overview` | `openbsw` | Portal overview page served on port 80 |
+| Overview Deployment and Service `mod-openbsw-overview` | `openbsw` | Portal overview page served on port 80. The nginx image is `config.nginx.image:config.nginx.tag`, set from `tools.nginx.tag` in the repo-root `versions.yaml` |
 
 Module Manager injects `moduleName`, `config`, `repo.url`, and `repo.revision` when the module is enabled. `moduleName` stays empty in `values.yaml`.
 
@@ -63,7 +63,7 @@ On a sub-environment (`config.isSubEnvironment` true) the chart renders no resou
 
 ## Workflows
 
-The `argo-workflows/` chart ports the OpenBSW Jenkins jobs. Every WorkflowTemplate carries `horizon-sdv.io/expose: "true"` and `horizon-sdv.io/module: openbsw-module`, so they appear in the Developer Portal and Horizon CLI. Each has a Sensor on EventSource `webhook`, event `workflow-dispatch`, matching `body.workflowTemplateName`.
+The `argo-workflows/` chart ports the OpenBSW Jenkins jobs. Every WorkflowTemplate carries `horizon-sdv.io/expose: "true"` and `horizon-sdv.io/module: openbsw-module`, so they appear in the Developer Portal and Horizon CLI. Each has a Sensor on EventSource `webhook`, event `workflow-dispatch`, matching `body.workflowTemplateName`. Like every Horizon Sensor, it maps `body.horizonSubmittedBy` (token subject, the owner) to annotation `horizon-sdv.io/submitted-by` and `body.submittedBy` (username) to the display-only annotation `horizon-sdv.io/submitted-by-name`, so the Developer Portal lists runs by username.
 
 | WorkflowTemplate | Sensor | Jenkins job | Notes |
 |------------------|--------|-------------|-------|
@@ -85,8 +85,7 @@ The READMEs linked below describe the Jenkins jobs. Portal names and defaults ar
 | `dockerArtifactPathName` | workflow parameter, default `horizon-sdv/openbsw-builder` | system variable `OPENBSW_BUILD_DOCKER_ARTIFACT_PATH_NAME` |
 | `forceImageBuild` | `false`. `true` rebuilds the builder image inside `openbsw-bsw-builder` before the build | the image is built by the Docker Image Template job |
 | `submittedBy` | Horizon API sets the signed-in user | Jenkins records the user who started the job |
-| `geminiCommandLine` | chart value `bswBuilder.geminiCommandLine` (`gemini --yolo --output-format json`). Change it in `argo-workflows/values.yaml`; the submit form omits it | parameter `GEMINI_COMMAND_LINE` |
-| `openbsw-delete-mtkc-testbench` | parameter `mtkConnectTestbench` only; the step runs `node:22-bookworm-slim` | also takes `IMAGE_TAG` and runs the builder image |
+| `geminiCommandLine` | `gemini --yolo --output-format json`. The model comes from chart value `bswBuilder.geminiModel` (`GEMINI_MODEL`). Only `gemini` followed by plain options is accepted, because the command line is evaluated in the elevated `ai-review` pod | `gemini --model <GEMINI_MODEL> --yolo --output-format json`, any command line |
 
 Jenkins `BUILDKIT_RELEASE_TAG` and `DOCKER_CREDENTIALS_URL` are `buildkitReleaseTag` (default `v0.24.0`) and `dockerCredentialsUrl` on `openbsw-builder-image`. Both pass through to `common-docker-image-build`. An empty `dockerCredentialsUrl` uses the workloads-common default.
 
@@ -130,7 +129,7 @@ Start, keep-alive and stop run in one pod, because the MTK Connect agent runs in
 
 Testbench names, owners and device counts are checked against a strict character set before `mtk_connect.sh` writes them to its env file. The API key reaches the script only through the environment (`sudo --preserve-env`), never on a command line. `openbsw-delete-mtkc-testbench` only accepts names that contain `mtkConnect.testbenchMustContain` (`OpenBSW`), the same guard as the Jenkins job. Either job can therefore delete an offline testbench the other created, for example a Jenkins `OpenBSW/Tests/POSIX-<build number>` from Argo. This is intended: the guard matches Jenkins, a testbench is only deleted when offline, and `remove-testbench.js` deletes an exact name match only.
 
-The delete step needs only `bash`, `npm`, `node` and coreutils (`mtk_connect.sh --delete` runs `remove-testbench.js`). All of them are in `node:22-bookworm-slim`, which runs as root, so it does not use `sudo`.
+The delete steps (`openbsw-delete-mtkc-testbench` and `mtk-cleanup`) run the `imageTag` builder image, as the Jenkins job runs `IMAGE_TAG`, and call `mtk_connect.sh --delete` through `sudo --preserve-env`.
 
 `openbswDownloadUrl` must start with one of `posixTest.downloadUrlAllowPrefixes`. The default is the module bucket `gs://<project>-openbsw/`.
 
@@ -138,7 +137,7 @@ The delete step needs only `bash`, `npm`, `node` and coreutils (`mtk_connect.sh 
 
 WorkflowTemplates stay in the platform `workflows` namespace, which Horizon API and the Argo controller watch. Their pods schedule onto the existing Terraform pool `sdv-openbsw-build-node-pool` (`workloadLabel: openbsw`, taint `workloadType=openbsw:NoSchedule`). This module does not create that pool and does not change its labels or taint.
 
-Each WorkflowTemplate in `argo-workflows/` that runs the builder image sets the block below. `openbsw-delete-mtkc-testbench` only calls the MTK Connect API, so it does not set it and runs a small Node image on the default pool:
+Each WorkflowTemplate in `argo-workflows/` that runs the builder image sets the block below. `openbsw-delete-mtkc-testbench` only calls the MTK Connect API, so it does not set it and runs on the default pool instead of scaling up the OpenBSW pool:
 
 ```yaml
 spec:
@@ -306,13 +305,13 @@ kubectl get ns openbsw
 python3 gitops/modules/openbsw-module/tests/smoke_test.py
 ```
 
-The smoke test lints both charts, renders them with `helm template`, checks the `openbsw-module` ModuleCatalog fields, and checks that the child Application is rendered with `prune: true` and the Argo CD resources finalizer. For the MTK Connect templates it checks the single session pod (start, stop, SIGTERM trap, API key from the Secret and kept off the command line), the `exit-handler` order and conditions, and that the delete template is unprivileged, uses the mutex and deletes offline testbenches only. It is not part of CI.
+The smoke test lints both charts, renders them with `helm template`, checks the `openbsw-module` ModuleCatalog fields, and checks that the child Application is rendered with `prune: true` and the Argo CD resources finalizer, and that the overview nginx image comes from `config.nginx`. For the MTK Connect templates it checks the single session pod (start, stop, SIGTERM trap, API key from the Secret and kept off the command line), the `exit-handler` order and conditions, and that the delete template runs the `imageTag` builder image unprivileged, uses the mutex and deletes offline testbenches only. It checks that every parameter in the five Jenkins `job.groovy` files exists as a workflow parameter (camelCase name), that every Sensor maps `body.submittedBy` to `horizon-sdv.io/submitted-by-name`, and that `ai-review` rejects a `geminiCommandLine` with shell metacharacters. It is not part of CI.
 
 If the `argo` CLI is installed, the smoke test also covers the workflows, with `git.authMethod` set to `app` and to empty:
 
 - `argo lint --offline` on all five WorkflowTemplates and the ClusterWorkflowTemplates they call (`common-docker-image-build`, `prepare-pipeline-git-creds`).
 - A client-side `argo submit --dry-run --from workflowtemplate/<name>` for each template. It talks to a local fake Kubernetes API that serves the rendered templates, so it needs no cluster and does not touch your kube context.
-- A simulated webhook event per Sensor. Each Sensor must fire on its own `workflowTemplateName` and on no other (including `<name>-extra` and `x<name>`). The Workflow it would create is then dry-run submitted, and body fields must land in the matching parameters.
+- A simulated webhook event per Sensor. Each Sensor must fire on its own `workflowTemplateName` and on no other (including `<name>-extra` and `x<name>`). The Workflow it would create is then dry-run submitted, body fields must land in the matching parameters, and `submittedBy` must land in the `submitted-by-name` annotation (empty when the field is absent).
 
 Without the `argo` CLI those checks print `SKIPPED`.
 

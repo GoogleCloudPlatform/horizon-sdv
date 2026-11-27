@@ -75,7 +75,7 @@ so storage needs them too.
   (list "NXP_S32K148_BUILD_CMDLINE" "nxpS32k148BuildCmdline")
   (list "NXP_S32K148_ARTIFACT" "nxpS32k148Artifact")
   (list "ENABLE_GEMINI_AI_ASSISTANT" "enableGeminiAiAssistant")
-  (list "OPENBSW_ARTIFACT_STORAGE_SOLUTION" "artifactStorageSolution")
+  (list "OPENBSW_ARTIFACT_STORAGE_SOLUTION" "openbswArtifactStorageSolution")
   (list "STORAGE_BUCKET_DESTINATION" "storageBucketDestination")
   (list "STORAGE_LABELS" "storageLabels")
 }}
@@ -145,7 +145,7 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
           ai-review.Errored ||
           ai-review.Skipped
         when: >-
-          '{{ "{{" }}workflow.parameters.artifactStorageSolution{{ "}}" }}' != ""
+          '{{ "{{" }}workflow.parameters.openbswArtifactStorageSolution{{ "}}" }}' != ""
       - name: retain
         template: retain
         depends: >-
@@ -346,12 +346,9 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
       - name: GEMINI_LOCATION_GLOBAL
         value: {{ .Values.bswBuilder.geminiLocationGlobal | quote }}
       # gemini-cli only (agy uses workloads/common/agentic-ai/antigravity/skills/openbsw).
+      # gemini-cli also reads GEMINI_MODEL, so the default command line needs no --model.
       - name: GEMINI_COMMAND_LINE
-{{- if .Values.bswBuilder.geminiModel }}
-        value: {{ printf "gemini --model %s --yolo --output-format json" .Values.bswBuilder.geminiModel | quote }}
-{{- else }}
-        value: {{ .Values.bswBuilder.geminiCommandLine | quote }}
-{{- end }}
+        value: '{{ "{{" }}workflow.parameters.geminiCommandLine{{ "}}" }}'
       - name: GEMINI_PROMPT_FILE
         value: {{ printf "%s/step1_triage.txt" $prompts | quote }}
       - name: GEMINI_PROMPT_FILE_2
@@ -365,7 +362,15 @@ bsw-workspace mounts for the builder image (USER builder, HOME /home/builder).
     volumeMounts:
 {{- include "openbsw.bswBuilder.workspaceMounts" . | nindent 6 }}
     args:
-      - bash "${PIPELINE_REPO_ROOT}/workloads/common/agentic-ai/gemini/run_ai_review.sh"
+      - |
+        # gemini_analysis.sh evals GEMINI_COMMAND_LINE, and this pod runs as the elevated account,
+        # so only a plain gemini invocation is accepted (no shell metacharacters or quoting).
+        gemini_re='^gemini( +[A-Za-z0-9._=:/-]+)*$'
+        if [[ "${AI_REVIEW_RUNTIME}" == "gemini-cli" && ! "${GEMINI_COMMAND_LINE}" =~ ${gemini_re} ]]; then
+          echo "ERROR: geminiCommandLine must be 'gemini' followed by plain options (letters, digits and . _ = : / -)." >&2
+          exit 1
+        fi
+        bash "${PIPELINE_REPO_ROOT}/workloads/common/agentic-ai/gemini/run_ai_review.sh"
 {{- end -}}
 
 {{- define "openbsw.bswBuilder.template.storage" -}}

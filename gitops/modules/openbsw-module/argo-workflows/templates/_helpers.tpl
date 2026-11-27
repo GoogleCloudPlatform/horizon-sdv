@@ -115,7 +115,9 @@ WorkflowTemplate spec.arguments.parameters: horizonSubmittedFrom, then each entr
 {{/*
 Webhook Sensor for one WorkflowTemplate. Webhook body fields map to spec.arguments.parameters by
 position, so the mapping is generated from the same list as the WorkflowTemplate parameters.
-Missing body fields fall back to the WorkflowTemplate default.
+Missing body fields fall back to the WorkflowTemplate default. body.submittedBy (the caller's
+username) also goes to the display-only annotation horizon-sdv.io/submitted-by-name, so the
+Developer Portal lists runs by username; horizon-sdv.io/submitted-by stays the owner (token subject).
 Usage: include "openbsw.webhookSensor" (dict "root" . "name" <template name> "generateName" <prefix> "params" <list>)
 */}}
 {{- define "openbsw.webhookSensor" -}}
@@ -170,6 +172,11 @@ spec:
                 dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedBy
               dest: metadata.annotations.horizon-sdv\.io/submitted-by
+            - src:
+                dependencyName: webhook-dep
+                dataKey: body.submittedBy
+                value: ""
+              dest: metadata.annotations.horizon-sdv\.io/submitted-by-name
             - src:
                 dependencyName: webhook-dep
                 dataKey: body.horizonSubmittedFrom
