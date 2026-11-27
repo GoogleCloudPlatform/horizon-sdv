@@ -369,6 +369,7 @@ module "sdv_gke_apps" {
   }
 
   common_nginx_version = local.common_nginx_version
+  common_alpine_version = local.common_alpine_version
 
   # Horizon platform component versions from the repo-root versions.yaml.
   component_versions = local.versions.components

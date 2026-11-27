@@ -49,7 +49,8 @@ spec:
             dependencies: [echo-and-artifact]
     - name: log-parameters
       container:
-        image: alpine:3.19
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         # Parameters via env vars, never interpolated into the script.
         env:
           - name: SAMPLE_ENV
@@ -72,7 +73,8 @@ spec:
             echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: echo-and-artifact
       container:
-        image: alpine:3.19
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -90,7 +92,8 @@ spec:
             path: /tmp/result.txt
     - name: verify-gcs
       container:
-        image: alpine:3.19
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -138,7 +141,8 @@ spec:
             dependencies: [echo-and-artifact]
     - name: log-parameters
       container:
-        image: alpine:3.19
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         # Parameters via env vars, never interpolated into the script.
         env:
           - name: RELEASE_CHANNEL
@@ -161,7 +165,8 @@ spec:
             echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: echo-and-artifact
       container:
-        image: alpine:3.19
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -179,7 +184,8 @@ spec:
             path: /tmp/result.txt
     - name: verify-gcs
       container:
-        image: alpine:3.19
+        {{- /* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000

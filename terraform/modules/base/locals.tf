@@ -24,6 +24,10 @@ locals {
   # in the repo-root versions.yaml; do not hardcode it here.
   common_nginx_version = local.versions.tools.nginx.tag
 
+  # Alpine image tag for in-cluster workflow steps. Source: tools.alpine.tag
+  # in the repo-root versions.yaml; do not hardcode it here.
+  common_alpine_version = local.versions.tools.alpine.tag
+
   # Horizon platform version(s) from the repo-root versions.yaml. components.horizoncore is also the
   # Developer Portal image tag (build_version / deploy_version of "horizon-dev-portal" below).
   # tools.nginx.tag from the same file feeds common_nginx_version above.
@@ -149,8 +153,8 @@ locals {
     }
     "kcc-webhook-cert-monitor" = {
       directory      = "kcc-webhook-cert-monitor"
-      build_version  = "1.0.0"
-      deploy_version = "1.0.0"
+      build_version  = "1.0.1"
+      deploy_version = "1.0.1"
       platform       = "linux/amd64"
     }
   }

@@ -89,6 +89,10 @@ spec:
           nginx:
             image: {{ .Values.config.nginx.image }}
             tag: {{ .Values.config.nginx.tag | quote }}
+          alpine:
+            {{/* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+            image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" | quote }}
+            tag: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" | quote }}
     path: gitops/apps/module-manager
   destination:
     server: https://kubernetes.default.svc

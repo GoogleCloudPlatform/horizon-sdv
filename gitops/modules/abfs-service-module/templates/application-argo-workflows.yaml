@@ -39,6 +39,12 @@ spec:
         abfsNamespace: {{ .Values.abfsNamespace }}
         networkPolicies: {{ .Values.config.enableNetworkPolicies | default false }}
         gcpProjectId: {{ .Values.config.projectID | quote }}
+        # Shared Alpine image for workflow steps. Must be forwarded here; this child chart does not inherit root config.
+        config:
+          alpine:
+            {{/* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+            image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" | quote }}
+            tag: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.config.namespacePrefix }}workflows

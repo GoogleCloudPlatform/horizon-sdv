@@ -33,7 +33,7 @@ pipelineJob('Sample/Environment/Docker Image Template') {
     }
     stringParam {
       name('LINUX_DISTRIBUTION')
-      defaultValue('alpine:3.19')
+      defaultValue('alpine:3.24')
       description('<p>Base image for Dockerfile ARG LINUX_DISTRIBUTION.</p>')
       trim(true)
     }

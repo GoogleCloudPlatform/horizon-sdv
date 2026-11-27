@@ -28,7 +28,7 @@
 ARG PREFLIGHT_WEB_REPO=""
 ARG PREFLIGHT_WEB_DIR=""
 
-ARG ALPINE_VERSION=3.19
+ARG ALPINE_VERSION=3.24
 ARG NODE_VERSION=22-slim
 
 ###############################################################

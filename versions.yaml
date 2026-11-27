@@ -49,6 +49,11 @@ tools:
   # and workloads/sample/pipelines/environment/docker_image_template/Jenkinsfile.
   go:
     version: "1.27.4"
+  # Docker Hub Alpine tag for in-cluster workflow steps (image name "alpine" is set in
+  # terraform/modules/sdv-gke-apps/main.tf). Terraform exposes it to GitOps as config.alpine.tag.
+  # Keep it quoted: an unquoted 3.24 is parsed as a number.
+  alpine:
+    tag: "3.24"
   # kubectl release used as the Docker build-arg KUBECTL_VERSION.
   # Keep the leading v: the download URL is https://dl.k8s.io/release/<version>/...
   # Readers: Terraform (terraform/modules/base) and tools/scripts/container-images/build.sh.

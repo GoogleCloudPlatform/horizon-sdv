@@ -35,6 +35,12 @@ spec:
       values: |
         workflowNamespace: {{ .Values.config.namespacePrefix }}workflows
         eventsNamespace: {{ .Values.config.namespacePrefix }}argo-events
+        # Shared Alpine image for workflow steps. Must be forwarded here; this child chart does not inherit root config.
+        config:
+          alpine:
+            {{/* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+            image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" | quote }}
+            tag: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.config.namespacePrefix }}workflows

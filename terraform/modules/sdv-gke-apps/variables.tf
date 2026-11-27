@@ -210,6 +210,11 @@ variable "common_nginx_version" {
   type        = string
 }
 
+variable "common_alpine_version" {
+  description = "Alpine tag for in-cluster workflow steps. Source: tools.alpine.tag in versions.yaml."
+  type        = string
+}
+
 variable "gcp_compute_sa_email" {
   description = "GCP compute service account email used by GKE node pools (MODULE_CONFIG for module KCC resources)."
   type        = string

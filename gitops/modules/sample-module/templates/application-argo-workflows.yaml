@@ -43,6 +43,12 @@ spec:
         referenceGcsEnabled: {{ and (index .Values.softFeaturesEnabled "storage-gcs" | default false) (index .Values.softFeaturesEnabled "sample-data" | default false) }}
         # Bucket owned by sample-data; passed to storage-gcs-upload (not configured in storage-gcs).
         sampleWorkloadsDataBucket: {{ .Values.config.projectID }}-sample-workloads-data
+        # Shared Alpine image for workflow steps. Must be forwarded here; this child chart does not inherit root config.
+        config:
+          alpine:
+            {{/* Fallback to alpine:3.24 when config.alpine is missing. GitOps overrides this value. */}}
+            image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" | quote }}
+            tag: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.config.namespacePrefix }}workflows

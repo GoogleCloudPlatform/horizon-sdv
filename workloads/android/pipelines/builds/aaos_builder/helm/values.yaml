@@ -21,6 +21,8 @@
 # Namespace: if `namespace` is non-empty, use it; else `namespacePrefix` + "workflows" (e.g. namespacePrefix: "dev-" → dev-workflows; matches GitOps config.namespacePrefix).
 namespacePrefix: ""
 namespace: ""
+# Fallback for standalone helm template. GitOps sets alpineImage from config.alpine.
+alpineImage: "alpine:3.24"
 # Set by GitOps (userpass | app | none). Remote + userpass|app: prepare-pipeline-git-creds (umbrella) before git artifacts;
 # then again after the build step (refresh-pipeline-git-creds-after-build) so storage / gemini-review clones use a fresh ~1h token.
 git:

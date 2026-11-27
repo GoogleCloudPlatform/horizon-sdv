@@ -171,7 +171,11 @@ app:
   rootPath: ${PATH_PREFIX}
 
 # Environment config injected by Module Manager.
-config: {}
+# Fallback when config.alpine is not injected yet. GitOps overrides this. Keep the tag quoted.
+config:
+  alpine:
+    image: alpine
+    tag: "3.24"
 
 # Soft feature flags injected dynamically by Module Manager.
 softFeaturesEnabled: {}
@@ -448,6 +452,11 @@ spec:
         parentModuleName: {{ .Values.moduleName | quote }}
         softFeaturesEnabled:
 {{ .Values.softFeaturesEnabled | toYaml | nindent 10 }}
+        # Shared Alpine image for workflow steps. Must be forwarded here; this child chart does not inherit root config.
+        config:
+          alpine:
+            image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" | quote }}
+            tag: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.config.namespacePrefix }}workflows
@@ -672,6 +681,11 @@ workflowNamespace: ""
 eventsNamespace: ""
 parentModuleName: ""
 softFeaturesEnabled: {}
+# Fallback when config.alpine is not injected yet. GitOps overrides this. Keep the tag quoted.
+config:
+  alpine:
+    image: alpine
+    tag: "3.24"
 EOF
 
 cat << 'EOF' > "${TARGET_DIR}/argo-workflows/templates/workflowtemplates.yaml"
@@ -709,7 +723,7 @@ spec:
             depends: log-parameters
     - name: log-parameters
       container:
-        image: alpine:3.19
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         command: [sh, -c]
         args:
           - |
@@ -719,7 +733,7 @@ spec:
             echo "Initialization started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: setup-resources
       container:
-        image: alpine:3.19
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         command: [sh, -c]
         args:
           - |
@@ -767,7 +781,7 @@ spec:
             depends: log-parameters
     - name: log-parameters
       container:
-        image: alpine:3.19
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         command: [sh, -c]
         args:
           - |
@@ -778,7 +792,7 @@ spec:
             echo "Execution started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     - name: run-workload
       container:
-        image: alpine:3.19
+        image: {{ index ((index (.Values.config | default dict) "alpine") | default dict) "image" | default "alpine" }}:{{ index ((index (.Values.config | default dict) "alpine") | default dict) "tag" | default "3.24" }}
         command: [sh, -c]
         args:
           - |

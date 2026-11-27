@@ -344,7 +344,7 @@ spec:
             template: setup-step
     - name: setup-step
       container:
-        image: alpine:3.19
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         command: [sh, -c]
         args: ["echo Initializing {{ .Values.parentModuleName }}"]
 ---
@@ -379,7 +379,7 @@ spec:
             template: exec-step
     - name: exec-step
       container:
-        image: alpine:3.19
+        image: {{ .Values.config.alpine.image }}:{{ .Values.config.alpine.tag }}
         command: [sh, -c]
         args: ["echo Executing workload for {{ .Values.parentModuleName }}"]
 ```

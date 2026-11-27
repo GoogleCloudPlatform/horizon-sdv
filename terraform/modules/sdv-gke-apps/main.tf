@@ -541,6 +541,9 @@ resource "kubectl_manifest" "argocd_application" {
               nginx:
                 image: nginx
                 tag: "${var.common_nginx_version}"
+              alpine:
+                image: alpine
+                tag: "${var.common_alpine_version}"
               versions:
                 components:
                   ${indent(18, trimspace(yamlencode(var.component_versions)))}
